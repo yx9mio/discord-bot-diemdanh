@@ -1,14 +1,9 @@
 /**
- * Builds a visual progress bar string.
- * @param current - Number of participants who joined
- * @param total - Total eligible participants
- * @param length - Bar length in characters (default 10)
+ * Build a visual progress bar string.
+ * @param pct 0–100
+ * @param len number of blocks (default 10)
  */
-export function buildProgressBar(current: number, total: number, length = 10): string {
-  if (total <= 0) return `\`[${'░'.repeat(length)}]\` 0%`;
-  const ratio = Math.min(current / total, 1);
-  const filled = Math.round(ratio * length);
-  const empty = length - filled;
-  const pct = Math.round(ratio * 100);
-  return `\`[${'█'.repeat(filled)}${'░'.repeat(empty)}]\` ${pct}% (${current}/${total})`;
+export function buildProgressBar(pct: number, len = 10): string {
+  const filled = Math.round((Math.min(100, Math.max(0, pct)) / 100) * len);
+  return '█'.repeat(filled) + '░'.repeat(len - filled);
 }

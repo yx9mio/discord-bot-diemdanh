@@ -1,125 +1,141 @@
-# 🎮 Discord Bot Điểm Danh Bang Chiến
+# 📋 Bot Điểm Danh Discord
 
-Bot Discord viết bằng **TypeScript + discord.js v14** để quản lý điểm danh cho bang/guild trong game.
+Bot Discord tự động hóa điểm danh cho guild — viết bằng **TypeScript + discord.js v14**.
+
+---
 
 ## ✨ Tính Năng
 
-- 📋 Mở/kết thúc phiên điểm danh với embed trực quan
-- ✅ Thành viên tự điểm danh qua nút button
-- ⏱️ Tự động kết thúc phiên sau thời gian đặt trước
-- 🔔 Nhắc nhở trước khi phiên kết thúc
-- 🛡️ Hệ thống role Admin Bot — không cần quyền Quản lý Server
-- 📊 Thống kê, lịch sử, xuất file txt
-- 🌙 Channel hiển thị riêng tự động tạo
+### 🎮 Member
+| Command | Mô tả |
+|---|---|
+| `/xem_diemdanh` | Xem danh sách điểm danh phiên hiện tại |
+| `/lich_su` | Xem lịch sử các phiên đã kết thúc |
+| `/thong_ke` | Top 10 thành viên tham gia nhiều nhất |
+| `/xuat_diemdanh` | Xuất danh sách ra file `.txt` |
+| `/xem_lich_su_member` | Lịch sử cá nhân: tỷ lệ %, streak, huy hiệu |
+| `/thong_ke_phien` | Chi tiết 1 phiên cụ thể từ lịch sử |
 
-## 📜 Danh Sách Lệnh
-
-### Lệnh Admin Bot
-> Yêu cầu role Admin Bot **hoặc** quyền Quản lý Server
-
-| Lệnh | Mô tả |
-|------|-------|
-| `/batdau_diemdanh` | Mở phiên điểm danh mới |
-| `/ket_thuc_diemdanh` | Kết thúc phiên hiện tại |
-| `/them_diemdanh` | Thêm điểm danh thủ công |
+### 🛡️ Admin
+| Command | Mô tả |
+|---|---|
+| `/batdau_diemdanh` | Mở phiên mới (có auto-close & reminder) |
+| `/ket_thuc_diemdanh` | Kết thúc phiên, lưu lịch sử |
+| `/huy_diemdanh` | Hủy phiên **không lưu** lịch sử |
+| `/them_diemdanh` | Thêm 1 thành viên thủ công |
+| `/sua_diemdanh` | Sửa status hàng loạt (tối đa 5 người) |
 | `/xoa_diemdanh` | Xóa điểm danh của 1 thành viên |
-
-### Lệnh Cấu Hình
-> Yêu cầu quyền **Quản lý Server**
-
-| Lệnh | Mô tả |
-|------|-------|
-| `/caidat_role` | Đặt role được phép điểm danh |
-| `/caidat_admin_role` | Đặt role được dùng lệnh admin bot |
+| `/nhac_nho` | Ping/liệt kê người chưa điểm danh |
+| `/caidat_role` | Cài role được phép điểm danh |
+| `/caidat_admin_role` | Cài role admin bot |
 | `/caidat_xem` | Xem cấu hình hiện tại |
 
-### Lệnh Công Khai
+### 🤖 Tự Động
+- **Live embed** cập nhật real-time: % tỷ lệ tham gia, danh sách chưa điểm danh, countdown Discord native
+- **Auto-close** phiên sau thời gian đặt trước
+- **Reminder** trước khi kết thúc
+- **Reschedule timer** khi bot restart (sessions.json)
+- **Streak tracking** liên tiếp theo phiên (không phá streak khi vắng do không eligible)
+- **Badge milestones**: 🌱5 ⭐10 🌟20 💪30 🏆50 👑100 lần tham gia
+- **Badge announcement** tự động sau mỗi phiên
 
-| Lệnh | Mô tả |
-|------|-------|
-| `/xem_diemdanh` | Xem danh sách phiên hiện tại |
-| `/lich_su` | Xem lịch sử 10 phiên gần nhất |
-| `/thong_ke` | Top thành viên tham gia nhiều nhất |
-| `/xuat_diemdanh` | Xuất danh sách ra file `.txt` |
+---
 
-## 🚀 Cài Đặt
-
-### Yêu Cầu
-
-- Node.js 20+
-- Discord Bot Token ([Discord Developer Portal](https://discord.com/developers/applications))
-
-### Chạy Local
+## 🚀 Setup Local
 
 ```bash
-# Clone repo
-git clone https://github.com/yx9mio/discord-bot-diemdanh.git
+git clone https://github.com/yx9mio/discord-bot-diemdanh
 cd discord-bot-diemdanh
-
-# Cài dependencies
 npm install
-
-# Tạo file .env
-cp .env.example .env
-# Điền DISCORD_TOKEN=your_token_here vào .env
-
-# Build và chạy
-npm run build
-npm start
-
-# Hoặc dev mode (watch)
+cp .env.example .env   # điền DISCORD_TOKEN
 npm run dev
 ```
 
-### Deploy Miễn Phí với Fly.io
+### Yêu cầu
+- Node.js 20+
+- Discord Bot token với intents: **Guilds**, **Guild Members**
+
+### Cấu trúc dự án
+
+```
+src/
+├── index.ts          # Entry point, tất cả command handlers
+├── storage.ts        # SessionStore, ConfigStore, HistoryStore, MemberStatsStore
+├── streak.ts         # Streak & milestone logic
+├── types.ts          # TypeScript interfaces
+└── utils/
+    ├── embeds.ts     # buildDisplayEmbed, buildSummaryEmbed, ...
+    └── progress.ts   # Progress bar utility
+data/                 # Auto-created, gitignored
+├── sessions.json     # Active sessions (persistent across restart)
+├── history.json      # Lịch sử các phiên đã kết thúc
+├── config.json       # Guild configs
+└── members.json      # Member stats & streak
+```
+
+---
+
+## 🐳 Deploy Miễn Phí
+
+### Fly.io (Khuyến nghị)
+
+Bot có sẵn `Dockerfile` — deploy trực tiếp:
 
 ```bash
 # Cài flyctl
 curl -L https://fly.io/install.sh | sh
 
-# Login
+# Login & deploy
 flyctl auth login
-
-# Launch (Fly tự detect Dockerfile)
-flyctl launch
-
-# Set bot token
+flyctl launch          # tự detect Dockerfile
 flyctl secrets set DISCORD_TOKEN=your_token_here
-
-# Deploy
 flyctl deploy
 ```
 
-> ⚠️ Bot dùng JSON file để lưu dữ liệu. Trên Fly.io, dữ liệu sẽ mất khi container restart.  
-> Để bền vững hơn: thêm [Fly Volume](https://fly.io/docs/volumes/) hoặc chuyển sang Supabase.
+**Free tier**: 3 shared-cpu-1x VMs, 256MB RAM — đủ cho bot Discord.
 
-## ⚙️ Cấu Hình Ban Đầu
+### Oracle Cloud Always Free (Dài hạn)
 
-1. Mời bot vào server với quyền: `Send Messages`, `Manage Messages`, `Manage Channels`, `Read Message History`
-2. Dùng `/caidat_role` để đặt role được điểm danh (ví dụ: `@Bang Chúng`)
-3. Dùng `/caidat_admin_role` để đặt role được dùng lệnh admin bot (ví dụ: `@Bang Chủ`)
-4. Dùng `/batdau_diemdanh` để mở phiên đầu tiên
+VM ARM 24GB RAM, không giới hạn thời gian — tốt nhất cho production:
 
-## 🗂️ Cấu Trúc Project
+```bash
+# Trên VM Ubuntu 24.04
+sudo apt update && sudo apt install -y nodejs npm git
+git clone https://github.com/yx9mio/discord-bot-diemdanh
+cd discord-bot-diemdanh && npm install && npm run build
 
-```
-discord-bot-diemdanh/
-├── src/
-│   ├── index.ts          # Entry point, xử lý tất cả commands & events
-│   ├── types.ts          # TypeScript interfaces
-│   ├── storage.ts        # JSON file storage (sessions, config, history)
-│   └── utils/
-│       ├── embeds.ts     # Discord embed builders
-│       └── progress.ts   # Progress bar utility
-├── data/                 # Dữ liệu runtime (gitignored)
-├── Dockerfile
-├── package.json
-└── tsconfig.json
+# Chạy bằng PM2
+npm install -g pm2
+pm2 start dist/index.js --name diemdanh-bot
+pm2 save && pm2 startup
 ```
 
-## 🛠️ Tech Stack
+---
 
-- **Runtime**: Node.js 20
-- **Language**: TypeScript
-- **Discord Library**: discord.js v14
-- **Storage**: JSON files (local filesystem)
+## ⚠️ Lưu ý về Storage
+
+Bot dùng **JSON files** trong `data/` để lưu trữ. Trên các platform ephemeral (Fly.io, Railway...):
+
+- **Sessions active** ✅ persist qua restart (sessions.json được đọc khi bot start)
+- **History & member stats** ⚠️ **mất khi container bị xóa/redeploy**
+
+**Giải pháp production**: Mount persistent volume (Fly Volumes) hoặc migrate sang PostgreSQL/Supabase.
+
+```bash
+# Fly.io persistent volume
+flyctl volumes create diemdanh_data --size 1
+# Thêm vào fly.toml:
+# [mounts]
+#   source = "diemdanh_data"
+#   destination = "/app/data"
+```
+
+---
+
+## 🏗️ Tech Stack
+
+- **Runtime**: Node.js 20 (Alpine)
+- **Language**: TypeScript 5
+- **Discord**: discord.js v14
+- **Storage**: JSON files (fs sync)
+- **Deploy**: Docker / Fly.io / Oracle Cloud
