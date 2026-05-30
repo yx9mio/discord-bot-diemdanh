@@ -1,7 +1,7 @@
 {
   "name": "discord-bot-diemdanh",
-  "version": "2.0.0",
-  "description": "Discord Bot Điểm Danh Bang Chiến — TypeScript",
+  "version": "3.0.0",
+  "description": "Discord Bot Điểm Danh Bang Chiến — TypeScript enhanced edition",
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
