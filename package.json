@@ -1,6 +1,6 @@
 {
   "name": "discord-bot-diemdanh",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "Bot Discord điểm danh — JavaScript (CommonJS) + discord.js v14",
   "main": "index.js",
   "scripts": {
@@ -9,5 +9,8 @@
   "dependencies": {
     "discord.js": "^14.16.3",
     "dotenv": "^16.4.5"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }

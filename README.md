@@ -1,126 +1,124 @@
-# 📋 Bot Điểm Danh Discord
+# 🎮 Discord Bot Điểm Danh
 
-Bot Discord tự động hóa điểm danh cho guild — viết bằng **JavaScript (CommonJS) + discord.js v14**.
-
-> ✅ Không cần build step — chạy thẳng bằng `node index.js`
+Bot điểm danh Bang Chiến cho Discord — viết bằng **JavaScript (Node.js)** + **discord.js v14**.
 
 ---
 
 ## ✨ Tính Năng
 
-### 🎮 Member
-| Command | Mô tả |
-|---|---|
-| `/xem_diemdanh` | Xem danh sách điểm danh phiên hiện tại |
-| `/lich_su` | Xem lịch sử các phiên đã kết thúc |
-| `/thong_ke` | Top 10 thành viên tham gia nhiều nhất |
-| `/xuat_diemdanh` | Xuất danh sách ra file `.txt` |
-| `/xem_lich_su_member` | Lịch sử cá nhân: tỷ lệ %, streak, huy hiệu |
-| `/thong_ke_phien` | Chi tiết 1 phiên cụ thể từ lịch sử |
-
-### 🛡️ Admin
-| Command | Mô tả |
-|---|---|
-| `/batdau_diemdanh` | Mở phiên mới (có auto-close & reminder) |
-| `/ket_thuc_diemdanh` | Kết thúc phiên, lưu lịch sử |
-| `/huy_diemdanh` | Hủy phiên **không lưu** lịch sử |
-| `/them_diemdanh` | Thêm 1 thành viên thủ công |
-| `/sua_diemdanh` | Sửa status hàng loạt (tối đa 5 người) |
-| `/xoa_diemdanh` | Xóa điểm danh của 1 thành viên |
-| `/nhac_nho` | Ping/liệt kê người chưa điểm danh |
-| `/caidat_role` | Cài role được phép điểm danh |
-| `/caidat_admin_role` | Cài role admin bot |
-| `/caidat_xem` | Xem cấu hình hiện tại |
-
-### 🤖 Tự Động
-- **Live embed** cập nhật real-time: % tỷ lệ tham gia, countdown Discord native
-- **Auto-close** phiên sau thời gian đặt trước
-- **Reminder** trước khi kết thúc
-- **Reschedule timer** khi bot restart
-- **Streak tracking** liên tiếp theo phiên
-- **Badge milestones**: 🌱5 ⭐10 🌟20 💪30 🏆50 👑100 lần tham gia
+| Lệnh | Mô tả | Quyền |
+|---|---|---|
+| `/batdau_diemdanh` | Mở phiên điểm danh mới | Admin |
+| `/ket_thuc_diemdanh` | Kết thúc phiên + lưu lịch sử | Admin |
+| `/huy_diemdanh` | Hủy phiên — KHÔNG lưu | Admin |
+| `/them_diemdanh` | Thêm thủ công 1 member | Admin |
+| `/sua_diemdanh` | Sửa trạng thái hàng loạt (5 member) | Admin |
+| `/xoa_diemdanh` | Xóa điểm danh của 1 member | Admin |
+| `/nhac_nho` | Nhắc member chưa điểm danh | Admin |
+| `/caidat_role` | Cài role được phép điểm danh | ManageGuild |
+| `/caidat_admin_role` | Cài role admin bot | ManageGuild |
+| `/caidat_xem` | Xem cấu hình hiện tại | ManageGuild |
+| `/xem_diemdanh` | Xem danh sách phiên hiện tại | Tất cả |
+| `/lich_su` | Xem lịch sử các phiên | Tất cả |
+| `/thong_ke_phien` | Chi tiết một phiên cụ thể | Tất cả |
+| `/xem_lich_su_member` | Lịch sử điểm danh cá nhân | Tất cả |
+| `/thong_ke` | BXH thành viên tham gia nhiều nhất | Tất cả |
+| `/xuat_diemdanh` | Xuất danh sách ra file `.txt` | Tất cả |
 
 ---
 
-## 🚀 Setup Local
+## 🚀 Deploy Miễn Phí — WispByte
+
+[WispByte](https://wispbyte.com) cung cấp hosting Discord bot **24/7 hoàn toàn miễn phí**, không cần thẻ.
+
+### Bước 1 — Chuẩn bị
+
+1. Đăng ký tài khoản tại [wispbyte.com/client](https://wispbyte.com/client)
+2. Tạo server Discord Bot mới trên dashboard
+3. Chọn runtime **Node.js 20**
+
+### Bước 2 — Upload Code
+
+Zip toàn bộ repo (trừ `node_modules/` và `.env`) rồi upload lên WispByte File Manager, **hoặc** dùng Git:
+
+```
+Repository URL: https://github.com/yx9mio/discord-bot-diemdanh
+Branch: main
+```
+
+### Bước 3 — Cài Biến Môi Trường
+
+Trong tab **Startup** của WispByte panel, thêm:
+
+```
+DISCORD_TOKEN = token_bot_của_bạn
+```
+
+### Bước 4 — Startup Command
+
+```
+node index.js
+```
+
+### Bước 5 — Start!
+
+Bấm **Start** trên panel. Bot sẽ online trong vài giây.
+
+---
+
+## 💻 Chạy Local
 
 ```bash
 git clone https://github.com/yx9mio/discord-bot-diemdanh
 cd discord-bot-diemdanh
 npm install
-cp .env.example .env   # điền DISCORD_TOKEN
-node index.js
-```
 
-### Yêu cầu
-- Node.js 20+
-- Discord Bot token với intents: **Guilds**, **Guild Members**
+# Tạo file .env
+echo "DISCORD_TOKEN=token_của_bạn" > .env
 
-### Cấu trúc dự án
-
-```
-index.js          # Entry point — tất cả command handlers
-storage.js        # SessionStore, ConfigStore, HistoryStore, MemberStatsStore
-streak.js         # Streak & milestone logic
-utils/
-├── embeds.js     # 5 embed builders
-└── progress.js   # Progress bar utility
-data/             # Auto-created, gitignored
-├── sessions.json
-├── history.json
-├── config.json
-└── members.json
+npm start
 ```
 
 ---
 
-## 🐳 Deploy
-
-### Wispbyte / VPS (Khuyến nghị)
-
-Bot chạy thẳng Node.js — không cần build:
+## 🐳 Chạy bằng Docker
 
 ```bash
-# Upload files lên server
-npm install
-echo "DISCORD_TOKEN=your_token" > .env
-node index.js
-
-# Chạy liên tục với PM2
-npm install -g pm2
-pm2 start index.js --name diemdanh-bot
-pm2 save && pm2 startup
+docker build -t diemdanh-bot .
+docker run -e DISCORD_TOKEN=token_của_bạn diemdanh-bot
 ```
-
-### Fly.io (Free tier)
-
-```bash
-curl -L https://fly.io/install.sh | sh
-flyctl auth login
-flyctl launch
-flyctl secrets set DISCORD_TOKEN=your_token_here
-flyctl deploy
-```
-
-**Free tier**: 3 shared-cpu-1x VMs, 256MB RAM.
 
 ---
 
-## ⚠️ Lưu ý về Storage
+## ⚠️ Lưu Ý Storage
 
-Bot dùng **JSON files** trong `data/` để lưu trữ. Trên các platform ephemeral:
+Bot hiện dùng **in-memory storage** — dữ liệu (lịch sử, stats, config) sẽ **mất khi bot restart**.
 
-- **Sessions active** ✅ persist qua restart
-- **History & member stats** ⚠️ mất khi container bị xóa/redeploy
+Đây là thiết kế phù hợp với WispByte free tier (không có persistent disk).
 
-**Giải pháp production**: Mount persistent volume (Fly Volumes) hoặc migrate sang PostgreSQL/Supabase.
+Nếu cần lưu trữ bền vững, hãy nâng cấp `storage.js` để dùng **Supabase** hoặc **MongoDB Atlas** (đều có free tier).
 
 ---
 
-## 🏗️ Tech Stack
+## 🔧 Cấu Trúc Project
+
+```
+├── index.js          # Main bot — commands & event handlers
+├── storage.js        # In-memory stores (Session, Config, History, Stats)
+├── streak.js         # Logic tính streak & milestone
+├── utils/
+│   ├── embeds.js     # Builder các Discord Embed
+│   └── progress.js   # Progress bar utility
+├── .env.example      # Mẫu biến môi trường
+├── Dockerfile        # Docker build (Node 20 Alpine)
+└── package.json
+```
+
+---
+
+## 🛠 Tech Stack
 
 - **Runtime**: Node.js 20
-- **Language**: JavaScript (CommonJS)
 - **Discord**: discord.js v14
-- **Storage**: JSON files (fs sync)
-- **Deploy**: Node.js trực tiếp / Docker / Fly.io
+- **Config**: dotenv
+- **Storage**: In-memory (RAM)
