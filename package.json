@@ -1,21 +1,13 @@
 {
   "name": "discord-bot-diemdanh",
-  "version": "2.0.0",
-  "description": "Bot Discord điểm danh Bang Chiến — TypeScript + discord.js v14",
-  "type": "module",
-  "main": "dist/index.js",
+  "version": "3.0.0",
+  "description": "Bot Discord điểm danh — JavaScript (CommonJS) + discord.js v14",
+  "main": "index.js",
   "scripts": {
-    "build": "tsc",
-    "dev": "tsx watch src/index.ts",
-    "start": "node dist/index.js"
+    "start": "node index.js"
   },
   "dependencies": {
     "discord.js": "^14.16.3",
     "dotenv": "^16.4.5"
-  },
-  "devDependencies": {
-    "@types/node": "^20.14.2",
-    "tsx": "^4.15.5",
-    "typescript": "^5.4.5"
   }
 }

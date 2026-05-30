@@ -1,6 +1,8 @@
 # 📋 Bot Điểm Danh Discord
 
-Bot Discord tự động hóa điểm danh cho guild — viết bằng **TypeScript + discord.js v14**.
+Bot Discord tự động hóa điểm danh cho guild — viết bằng **JavaScript (CommonJS) + discord.js v14**.
+
+> ✅ Không cần build step — chạy thẳng bằng `node index.js`
 
 ---
 
@@ -31,13 +33,12 @@ Bot Discord tự động hóa điểm danh cho guild — viết bằng **TypeScr
 | `/caidat_xem` | Xem cấu hình hiện tại |
 
 ### 🤖 Tự Động
-- **Live embed** cập nhật real-time: % tỷ lệ tham gia, danh sách chưa điểm danh, countdown Discord native
+- **Live embed** cập nhật real-time: % tỷ lệ tham gia, countdown Discord native
 - **Auto-close** phiên sau thời gian đặt trước
 - **Reminder** trước khi kết thúc
-- **Reschedule timer** khi bot restart (sessions.json)
-- **Streak tracking** liên tiếp theo phiên (không phá streak khi vắng do không eligible)
+- **Reschedule timer** khi bot restart
+- **Streak tracking** liên tiếp theo phiên
 - **Badge milestones**: 🌱5 ⭐10 🌟20 💪30 🏆50 👑100 lần tham gia
-- **Badge announcement** tự động sau mỗi phiên
 
 ---
 
@@ -48,7 +49,7 @@ git clone https://github.com/yx9mio/discord-bot-diemdanh
 cd discord-bot-diemdanh
 npm install
 cp .env.example .env   # điền DISCORD_TOKEN
-npm run dev
+node index.js
 ```
 
 ### Yêu cầu
@@ -58,84 +59,68 @@ npm run dev
 ### Cấu trúc dự án
 
 ```
-src/
-├── index.ts          # Entry point, tất cả command handlers
-├── storage.ts        # SessionStore, ConfigStore, HistoryStore, MemberStatsStore
-├── streak.ts         # Streak & milestone logic
-├── types.ts          # TypeScript interfaces
-└── utils/
-    ├── embeds.ts     # buildDisplayEmbed, buildSummaryEmbed, ...
-    └── progress.ts   # Progress bar utility
-data/                 # Auto-created, gitignored
-├── sessions.json     # Active sessions (persistent across restart)
-├── history.json      # Lịch sử các phiên đã kết thúc
-├── config.json       # Guild configs
-└── members.json      # Member stats & streak
+index.js          # Entry point — tất cả command handlers
+storage.js        # SessionStore, ConfigStore, HistoryStore, MemberStatsStore
+streak.js         # Streak & milestone logic
+utils/
+├── embeds.js     # 5 embed builders
+└── progress.js   # Progress bar utility
+data/             # Auto-created, gitignored
+├── sessions.json
+├── history.json
+├── config.json
+└── members.json
 ```
 
 ---
 
-## 🐳 Deploy Miễn Phí
+## 🐳 Deploy
 
-### Fly.io (Khuyến nghị)
+### Wispbyte / VPS (Khuyến nghị)
 
-Bot có sẵn `Dockerfile` — deploy trực tiếp:
+Bot chạy thẳng Node.js — không cần build:
 
 ```bash
-# Cài flyctl
-curl -L https://fly.io/install.sh | sh
+# Upload files lên server
+npm install
+echo "DISCORD_TOKEN=your_token" > .env
+node index.js
 
-# Login & deploy
+# Chạy liên tục với PM2
+npm install -g pm2
+pm2 start index.js --name diemdanh-bot
+pm2 save && pm2 startup
+```
+
+### Fly.io (Free tier)
+
+```bash
+curl -L https://fly.io/install.sh | sh
 flyctl auth login
-flyctl launch          # tự detect Dockerfile
+flyctl launch
 flyctl secrets set DISCORD_TOKEN=your_token_here
 flyctl deploy
 ```
 
-**Free tier**: 3 shared-cpu-1x VMs, 256MB RAM — đủ cho bot Discord.
-
-### Oracle Cloud Always Free (Dài hạn)
-
-VM ARM 24GB RAM, không giới hạn thời gian — tốt nhất cho production:
-
-```bash
-# Trên VM Ubuntu 24.04
-sudo apt update && sudo apt install -y nodejs npm git
-git clone https://github.com/yx9mio/discord-bot-diemdanh
-cd discord-bot-diemdanh && npm install && npm run build
-
-# Chạy bằng PM2
-npm install -g pm2
-pm2 start dist/index.js --name diemdanh-bot
-pm2 save && pm2 startup
-```
+**Free tier**: 3 shared-cpu-1x VMs, 256MB RAM.
 
 ---
 
 ## ⚠️ Lưu ý về Storage
 
-Bot dùng **JSON files** trong `data/` để lưu trữ. Trên các platform ephemeral (Fly.io, Railway...):
+Bot dùng **JSON files** trong `data/` để lưu trữ. Trên các platform ephemeral:
 
-- **Sessions active** ✅ persist qua restart (sessions.json được đọc khi bot start)
-- **History & member stats** ⚠️ **mất khi container bị xóa/redeploy**
+- **Sessions active** ✅ persist qua restart
+- **History & member stats** ⚠️ mất khi container bị xóa/redeploy
 
 **Giải pháp production**: Mount persistent volume (Fly Volumes) hoặc migrate sang PostgreSQL/Supabase.
-
-```bash
-# Fly.io persistent volume
-flyctl volumes create diemdanh_data --size 1
-# Thêm vào fly.toml:
-# [mounts]
-#   source = "diemdanh_data"
-#   destination = "/app/data"
-```
 
 ---
 
 ## 🏗️ Tech Stack
 
-- **Runtime**: Node.js 20 (Alpine)
-- **Language**: TypeScript 5
+- **Runtime**: Node.js 20
+- **Language**: JavaScript (CommonJS)
 - **Discord**: discord.js v14
 - **Storage**: JSON files (fs sync)
-- **Deploy**: Docker / Fly.io / Oracle Cloud
+- **Deploy**: Node.js trực tiếp / Docker / Fly.io
