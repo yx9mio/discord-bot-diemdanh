@@ -23,6 +23,8 @@ export interface Session {
   reminder_minutes_before_end: number | null;
   reminder_sent: boolean;
   ended: boolean;
+  /** Member IDs with the attendance role, cached at session start */
+  eligible_member_ids: string[];
 }
 
 export interface GuildConfig {

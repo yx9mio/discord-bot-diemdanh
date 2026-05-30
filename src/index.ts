@@ -78,14 +78,11 @@ function attendanceButtons(disabled = false): ActionRowBuilder<ButtonBuilder> {
 
 async function isAdminUser(interaction: ChatInputCommandInteraction<'cached'>): Promise<boolean> {
   if (interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) return true;
-
   const cfg = ConfigStore.get(interaction.guild.id);
-
   if (cfg.admin_role_id) {
     const member = await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
     if (member?.roles.cache.has(cfg.admin_role_id)) return true;
   }
-
   const roleByName = interaction.guild.roles.cache.find(
     (r) => r.name === (cfg.admin_role_name || 'Bang Chủ'),
   );
@@ -94,7 +91,6 @@ async function isAdminUser(interaction: ChatInputCommandInteraction<'cached'>): 
     const member = await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
     if (member?.roles.cache.has(roleByName.id)) return true;
   }
-
   return false;
 }
 
@@ -168,7 +164,7 @@ async function updateDisplay(guild: Guild): Promise<void> {
   } catch { /* noop */ }
 }
 
-// ─── Session Timers ───────────────────────────────────────────────────────────
+// ─── Session Timers ──────────────────────────────────────────────────────────
 
 function clearGuildTimers(guildId: string): void {
   const t = timers.get(guildId);
@@ -264,7 +260,7 @@ function scheduleSession(guildId: string): void {
   timers.set(guildId, bucket);
 }
 
-// ─── Attendance Button ────────────────────────────────────────────────────────
+// ─── Attendance Button ───────────────────────────────────────────────────────
 
 async function enforceAttendanceRole(interaction: Interaction): Promise<GuildMember | null> {
   if (!interaction.inCachedGuild()) return null;
@@ -312,7 +308,7 @@ async function markAttendance(interaction: Interaction, status: AttendanceStatus
   await interaction.reply({ content: text, ephemeral: true });
 }
 
-// ─── Slash Command Definitions ────────────────────────────────────────────────
+// ─── Slash Command Definitions ───────────────────────────────────────────────
 
 function buildCommands() {
   return [
@@ -347,6 +343,12 @@ function buildCommands() {
         ),
       ),
     new SlashCommandBuilder()
+      .setName('nhac_nho')
+      .setDescription('[Admin] Nhắc nhở thành viên chưa điểm danh')
+      .addBooleanOption((o) =>
+        o.setName('mention').setDescription('Mention @member trong channel (true) hoặc chỉ liệt kê tên (false)').setRequired(false),
+      ),
+    new SlashCommandBuilder()
       .setName('caidat_role')
       .setDescription('[Admin] Cài role được điểm danh')
       .addRoleOption((o) => o.setName('role').setDescription('Role được phép điểm danh').setRequired(true))
@@ -367,7 +369,7 @@ function buildCommands() {
   ].map((x) => x.toJSON());
 }
 
-// ─── Command Handlers ─────────────────────────────────────────────────────────
+// ─── Command Handlers ────────────────────────────────────────────────────────
 
 async function handleStart(interaction: ChatInputCommandInteraction<'cached'>): Promise<void> {
   if (!await assertAdmin(interaction)) return;
@@ -404,6 +406,11 @@ async function handleStart(interaction: ChatInputCommandInteraction<'cached'>): 
   }
 
   await interaction.deferReply();
+
+  // Fetch & cache all eligible member IDs at session start
+  await guild.members.fetch();
+  const eligibleMemberIds = [...role.members.keys()];
+
   const displayCh = await getOrCreateDisplayChannel(guild);
 
   const session: Session = {
@@ -421,6 +428,7 @@ async function handleStart(interaction: ChatInputCommandInteraction<'cached'>): 
     reminder_minutes_before_end: reminder ?? null,
     reminder_sent: false,
     ended: false,
+    eligible_member_ids: eligibleMemberIds,
   };
 
   const displayMessage = await displayCh.send({
@@ -436,7 +444,7 @@ async function handleStart(interaction: ChatInputCommandInteraction<'cached'>): 
     .setColor(Colors.Gold)
     .setDescription(
       [
-        `🎯 Role được phép điểm danh: ${role}`,
+        `🎯 Role được phép điểm danh: ${role} (${eligibleMemberIds.length} thành viên)`,
         `📊 Kênh hiển thị: ${displayCh}`,
         duration ? `⏳ Tự động kết thúc sau **${duration} phút**` : '⏳ Không đặt tự động kết thúc',
         reminder ? `🔔 Nhắc trước **${reminder} phút**` : '🔔 Không đặt reminder',
@@ -518,6 +526,72 @@ async function handleManualAdd(interaction: ChatInputCommandInteraction<'cached'
   });
 }
 
+// ─── /nhac_nho ───────────────────────────────────────────────────────────────
+
+async function handleRemind(interaction: ChatInputCommandInteraction<'cached'>): Promise<void> {
+  if (!await assertAdmin(interaction)) return;
+  const session = SessionStore.get(interaction.guild.id);
+  if (!session) {
+    await interaction.reply({ content: '⚠️ Không có phiên điểm danh nào đang mở!', ephemeral: true });
+    return;
+  }
+
+  await interaction.deferReply({ ephemeral: true });
+  const shouldMention = interaction.options.getBoolean('mention') ?? false;
+
+  const checkedIds = new Set(Object.keys(session.attendees));
+  const role = session.role_id
+    ? await interaction.guild.roles.fetch(session.role_id).catch(() => null)
+    : null;
+
+  let absentIds: string[];
+  if (role) {
+    await interaction.guild.members.fetch();
+    absentIds = [...role.members.keys()].filter((id) => !checkedIds.has(id));
+  } else {
+    absentIds = session.eligible_member_ids.filter((id) => !checkedIds.has(id));
+  }
+
+  if (absentIds.length === 0) {
+    await interaction.followUp({ content: '✅ Tất cả thành viên đã điểm danh rồi!', ephemeral: true });
+    return;
+  }
+
+  const channel = interaction.channel as TextChannel;
+
+  if (shouldMention) {
+    // Batch 10 mentions per message to stay under Discord's character limit
+    for (let i = 0; i < absentIds.length; i += 10) {
+      const batch = absentIds.slice(i, i + 10);
+      await channel.send({
+        content: `🔔 **Nhắc nhở điểm danh phiên "${session.session_name}":**\n${batch.map((id) => `<@${id}>`).join(' ')}\nHãy bấm nút điểm danh ngay nhé!`,
+        allowedMentions: { users: batch },
+      });
+    }
+    await interaction.followUp({
+      content: `🔔 Đã mention **${absentIds.length}** thành viên chưa điểm danh.`,
+      ephemeral: true,
+    });
+  } else {
+    const names: string[] = [];
+    for (const id of absentIds) {
+      const member = interaction.guild.members.cache.get(id);
+      names.push(member ? member.displayName : `<@${id}>`);
+    }
+    const embed = new EmbedBuilder()
+      .setTitle(`⏳ Chưa Điểm Danh — ${absentIds.length} người`)
+      .setColor(Colors.Orange)
+      .setDescription(names.map((n, i) => `\`${String(i + 1).padStart(2)}.\` ${n}`).join('\n'))
+      .setFooter({ text: `Phiên: ${session.session_name}` })
+      .setTimestamp();
+    await channel.send({ embeds: [embed] });
+    await interaction.followUp({
+      content: `📋 Đã gửi danh sách **${absentIds.length}** người chưa điểm danh.`,
+      ephemeral: true,
+    });
+  }
+}
+
 async function handleHistory(interaction: ChatInputCommandInteraction<'cached'>): Promise<void> {
   const history = HistoryStore.get(interaction.guild.id);
   await interaction.reply({ embeds: [buildHistoryEmbed(history)], ephemeral: true });
@@ -556,10 +630,12 @@ async function handleExport(interaction: ChatInputCommandInteraction<'cached'>):
   const attendees = Object.values(session.attendees);
   const joined = attendees.filter((x) => x.status === 'tham_gia');
   const declined = attendees.filter((x) => x.status === 'khong_tham_gia');
+  const eligible = session.eligible_member_ids.length;
   const lines = [
     `PHIÊN: ${session.session_name}`,
     `BẮT ĐẦU: ${session.start_time}`,
     `ROLE: ${session.role_name}`,
+    `ELIGIBLE: ${eligible} thành viên`,
     '',
     `THAM GIA (${joined.length})`,
     ...joined.map((x, i) => `${i + 1}. ${x.name} - ${x.time}`),
@@ -567,7 +643,7 @@ async function handleExport(interaction: ChatInputCommandInteraction<'cached'>):
     `KHÔNG THAM GIA (${declined.length})`,
     ...declined.map((x, i) => `${i + 1}. ${x.name} - ${x.time}`),
     '',
-    `TỔNG: ${attendees.length}`,
+    `TỶ LỆ: ${eligible > 0 ? Math.round((joined.length / eligible) * 100) : 0}% (${joined.length}/${eligible})`,
   ].join('\n');
   const file = new AttachmentBuilder(Buffer.from(lines, 'utf-8'), { name: 'diemdanh.txt' });
   await interaction.reply({ content: '📦 File export điểm danh:', files: [file], ephemeral: true });
@@ -607,9 +683,8 @@ async function handleConfigView(interaction: ChatInputCommandInteraction<'cached
   });
 }
 
-// ─── Bot Entry ────────────────────────────────────────────────────────────────
+// ─── Bot Entry ───────────────────────────────────────────────────────────────
 
-// Use 'clientReady' (discord.js v14.x) instead of deprecated 'ready'
 client.once('clientReady', async (readyClient) => {
   console.log(`🤖 Bot đã online: ${readyClient.user.tag}`);
   const rest = new REST({ version: '10' }).setToken(TOKEN);
@@ -638,6 +713,7 @@ client.on('interactionCreate', async (interaction) => {
       case 'xem_diemdanh':       await handleView(interaction); break;
       case 'xoa_diemdanh':       await handleDelete(interaction); break;
       case 'them_diemdanh':      await handleManualAdd(interaction); break;
+      case 'nhac_nho':           await handleRemind(interaction); break;
       case 'lich_su':            await handleHistory(interaction); break;
       case 'thong_ke':           await handleStats(interaction); break;
       case 'xuat_diemdanh':      await handleExport(interaction); break;

@@ -12,52 +12,100 @@ export function displayColor(joined: number, declined: number): number {
   return Colors.Orange;
 }
 
-export async function buildDisplayEmbed(guild: Guild, session: Session, closed = false): Promise<EmbedBuilder> {
+export async function buildDisplayEmbed(
+  guild: Guild,
+  session: Session,
+  closed = false,
+): Promise<EmbedBuilder> {
   const attendees = Object.values(session.attendees);
   const joined = attendees.filter((x) => x.status === 'tham_gia');
   const declined = attendees.filter((x) => x.status === 'khong_tham_gia');
-  const role = session.role_id ? await guild.roles.fetch(session.role_id).catch(() => null) : null;
-  const eligibleCount = role ? role.members.size : 0;
-  const progress = buildProgressBar(joined.length, eligibleCount || Math.max(joined.length + declined.length, 1));
+
+  const role = session.role_id
+    ? await guild.roles.fetch(session.role_id).catch(() => null)
+    : null;
+  const eligibleCount = role ? role.members.size : session.eligible_member_ids.length;
+  const denominator = Math.max(eligibleCount, joined.length + declined.length, 1);
+  const pct = Math.round((joined.length / denominator) * 100);
+  const progress = buildProgressBar(joined.length, denominator);
+
+  // Members with role who haven't checked in
+  const checkedIds = new Set(attendees.map((a) => a.user_id));
+  const absentIds = (role
+    ? [...role.members.keys()]
+    : session.eligible_member_ids
+  ).filter((id) => !checkedIds.has(id));
+
+  const absentNames: string[] = [];
+  for (const id of absentIds.slice(0, 20)) {
+    const member = guild.members.cache.get(id);
+    absentNames.push(member ? member.displayName : `<@${id}>`);
+  }
+  const absentMore = absentIds.length > 20 ? ` _(+${absentIds.length - 20} người nữa)_` : '';
+
   const prefix = closed ? '🏆 [ĐÃ KẾT THÚC]' : '📋 Điểm Danh Bang Chiến';
 
-  return new EmbedBuilder()
+  const descLines = [
+    `👥 Role: **${session.role_name}** • Tổng eligible: **${eligibleCount}**`,
+    `📈 Tỷ lệ tham gia: ${progress} **${pct}%** (${joined.length}/${denominator})`,
+  ];
+
+  if (session.end_time && !closed) {
+    const ts = Math.floor(new Date(session.end_time).getTime() / 1000);
+    descLines.push(`⏰ Kết thúc: <t:${ts}:R> (<t:${ts}:t>)`);
+  } else if (!closed) {
+    descLines.push('⏳ Không đặt tự động kết thúc');
+  }
+
+  const embed = new EmbedBuilder()
     .setTitle(`${prefix}: ${session.session_name}`)
     .setColor(displayColor(joined.length, declined.length))
-    .setDescription([
-      `👥 Role được điểm danh: **${session.role_name}**`,
-      `📈 Tỷ lệ tham gia: ${progress}`,
-      session.end_time
-        ? `⏳ Tự động kết thúc: <t:${Math.floor(new Date(session.end_time).getTime() / 1000)}:R>`
-        : '⏳ Không đặt tự động kết thúc',
-    ].join('\n'))
+    .setDescription(descLines.join('\n'))
     .addFields(
       {
         name: `✅ Tham Gia — ${joined.length}`,
-        value: fmtList(joined.map((d, i) => `\`${String(i + 1).padStart(2)}.\` ${d.name} *(lúc ${d.time})*`)),
+        value: fmtList(
+          joined.map((d, i) => `\`${String(i + 1).padStart(2)}.\` ${d.name} *(${d.time})*`),
+        ),
         inline: false,
       },
       {
         name: `❌ Không Tham Gia — ${declined.length}`,
-        value: fmtList(declined.map((d, i) => `\`${String(i + 1).padStart(2)}.\` ${d.name} *(lúc ${d.time})*`)),
+        value: fmtList(
+          declined.map((d, i) => `\`${String(i + 1).padStart(2)}.\` ${d.name} *(${d.time})*`),
+        ),
         inline: false,
       },
-    )
-    .setFooter({ text: `Tổng đã điểm danh: ${attendees.length} • Bắt đầu: ${session.start_time}` })
+    );
+
+  if (!closed && absentIds.length > 0) {
+    embed.addFields({
+      name: `⏳ Chưa Điểm Danh — ${absentIds.length}`,
+      value: absentNames.join(', ') + absentMore,
+      inline: false,
+    });
+  }
+
+  embed
+    .setFooter({ text: `Đã điểm danh: ${attendees.length} • Bắt đầu: ${session.start_time}` })
     .setTimestamp();
+
+  return embed;
 }
 
 export function buildSummaryEmbed(session: Session): EmbedBuilder {
   const attendees = Object.values(session.attendees);
   const joined = attendees.filter((x) => x.status === 'tham_gia').length;
   const declined = attendees.filter((x) => x.status === 'khong_tham_gia').length;
+  const eligible = session.eligible_member_ids.length || attendees.length;
+  const pct = eligible > 0 ? Math.round((joined / eligible) * 100) : 0;
   return new EmbedBuilder()
     .setTitle(`🏁 Kết Thúc Điểm Danh: ${session.session_name}`)
     .setColor(Colors.Green)
     .addFields(
       { name: '✅ Tham Gia', value: String(joined), inline: true },
       { name: '❌ Không Tham Gia', value: String(declined), inline: true },
-      { name: '📊 Tổng Cộng', value: String(attendees.length), inline: true },
+      { name: '📊 Tổng / Eligible', value: `${attendees.length} / ${eligible} (${pct}%)`, inline: true },
     )
     .setTimestamp();
 }
@@ -68,10 +116,18 @@ export function buildHistoryEmbed(items: HistorySession[]): EmbedBuilder {
     .setColor(Colors.Blue)
     .setDescription(
       items.length
-        ? items.slice(0, 10).map((s, i) => {
-            const total = s.total_tham_gia + s.total_khong_tham_gia;
-            return `**${i + 1}. ${s.session_name}**\nBắt đầu: ${s.start_time}\nKết thúc: ${s.end_time}\nRole: ${s.role_name}\nTổng: ${total} (${s.total_tham_gia} tham gia / ${s.total_khong_tham_gia} không tham gia)`;
-          }).join('\n\n')
+        ? items
+            .slice(-10)
+            .reverse()
+            .map((s, i) => {
+              const total = s.total_tham_gia + s.total_khong_tham_gia;
+              return (
+                `**${i + 1}. ${s.session_name}**\n` +
+                `Bắt đầu: ${s.start_time} • Kết thúc: ${s.end_time}\n` +
+                `Role: ${s.role_name} • Tổng: ${total} (${s.total_tham_gia}✅ / ${s.total_khong_tham_gia}❌)`
+              );
+            })
+            .join('\n\n')
         : 'Chưa có lịch sử phiên nào.',
     )
     .setTimestamp();
@@ -85,19 +141,27 @@ export function buildStatsEmbed(title: string, lines: string[]): EmbedBuilder {
     .setTimestamp();
 }
 
-export function buildConfigEmbed(cfg: GuildConfig, attendanceRole: Role | null, adminRole: Role | null): EmbedBuilder {
+export function buildConfigEmbed(
+  cfg: GuildConfig,
+  attendanceRole: Role | null,
+  adminRole: Role | null,
+): EmbedBuilder {
   return new EmbedBuilder()
     .setTitle('⚙️ Cấu Hình Bot Điểm Danh')
     .setColor(Colors.Blurple)
     .addFields(
       {
         name: '📋 Role Điểm Danh',
-        value: attendanceRole ? `${attendanceRole} (${attendanceRole.name})` : `**${cfg.allowed_role_name}** _(chưa tìm thấy)_`,
+        value: attendanceRole
+          ? `${attendanceRole} (${attendanceRole.name})`
+          : `**${cfg.allowed_role_name}** _(chưa tìm thấy)_`,
         inline: true,
       },
       {
         name: '🛡️ Role Admin Bot',
-        value: adminRole ? `${adminRole} (${adminRole.name})` : `**${cfg.admin_role_name}** _(chưa tìm thấy)_`,
+        value: adminRole
+          ? `${adminRole} (${adminRole.name})`
+          : `**${cfg.admin_role_name}** _(chưa tìm thấy)_`,
         inline: true,
       },
     )
