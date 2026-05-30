@@ -32,17 +32,25 @@ const commands = [
   new SlashCommandBuilder()
     .setName('batdau_diemdanh')
     .setDescription('Mở phiên điểm danh mới')
-    .addStringOption(o => o.setName('ten_phien').setDescription('Tên phiên (vd: Bang Chiến T7)').setRequired(true))
+    .addStringOption(o => o
+      .setName('ten_phien')
+      .setDescription('Tên phiên (vd: Bang Chiến T7)')
+      .setRequired(true))
     .addIntegerOption(o => o
       .setName('gio_dong')
-      .setDescription('Giờ tự động đóng (0-23, theo giờ VN UTC+7). Để trống = không tự đóng.')
+      .setDescription('Giờ tự đóng (0–23, giờ VN UTC+7). Để trống = không tự đóng.')
       .setRequired(false)
       .setMinValue(0).setMaxValue(23))
     .addIntegerOption(o => o
       .setName('phut_dong')
-      .setDescription('Phút tự động đóng (0-59). Mặc định = 0 nếu đã nhập gio_dong.')
+      .setDescription('Phút tự đóng (0–59). Mặc định = 0.')
       .setRequired(false)
-      .setMinValue(0).setMaxValue(59)),
+      .setMinValue(0).setMaxValue(59))
+    .addIntegerOption(o => o
+      .setName('ngay_dong')
+      .setDescription('Ngày trong tháng (1–31). Nếu không nhập = hôm nay.')
+      .setRequired(false)
+      .setMinValue(1).setMaxValue(31)),
   new SlashCommandBuilder().setName('ket_thuc_diemdanh').setDescription('Kết thúc phiên điểm danh, lưu lịch sử'),
   new SlashCommandBuilder().setName('huy_diemdanh').setDescription('Hủy phiên điểm danh (không lưu lịch sử)'),
   new SlashCommandBuilder()
@@ -108,37 +116,53 @@ async function registerCommands() {
   }
 }
 
-// ─── Tính số ms đến giờ:phút cố định hôm nay (UTC+7) ─────────
-// Trả về { ms, targetDate }
-// ms < 0 nếu giờ đó đã qua hôm nay
-function msUntilFixedTime(hour, minute) {
+// ─── Tính ms đến ngày/giờ/phút cố định (giờ VN UTC+7) ────────
+// - ngay: null = hôm nay (theo giờ VN)
+// - Tự điều chỉnh sang tháng tiếp nếu ngày + giờ:phút đã qua
+// Trả về: { ms, targetDate, errorMsg }
+function msUntilFixedDateTime(day, hour, minute) {
   const VN_OFFSET_MS = 7 * 60 * 60 * 1000;
   const nowUtcMs = Date.now();
 
-  // Tính "hôm nay theo giờ VN": lấy ngày năm tháng VN
-  const nowVnMs = nowUtcMs + VN_OFFSET_MS;
-  const nowVnDate = new Date(nowVnMs);
+  // Giờ VN hiện tại
+  const nowVnDate = new Date(nowUtcMs + VN_OFFSET_MS);
+  const vnYear  = nowVnDate.getUTCFullYear();
+  const vnMonth = nowVnDate.getUTCMonth(); // 0-indexed
+  const vnDay   = nowVnDate.getUTCDate();
 
-  // Xây target theo giờ VN: năm/tháng/ngày giờ VN + hour:minute:00
-  const targetVnMs = Date.UTC(
-    nowVnDate.getUTCFullYear(),
-    nowVnDate.getUTCMonth(),
-    nowVnDate.getUTCDate(),
-    hour,    // giờ VN (offset đã là 0 vì ta đang làm việc trong "không gian VN")
-    minute,
-    0, 0
-  );
-  // targetVnMs là miliseconds nếu đây là UTC, nhưng thực ra là giờ VN —
-  // phải trừ đi VN_OFFSET để ra UTC thật sự
-  const targetUtcMs = targetVnMs - VN_OFFSET_MS;
+  // Nếu không nhập ngày → dùng hôm nay
+  const targetDay = day ?? vnDay;
 
-  return {
-    ms: targetUtcMs - nowUtcMs,
-    targetDate: new Date(targetUtcMs),
-  };
+  // Thử xây target trong tháng hiện tại
+  function buildTarget(year, month, d) {
+    // Kiểm tra ngày hợp lệ trong tháng đó
+    const maxDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+    if (d > maxDay) return null; // ngày không tồn tại trong tháng này
+    const targetVnMs = Date.UTC(year, month, d, hour, minute, 0, 0);
+    const targetUtcMs = targetVnMs - VN_OFFSET_MS;
+    return { ms: targetUtcMs - nowUtcMs, targetDate: new Date(targetUtcMs) };
+  }
+
+  // Thử tháng hiện tại
+  let result = buildTarget(vnYear, vnMonth, targetDay);
+
+  if (!result || result.ms <= 0) {
+    // Đã qua hoặc ngày không tồn tại → thử tháng sau
+    const nextMonth = vnMonth === 11 ? 0 : vnMonth + 1;
+    const nextYear  = vnMonth === 11 ? vnYear + 1 : vnYear;
+    result = buildTarget(nextYear, nextMonth, targetDay);
+  }
+
+  // Vẫn không hợp lệ (ví dụ: ngày 31 trong tháng 2)
+  if (!result || result.ms <= 0) {
+    return { ms: -1, targetDate: null,
+      errorMsg: `Ngày **${targetDay}** không tồn tại trong tháng hiện tại lẫn tháng sau. Hãy kiểm tra lại.` };
+  }
+
+  return { ...result, errorMsg: null };
 }
 
-// ─── Format thời lượng ms → chuỗi "X giờ Y phút" hoặc "Y phút" ─
+// ─── Format thời lượng ms → chuỗi "X giờ Y phút" ─────────────
 function formatDuration(ms) {
   const totalMin = Math.round(ms / 60000);
   if (totalMin < 60) return `${totalMin} phút`;
@@ -277,29 +301,35 @@ client.on('interactionCreate', async (interaction) => {
     const tenPhien = interaction.options.getString('ten_phien');
     const gioDong  = interaction.options.getInteger('gio_dong');
     const phutDong = interaction.options.getInteger('phut_dong') ?? 0;
+    const ngayDong = interaction.options.getInteger('ngay_dong');  // null = hôm nay
 
-    // Tính ms đến giờ đóng cố định (UTC+7)
+    // — Tính thời gian tự đóng —
     let autoCloseMs = 0;
     let autoCloseLabel = '';
     let autoCloseAt = null;
 
     if (gioDong !== null) {
-      const { ms, targetDate } = msUntilFixedTime(gioDong, phutDong);
+      const { ms, targetDate, errorMsg } = msUntilFixedDateTime(ngayDong, gioDong, phutDong);
       const pad = n => String(n).padStart(2, '0');
 
+      if (errorMsg) {
+        return interaction.reply({ content: `❌ ${errorMsg}`, ephemeral: true });
+      }
       if (ms <= 0) {
+        const dateStr = ngayDong ? `ngày **${ngayDong}** ` : '';
         return interaction.reply({
-          content: `❌ Giờ đóng **${pad(gioDong)}:${pad(phutDong)}** đã qua rồi hôm nay. Hãy chọn giờ trong tương lai (giờ VN).`,
+          content: `❌ Thời gian đóng ${dateStr}**${pad(gioDong)}:${pad(phutDong)}** đã qua rồi. Hãy nhập thời gian trong tương lai (giờ VN).`,
           ephemeral: true,
         });
       }
 
-      autoCloseMs = ms;
-      autoCloseAt = targetDate.toISOString();
+      autoCloseMs  = ms;
+      autoCloseAt  = targetDate.toISOString();
 
-      // Discord timestamp: hiển thị giờ:phút local của người dùng
       const discordTs = Math.floor(targetDate.getTime() / 1000);
-      autoCloseLabel = `**${pad(gioDong)}:${pad(phutDong)}** (<t:${discordTs}:t>) — còn ~${formatDuration(ms)}`;
+      // Hiển thị: ngày/giờ VN + Discord relative
+      const dayPart = ngayDong ? `ngày ${ngayDong}, ` : '';
+      autoCloseLabel = `${dayPart}**${pad(gioDong)}:${pad(phutDong)}** (<t:${discordTs}:F>) — còn ~${formatDuration(ms)}`;
     }
 
     await guild.members.fetch().catch(() => null);
@@ -450,7 +480,7 @@ client.on('interactionCreate', async (interaction) => {
     const pct = eligible > 0 ? Math.round((joined.length / eligible) * 100) : 0;
     const bar = buildProgressBar(pct);
     const autoInfo = session.auto_close_at
-      ? `\n🔒 Tự đóng lúc: <t:${Math.floor(new Date(session.auto_close_at).getTime()/1000)}:t>`
+      ? `\n🔒 Tự đóng: <t:${Math.floor(new Date(session.auto_close_at).getTime()/1000)}:F>`
       : '';
     const embed = new EmbedBuilder()
       .setTitle(`📋 Điểm Danh: ${session.session_name}`)
