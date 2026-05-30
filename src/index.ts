@@ -23,7 +23,13 @@ import {
 } from 'discord.js';
 import { ConfigStore, HistoryStore, SessionStore } from './storage.js';
 import { AttendanceStatus, HistorySession, Session } from './types.js';
-import { buildConfigEmbed, buildDisplayEmbed, buildHistoryEmbed, buildStatsEmbed, buildSummaryEmbed } from './utils/embeds.js';
+import {
+  buildConfigEmbed,
+  buildDisplayEmbed,
+  buildHistoryEmbed,
+  buildStatsEmbed,
+  buildSummaryEmbed,
+} from './utils/embeds.js';
 
 const TOKEN = process.env.DISCORD_TOKEN;
 if (!TOKEN) throw new Error('❌ Thiếu DISCORD_TOKEN trong .env');
@@ -34,13 +40,18 @@ const client = new Client({
 
 const timers = new Map<string, { reminder?: NodeJS.Timeout; autoClose?: NodeJS.Timeout }>();
 
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
 function nowTime(): string {
-  return new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+  return new Date().toLocaleTimeString('vi-VN', {
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  });
 }
 
 function nowDatetime(): string {
   return new Date().toLocaleString('vi-VN', {
-    day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false,
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit', hour12: false,
   });
 }
 
@@ -50,10 +61,65 @@ function toIsoAfterMinutes(minutes: number): string {
 
 function attendanceButtons(disabled = false): ActionRowBuilder<ButtonBuilder> {
   return new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder().setCustomId('btn_tham_gia').setLabel('✅ Tham Gia').setStyle(ButtonStyle.Success).setDisabled(disabled),
-    new ButtonBuilder().setCustomId('btn_khong_tham_gia').setLabel('❌ Không Tham Gia').setStyle(ButtonStyle.Danger).setDisabled(disabled),
+    new ButtonBuilder()
+      .setCustomId('btn_tham_gia')
+      .setLabel('✅ Tham Gia')
+      .setStyle(ButtonStyle.Success)
+      .setDisabled(disabled),
+    new ButtonBuilder()
+      .setCustomId('btn_khong_tham_gia')
+      .setLabel('❌ Không Tham Gia')
+      .setStyle(ButtonStyle.Danger)
+      .setDisabled(disabled),
   );
 }
+
+// ─── Admin Role Guard ────────────────────────────────────────────────────────
+
+/**
+ * Returns true if the member:
+ * 1. Has ManageGuild permission (server admin / owner), OR
+ * 2. Has the configured admin role (admin_role_id / admin_role_name)
+ */
+async function isAdminUser(interaction: ChatInputCommandInteraction<'cached'>): Promise<boolean> {
+  // Always allow ManageGuild holders
+  if (interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) return true;
+
+  const cfg = ConfigStore.get(interaction.guild.id);
+
+  // Check by stored role ID first (fast path)
+  if (cfg.admin_role_id) {
+    const member = await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
+    if (member?.roles.cache.has(cfg.admin_role_id)) return true;
+  }
+
+  // Fallback: match by role name
+  const roleByName = interaction.guild.roles.cache.find(
+    (r) => r.name === (cfg.admin_role_name || 'Bang Chủ'),
+  );
+  if (roleByName) {
+    // Cache the ID for future lookups
+    ConfigStore.set(interaction.guild.id, { ...cfg, admin_role_id: roleByName.id });
+    const member = await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
+    if (member?.roles.cache.has(roleByName.id)) return true;
+  }
+
+  return false;
+}
+
+async function assertAdmin(interaction: ChatInputCommandInteraction<'cached'>): Promise<boolean> {
+  const ok = await isAdminUser(interaction);
+  if (!ok) {
+    const cfg = ConfigStore.get(interaction.guild.id);
+    await interaction.reply({
+      content: `🚫 Bạn không có quyền dùng lệnh này.\nYêu cầu role **${cfg.admin_role_name}** hoặc quyền **Quản lý Server**.`,
+      ephemeral: true,
+    });
+  }
+  return ok;
+}
+
+// ─── Attendance Role ─────────────────────────────────────────────────────────
 
 async function resolveAllowedRole(guild: Guild): Promise<Role | null> {
   const cfg = ConfigStore.get(guild.id);
@@ -61,18 +127,35 @@ async function resolveAllowedRole(guild: Guild): Promise<Role | null> {
     const byId = await guild.roles.fetch(cfg.allowed_role_id).catch(() => null);
     if (byId) return byId;
   }
-  const byName = guild.roles.cache.find((r) => r.name === (cfg.allowed_role_name || 'Bang Chúng')) ?? null;
+  const byName = guild.roles.cache.find(
+    (r) => r.name === (cfg.allowed_role_name || 'Bang Chúng'),
+  ) ?? null;
   if (byName) {
-    ConfigStore.set(guild.id, { allowed_role_id: byName.id, allowed_role_name: byName.name });
+    ConfigStore.set(guild.id, { ...cfg, allowed_role_id: byName.id });
     return byName;
   }
   return null;
 }
 
+async function resolveAdminRole(guild: Guild): Promise<Role | null> {
+  const cfg = ConfigStore.get(guild.id);
+  if (cfg.admin_role_id) {
+    const byId = await guild.roles.fetch(cfg.admin_role_id).catch(() => null);
+    if (byId) return byId;
+  }
+  return guild.roles.cache.find(
+    (r) => r.name === (cfg.admin_role_name || 'Bang Chủ'),
+  ) ?? null;
+}
+
+// ─── Display Channel ─────────────────────────────────────────────────────────
+
 async function getOrCreateDisplayChannel(guild: Guild): Promise<TextChannel> {
-  const existing = guild.channels.cache.find((ch) => ch.type === ChannelType.GuildText && ch.name === 'diemdanh-bang-chien');
+  const existing = guild.channels.cache.find(
+    (ch) => ch.type === ChannelType.GuildText && ch.name === 'diemdanh-bang-chien',
+  );
   if (existing) return existing as TextChannel;
-  const ch = await guild.channels.create({
+  return guild.channels.create({
     name: 'diemdanh-bang-chien',
     type: ChannelType.GuildText,
     topic: '📋 Danh sách điểm danh Bang Chiến — Tự động cập nhật',
@@ -82,7 +165,6 @@ async function getOrCreateDisplayChannel(guild: Guild): Promise<TextChannel> {
       { id: client.user!.id, type: OverwriteType.Member, allow: ['SendMessages', 'ManageMessages'] },
     ],
   });
-  return ch;
 }
 
 async function updateDisplay(guild: Guild): Promise<void> {
@@ -92,10 +174,10 @@ async function updateDisplay(guild: Guild): Promise<void> {
     const channel = await guild.channels.fetch(session.display_channel_id) as TextChannel;
     const msg = await channel.messages.fetch(session.display_message_id);
     await msg.edit({ embeds: [await buildDisplayEmbed(guild, session)], components: [attendanceButtons(false)] });
-  } catch {
-    // noop
-  }
+  } catch { /* noop */ }
 }
+
+// ─── Session Timers ───────────────────────────────────────────────────────────
 
 function clearGuildTimers(guildId: string): void {
   const t = timers.get(guildId);
@@ -113,18 +195,23 @@ async function finishSession(guild: Guild, reason = 'manual'): Promise<void> {
     const displayChannel = await guild.channels.fetch(session.display_channel_id) as TextChannel;
     if (session.display_message_id) {
       const msg = await displayChannel.messages.fetch(session.display_message_id);
-      await msg.edit({ embeds: [await buildDisplayEmbed(guild, session, true)], components: [attendanceButtons(true)] });
+      await msg.edit({
+        embeds: [await buildDisplayEmbed(guild, session, true)],
+        components: [attendanceButtons(true)],
+      });
     }
-  } catch {
-    // noop
-  }
+  } catch { /* noop */ }
 
   try {
     const announceChannel = await guild.channels.fetch(session.announce_channel_id) as TextChannel;
-    await announceChannel.send({ embeds: [buildSummaryEmbed(session).setFooter({ text: reason === 'auto' ? 'Phiên tự động kết thúc' : 'Phiên kết thúc thủ công' })] });
-  } catch {
-    // noop
-  }
+    await announceChannel.send({
+      embeds: [
+        buildSummaryEmbed(session).setFooter({
+          text: reason === 'auto' ? 'Phiên tự động kết thúc' : 'Phiên kết thúc thủ công',
+        }),
+      ],
+    });
+  } catch { /* noop */ }
 
   const attendees = Object.values(session.attendees);
   const history: HistorySession = {
@@ -147,7 +234,10 @@ function scheduleSession(guildId: string): void {
   if (!session || !session.end_time) return;
 
   const endMs = new Date(session.end_time).getTime() - Date.now();
-  const reminderMs = session.reminder_minutes_before_end !== null ? endMs - session.reminder_minutes_before_end * 60_000 : null;
+  const reminderMs =
+    session.reminder_minutes_before_end !== null
+      ? endMs - session.reminder_minutes_before_end * 60_000
+      : null;
   const bucket: { reminder?: NodeJS.Timeout; autoClose?: NodeJS.Timeout } = {};
 
   if (reminderMs !== null && reminderMs > 0 && !session.reminder_sent) {
@@ -158,7 +248,15 @@ function scheduleSession(guildId: string): void {
       const channel = await guild.channels.fetch(fresh.announce_channel_id).catch(() => null) as TextChannel | null;
       if (channel) {
         await channel.send({
-          embeds: [new EmbedBuilder().setTitle('⏰ Nhắc Nhở Điểm Danh').setColor(Colors.Orange).setDescription(`Phiên **${fresh.session_name}** sẽ kết thúc sau **${fresh.reminder_minutes_before_end} phút**.`).setTimestamp()],
+          embeds: [
+            new EmbedBuilder()
+              .setTitle('⏰ Nhắc Nhở Điểm Danh')
+              .setColor(Colors.Orange)
+              .setDescription(
+                `Phiên **${fresh.session_name}** sẽ kết thúc sau **${fresh.reminder_minutes_before_end} phút**.`,
+              )
+              .setTimestamp(),
+          ],
         });
       }
       fresh.reminder_sent = true;
@@ -175,12 +273,13 @@ function scheduleSession(guildId: string): void {
   timers.set(guildId, bucket);
 }
 
-async function enforceRole(interaction: Interaction): Promise<GuildMember | null> {
+// ─── Attendance Button ────────────────────────────────────────────────────────
+
+async function enforceAttendanceRole(interaction: Interaction): Promise<GuildMember | null> {
   if (!interaction.inCachedGuild()) return null;
-  const guild = interaction.guild;
-  const role = await resolveAllowedRole(guild);
+  const role = await resolveAllowedRole(interaction.guild);
   if (!role) return null;
-  const member = await guild.members.fetch(interaction.user.id).catch(() => null);
+  const member = await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
   if (!member) return null;
   return member.roles.cache.has(role.id) ? member : null;
 }
@@ -194,9 +293,12 @@ async function markAttendance(interaction: Interaction, status: AttendanceStatus
     return;
   }
 
-  const member = await enforceRole(interaction);
+  const member = await enforceAttendanceRole(interaction);
   if (!member) {
-    await interaction.reply({ content: `🚫 Chỉ thành viên có role **${session.role_name}** mới được điểm danh.`, ephemeral: true });
+    await interaction.reply({
+      content: `🚫 Chỉ thành viên có role **${session.role_name}** mới được điểm danh.`,
+      ephemeral: true,
+    });
     return;
   }
 
@@ -212,49 +314,91 @@ async function markAttendance(interaction: Interaction, status: AttendanceStatus
   await updateDisplay(guild);
 
   const label = status === 'tham_gia' ? '✅ Tham Gia' : '❌ Không Tham Gia';
-  const text = old && old !== status ? `🔄 Đã đổi trạng thái sang **${label}** cho ${interaction.user}.` : `${label} — đã điểm danh thành công cho ${interaction.user}!`;
+  const text =
+    old && old !== status
+      ? `🔄 Đã đổi trạng thái sang **${label}** cho ${interaction.user}.`
+      : `${label} — đã điểm danh thành công cho ${interaction.user}!`;
   await interaction.reply({ content: text, ephemeral: true });
 }
 
+// ─── Slash Command Definitions ────────────────────────────────────────────────
+
 function buildCommands() {
   return [
-    new SlashCommandBuilder().setName('batdau_diemdanh').setDescription('[Admin] Bắt đầu phiên điểm danh mới')
-      .addStringOption(o => o.setName('ten_tran').setDescription('Tên trận / ngày tháng').setRequired(false))
-      .addIntegerOption(o => o.setName('thoi_luong_phut').setDescription('Tự động kết thúc sau bao nhiêu phút').setRequired(false).setMinValue(5).setMaxValue(1440))
-      .addIntegerOption(o => o.setName('nhac_truoc_phut').setDescription('Nhắc trước khi kết thúc bao nhiêu phút').setRequired(false).setMinValue(1).setMaxValue(180))
-      .addBooleanOption(o => o.setName('ping_role').setDescription('Có ping role Bang Chúng khi mở phiên không?').setRequired(false))
+    // Admin commands — no setDefaultMemberPermissions so role-based admins can see them
+    new SlashCommandBuilder()
+      .setName('batdau_diemdanh')
+      .setDescription('[Admin] Bắt đầu phiên điểm danh mới')
+      .addStringOption((o) => o.setName('ten_tran').setDescription('Tên trận / ngày tháng').setRequired(false))
+      .addIntegerOption((o) =>
+        o.setName('thoi_luong_phut').setDescription('Tự động kết thúc sau bao nhiêu phút').setRequired(false).setMinValue(5).setMaxValue(1440),
+      )
+      .addIntegerOption((o) =>
+        o.setName('nhac_truoc_phut').setDescription('Nhắc trước khi kết thúc bao nhiêu phút').setRequired(false).setMinValue(1).setMaxValue(180),
+      )
+      .addBooleanOption((o) =>
+        o.setName('ping_role').setDescription('Có ping role Bang Chúng khi mở phiên không?').setRequired(false),
+      ),
+    new SlashCommandBuilder()
+      .setName('ket_thuc_diemdanh')
+      .setDescription('[Admin] Kết thúc phiên hiện tại'),
+    new SlashCommandBuilder()
+      .setName('xoa_diemdanh')
+      .setDescription('[Admin] Xóa điểm danh của một thành viên')
+      .addUserOption((o) => o.setName('member').setDescription('Thành viên cần xóa').setRequired(true)),
+    new SlashCommandBuilder()
+      .setName('them_diemdanh')
+      .setDescription('[Admin] Thêm điểm danh thủ công')
+      .addUserOption((o) => o.setName('member').setDescription('Thành viên cần thêm').setRequired(true))
+      .addStringOption((o) =>
+        o.setName('trang_thai').setDescription('Trạng thái').setRequired(true).addChoices(
+          { name: '✅ Tham Gia', value: 'tham_gia' },
+          { name: '❌ Không Tham Gia', value: 'khong_tham_gia' },
+        ),
+      ),
+    // Config — only real ManageGuild can set roles
+    new SlashCommandBuilder()
+      .setName('caidat_role')
+      .setDescription('[Admin] Cài role được điểm danh')
+      .addRoleOption((o) => o.setName('role').setDescription('Role được phép điểm danh').setRequired(true))
       .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
-    new SlashCommandBuilder().setName('ket_thuc_diemdanh').setDescription('[Admin] Kết thúc phiên hiện tại').setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
+    new SlashCommandBuilder()
+      .setName('caidat_admin_role')
+      .setDescription('[Admin] Cài role được dùng lệnh admin bot')
+      .addRoleOption((o) => o.setName('role').setDescription('Role admin bot').setRequired(true))
+      .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
+    new SlashCommandBuilder()
+      .setName('caidat_xem')
+      .setDescription('[Admin] Xem cấu hình hiện tại')
+      .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
+    // Public commands
     new SlashCommandBuilder().setName('xem_diemdanh').setDescription('Xem danh sách hiện tại'),
-    new SlashCommandBuilder().setName('xoa_diemdanh').setDescription('[Admin] Xóa điểm danh của một thành viên')
-      .addUserOption(o => o.setName('member').setDescription('Thành viên cần xóa').setRequired(true))
-      .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
-    new SlashCommandBuilder().setName('them_diemdanh').setDescription('[Admin] Thêm điểm danh thủ công')
-      .addUserOption(o => o.setName('member').setDescription('Thành viên cần thêm').setRequired(true))
-      .addStringOption(o => o.setName('trang_thai').setDescription('Trạng thái').setRequired(true).addChoices(
-        { name: '✅ Tham Gia', value: 'tham_gia' },
-        { name: '❌ Không Tham Gia', value: 'khong_tham_gia' },
-      ))
-      .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
     new SlashCommandBuilder().setName('lich_su').setDescription('Xem lịch sử các phiên đã kết thúc'),
     new SlashCommandBuilder().setName('thong_ke').setDescription('Xem thống kê thành viên tham gia nhiều nhất'),
     new SlashCommandBuilder().setName('xuat_diemdanh').setDescription('Xuất danh sách điểm danh hiện tại ra file txt'),
-    new SlashCommandBuilder().setName('caidat_role').setDescription('[Admin] Cài role được điểm danh')
-      .addRoleOption(o => o.setName('role').setDescription('Role được phép điểm danh').setRequired(true))
-      .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
-  ].map(x => x.toJSON());
+  ].map((x) => x.toJSON());
 }
 
+// ─── Command Handlers ─────────────────────────────────────────────────────────
+
 async function handleStart(interaction: ChatInputCommandInteraction<'cached'>): Promise<void> {
+  if (!await assertAdmin(interaction)) return;
+
   const guild = interaction.guild;
   if (SessionStore.get(guild.id)) {
-    await interaction.reply({ content: '⚠️ Đã có phiên điểm danh đang mở! Dùng `/ket_thuc_diemdanh` trước.', ephemeral: true });
+    await interaction.reply({
+      content: '⚠️ Đã có phiên điểm danh đang mở! Dùng `/ket_thuc_diemdanh` trước.',
+      ephemeral: true,
+    });
     return;
   }
 
   const role = await resolveAllowedRole(guild);
   if (!role) {
-    await interaction.reply({ content: '⚠️ Không tìm thấy role **Bang Chúng**. Hãy dùng `/caidat_role` trước.', ephemeral: true });
+    await interaction.reply({
+      content: '⚠️ Không tìm thấy role **Bang Chúng**. Hãy dùng `/caidat_role` trước.',
+      ephemeral: true,
+    });
     return;
   }
 
@@ -264,7 +408,10 @@ async function handleStart(interaction: ChatInputCommandInteraction<'cached'>): 
   const shouldPingRole = interaction.options.getBoolean('ping_role') ?? true;
 
   if (duration && reminder && reminder >= duration) {
-    await interaction.reply({ content: '⚠️ `nhac_truoc_phut` phải nhỏ hơn `thoi_luong_phut`.', ephemeral: true });
+    await interaction.reply({
+      content: '⚠️ `nhac_truoc_phut` phải nhỏ hơn `thoi_luong_phut`.',
+      ephemeral: true,
+    });
     return;
   }
 
@@ -288,7 +435,10 @@ async function handleStart(interaction: ChatInputCommandInteraction<'cached'>): 
     ended: false,
   };
 
-  const displayMessage = await displayCh.send({ embeds: [await buildDisplayEmbed(guild, session)], components: [attendanceButtons(false)] });
+  const displayMessage = await displayCh.send({
+    embeds: [await buildDisplayEmbed(guild, session)],
+    components: [attendanceButtons(false)],
+  });
   session.display_message_id = displayMessage.id;
   SessionStore.set(guild.id, session);
   if (duration) scheduleSession(guild.id);
@@ -296,12 +446,14 @@ async function handleStart(interaction: ChatInputCommandInteraction<'cached'>): 
   const announce = new EmbedBuilder()
     .setTitle(`⚔️ Mở Điểm Danh: ${tenTran}`)
     .setColor(Colors.Gold)
-    .setDescription([
-      `🎯 Role được phép điểm danh: ${role}`,
-      `📊 Kênh hiển thị: ${displayCh}`,
-      duration ? `⏳ Tự động kết thúc sau **${duration} phút**` : '⏳ Không đặt tự động kết thúc',
-      reminder ? `🔔 Nhắc trước **${reminder} phút**` : '🔔 Không đặt reminder',
-    ].join('\n'))
+    .setDescription(
+      [
+        `🎯 Role được phép điểm danh: ${role}`,
+        `📊 Kênh hiển thị: ${displayCh}`,
+        duration ? `⏳ Tự động kết thúc sau **${duration} phút**` : '⏳ Không đặt tự động kết thúc',
+        reminder ? `🔔 Nhắc trước **${reminder} phút**` : '🔔 Không đặt reminder',
+      ].join('\n'),
+    )
     .setTimestamp();
 
   const sent = await interaction.followUp({
@@ -310,12 +462,12 @@ async function handleStart(interaction: ChatInputCommandInteraction<'cached'>): 
     components: [attendanceButtons(false)],
     allowedMentions: { roles: shouldPingRole ? [role.id] : [] },
   });
-
   session.announce_message_id = sent.id;
   SessionStore.set(guild.id, session);
 }
 
 async function handleEnd(interaction: ChatInputCommandInteraction<'cached'>): Promise<void> {
+  if (!await assertAdmin(interaction)) return;
   const session = SessionStore.get(interaction.guild.id);
   if (!session) {
     await interaction.reply({ content: '⚠️ Không có phiên điểm danh nào đang mở!', ephemeral: true });
@@ -336,6 +488,7 @@ async function handleView(interaction: ChatInputCommandInteraction<'cached'>): P
 }
 
 async function handleDelete(interaction: ChatInputCommandInteraction<'cached'>): Promise<void> {
+  if (!await assertAdmin(interaction)) return;
   const session = SessionStore.get(interaction.guild.id);
   if (!session) {
     await interaction.reply({ content: '⚠️ Không có phiên điểm danh nào đang mở!', ephemeral: true });
@@ -353,6 +506,7 @@ async function handleDelete(interaction: ChatInputCommandInteraction<'cached'>):
 }
 
 async function handleManualAdd(interaction: ChatInputCommandInteraction<'cached'>): Promise<void> {
+  if (!await assertAdmin(interaction)) return;
   const session = SessionStore.get(interaction.guild.id);
   if (!session) {
     await interaction.reply({ content: '⚠️ Không có phiên điểm danh nào đang mở!', ephemeral: true });
@@ -370,7 +524,10 @@ async function handleManualAdd(interaction: ChatInputCommandInteraction<'cached'
   };
   SessionStore.set(interaction.guild.id, session);
   await updateDisplay(interaction.guild);
-  await interaction.reply({ content: `✏️ Đã thêm điểm danh cho **${member?.displayName ?? user.username}**.`, ephemeral: true });
+  await interaction.reply({
+    content: `✏️ Đã thêm điểm danh cho **${member?.displayName ?? user.username}**.`,
+    ephemeral: true,
+  });
 }
 
 async function handleHistory(interaction: ChatInputCommandInteraction<'cached'>): Promise<void> {
@@ -390,9 +547,16 @@ async function handleStats(interaction: ChatInputCommandInteraction<'cached'>): 
       stats.set(item.user_id, row);
     }
   }
-  const top = [...stats.values()].sort((a, b) => b.joined - a.joined || b.total - a.total).slice(0, 10);
-  const lines = top.map((x, i) => `**${i + 1}. ${x.name}** — ${x.joined} tham gia, ${x.declined} không tham gia, tổng ${x.total} phiên`);
-  await interaction.reply({ embeds: [buildStatsEmbed('📈 Thống Kê Thành Viên', lines)], ephemeral: true });
+  const top = [...stats.values()]
+    .sort((a, b) => b.joined - a.joined || b.total - a.total)
+    .slice(0, 10);
+  const lines = top.map(
+    (x, i) => `**${i + 1}. ${x.name}** — ${x.joined} tham gia, ${x.declined} không tham gia, tổng ${x.total} phiên`,
+  );
+  await interaction.reply({
+    embeds: [buildStatsEmbed('📈 Thống Kê Thành Viên', lines)],
+    ephemeral: true,
+  });
 }
 
 async function handleExport(interaction: ChatInputCommandInteraction<'cached'>): Promise<void> {
@@ -417,23 +581,51 @@ async function handleExport(interaction: ChatInputCommandInteraction<'cached'>):
     '',
     `TỔNG: ${attendees.length}`,
   ].join('\n');
-
   const file = new AttachmentBuilder(Buffer.from(lines, 'utf-8'), { name: 'diemdanh.txt' });
   await interaction.reply({ content: '📦 File export điểm danh:', files: [file], ephemeral: true });
 }
 
-async function handleConfigRole(interaction: ChatInputCommandInteraction<'cached'>): Promise<void> {
+async function handleConfigAttendanceRole(interaction: ChatInputCommandInteraction<'cached'>): Promise<void> {
   const role = interaction.options.getRole('role', true) as Role;
-  ConfigStore.set(interaction.guild.id, { allowed_role_id: role.id, allowed_role_name: role.name });
-  await interaction.reply({ embeds: [buildConfigEmbed(role, role.name)], ephemeral: true });
+  const cfg = ConfigStore.get(interaction.guild.id);
+  ConfigStore.set(interaction.guild.id, { ...cfg, allowed_role_id: role.id, allowed_role_name: role.name });
+  const adminRole = await resolveAdminRole(interaction.guild);
+  await interaction.reply({
+    embeds: [buildConfigEmbed(ConfigStore.get(interaction.guild.id), role, adminRole)],
+    ephemeral: true,
+  });
 }
+
+async function handleConfigAdminRole(interaction: ChatInputCommandInteraction<'cached'>): Promise<void> {
+  const role = interaction.options.getRole('role', true) as Role;
+  const cfg = ConfigStore.get(interaction.guild.id);
+  ConfigStore.set(interaction.guild.id, { ...cfg, admin_role_id: role.id, admin_role_name: role.name });
+  const attendanceRole = await resolveAllowedRole(interaction.guild);
+  await interaction.reply({
+    embeds: [buildConfigEmbed(ConfigStore.get(interaction.guild.id), attendanceRole, role)],
+    ephemeral: true,
+  });
+}
+
+async function handleConfigView(interaction: ChatInputCommandInteraction<'cached'>): Promise<void> {
+  const cfg = ConfigStore.get(interaction.guild.id);
+  const [attendanceRole, adminRole] = await Promise.all([
+    resolveAllowedRole(interaction.guild),
+    resolveAdminRole(interaction.guild),
+  ]);
+  await interaction.reply({
+    embeds: [buildConfigEmbed(cfg, attendanceRole, adminRole)],
+    ephemeral: true,
+  });
+}
+
+// ─── Bot Entry ────────────────────────────────────────────────────────────────
 
 client.once('ready', async () => {
   console.log(`🤖 Bot đã online: ${client.user?.tag}`);
   const rest = new REST({ version: '10' }).setToken(TOKEN);
   await rest.put(Routes.applicationCommands(client.user!.id), { body: buildCommands() });
   console.log('✅ Đã sync slash commands');
-
   for (const [guildId, session] of Object.entries(SessionStore.all())) {
     if (session.end_time && new Date(session.end_time).getTime() > Date.now()) {
       scheduleSession(guildId);
@@ -451,21 +643,27 @@ client.on('interactionCreate', async (interaction) => {
 
     if (!interaction.isChatInputCommand() || !interaction.inCachedGuild()) return;
 
-    if (interaction.commandName === 'batdau_diemdanh') await handleStart(interaction);
-    else if (interaction.commandName === 'ket_thuc_diemdanh') await handleEnd(interaction);
-    else if (interaction.commandName === 'xem_diemdanh') await handleView(interaction);
-    else if (interaction.commandName === 'xoa_diemdanh') await handleDelete(interaction);
-    else if (interaction.commandName === 'them_diemdanh') await handleManualAdd(interaction);
-    else if (interaction.commandName === 'lich_su') await handleHistory(interaction);
-    else if (interaction.commandName === 'thong_ke') await handleStats(interaction);
-    else if (interaction.commandName === 'xuat_diemdanh') await handleExport(interaction);
-    else if (interaction.commandName === 'caidat_role') await handleConfigRole(interaction);
+    switch (interaction.commandName) {
+      case 'batdau_diemdanh':    await handleStart(interaction); break;
+      case 'ket_thuc_diemdanh':  await handleEnd(interaction); break;
+      case 'xem_diemdanh':       await handleView(interaction); break;
+      case 'xoa_diemdanh':       await handleDelete(interaction); break;
+      case 'them_diemdanh':      await handleManualAdd(interaction); break;
+      case 'lich_su':            await handleHistory(interaction); break;
+      case 'thong_ke':           await handleStats(interaction); break;
+      case 'xuat_diemdanh':      await handleExport(interaction); break;
+      case 'caidat_role':        await handleConfigAttendanceRole(interaction); break;
+      case 'caidat_admin_role':  await handleConfigAdminRole(interaction); break;
+      case 'caidat_xem':         await handleConfigView(interaction); break;
+    }
   } catch (error) {
     console.error(error);
     const message = '❌ Có lỗi xảy ra khi xử lý lệnh.';
     if (interaction.isRepliable()) {
-      if (interaction.replied || interaction.deferred) await interaction.followUp({ content: message, ephemeral: true }).catch(() => null);
-      else await interaction.reply({ content: message, ephemeral: true }).catch(() => null);
+      if (interaction.replied || interaction.deferred)
+        await interaction.followUp({ content: message, ephemeral: true }).catch(() => null);
+      else
+        await interaction.reply({ content: message, ephemeral: true }).catch(() => null);
     }
   }
 });

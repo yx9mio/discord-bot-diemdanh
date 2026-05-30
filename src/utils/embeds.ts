@@ -1,5 +1,5 @@
 import { Colors, EmbedBuilder, Guild, Role } from 'discord.js';
-import { Session, HistorySession } from '../types.js';
+import { Session, HistorySession, GuildConfig } from '../types.js';
 import { buildProgressBar } from './progress.js';
 
 function fmtList(values: string[]): string {
@@ -27,7 +27,9 @@ export async function buildDisplayEmbed(guild: Guild, session: Session, closed =
     .setDescription([
       `👥 Role được điểm danh: **${session.role_name}**`,
       `📈 Tỷ lệ tham gia: ${progress}`,
-      session.end_time ? `⏳ Tự động kết thúc: <t:${Math.floor(new Date(session.end_time).getTime() / 1000)}:R>` : '⏳ Không đặt tự động kết thúc',
+      session.end_time
+        ? `⏳ Tự động kết thúc: <t:${Math.floor(new Date(session.end_time).getTime() / 1000)}:R>`
+        : '⏳ Không đặt tự động kết thúc',
     ].join('\n'))
     .addFields(
       {
@@ -64,10 +66,14 @@ export function buildHistoryEmbed(items: HistorySession[]): EmbedBuilder {
   return new EmbedBuilder()
     .setTitle('📚 Lịch Sử Điểm Danh')
     .setColor(Colors.Blue)
-    .setDescription(items.length ? items.slice(0, 10).map((s, i) => {
-      const total = s.total_tham_gia + s.total_khong_tham_gia;
-      return `**${i + 1}. ${s.session_name}**\nBắt đầu: ${s.start_time}\nKết thúc: ${s.end_time}\nRole: ${s.role_name}\nTổng: ${total} (${s.total_tham_gia} tham gia / ${s.total_khong_tham_gia} không tham gia)`;
-    }).join('\n\n') : 'Chưa có lịch sử phiên nào.')
+    .setDescription(
+      items.length
+        ? items.slice(0, 10).map((s, i) => {
+            const total = s.total_tham_gia + s.total_khong_tham_gia;
+            return `**${i + 1}. ${s.session_name}**\nBắt đầu: ${s.start_time}\nKết thúc: ${s.end_time}\nRole: ${s.role_name}\nTổng: ${total} (${s.total_tham_gia} tham gia / ${s.total_khong_tham_gia} không tham gia)`;
+          }).join('\n\n')
+        : 'Chưa có lịch sử phiên nào.',
+    )
     .setTimestamp();
 }
 
@@ -79,10 +85,22 @@ export function buildStatsEmbed(title: string, lines: string[]): EmbedBuilder {
     .setTimestamp();
 }
 
-export function buildConfigEmbed(role: Role | null, roleName: string): EmbedBuilder {
+export function buildConfigEmbed(cfg: GuildConfig, attendanceRole: Role | null, adminRole: Role | null): EmbedBuilder {
   return new EmbedBuilder()
-    .setTitle('⚙️ Cấu Hình Điểm Danh')
+    .setTitle('⚙️ Cấu Hình Bot Điểm Danh')
     .setColor(Colors.Blurple)
-    .setDescription(`Role được điểm danh hiện tại: **${role?.name ?? roleName}**`)
+    .addFields(
+      {
+        name: '📋 Role Điểm Danh',
+        value: attendanceRole ? `${attendanceRole} (${attendanceRole.name})` : `**${cfg.allowed_role_name}** _(chưa tìm thấy)_`,
+        inline: true,
+      },
+      {
+        name: '🛡️ Role Admin Bot',
+        value: adminRole ? `${adminRole} (${adminRole.name})` : `**${cfg.admin_role_name}** _(chưa tìm thấy)_`,
+        inline: true,
+      },
+    )
+    .setFooter({ text: 'Người có ManageGuild luôn có quyền admin bot' })
     .setTimestamp();
 }

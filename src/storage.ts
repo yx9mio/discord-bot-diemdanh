@@ -52,7 +52,13 @@ export const ConfigStore = {
   },
   get(guildId: string): GuildConfig {
     const all = this.all();
-    return all[guildId] ?? { allowed_role_id: null, allowed_role_name: 'Bang Chúng' };
+    const saved = all[guildId];
+    return {
+      allowed_role_id: saved?.allowed_role_id ?? null,
+      allowed_role_name: saved?.allowed_role_name ?? 'Bang Chúng',
+      admin_role_id: saved?.admin_role_id ?? null,
+      admin_role_name: saved?.admin_role_name ?? 'Bang Chủ',
+    };
   },
   set(guildId: string, config: GuildConfig): void {
     const all = this.all();

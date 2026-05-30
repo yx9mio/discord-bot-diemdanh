@@ -28,6 +28,8 @@ export interface Session {
 export interface GuildConfig {
   allowed_role_id: string | null;
   allowed_role_name: string;
+  admin_role_id: string | null;
+  admin_role_name: string;
 }
 
 export interface HistorySession {
