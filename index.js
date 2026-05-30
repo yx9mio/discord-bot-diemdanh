@@ -37,18 +37,18 @@ const commands = [
       .setDescription('Tên phiên (vd: Bang Chiến T7)')
       .setRequired(true))
     .addIntegerOption(o => o
-      .setName('gio_dong')
-      .setDescription('Giờ tự đóng (0–23, giờ VN UTC+7). Để trống = không tự đóng.')
+      .setName('gio_ket_thuc')
+      .setDescription('Giờ kết thúc (0–23, giờ VN). Để trống = không tự đóng.')
       .setRequired(false)
       .setMinValue(0).setMaxValue(23))
     .addIntegerOption(o => o
-      .setName('phut_dong')
-      .setDescription('Phút tự đóng (0–59). Mặc định = 0.')
+      .setName('phut_ket_thuc')
+      .setDescription('Phút kết thúc (0–59). Mặc định = 0.')
       .setRequired(false)
       .setMinValue(0).setMaxValue(59))
     .addIntegerOption(o => o
-      .setName('ngay_dong')
-      .setDescription('Ngày trong tháng (1–31). Nếu không nhập = hôm nay.')
+      .setName('ngay_ket_thuc')
+      .setDescription('Ngày kết thúc (1–31). Để trống = hôm nay.')
       .setRequired(false)
       .setMinValue(1).setMaxValue(31)),
   new SlashCommandBuilder().setName('ket_thuc_diemdanh').setDescription('Kết thúc phiên điểm danh, lưu lịch sử'),
@@ -117,7 +117,7 @@ async function registerCommands() {
 }
 
 // ─── Tính ms đến ngày/giờ/phút cố định (giờ VN UTC+7) ────────
-// - ngay: null = hôm nay (theo giờ VN)
+// - day: null = hôm nay (theo giờ VN)
 // - Tự điều chỉnh sang tháng tiếp nếu ngày + giờ:phút đã qua
 // Trả về: { ms, targetDate, errorMsg }
 function msUntilFixedDateTime(day, hour, minute) {
@@ -135,9 +135,8 @@ function msUntilFixedDateTime(day, hour, minute) {
 
   // Thử xây target trong tháng hiện tại
   function buildTarget(year, month, d) {
-    // Kiểm tra ngày hợp lệ trong tháng đó
     const maxDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
-    if (d > maxDay) return null; // ngày không tồn tại trong tháng này
+    if (d > maxDay) return null;
     const targetVnMs = Date.UTC(year, month, d, hour, minute, 0, 0);
     const targetUtcMs = targetVnMs - VN_OFFSET_MS;
     return { ms: targetUtcMs - nowUtcMs, targetDate: new Date(targetUtcMs) };
@@ -153,7 +152,6 @@ function msUntilFixedDateTime(day, hour, minute) {
     result = buildTarget(nextYear, nextMonth, targetDay);
   }
 
-  // Vẫn không hợp lệ (ví dụ: ngày 31 trong tháng 2)
   if (!result || result.ms <= 0) {
     return { ms: -1, targetDate: null,
       errorMsg: `Ngày **${targetDay}** không tồn tại trong tháng hiện tại lẫn tháng sau. Hãy kiểm tra lại.` };
@@ -298,38 +296,37 @@ client.on('interactionCreate', async (interaction) => {
     const existing = await db.getActiveSession(guild.id);
     if (existing) return interaction.reply({ content: '❌ Đã có phiên điểm danh đang mở. Hãy kết thúc phiên cũ trước.', ephemeral: true });
 
-    const tenPhien = interaction.options.getString('ten_phien');
-    const gioDong  = interaction.options.getInteger('gio_dong');
-    const phutDong = interaction.options.getInteger('phut_dong') ?? 0;
-    const ngayDong = interaction.options.getInteger('ngay_dong');  // null = hôm nay
+    const tenPhien    = interaction.options.getString('ten_phien');
+    const gioKetThuc  = interaction.options.getInteger('gio_ket_thuc');
+    const phutKetThuc = interaction.options.getInteger('phut_ket_thuc') ?? 0;
+    const ngayKetThuc = interaction.options.getInteger('ngay_ket_thuc'); // null = hôm nay
 
     // — Tính thời gian tự đóng —
-    let autoCloseMs = 0;
+    let autoCloseMs    = 0;
     let autoCloseLabel = '';
-    let autoCloseAt = null;
+    let autoCloseAt    = null;
 
-    if (gioDong !== null) {
-      const { ms, targetDate, errorMsg } = msUntilFixedDateTime(ngayDong, gioDong, phutDong);
+    if (gioKetThuc !== null) {
       const pad = n => String(n).padStart(2, '0');
+      const { ms, targetDate, errorMsg } = msUntilFixedDateTime(ngayKetThuc, gioKetThuc, phutKetThuc);
 
       if (errorMsg) {
         return interaction.reply({ content: `❌ ${errorMsg}`, ephemeral: true });
       }
       if (ms <= 0) {
-        const dateStr = ngayDong ? `ngày **${ngayDong}** ` : '';
+        const dateStr = ngayKetThuc ? `ngày **${ngayKetThuc}** ` : '';
         return interaction.reply({
-          content: `❌ Thời gian đóng ${dateStr}**${pad(gioDong)}:${pad(phutDong)}** đã qua rồi. Hãy nhập thời gian trong tương lai (giờ VN).`,
+          content: `❌ Thời gian kết thúc ${dateStr}**${pad(gioKetThuc)}:${pad(phutKetThuc)}** đã qua rồi. Hãy nhập thời gian trong tương lai (giờ VN).`,
           ephemeral: true,
         });
       }
 
-      autoCloseMs  = ms;
-      autoCloseAt  = targetDate.toISOString();
+      autoCloseMs = ms;
+      autoCloseAt = targetDate.toISOString();
 
       const discordTs = Math.floor(targetDate.getTime() / 1000);
-      // Hiển thị: ngày/giờ VN + Discord relative
-      const dayPart = ngayDong ? `ngày ${ngayDong}, ` : '';
-      autoCloseLabel = `${dayPart}**${pad(gioDong)}:${pad(phutDong)}** (<t:${discordTs}:F>) — còn ~${formatDuration(ms)}`;
+      const dayPart   = ngayKetThuc ? `ngày ${ngayKetThuc}, ` : '';
+      autoCloseLabel  = `${dayPart}**${pad(gioKetThuc)}:${pad(phutKetThuc)}** (<t:${discordTs}:F>) — còn ~${formatDuration(ms)}`;
     }
 
     await guild.members.fetch().catch(() => null);
@@ -354,7 +351,7 @@ client.on('interactionCreate', async (interaction) => {
       .setDescription(
         `👥 Role: **${roleName}** | Thành viên: **${eligibleIds.length}**\n` +
         `⏰ Bắt đầu: <t:${Math.floor(Date.now()/1000)}:f>` +
-        (autoCloseMs > 0 ? `\n🔒 Tự đóng lúc: ${autoCloseLabel}` : '')
+        (autoCloseMs > 0 ? `\n🔒 Kết thúc lúc: ${autoCloseLabel}` : '')
       )
       .setFooter({ text: 'Dùng /them_diemdanh để thêm thành viên' })
       .setTimestamp();
@@ -480,7 +477,7 @@ client.on('interactionCreate', async (interaction) => {
     const pct = eligible > 0 ? Math.round((joined.length / eligible) * 100) : 0;
     const bar = buildProgressBar(pct);
     const autoInfo = session.auto_close_at
-      ? `\n🔒 Tự đóng: <t:${Math.floor(new Date(session.auto_close_at).getTime()/1000)}:F>`
+      ? `\n🔒 Kết thúc lúc: <t:${Math.floor(new Date(session.auto_close_at).getTime()/1000)}:F>`
       : '';
     const embed = new EmbedBuilder()
       .setTitle(`📋 Điểm Danh: ${session.session_name}`)
