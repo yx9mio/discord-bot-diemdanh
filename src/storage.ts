@@ -1,87 +1,79 @@
-import fs from 'fs';
-import path from 'path';
-import { GuildStatsMember, HistorySession, Session, StorageShape } from './types.js';
+import fs from 'node:fs';
+import path from 'node:path';
+import { ConfigMap, GuildConfig, HistoryMap, HistorySession, Session, SessionMap } from './types.js';
 
-const STORAGE_PATH = path.join(process.cwd(), 'data', 'sessions.json');
+const DATA_DIR = path.join(process.cwd(), 'data');
+const SESSIONS_PATH = path.join(DATA_DIR, 'sessions.json');
+const HISTORY_PATH = path.join(DATA_DIR, 'history.json');
+const CONFIG_PATH = path.join(DATA_DIR, 'config.json');
 
-function ensureStorage(): void {
-  const dir = path.dirname(STORAGE_PATH);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  if (!fs.existsSync(STORAGE_PATH)) save({ sessions: {}, history: {} });
+function ensureFile(filePath: string, empty: object): void {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+  if (!fs.existsSync(filePath)) fs.writeFileSync(filePath, JSON.stringify(empty, null, 2), 'utf-8');
 }
 
-function load(): StorageShape {
-  ensureStorage();
+function readJson<T>(filePath: string, fallback: T): T {
+  ensureFile(filePath, fallback as object);
   try {
-    const parsed = JSON.parse(fs.readFileSync(STORAGE_PATH, 'utf-8')) as Partial<StorageShape>;
-    return {
-      sessions: parsed.sessions ?? {},
-      history: parsed.history ?? {},
-    };
+    return JSON.parse(fs.readFileSync(filePath, 'utf-8')) as T;
   } catch {
-    return { sessions: {}, history: {} };
+    return fallback;
   }
 }
 
-function save(data: StorageShape): void {
-  const dir = path.dirname(STORAGE_PATH);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(STORAGE_PATH, JSON.stringify(data, null, 2), 'utf-8');
+function writeJson<T>(filePath: string, value: T): void {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+  fs.writeFileSync(filePath, JSON.stringify(value, null, 2), 'utf-8');
 }
 
-export const Store = {
-  getSession(guildId: string): Session | null {
-    return load().sessions[guildId] ?? null;
+export const SessionStore = {
+  all(): SessionMap {
+    return readJson<SessionMap>(SESSIONS_PATH, {});
   },
-
-  setSession(guildId: string, session: Session): void {
-    const data = load();
-    data.sessions[guildId] = session;
-    save(data);
+  get(guildId: string): Session | null {
+    const all = this.all();
+    return all[guildId] ?? null;
   },
-
-  deleteSession(guildId: string): void {
-    const data = load();
-    delete data.sessions[guildId];
-    save(data);
+  set(guildId: string, session: Session): void {
+    const all = this.all();
+    all[guildId] = session;
+    writeJson(SESSIONS_PATH, all);
   },
-
-  appendHistory(guildId: string, historySession: HistorySession): void {
-    const data = load();
-    if (!data.history[guildId]) data.history[guildId] = [];
-    data.history[guildId].unshift(historySession);
-    data.history[guildId] = data.history[guildId].slice(0, 50);
-    save(data);
+  delete(guildId: string): void {
+    const all = this.all();
+    delete all[guildId];
+    writeJson(SESSIONS_PATH, all);
   },
+};
 
-  getHistory(guildId: string): HistorySession[] {
-    return load().history[guildId] ?? [];
+export const ConfigStore = {
+  all(): ConfigMap {
+    return readJson<ConfigMap>(CONFIG_PATH, {});
   },
+  get(guildId: string): GuildConfig {
+    const all = this.all();
+    return all[guildId] ?? { allowed_role_id: null, allowed_role_name: 'Bang Chúng' };
+  },
+  set(guildId: string, config: GuildConfig): void {
+    const all = this.all();
+    all[guildId] = config;
+    writeJson(CONFIG_PATH, all);
+  },
+};
 
-  getStats(guildId: string): GuildStatsMember[] {
-    const history = load().history[guildId] ?? [];
-    const map = new Map<string, GuildStatsMember>();
-
-    for (const session of history) {
-      for (const attendee of Object.values(session.attendees)) {
-        const current = map.get(attendee.userId) ?? {
-          userId: attendee.userId,
-          name: attendee.name,
-          tham_gia_count: 0,
-          khong_tham_gia_count: 0,
-          total_count: 0,
-        };
-
-        if (attendee.status === 'tham_gia') current.tham_gia_count += 1;
-        if (attendee.status === 'khong_tham_gia') current.khong_tham_gia_count += 1;
-        current.total_count += 1;
-        map.set(attendee.userId, current);
-      }
-    }
-
-    return [...map.values()].sort((a, b) => {
-      if (b.tham_gia_count !== a.tham_gia_count) return b.tham_gia_count - a.tham_gia_count;
-      return b.total_count - a.total_count;
-    });
+export const HistoryStore = {
+  all(): HistoryMap {
+    return readJson<HistoryMap>(HISTORY_PATH, {});
+  },
+  get(guildId: string): HistorySession[] {
+    const all = this.all();
+    return all[guildId] ?? [];
+  },
+  push(guildId: string, item: HistorySession): void {
+    const all = this.all();
+    const list = all[guildId] ?? [];
+    list.unshift(item);
+    all[guildId] = list.slice(0, 25);
+    writeJson(HISTORY_PATH, all);
   },
 };

@@ -1,65 +1,63 @@
-# ⚔️ Bot Điểm Danh Bang Chiến (TypeScript Enhanced)
+# Discord Bot Điểm Danh Bang Chiến — v3.0
 
-Bot Discord quản lý điểm danh bang chiến với giao diện embed đẹp hơn, lịch sử phiên, thống kê thành viên, export file, reminder tự động, auto-close và giới hạn role **Bang Chúng** mới được điểm danh. Repo hiện đã được viết lại bằng **TypeScript + discord.js v14** [cite:23].
+## Tính năng
 
-## ✨ Tính Năng
+- Embed đẹp với progress bar tỷ lệ tham gia và màu động
+- Chỉ role **Bang Chúng** được điểm danh (đổi được bằng `/caidat_role`)
+- Lưu lịch sử 25 phiên gần nhất
+- Thống kê thành viên tham gia nhiều nhất
+- Export danh sách ra file `.txt`
+- Reminder tự động trước khi phiên kết thúc
+- Tự động đóng phiên sau X phút do admin đặt
+- Ping role khi mở phiên
+- Admin thêm/xóa điểm danh thủ công
 
-- ✅ Nút bấm điểm danh đẹp hơn, cập nhật real-time.
-- 🔒 Chỉ role **Bang Chúng** được bấm nút điểm danh.
-- 📊 Embed đẹp hơn: progress bar, thumbnail avatar, tổng quan phiên.
-- 🗂️ `/lich_su` xem 10 phiên gần nhất.
-- 🏆 `/thong_ke` xem top thành viên tham gia nhiều nhất.
-- 📦 `/export_diemdanh` xuất danh sách ra file `.txt`.
-- ⏰ Reminder tự động trước khi auto-close.
-- 🛑 Tự động đóng phiên sau X phút.
-- 📣 Có thể ping role khi mở phiên.
-- 💾 Lưu dữ liệu bằng JSON: phiên hiện tại + lịch sử.
+## Lệnh
 
-## 📁 Cấu Trúc
+| Lệnh | Mô tả |
+|------|-------|
+| `/batdau_diemdanh` | Mở phiên mới (có thể đặt thời lượng, reminder, ping role) |
+| `/ket_thuc_diemdanh` | Đóng phiên hiện tại |
+| `/xem_diemdanh` | Xem danh sách hiện tại |
+| `/them_diemdanh` | Thêm điểm danh thủ công |
+| `/xoa_diemdanh` | Xóa điểm danh một thành viên |
+| `/lich_su` | Xem lịch sử các phiên đã kết thúc |
+| `/thong_ke` | Top thành viên tham gia nhiều nhất |
+| `/xuat_diemdanh` | Export ra file `.txt` |
+| `/caidat_role` | Đổi role được phép điểm danh |
 
-```bash
-src/
-├── index.ts
-├── storage.ts
-├── embeds.ts
-├── utils.ts
-└── types.ts
-```
-
-## 🚀 Cài Đặt
-
-Yêu cầu: **Node.js 20+**
+## Chạy local
 
 ```bash
 npm install
 cp .env.example .env
-# điền DISCORD_TOKEN vào .env
-```
-
-## ▶️ Chạy Bot
-
-```bash
+# Điền DISCORD_TOKEN vào .env
 npm run dev
 ```
 
-hoặc production:
+## Build production
 
 ```bash
 npm run build
 npm start
 ```
 
-## 📖 Slash Commands
+## Deploy với Docker
 
-- `/batdau_diemdanh [ten_tran] [reminder] [tu_dong_dong] [ping_role]`
-- `/ket_thuc_diemdanh`
-- `/xem_diemdanh`
-- `/them_diemdanh @member trang_thai`
-- `/xoa_diemdanh @member`
-- `/lich_su`
-- `/thong_ke`
-- `/export_diemdanh`
+```bash
+docker build -t diemdanh-bot .
+docker run -e DISCORD_TOKEN=your_token_here diemdanh-bot
+```
 
-## ☁️ Deploy
+## Cấu trúc files
 
-Bot không phù hợp deploy trên Vercel vì Discord bot cần process chạy liên tục. Dùng Oracle Always Free, Wispbyte hoặc các server bot hosting free sẽ hợp hơn.
+```
+src/
+├── index.ts          # Entry point, xử lý commands & events
+├── storage.ts        # Đọc/ghi JSON (sessions, history, config)
+├── types.ts          # TypeScript interfaces
+└── utils/
+    ├── embeds.ts     # Builders cho tất cả Discord embeds
+    └── progress.ts   # Progress bar helper
+data/                 # Tự tạo khi chạy (gitignored)
+```
