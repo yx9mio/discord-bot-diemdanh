@@ -3,13 +3,18 @@
 // ============================================================
 require('dotenv').config();
 const { createClient } = require('@supabase/supabase-js');
+const ws = require('ws');
 
 if (!process.env.SUPABASE_URL || !process.env.SUPABASE_KEY) {
   console.error('[FATAL] Thiếu SUPABASE_URL hoặc SUPABASE_KEY trong .env!');
   process.exit(1);
 }
 
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY, {
+  realtime: {
+    transport: ws,
+  },
+});
 
 // ─── Guild Config ─────────────────────────────────────────────
 async function getConfig(guildId) {
