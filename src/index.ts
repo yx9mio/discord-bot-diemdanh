@@ -76,29 +76,20 @@ function attendanceButtons(disabled = false): ActionRowBuilder<ButtonBuilder> {
 
 // ─── Admin Role Guard ────────────────────────────────────────────────────────
 
-/**
- * Returns true if the member:
- * 1. Has ManageGuild permission (server admin / owner), OR
- * 2. Has the configured admin role (admin_role_id / admin_role_name)
- */
 async function isAdminUser(interaction: ChatInputCommandInteraction<'cached'>): Promise<boolean> {
-  // Always allow ManageGuild holders
   if (interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) return true;
 
   const cfg = ConfigStore.get(interaction.guild.id);
 
-  // Check by stored role ID first (fast path)
   if (cfg.admin_role_id) {
     const member = await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
     if (member?.roles.cache.has(cfg.admin_role_id)) return true;
   }
 
-  // Fallback: match by role name
   const roleByName = interaction.guild.roles.cache.find(
     (r) => r.name === (cfg.admin_role_name || 'Bang Chủ'),
   );
   if (roleByName) {
-    // Cache the ID for future lookups
     ConfigStore.set(interaction.guild.id, { ...cfg, admin_role_id: roleByName.id });
     const member = await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
     if (member?.roles.cache.has(roleByName.id)) return true;
@@ -325,7 +316,6 @@ async function markAttendance(interaction: Interaction, status: AttendanceStatus
 
 function buildCommands() {
   return [
-    // Admin commands — no setDefaultMemberPermissions so role-based admins can see them
     new SlashCommandBuilder()
       .setName('batdau_diemdanh')
       .setDescription('[Admin] Bắt đầu phiên điểm danh mới')
@@ -356,7 +346,6 @@ function buildCommands() {
           { name: '❌ Không Tham Gia', value: 'khong_tham_gia' },
         ),
       ),
-    // Config — only real ManageGuild can set roles
     new SlashCommandBuilder()
       .setName('caidat_role')
       .setDescription('[Admin] Cài role được điểm danh')
@@ -371,7 +360,6 @@ function buildCommands() {
       .setName('caidat_xem')
       .setDescription('[Admin] Xem cấu hình hiện tại')
       .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
-    // Public commands
     new SlashCommandBuilder().setName('xem_diemdanh').setDescription('Xem danh sách hiện tại'),
     new SlashCommandBuilder().setName('lich_su').setDescription('Xem lịch sử các phiên đã kết thúc'),
     new SlashCommandBuilder().setName('thong_ke').setDescription('Xem thống kê thành viên tham gia nhiều nhất'),
@@ -621,10 +609,11 @@ async function handleConfigView(interaction: ChatInputCommandInteraction<'cached
 
 // ─── Bot Entry ────────────────────────────────────────────────────────────────
 
-client.once('ready', async () => {
-  console.log(`🤖 Bot đã online: ${client.user?.tag}`);
+// Use 'clientReady' (discord.js v14.x) instead of deprecated 'ready'
+client.once('clientReady', async (readyClient) => {
+  console.log(`🤖 Bot đã online: ${readyClient.user.tag}`);
   const rest = new REST({ version: '10' }).setToken(TOKEN);
-  await rest.put(Routes.applicationCommands(client.user!.id), { body: buildCommands() });
+  await rest.put(Routes.applicationCommands(readyClient.user.id), { body: buildCommands() });
   console.log('✅ Đã sync slash commands');
   for (const [guildId, session] of Object.entries(SessionStore.all())) {
     if (session.end_time && new Date(session.end_time).getTime() > Date.now()) {
