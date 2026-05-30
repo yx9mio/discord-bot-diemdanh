@@ -1,9 +1,8 @@
 import { Colors, EmbedBuilder, Guild } from 'discord.js';
 import { HistorySession, Session } from '../types.js';
-import { GuildConfig, Role } from 'discord.js';
 import { buildProgressBar } from './progress.js';
 
-// ─── Display Embed (live session) ───────────────────────────────────────────
+// ─── Display Embed (live session) ────────────────────────────────────────────
 
 export async function buildDisplayEmbed(
   guild: Guild,
@@ -23,13 +22,11 @@ export async function buildDisplayEmbed(
     .setColor(ended ? Colors.Grey : Colors.Gold)
     .setTimestamp();
 
-  // Header stats
   const statsLines = [
     `📈 Tỷ lệ: \`${bar}\` **${pct}%** (${joined.length}/${eligible})`,
     `✅ Tham gia: **${joined.length}** | ❌ Không: **${declined.length}**`,
   ];
 
-  // Countdown (only when session has end_time and not ended)
   if (!ended && session.end_time) {
     const endUnix = Math.floor(new Date(session.end_time).getTime() / 1000);
     statsLines.push(`⏰ Kết thúc: <t:${endUnix}:R>`);
@@ -37,34 +34,20 @@ export async function buildDisplayEmbed(
 
   embed.setDescription(statsLines.join('\n'));
 
-  // Attendees list — tham_gia
   if (joined.length > 0) {
     const lines = joined.map((x, i) => `\`${String(i + 1).padStart(2)}.\` **${x.name}** (${x.time})`);
-    // chunk if > 1024 chars
-    const chunks = chunkLines(lines, 950);
-    chunks.forEach((chunk, i) => {
-      embed.addFields({
-        name: i === 0 ? `✅ Tham Gia (${joined.length})` : '\u200b',
-        value: chunk,
-        inline: false,
-      });
+    chunkLines(lines, 950).forEach((chunk, i) => {
+      embed.addFields({ name: i === 0 ? `✅ Tham Gia (${joined.length})` : '\u200b', value: chunk, inline: false });
     });
   }
 
-  // Declined list
   if (declined.length > 0) {
     const lines = declined.map((x, i) => `\`${String(i + 1).padStart(2)}.\` ${x.name}`);
-    const chunks = chunkLines(lines, 950);
-    chunks.forEach((chunk, i) => {
-      embed.addFields({
-        name: i === 0 ? `❌ Không Tham Gia (${declined.length})` : '\u200b',
-        value: chunk,
-        inline: false,
-      });
+    chunkLines(lines, 950).forEach((chunk, i) => {
+      embed.addFields({ name: i === 0 ? `❌ Không Tham Gia (${declined.length})` : '\u200b', value: chunk, inline: false });
     });
   }
 
-  // Absent list (only while session is open)
   if (!ended && eligible > 0) {
     const checkedIds = new Set(Object.keys(session.attendees));
     const absentIds = session.eligible_member_ids.filter((id) => !checkedIds.has(id));
@@ -88,7 +71,7 @@ export async function buildDisplayEmbed(
   return embed;
 }
 
-// ─── Summary Embed (after session ends) ─────────────────────────────────────
+// ─── Summary Embed ────────────────────────────────────────────────────────────
 
 export function buildSummaryEmbed(session: Session): EmbedBuilder {
   const attendees = Object.values(session.attendees);
@@ -112,7 +95,7 @@ export function buildSummaryEmbed(session: Session): EmbedBuilder {
     .setTimestamp();
 }
 
-// ─── History Embed ───────────────────────────────────────────────────────────
+// ─── History Embed ────────────────────────────────────────────────────────────
 
 export function buildHistoryEmbed(history: HistorySession[]): EmbedBuilder {
   if (history.length === 0) {
@@ -136,7 +119,7 @@ export function buildHistoryEmbed(history: HistorySession[]): EmbedBuilder {
     .setTimestamp();
 }
 
-// ─── Stats Embed ─────────────────────────────────────────────────────────────
+// ─── Stats Embed ──────────────────────────────────────────────────────────────
 
 export function buildStatsEmbed(title: string, lines: string[]): EmbedBuilder {
   return new EmbedBuilder()
@@ -159,19 +142,23 @@ export function buildConfigEmbed(
     .addFields(
       {
         name: '🎯 Role Điểm Danh',
-        value: attendanceRole ? `${attendanceRole} (${cfg.allowed_role_name})` : `❌ Chưa cài — tên mặc định: **${cfg.allowed_role_name}**`,
+        value: attendanceRole
+          ? `${attendanceRole} (${cfg.allowed_role_name})`
+          : `❌ Chưa cài — tên mặc định: **${cfg.allowed_role_name}**`,
         inline: false,
       },
       {
         name: '🛡️ Role Admin Bot',
-        value: adminRole ? `${adminRole} (${cfg.admin_role_name})` : `❌ Chưa cài — tên mặc định: **${cfg.admin_role_name}**`,
+        value: adminRole
+          ? `${adminRole} (${cfg.admin_role_name})`
+          : `❌ Chưa cài — tên mặc định: **${cfg.admin_role_name}**`,
         inline: false,
       },
     )
     .setTimestamp();
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function chunkLines(lines: string[], maxLen: number): string[] {
   const chunks: string[] = [];
