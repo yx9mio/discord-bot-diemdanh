@@ -109,22 +109,42 @@ async function registerCommands() {
 }
 
 // ─── Tính số ms đến giờ:phút cố định hôm nay (UTC+7) ─────────
-// Nếu giờ đó đã qua → báo lỗi (trả về null)
+// Trả về { ms, targetDate }
+// ms < 0 nếu giờ đó đã qua hôm nay
 function msUntilFixedTime(hour, minute) {
-  const now = new Date();
-  // Lấy thời điểm hôm nay tại giờ:phút theo UTC+7
   const VN_OFFSET_MS = 7 * 60 * 60 * 1000;
-  const nowVN = new Date(now.getTime() + VN_OFFSET_MS);
-  const target = new Date(Date.UTC(
-    nowVN.getUTCFullYear(),
-    nowVN.getUTCMonth(),
-    nowVN.getUTCDate(),
-    hour,   // giờ VN = UTC giờ
+  const nowUtcMs = Date.now();
+
+  // Tính "hôm nay theo giờ VN": lấy ngày năm tháng VN
+  const nowVnMs = nowUtcMs + VN_OFFSET_MS;
+  const nowVnDate = new Date(nowVnMs);
+
+  // Xây target theo giờ VN: năm/tháng/ngày giờ VN + hour:minute:00
+  const targetVnMs = Date.UTC(
+    nowVnDate.getUTCFullYear(),
+    nowVnDate.getUTCMonth(),
+    nowVnDate.getUTCDate(),
+    hour,    // giờ VN (offset đã là 0 vì ta đang làm việc trong "không gian VN")
     minute,
     0, 0
-  ) - VN_OFFSET_MS); // convert lại về UTC thực
-  const ms = target.getTime() - now.getTime();
-  return ms; // âm nếu đã qua
+  );
+  // targetVnMs là miliseconds nếu đây là UTC, nhưng thực ra là giờ VN —
+  // phải trừ đi VN_OFFSET để ra UTC thật sự
+  const targetUtcMs = targetVnMs - VN_OFFSET_MS;
+
+  return {
+    ms: targetUtcMs - nowUtcMs,
+    targetDate: new Date(targetUtcMs),
+  };
+}
+
+// ─── Format thời lượng ms → chuỗi "X giờ Y phút" hoặc "Y phút" ─
+function formatDuration(ms) {
+  const totalMin = Math.round(ms / 60000);
+  if (totalMin < 60) return `${totalMin} phút`;
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  return m > 0 ? `${h} giờ ${m} phút` : `${h} giờ`;
 }
 
 // ─── Auto-close timers (in-memory) ────────────────────────────
@@ -258,25 +278,28 @@ client.on('interactionCreate', async (interaction) => {
     const gioDong  = interaction.options.getInteger('gio_dong');
     const phutDong = interaction.options.getInteger('phut_dong') ?? 0;
 
-    // Tính ms đến giờ đóng cố định
+    // Tính ms đến giờ đóng cố định (UTC+7)
     let autoCloseMs = 0;
     let autoCloseLabel = '';
     let autoCloseAt = null;
 
     if (gioDong !== null) {
-      const ms = msUntilFixedTime(gioDong, phutDong);
+      const { ms, targetDate } = msUntilFixedTime(gioDong, phutDong);
+      const pad = n => String(n).padStart(2, '0');
+
       if (ms <= 0) {
-        const pad = n => String(n).padStart(2, '0');
         return interaction.reply({
           content: `❌ Giờ đóng **${pad(gioDong)}:${pad(phutDong)}** đã qua rồi hôm nay. Hãy chọn giờ trong tương lai (giờ VN).`,
           ephemeral: true,
         });
       }
+
       autoCloseMs = ms;
-      const totalMin = Math.round(ms / 60000);
-      const pad = n => String(n).padStart(2, '0');
-      autoCloseLabel = `**${pad(gioDong)}:${pad(phutDong)}** (còn ~${totalMin} phút)`;
-      autoCloseAt = new Date(Date.now() + ms).toISOString();
+      autoCloseAt = targetDate.toISOString();
+
+      // Discord timestamp: hiển thị giờ:phút local của người dùng
+      const discordTs = Math.floor(targetDate.getTime() / 1000);
+      autoCloseLabel = `**${pad(gioDong)}:${pad(phutDong)}** (<t:${discordTs}:t>) — còn ~${formatDuration(ms)}`;
     }
 
     await guild.members.fetch().catch(() => null);
