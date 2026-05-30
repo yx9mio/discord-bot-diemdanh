@@ -1,6 +1,7 @@
-# ⚔️ Bot Điểm Danh Bang Chiến
+# ⚔️ Bot Điểm Danh Bang Chiến (TypeScript)
 
 > Bot Discord quản lý điểm danh bang chiến với nút bấm trực quan, tự động cập nhật danh sách real-time vào một channel riêng.
+> Viết bằng **TypeScript** + **discord.js v14**.
 
 ---
 
@@ -12,7 +13,7 @@
 - 🔄 **Đổi trạng thái** — thành viên có thể đổi Tham Gia ↔ Không Tham Gia bất kỳ lúc nào
 - 🛡️ **Phân quyền rõ ràng** — chỉ Admin mới mở/đóng phiên điểm danh
 - ✏️ **Quản lý thủ công** — Admin thêm/xóa điểm danh cho từng thành viên nếu cần
-- 💾 **Persistent Buttons** — nút bấm vẫn hoạt động sau khi bot khởi động lại
+- 💾 **Persistent JSON** — dữ liệu lưu vào `data/sessions.json`
 
 ---
 
@@ -20,10 +21,16 @@
 
 ```
 discord-bot-diemdanh/
-├── bot.py            ← Code chính
-├── requirements.txt  ← Thư viện Python
-├── .env.example      ← Mẫu file cấu hình
-└── README.md         ← Hướng dẫn này
+├── src/
+│   ├── index.ts       ← Code chính
+│   ├── storage.ts     ← JSON session storage
+│   └── types.ts       ← TypeScript interfaces
+├── data/              ← Tự tạo khi chạy (sessions.json)
+├── dist/              ← Build output
+├── package.json
+├── tsconfig.json
+├── .env.example
+└── README.md
 ```
 
 ---
@@ -34,11 +41,9 @@ discord-bot-diemdanh/
 
 1. Vào [discord.com/developers/applications](https://discord.com/developers/applications)
 2. Nhấn **New Application** → đặt tên → **Create**
-3. Vào tab **Bot** → bật các Privileged Gateway Intents:
+3. Vào tab **Bot** → bật:
    - ✅ **Server Members Intent**
-   - ✅ **Message Content Intent**
-4. *(Tuỳ chọn)* Tắt **Public Bot** nếu chỉ dùng nội bộ
-5. Nhấn **Reset Token** → copy và giữ bí mật token này
+4. Nhấn **Reset Token** → copy token
 
 ### Bước 2 — Mời Bot vào Server
 
@@ -52,44 +57,31 @@ Vào **OAuth2 → URL Generator**, chọn:
 | | `Read Message History` |
 | | `View Channels` |
 
-Copy URL tạo ra → mở trình duyệt → chọn server → **Authorize**.
+### Bước 3 — Cài Dependencies
 
-### Bước 3 — Cài Thư Viện
-
-> Yêu cầu **Python 3.10+**
+> Yêu cầu **Node.js 20+**
 
 ```bash
-# Tạo môi trường ảo (khuyến khích)
-python -m venv venv
-source venv/bin/activate       # Linux / macOS
-venv\Scripts\activate          # Windows
-
-# Cài thư viện
-pip install -r requirements.txt
+npm install
 ```
 
 ### Bước 4 — Cấu Hình Token
-
-Tạo file `.env` trong cùng thư mục với `bot.py`:
-
-```env
-DISCORD_TOKEN=token_cua_ban_o_day
-```
-
-Hoặc copy từ file mẫu:
 
 ```bash
 cp .env.example .env
 # Mở .env và điền token thật vào
 ```
 
-### Bước 5 — Chạy Bot
+### Bước 5 — Chạy
 
 ```bash
-python bot.py
-```
+# Development (không cần build)
+npm run dev
 
-Nếu thấy dòng `✅ Bot đã online` trong terminal là thành công.
+# Production
+npm run build
+npm start
+```
 
 ---
 
@@ -99,80 +91,73 @@ Nếu thấy dòng `✅ Bot đã online` trong terminal là thành công.
 
 | Lệnh | Mô tả |
 |------|-------|
-| `/batdau_diemdanh [ten_tran]` | Mở phiên điểm danh mới, đăng thông báo + nút bấm |
-| `/ket_thuc_diemdanh` | Đóng phiên, đánh dấu kết thúc, hiển thị tổng kết |
-| `/them_diemdanh @member trang_thai` | Thêm điểm danh thủ công cho thành viên |
+| `/batdau_diemdanh [ten_tran]` | Mở phiên điểm danh mới |
+| `/ket_thuc_diemdanh` | Đóng phiên, hiển thị tổng kết |
+| `/them_diemdanh @member trang_thai` | Thêm điểm danh thủ công |
 | `/xoa_diemdanh @member` | Xóa điểm danh của một thành viên |
 
-### 👥 Thành Viên — ai cũng dùng được
+### 👥 Thành Viên
 
 | Hành động | Mô tả |
 |-----------|-------|
-| Nút **✅ Tham Gia** | Điểm danh tham gia bang chiến |
+| Nút **✅ Tham Gia** | Điểm danh tham gia |
 | Nút **❌ Không Tham Gia** | Điểm danh không tham gia |
-| `/xem_diemdanh` | Xem danh sách hiện tại (chỉ mình bạn thấy — ephemeral) |
+| `/xem_diemdanh` | Xem danh sách (ephemeral) |
 
 ---
 
-## ☁️ Deploy 24/7
+## ☁️ Deploy 24/7 (Free)
 
-### Render *(khuyến nghị — đơn giản nhất)*
-
-1. Push code lên GitHub
-2. Vào [render.com](https://render.com) → **New → Background Worker**
-3. Kết nối repo GitHub
-4. Cấu hình:
-   - **Build Command:** `pip install -r requirements.txt`
-   - **Start Command:** `python bot.py`
-5. Thêm **Environment Variable:** `DISCORD_TOKEN` = token của bạn
-6. Nhấn **Deploy** — xong!
-
-> ⚠️ Chọn **Background Worker**, không phải Web Service, để bot không bị ngủ.
-
-### Replit
-
-1. Tạo **Python Repl** mới, upload code
-2. Vào **Secrets** → thêm key `DISCORD_TOKEN` = token của bạn
-3. Tạo file `.replit`:
-   ```toml
-   run = "python bot.py"
-   ```
-4. Vào **Deployments** → chọn **Reserved VM** → Deploy
-
-### Fly.io
-
-Thêm file `Dockerfile` vào project:
-
-```dockerfile
-FROM python:3.11-slim
-WORKDIR /app
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-COPY . .
-CMD ["python", "bot.py"]
-```
+### Fly.io *(khuyến nghị)*
 
 ```bash
+# Cài flyctl
+curl -L https://fly.io/install.sh | sh
+
+# Login & deploy
+flyctl auth login
 flyctl launch
-flyctl secrets set DISCORD_TOKEN=token_cua_ban
+flyctl secrets set DISCORD_TOKEN=token_của_bạn
 flyctl deploy
 ```
 
+Thêm `Dockerfile`:
+
+```dockerfile
+FROM node:20-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --omit=dev || npm install
+COPY . .
+RUN npm run build
+CMD ["npm", "start"]
+```
+
+### Oracle Cloud Always Free
+
+```bash
+sudo apt update && sudo apt install nodejs npm -y
+npm install
+npm run build
+
+# Chạy liên tục với PM2
+npm i -g pm2
+pm2 start dist/index.js --name diemdanh-bot
+pm2 save && pm2 startup
+```
+
 ---
 
-## ⚠️ Lưu Ý Quan Trọng
+## ⚠️ Lưu Ý
 
-- **Dữ liệu lưu trong RAM** — nếu bot restart, phiên đang mở sẽ mất. Để lưu bền vững qua các lần restart, cần nâng cấp thêm SQLite hoặc JSON.
-- **Mỗi server chỉ có 1 phiên** điểm danh cùng lúc. Phải kết thúc phiên cũ trước khi mở phiên mới.
-- **Channel `#diemdanh-bang-chien`** được tạo tự động nếu chưa tồn tại. Thành viên chỉ đọc, không gửi tin được.
-- **Không commit file `.env`** lên GitHub — token bị lộ sẽ phải reset ngay lập tức.
+- **Dữ liệu lưu JSON** — nếu container restart, session đang mở sẽ mất. Nâng cấp lên SQLite/Supabase để bền vững hơn.
+- **Mỗi server chỉ có 1 phiên** cùng lúc.
+- **Không commit file `.env`** lên GitHub.
 
----
-
-## 🛠️ Yêu Cầu Hệ Thống
+## 🛠️ Yêu Cầu
 
 | Thành phần | Phiên bản |
 |------------|-----------|
-| Python | 3.10 trở lên |
-| discord.py | 2.3.2 trở lên |
-| python-dotenv | 1.0.0 trở lên |
+| Node.js | 20 trở lên |
+| discord.js | 14.x |
+| TypeScript | 5.x |
