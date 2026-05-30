@@ -13,6 +13,17 @@ const storage = require('./storage.js');
 const { buildProgressBar } = require('./utils/progress.js');
 const embeds = require('./utils/embeds.js');
 
+// ─── Validate env vars ────────────────────────────────────────
+if (!process.env.DISCORD_TOKEN) {
+  console.error('[FATAL] Thiếu DISCORD_TOKEN trong environment variables!');
+  process.exit(1);
+}
+if (!process.env.CLIENT_ID) {
+  console.error('[FATAL] Thiếu CLIENT_ID trong environment variables!');
+  console.error('  → Lấy CLIENT_ID tại: https://discord.com/developers/applications → General Information → Application ID');
+  process.exit(1);
+}
+
 // ─── Client ───────────────────────────────────────────────────
 const client = new Client({
   intents: [
@@ -125,7 +136,7 @@ async function registerCommands() {
   const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
   try {
     console.log('[Commands] Đang đăng ký slash commands...');
-    await rest.put(Routes.applicationCommands(process.env.CLIENT_ID || ''), { body: commands });
+    await rest.put(Routes.applicationCommands(process.env.CLIENT_ID), { body: commands });
     console.log('[Commands] Đăng ký thành công!');
   } catch (e) {
     console.error('[Commands] Lỗi đăng ký:', e.message);
@@ -500,7 +511,7 @@ client.on('interactionCreate', async (interaction) => {
 });
 
 // ─── Ready ────────────────────────────────────────────────────
-client.once('ready', async () => {
+client.once('clientReady', async () => {
   console.log(`[Bot] Đã đăng nhập: ${client.user.tag}`);
   await registerCommands();
 });
