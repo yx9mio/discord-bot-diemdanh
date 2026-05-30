@@ -219,6 +219,84 @@ async function scheduleAutoClose(guild, session, channelId, ms) {
   autoCloseTimers.set(guild.id, timers);
 }
 
+// ─── Recover timers sau khi bot restart ───────────────────────
+// Quét tất cả guilds, tìm phiên đang active có auto_close_at,
+// nếu thời gian còn trong tương lai → schedule lại timer.
+// Nếu đã quá giờ → đóng phiên ngay lập tức.
+async function recoverTimers() {
+  console.log('[Recover] Đang kiểm tra các phiên điểm danh còn dở...');
+  let recovered = 0;
+  let expired   = 0;
+
+  for (const guild of client.guilds.cache.values()) {
+    try {
+      const session = await db.getActiveSession(guild.id);
+      if (!session || !session.auto_close_at) continue;
+
+      const closeAt = new Date(session.auto_close_at);
+      const msLeft  = closeAt.getTime() - Date.now();
+
+      if (msLeft > 0) {
+        // Tìm channel dùng để gửi thông báo
+        // Ưu tiên: system channel → channel text đầu tiên bot có quyền gửi
+        const channelId = await findNotifyChannel(guild);
+        if (channelId) {
+          await scheduleAutoClose(guild, session, channelId, msLeft);
+          console.log(`[Recover] Guild ${guild.name}: phiên "${session.session_name}" còn ${formatDuration(msLeft)}, đã recover timer.`);
+          recovered++;
+
+          // Thông báo vào channel rằng bot đã restart và timer được khôi phục
+          const ch = await guild.channels.fetch(channelId).catch(() => null);
+          if (ch) {
+            const discordTs = Math.floor(closeAt.getTime() / 1000);
+            await ch.send(
+              `🔄 Bot vừa khởi động lại. Phiên điểm danh **${session.session_name}** vẫn đang mở — tự đóng lúc <t:${discordTs}:F> (còn ~${formatDuration(msLeft)}).`
+            ).catch(() => null);
+          }
+        }
+      } else {
+        // Đã quá giờ → đóng phiên ngay
+        console.log(`[Recover] Guild ${guild.name}: phiên "${session.session_name}" đã quá giờ (${closeAt.toISOString()}), đóng ngay.`);
+        await guild.members.fetch().catch(() => null);
+        const attended = await db.getAttendances(session.id);
+        await finishSession(guild, session, attended);
+        expired++;
+
+        // Thông báo
+        const channelId = await findNotifyChannel(guild);
+        if (channelId) {
+          const ch = await guild.channels.fetch(channelId).catch(() => null);
+          if (ch) {
+            const embed = buildSummaryEmbed(session, attended);
+            await ch.send({
+              content: `🔒 **Phiên điểm danh "${session.session_name}" đã được đóng tự động** (bot restart — quá giờ).`,
+              embeds: [embed],
+            }).catch(() => null);
+            await announceNewBadges(guild, ch, guild.id, session.id, attended).catch(() => null);
+          }
+        }
+      }
+    } catch (e) {
+      console.error(`[Recover] Lỗi guild ${guild.name}:`, e.message);
+    }
+  }
+
+  console.log(`[Recover] Hoàn tất: ${recovered} timer recovered, ${expired} phiên đóng muộn.`);
+}
+
+// ─── Tìm channel để bot gửi thông báo ────────────────────────
+// Ưu tiên: system channel → channel text đầu tiên bot có quyền SendMessages
+async function findNotifyChannel(guild) {
+  if (guild.systemChannelId) {
+    const ch = guild.channels.cache.get(guild.systemChannelId);
+    if (ch && ch.permissionsFor(guild.members.me)?.has('SendMessages')) return guild.systemChannelId;
+  }
+  const textCh = guild.channels.cache.find(
+    c => c.isTextBased() && !c.isThread() && c.permissionsFor(guild.members.me)?.has('SendMessages')
+  );
+  return textCh?.id ?? null;
+}
+
 // ─── Helpers ──────────────────────────────────────────────────
 const BADGE_MILESTONES = [
   { count: 5,   badge: '🌱', label: 'Lính Mới' },
@@ -595,6 +673,7 @@ client.on('interactionCreate', async (interaction) => {
 client.once('clientReady', async () => {
   console.log(`[Bot] Đã đăng nhập: ${client.user.tag}`);
   await registerCommands();
+  await recoverTimers();
 });
 
 client.login(process.env.DISCORD_TOKEN);
