@@ -21,8 +21,8 @@ import {
   SlashCommandBuilder,
   TextChannel,
 } from 'discord.js';
-import { ConfigStore, HistoryStore, SessionStore } from './storage.js';
-import { AttendanceStatus, HistorySession, Session } from './types.js';
+import { ConfigStore, HistoryStore, MemberStatsStore, SessionStore } from './storage.js';
+import { AttendanceStatus, HistorySession, MemberStats, Session } from './types.js';
 import {
   buildConfigEmbed,
   buildDisplayEmbed,
@@ -30,6 +30,7 @@ import {
   buildStatsEmbed,
   buildSummaryEmbed,
 } from './utils/embeds.js';
+import { MILESTONE_EMOJI, updateMemberStats } from './streak.js';
 
 const TOKEN = process.env.DISCORD_TOKEN;
 if (!TOKEN) throw new Error('❌ Thiếu DISCORD_TOKEN trong .env');
@@ -40,7 +41,7 @@ const client = new Client({
 
 const timers = new Map<string, { reminder?: NodeJS.Timeout; autoClose?: NodeJS.Timeout }>();
 
-// ─── Helpers ────────────────────────────────────────────────────────────────
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function nowTime(): string {
   return new Date().toLocaleTimeString('vi-VN', {
@@ -74,7 +75,7 @@ function attendanceButtons(disabled = false): ActionRowBuilder<ButtonBuilder> {
   );
 }
 
-// ─── Admin Role Guard ────────────────────────────────────────────────────────
+// ─── Admin Role Guard ─────────────────────────────────────────────────────────
 
 async function isAdminUser(interaction: ChatInputCommandInteraction<'cached'>): Promise<boolean> {
   if (interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) return true;
@@ -106,7 +107,7 @@ async function assertAdmin(interaction: ChatInputCommandInteraction<'cached'>): 
   return ok;
 }
 
-// ─── Attendance Role ─────────────────────────────────────────────────────────
+// ─── Attendance Role ──────────────────────────────────────────────────────────
 
 async function resolveAllowedRole(guild: Guild): Promise<Role | null> {
   const cfg = ConfigStore.get(guild.id);
@@ -135,7 +136,7 @@ async function resolveAdminRole(guild: Guild): Promise<Role | null> {
   ) ?? null;
 }
 
-// ─── Display Channel ─────────────────────────────────────────────────────────
+// ─── Display Channel ──────────────────────────────────────────────────────────
 
 async function getOrCreateDisplayChannel(guild: Guild): Promise<TextChannel> {
   const existing = guild.channels.cache.find(
@@ -164,7 +165,7 @@ async function updateDisplay(guild: Guild): Promise<void> {
   } catch { /* noop */ }
 }
 
-// ─── Session Timers ──────────────────────────────────────────────────────────
+// ─── Session Timers ───────────────────────────────────────────────────────────
 
 function clearGuildTimers(guildId: string): void {
   const t = timers.get(guildId);
@@ -189,6 +190,39 @@ async function finishSession(guild: Guild, reason = 'manual'): Promise<void> {
     }
   } catch { /* noop */ }
 
+  const endTime = nowDatetime();
+  const attendees = Object.values(session.attendees);
+
+  const history: HistorySession = {
+    session_name: session.session_name,
+    start_time: session.start_time,
+    end_time: endTime,
+    role_name: session.role_name,
+    attendees: session.attendees,
+    total_tham_gia: attendees.filter((x) => x.status === 'tham_gia').length,
+    total_khong_tham_gia: attendees.filter((x) => x.status === 'khong_tham_gia').length,
+    eligible_count: session.eligible_member_ids.length,
+  };
+  HistoryStore.push(guild.id, history);
+
+  // ── Update member stats & collect badge announcements ──
+  const allHistory = HistoryStore.get(guild.id); // includes the one just pushed
+  const milestoneAnnouncements: { userId: string; name: string; milestones: number[] }[] = [];
+  const statsUpdates: Record<string, MemberStats> = {};
+
+  // Process all eligible members (both attended and absent)
+  const eligibleSet = new Set(session.eligible_member_ids);
+  for (const userId of eligibleSet) {
+    const record = session.attendees[userId];
+    const member = guild.members.cache.get(userId);
+    const name = member?.displayName ?? record?.name ?? userId;
+    const existing = MemberStatsStore.get(guild.id, userId);
+    const { stats, newMilestones } = updateMemberStats(existing, userId, name, record, endTime, allHistory);
+    statsUpdates[userId] = stats;
+    if (newMilestones.length > 0) milestoneAnnouncements.push({ userId, name, milestones: newMilestones });
+  }
+  MemberStatsStore.setMany(guild.id, statsUpdates);
+
   try {
     const announceChannel = await guild.channels.fetch(session.announce_channel_id) as TextChannel;
     await announceChannel.send({
@@ -198,19 +232,25 @@ async function finishSession(guild: Guild, reason = 'manual'): Promise<void> {
         }),
       ],
     });
+
+    // Badge announcements
+    for (const { userId, name, milestones } of milestoneAnnouncements) {
+      const lines = milestones.map(
+        (m) => `${MILESTONE_EMOJI[m] ?? '🎖️'} **${name}** đạt mốc **${m} lần tham gia**! <@${userId}>`,
+      );
+      await announceChannel.send({
+        embeds: [
+          new EmbedBuilder()
+            .setTitle('🏅 Thành Tích Mới!')
+            .setColor(Colors.Gold)
+            .setDescription(lines.join('\n'))
+            .setTimestamp(),
+        ],
+        allowedMentions: { users: [userId] },
+      });
+    }
   } catch { /* noop */ }
 
-  const attendees = Object.values(session.attendees);
-  const history: HistorySession = {
-    session_name: session.session_name,
-    start_time: session.start_time,
-    end_time: nowDatetime(),
-    role_name: session.role_name,
-    attendees: session.attendees,
-    total_tham_gia: attendees.filter((x) => x.status === 'tham_gia').length,
-    total_khong_tham_gia: attendees.filter((x) => x.status === 'khong_tham_gia').length,
-  };
-  HistoryStore.push(guild.id, history);
   SessionStore.delete(guild.id);
   clearGuildTimers(guild.id);
 }
@@ -260,7 +300,7 @@ function scheduleSession(guildId: string): void {
   timers.set(guildId, bucket);
 }
 
-// ─── Attendance Button ───────────────────────────────────────────────────────
+// ─── Attendance Button ────────────────────────────────────────────────────────
 
 async function enforceAttendanceRole(interaction: Interaction): Promise<GuildMember | null> {
   if (!interaction.inCachedGuild()) return null;
@@ -308,7 +348,7 @@ async function markAttendance(interaction: Interaction, status: AttendanceStatus
   await interaction.reply({ content: text, ephemeral: true });
 }
 
-// ─── Slash Command Definitions ───────────────────────────────────────────────
+// ─── Slash Command Definitions ────────────────────────────────────────────────
 
 function buildCommands() {
   return [
@@ -327,7 +367,10 @@ function buildCommands() {
       ),
     new SlashCommandBuilder()
       .setName('ket_thuc_diemdanh')
-      .setDescription('[Admin] Kết thúc phiên hiện tại'),
+      .setDescription('[Admin] Kết thúc phiên hiện tại (có lưu lịch sử)'),
+    new SlashCommandBuilder()
+      .setName('huy_diemdanh')
+      .setDescription('[Admin] Hủy phiên hiện tại — KHÔNG lưu lịch sử'),
     new SlashCommandBuilder()
       .setName('xoa_diemdanh')
       .setDescription('[Admin] Xóa điểm danh của một thành viên')
@@ -343,10 +386,37 @@ function buildCommands() {
         ),
       ),
     new SlashCommandBuilder()
+      .setName('sua_diemdanh')
+      .setDescription('[Admin] Sửa trạng thái điểm danh hàng loạt')
+      .addStringOption((o) =>
+        o.setName('trang_thai').setDescription('Trạng thái mới').setRequired(true).addChoices(
+          { name: '✅ Tham Gia', value: 'tham_gia' },
+          { name: '❌ Không Tham Gia', value: 'khong_tham_gia' },
+        ),
+      )
+      .addUserOption((o) => o.setName('member1').setDescription('Thành viên 1').setRequired(true))
+      .addUserOption((o) => o.setName('member2').setDescription('Thành viên 2').setRequired(false))
+      .addUserOption((o) => o.setName('member3').setDescription('Thành viên 3').setRequired(false))
+      .addUserOption((o) => o.setName('member4').setDescription('Thành viên 4').setRequired(false))
+      .addUserOption((o) => o.setName('member5').setDescription('Thành viên 5').setRequired(false)),
+    new SlashCommandBuilder()
       .setName('nhac_nho')
       .setDescription('[Admin] Nhắc nhở thành viên chưa điểm danh')
       .addBooleanOption((o) =>
         o.setName('mention').setDescription('Mention @member trong channel (true) hoặc chỉ liệt kê tên (false)').setRequired(false),
+      ),
+    new SlashCommandBuilder()
+      .setName('xem_lich_su_member')
+      .setDescription('Xem lịch sử điểm danh cá nhân của một thành viên')
+      .addUserOption((o) => o.setName('member').setDescription('Thành viên cần xem (để trống = bản thân)').setRequired(false)),
+    new SlashCommandBuilder()
+      .setName('thong_ke_phien')
+      .setDescription('Xem chi tiết một phiên cụ thể từ lịch sử')
+      .addIntegerOption((o) =>
+        o.setName('so_phien').setDescription('Số thứ tự phiên (1 = mới nhất, 2 = trước đó...)').setRequired(false).setMinValue(1),
+      )
+      .addStringOption((o) =>
+        o.setName('ten_phien').setDescription('Tìm theo tên phiên (partial match)').setRequired(false),
       ),
     new SlashCommandBuilder()
       .setName('caidat_role')
@@ -369,7 +439,7 @@ function buildCommands() {
   ].map((x) => x.toJSON());
 }
 
-// ─── Command Handlers ────────────────────────────────────────────────────────
+// ─── Command Handlers ─────────────────────────────────────────────────────────
 
 async function handleStart(interaction: ChatInputCommandInteraction<'cached'>): Promise<void> {
   if (!await assertAdmin(interaction)) return;
@@ -407,7 +477,6 @@ async function handleStart(interaction: ChatInputCommandInteraction<'cached'>): 
 
   await interaction.deferReply();
 
-  // Fetch & cache all eligible member IDs at session start
   await guild.members.fetch();
   const eligibleMemberIds = [...role.members.keys()];
 
@@ -471,7 +540,43 @@ async function handleEnd(interaction: ChatInputCommandInteraction<'cached'>): Pr
   }
   await interaction.deferReply();
   await finishSession(interaction.guild, 'manual');
-  await interaction.followUp({ content: '✅ Đã kết thúc phiên điểm danh.' });
+  await interaction.followUp({ content: '✅ Đã kết thúc phiên điểm danh và lưu lịch sử.' });
+}
+
+// ─── /huy_diemdanh — Cancel without saving history ───────────────────────────
+
+async function handleCancel(interaction: ChatInputCommandInteraction<'cached'>): Promise<void> {
+  if (!await assertAdmin(interaction)) return;
+  const session = SessionStore.get(interaction.guild.id);
+  if (!session) {
+    await interaction.reply({ content: '⚠️ Không có phiên điểm danh nào đang mở!', ephemeral: true });
+    return;
+  }
+  await interaction.deferReply();
+  clearGuildTimers(interaction.guild.id);
+
+  // Disable display embed
+  try {
+    const displayCh = await interaction.guild.channels.fetch(session.display_channel_id) as TextChannel;
+    if (session.display_message_id) {
+      const msg = await displayCh.messages.fetch(session.display_message_id);
+      await msg.edit({
+        embeds: [
+          new EmbedBuilder()
+            .setTitle(`🚫 Phiên Bị Hủy: ${session.session_name}`)
+            .setColor(Colors.Red)
+            .setDescription('Phiên điểm danh đã bị hủy — không lưu lịch sử.')
+            .setTimestamp(),
+        ],
+        components: [attendanceButtons(true)],
+      });
+    }
+  } catch { /* noop */ }
+
+  SessionStore.delete(interaction.guild.id);
+  await interaction.followUp({
+    content: `🚫 Đã **hủy** phiên **${session.session_name}** — dữ liệu KHÔNG được lưu vào lịch sử.`,
+  });
 }
 
 async function handleView(interaction: ChatInputCommandInteraction<'cached'>): Promise<void> {
@@ -526,7 +631,52 @@ async function handleManualAdd(interaction: ChatInputCommandInteraction<'cached'
   });
 }
 
-// ─── /nhac_nho ───────────────────────────────────────────────────────────────
+// ─── /sua_diemdanh — Bulk status update ──────────────────────────────────────
+
+async function handleBulkEdit(interaction: ChatInputCommandInteraction<'cached'>): Promise<void> {
+  if (!await assertAdmin(interaction)) return;
+  const session = SessionStore.get(interaction.guild.id);
+  if (!session) {
+    await interaction.reply({ content: '⚠️ Không có phiên điểm danh nào đang mở!', ephemeral: true });
+    return;
+  }
+
+  const status = interaction.options.getString('trang_thai', true) as AttendanceStatus;
+  const slots = ['member1', 'member2', 'member3', 'member4', 'member5'];
+  const users = slots
+    .map((s) => interaction.options.getUser(s))
+    .filter((u): u is NonNullable<typeof u> => u !== null);
+
+  if (users.length === 0) {
+    await interaction.reply({ content: '⚠️ Cần chọn ít nhất 1 thành viên!', ephemeral: true });
+    return;
+  }
+
+  await interaction.deferReply({ ephemeral: true });
+  const label = status === 'tham_gia' ? '✅ Tham Gia' : '❌ Không Tham Gia';
+  const updated: string[] = [];
+
+  for (const user of users) {
+    const member = await interaction.guild.members.fetch(user.id).catch(() => null);
+    session.attendees[user.id] = {
+      user_id: user.id,
+      name: member?.displayName ?? user.username,
+      avatar: user.displayAvatarURL(),
+      status,
+      time: nowTime(),
+    };
+    updated.push(member?.displayName ?? user.username);
+  }
+
+  SessionStore.set(interaction.guild.id, session);
+  await updateDisplay(interaction.guild);
+  await interaction.followUp({
+    content: `✏️ Đã cập nhật **${label}** cho ${updated.length} thành viên:\n${updated.map((n) => `• ${n}`).join('\n')}`,
+    ephemeral: true,
+  });
+}
+
+// ─── /nhac_nho ────────────────────────────────────────────────────────────────
 
 async function handleRemind(interaction: ChatInputCommandInteraction<'cached'>): Promise<void> {
   if (!await assertAdmin(interaction)) return;
@@ -560,7 +710,6 @@ async function handleRemind(interaction: ChatInputCommandInteraction<'cached'>):
   const channel = interaction.channel as TextChannel;
 
   if (shouldMention) {
-    // Batch 10 mentions per message to stay under Discord's character limit
     for (let i = 0; i < absentIds.length; i += 10) {
       const batch = absentIds.slice(i, i + 10);
       await channel.send({
@@ -590,6 +739,177 @@ async function handleRemind(interaction: ChatInputCommandInteraction<'cached'>):
       ephemeral: true,
     });
   }
+}
+
+// ─── /xem_lich_su_member — Personal history ───────────────────────────────────
+
+async function handleMemberHistory(interaction: ChatInputCommandInteraction<'cached'>): Promise<void> {
+  await interaction.deferReply({ ephemeral: true });
+
+  const targetUser = interaction.options.getUser('member') ?? interaction.user;
+  const stats = MemberStatsStore.get(interaction.guild.id, targetUser.id);
+  const history = HistoryStore.get(interaction.guild.id);
+
+  // Collect sessions where user participated or declined
+  const participated = history.filter((s) => s.attendees[targetUser.id] !== undefined);
+
+  const member = await interaction.guild.members.fetch(targetUser.id).catch(() => null);
+  const displayName = member?.displayName ?? targetUser.username;
+
+  if (!stats && participated.length === 0) {
+    await interaction.followUp({
+      content: `📭 Chưa có dữ liệu điểm danh nào cho **${displayName}**.`,
+      ephemeral: true,
+    });
+    return;
+  }
+
+  const joined = stats?.joined ?? participated.filter((s) => s.attendees[targetUser.id]?.status === 'tham_gia').length;
+  const total = stats?.total_sessions ?? participated.length;
+  const pct = total > 0 ? Math.round((joined / total) * 100) : 0;
+  const currentStreak = stats?.current_streak ?? 0;
+  const maxStreak = stats?.max_streak ?? 0;
+
+  // Bar visualization
+  const BAR_LEN = 10;
+  const filled = Math.round((pct / 100) * BAR_LEN);
+  const bar = '█'.repeat(filled) + '░'.repeat(BAR_LEN - filled);
+
+  // Recent 10 sessions
+  const recent = participated.slice(-10).reverse();
+  const recentLines = recent.map((s) => {
+    const att = s.attendees[targetUser.id];
+    const icon = att.status === 'tham_gia' ? '✅' : '❌';
+    return `${icon} **${s.session_name}** — ${s.start_time}`;
+  });
+
+  // Milestone badges
+  const MILESTONES = [5, 10, 20, 30, 50, 100];
+  const badges = MILESTONES
+    .filter((m) => joined >= m)
+    .map((m) => `${MILESTONE_EMOJI[m] ?? '🎖️'} ${m} phiên`)
+    .join('  ');
+
+  const embed = new EmbedBuilder()
+    .setTitle(`📋 Lịch Sử Điểm Danh — ${displayName}`)
+    .setColor(Colors.Blue)
+    .setThumbnail(targetUser.displayAvatarURL())
+    .addFields(
+      {
+        name: '📊 Tổng Quan',
+        value: [
+          `Tổng phiên: **${total}**`,
+          `Tham gia: **${joined}** | Không tham gia: **${(stats?.declined ?? (total - joined))}**`,
+          `Tỷ lệ: **${pct}%** \`${bar}\``,
+        ].join('\n'),
+        inline: false,
+      },
+      {
+        name: '🔥 Streak',
+        value: [
+          `Streak hiện tại: **${currentStreak}** phiên liên tiếp`,
+          `Streak cao nhất: **${maxStreak}** phiên`,
+        ].join('\n'),
+        inline: false,
+      },
+    );
+
+  if (badges) {
+    embed.addFields({ name: '🏅 Huy Hiệu', value: badges, inline: false });
+  }
+
+  if (recentLines.length > 0) {
+    embed.addFields({
+      name: `📅 10 Phiên Gần Nhất (${participated.length} tổng)`,
+      value: recentLines.join('\n'),
+      inline: false,
+    });
+  }
+
+  embed.setTimestamp();
+  await interaction.followUp({ embeds: [embed], ephemeral: true });
+}
+
+// ─── /thong_ke_phien — Detailed session from history ─────────────────────────
+
+async function handleSessionDetail(interaction: ChatInputCommandInteraction<'cached'>): Promise<void> {
+  await interaction.deferReply({ ephemeral: true });
+
+  const history = HistoryStore.get(interaction.guild.id);
+  if (history.length === 0) {
+    await interaction.followUp({ content: '📭 Chưa có phiên nào trong lịch sử.', ephemeral: true });
+    return;
+  }
+
+  const soPhien = interaction.options.getInteger('so_phien');
+  const tenPhien = interaction.options.getString('ten_phien');
+
+  let target: HistorySession | undefined;
+
+  if (tenPhien) {
+    target = [...history].reverse().find(
+      (s) => s.session_name.toLowerCase().includes(tenPhien.toLowerCase()),
+    );
+    if (!target) {
+      await interaction.followUp({ content: `⚠️ Không tìm thấy phiên nào có tên chứa "${tenPhien}".`, ephemeral: true });
+      return;
+    }
+  } else {
+    const idx = history.length - (soPhien ?? 1);
+    if (idx < 0) {
+      await interaction.followUp({ content: `⚠️ Chỉ có **${history.length}** phiên trong lịch sử.`, ephemeral: true });
+      return;
+    }
+    target = history[idx];
+  }
+
+  const attendees = Object.values(target.attendees);
+  const joined = attendees.filter((x) => x.status === 'tham_gia');
+  const declined = attendees.filter((x) => x.status === 'khong_tham_gia');
+  const eligible = target.eligible_count ?? attendees.length;
+  const pct = eligible > 0 ? Math.round((joined.length / eligible) * 100) : 0;
+
+  const BAR_LEN = 10;
+  const filled = Math.round((pct / 100) * BAR_LEN);
+  const bar = '█'.repeat(filled) + '░'.repeat(BAR_LEN - filled);
+
+  const joinedList = joined.map((x, i) => `\`${String(i + 1).padStart(2)}.\` ${x.name} (${x.time})`).join('\n') || '—';
+  const declinedList = declined.map((x, i) => `\`${String(i + 1).padStart(2)}.\` ${x.name}`).join('\n') || '—';
+
+  const embed = new EmbedBuilder()
+    .setTitle(`📋 Chi Tiết Phiên: ${target.session_name}`)
+    .setColor(Colors.Blue)
+    .addFields(
+      {
+        name: '📊 Tổng Quan',
+        value: [
+          `Bắt đầu: **${target.start_time}**`,
+          `Kết thúc: **${target.end_time}**`,
+          `Role: **${target.role_name}**`,
+          `Tỷ lệ: **${pct}%** \`${bar}\` (${joined.length}/${eligible})`,
+        ].join('\n'),
+        inline: false,
+      },
+    );
+
+  // Split long lists across fields (Discord 1024 char limit per field)
+  const chunkField = (title: string, content: string, color = false) => {
+    const lines = content.split('\n');
+    const chunks: string[] = [];
+    let cur = '';
+    for (const l of lines) {
+      if ((cur + '\n' + l).length > 950) { chunks.push(cur); cur = l; }
+      else cur = cur ? cur + '\n' + l : l;
+    }
+    if (cur) chunks.push(cur);
+    return chunks.map((c, i) => ({ name: i === 0 ? title : '\u200b', value: c, inline: false }));
+  };
+
+  embed.addFields(...chunkField(`✅ Tham Gia (${joined.length})`, joinedList));
+  embed.addFields(...chunkField(`❌ Không Tham Gia (${declined.length})`, declinedList));
+  embed.setTimestamp();
+
+  await interaction.followUp({ embeds: [embed], ephemeral: true });
 }
 
 async function handleHistory(interaction: ChatInputCommandInteraction<'cached'>): Promise<void> {
@@ -683,7 +1003,7 @@ async function handleConfigView(interaction: ChatInputCommandInteraction<'cached
   });
 }
 
-// ─── Bot Entry ───────────────────────────────────────────────────────────────
+// ─── Bot Entry ────────────────────────────────────────────────────────────────
 
 client.once('clientReady', async (readyClient) => {
   console.log(`🤖 Bot đã online: ${readyClient.user.tag}`);
@@ -693,6 +1013,7 @@ client.once('clientReady', async (readyClient) => {
   for (const [guildId, session] of Object.entries(SessionStore.all())) {
     if (session.end_time && new Date(session.end_time).getTime() > Date.now()) {
       scheduleSession(guildId);
+      console.log(`🔄 Đã reschedule session: ${session.session_name} (guild ${guildId})`);
     }
   }
 });
@@ -708,18 +1029,22 @@ client.on('interactionCreate', async (interaction) => {
     if (!interaction.isChatInputCommand() || !interaction.inCachedGuild()) return;
 
     switch (interaction.commandName) {
-      case 'batdau_diemdanh':    await handleStart(interaction); break;
-      case 'ket_thuc_diemdanh':  await handleEnd(interaction); break;
-      case 'xem_diemdanh':       await handleView(interaction); break;
-      case 'xoa_diemdanh':       await handleDelete(interaction); break;
-      case 'them_diemdanh':      await handleManualAdd(interaction); break;
-      case 'nhac_nho':           await handleRemind(interaction); break;
-      case 'lich_su':            await handleHistory(interaction); break;
-      case 'thong_ke':           await handleStats(interaction); break;
-      case 'xuat_diemdanh':      await handleExport(interaction); break;
-      case 'caidat_role':        await handleConfigAttendanceRole(interaction); break;
-      case 'caidat_admin_role':  await handleConfigAdminRole(interaction); break;
-      case 'caidat_xem':         await handleConfigView(interaction); break;
+      case 'batdau_diemdanh':     await handleStart(interaction); break;
+      case 'ket_thuc_diemdanh':   await handleEnd(interaction); break;
+      case 'huy_diemdanh':        await handleCancel(interaction); break;
+      case 'xem_diemdanh':        await handleView(interaction); break;
+      case 'xoa_diemdanh':        await handleDelete(interaction); break;
+      case 'them_diemdanh':       await handleManualAdd(interaction); break;
+      case 'sua_diemdanh':        await handleBulkEdit(interaction); break;
+      case 'nhac_nho':            await handleRemind(interaction); break;
+      case 'xem_lich_su_member':  await handleMemberHistory(interaction); break;
+      case 'thong_ke_phien':      await handleSessionDetail(interaction); break;
+      case 'lich_su':             await handleHistory(interaction); break;
+      case 'thong_ke':            await handleStats(interaction); break;
+      case 'xuat_diemdanh':       await handleExport(interaction); break;
+      case 'caidat_role':         await handleConfigAttendanceRole(interaction); break;
+      case 'caidat_admin_role':   await handleConfigAdminRole(interaction); break;
+      case 'caidat_xem':          await handleConfigView(interaction); break;
     }
   } catch (error) {
     console.error(error);
