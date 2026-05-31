@@ -3,7 +3,7 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const db = require('../../db.js');
 const { FOOTER_DEFAULT, AUTHOR_DEFAULT } = require('../../utils/embeds.js');
-const { TEN_THU, pad, ngayThucTe } = require('./helpers.js');
+const { pad, ngayThucTe, formatDongStr } = require('./helpers.js');
 
 async function timKenhThongBao(guild) {
   try {
@@ -37,11 +37,11 @@ async function buildDashboard(guild, cfg, viewMode = 'admin') {
 
   const lichLines = lichList.length
     ? lichList.map((l, i) => {
-        const mo   = `${TEN_THU[l.day_of_week]} ${pad(l.hour)}:${pad(l.minute)}`;
-        const dong = l.close_day_of_week != null
-          ? `${TEN_THU[l.close_day_of_week]} ${pad(l.close_hour)}:${pad(l.close_minute)}`
-          : 'không tự đóng';
-        return `\`${i+1}\` **${l.session_name}** | ${mo} → ${dong} | <#${l.channel_id}>`;
+        const { label: moLabel } = ngayThucTe(
+          l.day_of_week, l.hour, l.minute,
+        );
+        const dongLabel = formatDongStr(l);
+        return `\`${i+1}\` **${l.session_name}** | ${moLabel} → ${dongLabel} | <#${l.channel_id}>`;
       }).join('\n')
     : '⚠️ Chưa có lịch cố định';
 
