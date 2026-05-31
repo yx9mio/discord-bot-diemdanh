@@ -7,7 +7,7 @@ const { EmbedBuilder } = require('discord.js');
 // Map<guildId, Map<lichId_open | lichId_close, timeoutId>>
 const schedulerMap = new Map();
 
-// ── Tính ms đến lần chạy tiếp theo (giờ VN) ────────────────────────────────────────────────
+// ── Tính ms đến lần chạy tiếp theo (giờ VN) ──────────────────────────────────
 function msToNextOccurrence(dayOfWeek, hour, minute) {
   const VN_OFFSET = 7 * 60 * 60 * 1000;
   const nowUtc    = Date.now();
@@ -30,38 +30,39 @@ function msToNextOccurrence(dayOfWeek, hour, minute) {
   return targetVnMs - VN_OFFSET - nowUtc;
 }
 
-// ── Lên lịch open (chỉ open, KHÔNG schedule close ở đây) ────────────────────────
-// BUG-3 FIX: close timer KHÔNG được schedule độc lập tại đây.
-// Nó sẽ được schedule BÊN TRONG runLich() ngay sau khi _moPhien() thành công.
+// ── Lên lịch open. BUG-3+BUG-7 FIX: close timer KHÔNG schedule độc lập ở đây
+// nếu msClose < msOpen (tức close đã qua trong tuần này, hoặc cycle sai)
+// → để runLich() tự schedule close sau khi mở thành công.
 async function scheduleLichCoDinh(client, guildId, lich) {
   const ms = msToNextOccurrence(lich.day_of_week, lich.hour, lich.minute);
   console.log(`[Scheduler] guild:${guildId} — "${lich.session_name}" MỞ sau ${Math.round(ms / 60000)}p`);
   const tid = setTimeout(() => runLich(client, guildId, lich), ms);
   _setTimer(guildId, `${lich.id}_open`, tid);
 
-  // BUG-3 FIX: Chỉ schedule close khi bot restart VÀ giờ close còn trong tương lai
-  // (tức là giờ close > giờ hiện tại để tránh đặt timer lên 7 ngày sau khi không cần)
+  // Chỉ pre-schedule close khi bot restart VÀ close xảy ra SAU open trong tuần này
+  // BUG-7 FIX: dùng _setTimer để overwrite nếu đã có timer cũ (tránh duplicate)
   if (lich.close_day_of_week != null) {
     const msClose = msToNextOccurrence(lich.close_day_of_week, lich.close_hour, lich.close_minute);
-    const msOpen  = ms;
-    // Chỉ schedule close nếu close xảy ra SAU open (close > open trong tuần này)
-    // Nếu msClose < msOpen: close thuộc cycle trước → bỏ qua, để runLich tự schedule
-    if (msClose > msOpen) {
+    if (msClose > ms) {
       console.log(`[Scheduler] guild:${guildId} — "${lich.session_name}" ĐÓNG sau ${Math.round(msClose / 60000)}p`);
       const tidC = setTimeout(() => runDongLich(client, guildId, lich), msClose);
-      _setTimer(guildId, `${lich.id}_close`, tidC);
+      _setTimer(guildId, `${lich.id}_close`, tidC); // overwrite any stale timer
     } else {
-      console.log(`[Scheduler] guild:${guildId} — "${lich.session_name}" close timer bỏ qua (close < open), sẽ schedule sau khi open chạy`);
+      console.log(`[Scheduler] guild:${guildId} — "${lich.session_name}" close timer bỏ qua tại scheduleLich (close <= open), sẽ schedule sau khi open chạy`);
     }
   }
 }
 
 function _setTimer(guildId, key, tid) {
   if (!schedulerMap.has(guildId)) schedulerMap.set(guildId, new Map());
-  schedulerMap.get(guildId).set(key, tid);
+  // BUG-7 FIX: clear timer cũ trước khi set mới để tránh duplicate timers
+  const gMap = schedulerMap.get(guildId);
+  const existing = gMap.get(key);
+  if (existing != null) clearTimeout(existing);
+  gMap.set(key, tid);
 }
 
-// ── GIAI ĐOẠN 1: Mở phiên (nội bộ) ───────────────────────────────────────────────
+// ── GIAI ĐOẠN 1: Mở phiên ────────────────────────────────────────────────────
 async function runLich(client, guildId, lich) {
   try {
     const lichHienTai = await db.getLichCoDinhById(guildId, lich.id);
@@ -82,12 +83,12 @@ async function runLich(client, guildId, lich) {
 
     await _moPhien(g, lich);
 
-    // BUG-3 FIX: schedule close timer NGAY SAU KHI mở phiên thành công
+    // BUG-3+BUG-7 FIX: schedule close SAU KHI open thành công, dùng _setTimer để overwrite
     if (lich.close_day_of_week != null) {
       const msClose = msToNextOccurrence(lich.close_day_of_week, lich.close_hour, lich.close_minute);
       console.log(`[Scheduler] ${g.name} — "${lich.session_name}" ĐÓNG sau ${Math.round(msClose / 60000)}p (scheduled post-open)`);
       const tidC = setTimeout(() => runDongLich(client, guildId, lich), msClose);
-      _setTimer(guildId, `${lich.id}_close`, tidC);
+      _setTimer(guildId, `${lich.id}_close`, tidC); // overwrite stale close timer nếu có
     }
   } catch (e) {
     console.error(`[Scheduler] Lỗi runLich ${lich.id}:`, e.message);
@@ -95,7 +96,7 @@ async function runLich(client, guildId, lich) {
   await scheduleLichCoDinh(client, guildId, lich);
 }
 
-// ── Logic mở phiên (tách ra để runLichNgay có thể gọi) ──────────────────────────
+// ── Logic mở phiên ────────────────────────────────────────────────────────────
 async function _moPhien(g, lich) {
   await g.members.fetch();
   const cfg = await db.getConfig(g.id);
@@ -133,7 +134,7 @@ async function _moPhien(g, lich) {
   }
 }
 
-// ── GIAI ĐOẠN 2: Đóng phiên + thống kê phái (nội bộ) ─────────────────────────
+// ── GIAI ĐOẠN 2: Đóng phiên + thống kê phái ──────────────────────────────────
 async function runDongLich(client, guildId, lich) {
   try {
     const g = client.guilds.cache.get(guildId);
@@ -152,8 +153,6 @@ async function runDongLich(client, guildId, lich) {
     const nameMatch    = session.session_name === lich.session_name;
     const channelMatch = session.channel_id   === lich.channel_id;
     // BUG-1 FIX: phải khớp CẢ HAI (name VÀ channel) thì mới đóng
-    // Trước đây: !nameMatch && !channelMatch → chỉ skip khi cả 2 đều sai (quá lỏng)
-    // Sau fix:   !nameMatch || !channelMatch → skip khi bất kỳ 1 không khớp (chặt hơn)
     if (!nameMatch || !channelMatch) {
       console.log(`[Scheduler] ${g.name} — phiên "${session.session_name}" không khớp lịch "${lich.session_name}" (name:${nameMatch} ch:${channelMatch}), bỏ qua`);
       _rescheduleClose(client, guildId, lich);
@@ -173,13 +172,12 @@ async function runDongLich(client, guildId, lich) {
   _rescheduleClose(client, guildId, lich);
 }
 
-// ── Logic đóng phiên + thống kê (tách ra để runDongLichNgay gọi) ───────────────
+// ── Logic đóng phiên + thống kê ───────────────────────────────────────────────
 async function _dongPhienVaThongKe(g, session, ch, lich, client) {
   const attended = await db.getAttendances(session.id);
   await ketThucPhien(g, session, attended);
   await voHieuHoaNutDiemDanh(client, ch, session);
 
-  // Thống kê theo phái
   await g.members.fetch();
   const phaiBattleMap = new Map();
   const phaRoleIds    = lich.phai_role_ids ?? [];
@@ -245,7 +243,7 @@ function _addToPhai(map, phai, userId) {
   map.get(phai).push(userId);
 }
 
-// ── Hủy lịch ───────────────────────────────────────────────────────────────────────
+// ── Hủy lịch ──────────────────────────────────────────────────────────────────
 function cancelLichCoDinh(guildId, lichId) {
   const gMap = schedulerMap.get(guildId);
   if (!gMap) return;
@@ -257,7 +255,7 @@ function cancelLichCoDinh(guildId, lichId) {
   console.log(`[Scheduler] Đã hủy lịch ${lichId} của guild ${guildId}`);
 }
 
-// ── Khôi phục khi bot restart ───────────────────────────────────────────────────
+// ── Khôi phục khi bot restart ─────────────────────────────────────────────────
 async function khoiPhucScheduler(client) {
   for (const guild of client.guilds.cache.values()) {
     try {
@@ -273,17 +271,11 @@ async function khoiPhucScheduler(client) {
   }
 }
 
-// ── PUBLIC API: Mở sớm ngay lập tức (gọi từ Setup UI) ──────────────────────────
-/**
- * Mở phiên ngay lập tức theo lịch chỉ định (không đợi đến giờ cố định).
- * Caller phải kiểm tra trước khi gọi: không có phiên đang mở.
- */
+// ── PUBLIC API ────────────────────────────────────────────────────────────────
 async function runLichNgay(client, guildId, lich) {
   const g = client.guilds.cache.get(guildId);
   if (!g) throw new Error('Guild không tìm thấy');
   await _moPhien(g, lich);
-
-  // Schedule close timer ngay sau khi mở
   if (lich.close_day_of_week != null) {
     const msClose = msToNextOccurrence(lich.close_day_of_week, lich.close_hour, lich.close_minute);
     console.log(`[Scheduler] ${g.name} — "${lich.session_name}" ĐÓNG sau ${Math.round(msClose / 60000)}p (manual open)`);
@@ -292,10 +284,6 @@ async function runLichNgay(client, guildId, lich) {
   }
 }
 
-/**
- * Đóng phiên ngay lập tức theo lịch chỉ định.
- * Dùng cho nút "Đóng sớm" trong Setup UI.
- */
 async function runDongLichNgay(client, guildId, lich) {
   const g = client.guilds.cache.get(guildId);
   if (!g) throw new Error('Guild không tìm thấy');

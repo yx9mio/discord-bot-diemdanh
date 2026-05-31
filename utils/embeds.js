@@ -115,7 +115,6 @@ async function buildSessionEmbed(guild, session, attended) {
     ` Bắt đầu: <t:${startTs}:f>`,
   ];
 
-  // [FIX] Tự đóng dùng <t:ts:f> — hiện full date giống "31 Tháng Năm 2026 8:00 CH"
   if (session.auto_close_at) {
     const ts = Math.floor(new Date(session.auto_close_at).getTime() / 1000);
     descLines.push(` Tự đóng: <t:${ts}:f>`);
@@ -133,22 +132,23 @@ async function buildSessionEmbed(guild, session, attended) {
     if (iconURL) embed.setThumbnail(iconURL);
   }
 
+  // BUG-6 FIX: đổi a.display_name → a.username để khớp với schema bảng attendances
   if (joined.length > 0)
-    chunkLines(joined.map((a, i) => `\`${String(i + 1).padStart(2)}.\` **${a.display_name}**`))
+    chunkLines(joined.map((a, i) => `\`${String(i + 1).padStart(2)}.\` **${a.username}**`))
       .forEach((chunk, i) => embed.addFields({
         name: i === 0 ? `✅ Tham Gia — ${joined.length}` : '\u200b',
         value: chunk, inline: true,
       }));
 
   if (late.length > 0)
-    chunkLines(late.map((a, i) => `\`${String(i + 1).padStart(2)}.\` ${a.display_name}`))
+    chunkLines(late.map((a, i) => `\`${String(i + 1).padStart(2)}.\` ${a.username}`))
       .forEach((chunk, i) => embed.addFields({
         name: i === 0 ? `⏰ Đến Trễ — ${late.length}` : '\u200b',
         value: chunk, inline: true,
       }));
 
   if (declined.length > 0)
-    chunkLines(declined.map((a, i) => `\`${String(i + 1).padStart(2)}.\` ~~${a.display_name}~~`))
+    chunkLines(declined.map((a, i) => `\`${String(i + 1).padStart(2)}.\` ~~${a.username}~~`))
       .forEach((chunk, i) => embed.addFields({
         name: i === 0 ? `❌ Vắng Mặt — ${declined.length}` : '\u200b',
         value: chunk, inline: true,
@@ -203,9 +203,10 @@ function buildSummaryEmbed(session, attended) {
     .setDescription(descLines.join('\n'))
     .setTimestamp();
 
-  const joinedLines = joined.map((a, i) => `\`${String(i + 1).padStart(2)}.\` **${a.display_name}**`);
-  const lateLines   = late.map((a, i)   => `\`${String(i + 1).padStart(2)}.\` ${a.display_name}`);
-  const decLines    = declined.map((a, i) => `\`${String(i + 1).padStart(2)}.\` ~~${a.display_name}~~`);
+  // BUG-6 FIX: đổi a.display_name → a.username
+  const joinedLines = joined.map((a, i) => `\`${String(i + 1).padStart(2)}.\` **${a.username}**`);
+  const lateLines   = late.map((a, i)   => `\`${String(i + 1).padStart(2)}.\` ${a.username}`);
+  const decLines    = declined.map((a, i) => `\`${String(i + 1).padStart(2)}.\` ~~${a.username}~~`);
 
   if (joinedLines.length > 0)
     chunkLines(joinedLines).forEach((chunk, i) =>
@@ -274,22 +275,11 @@ function buildMemberEmbed(member, stats, badge, pct, bar) {
       `> 📅 ${stats.total_joined} tham gia · ${stats.total_sessions} tổng phiên`,
     ].join('\n'))
     .addFields(
-      { name: '🔥 Streak Hiện Tại', value: streakBar, inline: true },
-      { name: '🏆 Streak Tốt Nhất', value: `**${stats.best_streak}** phiên liên tiếp`, inline: true },
-      { name: '🏅 Huy Hiệu', value: badge || '*(chưa đạt)*', inline: true },
+      { name: '🔥 Streak Hiện Tại', value: streakBar, inline: false },
+      { name: '🏆 Streak Tốt Nhất', value: `**${stats.best_streak ?? 0}** phiên`, inline: true },
+      { name: '🏅 Huy Hiệu', value: badge || '*(chưa có)*', inline: true },
     )
     .setFooter({ text: FOOTER_DEFAULT })
-    .setTimestamp();
-}
-
-// ─── Stats Embed ──────────────────────────────────────────────────────────────
-function buildStatsEmbed(lines) {
-  return new EmbedBuilder()
-    .setAuthor(AUTHOR_DEFAULT)
-    .setTitle('🏆 Top 10 Thành Viên Chuyên Cần')
-    .setColor(COLOR_GOLD)
-    .setDescription(lines.length > 0 ? lines.join('\n') : '> Chưa có dữ liệu điểm danh.')
-    .setFooter({ text: `${FOOTER_DEFAULT} · Xếp hạng theo số lần tham gia` })
     .setTimestamp();
 }
 
@@ -298,38 +288,25 @@ function buildConfigEmbed(cfg) {
   return new EmbedBuilder()
     .setAuthor(AUTHOR_DEFAULT)
     .setTitle('⚙️ Cấu Hình Server')
-    .setColor(COLOR_GOLD)
+    .setColor(COLOR_ACTIVE)
     .addFields(
-      {
-        name: '🎯 Role Điểm Danh',
-        value: cfg.allowed_role_id ? `<@&${cfg.allowed_role_id}>` : '*(Tất cả thành viên)*',
-        inline: true,
-      },
-      {
-        name: '🛡️ Role Admin Bot',
-        value: cfg.admin_role_id ? `<@&${cfg.admin_role_id}>` : '*(Quản trị viên máy chủ)*',
-        inline: true,
-      },
+      { name: '👥 Role Điểm Danh', value: cfg.allowed_role_id ? `<@&${cfg.allowed_role_id}>` : '*(tất cả)*', inline: true },
+      { name: '🔑 Role Admin Bot', value: cfg.admin_role_id   ? `<@&${cfg.admin_role_id}>`   : '*(chưa đặt)*', inline: true },
+      { name: '⚔️ Role Phái', value: (cfg.phai_role_ids ?? []).length > 0
+        ? cfg.phai_role_ids.map(id => `<@&${id}>`).join(' ')
+        : '*(chưa cấu hình)*', inline: false },
     )
-    .setFooter({ text: `${FOOTER_DEFAULT} · Dùng /setup để chỉnh sửa` })
+    .setFooter({ text: FOOTER_DEFAULT })
     .setTimestamp();
 }
 
-// ─── Exports ──────────────────────────────────────────────────────────────────
 module.exports = {
+  pctColor, pctEmoji, pctLabel, chunkLines, formatDuration,
+  FOOTER_DEFAULT, AUTHOR_DEFAULT,
   buildAttendanceButtons,
   buildSessionEmbed,
   buildSummaryEmbed,
-  buildMemberEmbed,
-  buildStatsEmbed,
   buildHistoryEmbed,
+  buildMemberEmbed,
   buildConfigEmbed,
-  buildProgressBar,
-  pctColor,
-  pctEmoji,
-  pctLabel,
-  COLOR_GOLD,
-  COLOR_GREY,
-  FOOTER_DEFAULT,
-  AUTHOR_DEFAULT,
 };
