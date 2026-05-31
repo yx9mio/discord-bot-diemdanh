@@ -6,12 +6,21 @@ require('dotenv').config();
 const {
   Client, GatewayIntentBits, Partials, REST, Routes,
   SlashCommandBuilder, EmbedBuilder, Colors, PermissionFlagsBits,
-  AttachmentBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle,
+  AttachmentBuilder,
 } = require('discord.js');
 
 const db = require('./db.js');
 const { buildProgressBar } = require('./utils/progress.js');
-const embeds = require('./utils/embeds.js');
+const {
+  buildAttendanceButtons,
+  buildSessionEmbed,
+  buildSummaryEmbed,
+  buildMemberEmbed,
+  buildStatsEmbed,
+  buildHistoryEmbed,
+  buildConfigEmbed,
+  pctEmoji,
+} = require('./utils/embeds.js');
 
 // ─── Validate env ─────────────────────────────────────────────
 for (const key of ['DISCORD_TOKEN', 'CLIENT_ID', 'SUPABASE_URL', 'SUPABASE_KEY']) {
@@ -32,25 +41,10 @@ const commands = [
   new SlashCommandBuilder()
     .setName('batdau_diemdanh')
     .setDescription('Mở phiên điểm danh mới')
-    .addStringOption(o => o
-      .setName('ten_phien')
-      .setDescription('Tên phiên (vd: Bang Chiến T7)')
-      .setRequired(true))
-    .addIntegerOption(o => o
-      .setName('gio_ket_thuc')
-      .setDescription('Giờ kết thúc (0–23, giờ VN). Để trống = không tự đóng.')
-      .setRequired(false)
-      .setMinValue(0).setMaxValue(23))
-    .addIntegerOption(o => o
-      .setName('phut_ket_thuc')
-      .setDescription('Phút kết thúc (0–59). Mặc định = 0.')
-      .setRequired(false)
-      .setMinValue(0).setMaxValue(59))
-    .addIntegerOption(o => o
-      .setName('ngay_ket_thuc')
-      .setDescription('Ngày kết thúc (1–31). Để trống = hôm nay.')
-      .setRequired(false)
-      .setMinValue(1).setMaxValue(31)),
+    .addStringOption(o => o.setName('ten_phien').setDescription('Tên phiên (vd: Bang Chiến T7)').setRequired(true))
+    .addIntegerOption(o => o.setName('gio_ket_thuc').setDescription('Giờ kết thúc (0–23, giờ VN). Để trống = không tự đóng.').setRequired(false).setMinValue(0).setMaxValue(23))
+    .addIntegerOption(o => o.setName('phut_ket_thuc').setDescription('Phút kết thúc (0–59). Mặc định = 0.').setRequired(false).setMinValue(0).setMaxValue(59))
+    .addIntegerOption(o => o.setName('ngay_ket_thuc').setDescription('Ngày kết thúc (1–31). Để trống = hôm nay.').setRequired(false).setMinValue(1).setMaxValue(31)),
   new SlashCommandBuilder().setName('ket_thuc_diemdanh').setDescription('Kết thúc phiên điểm danh, lưu lịch sử'),
   new SlashCommandBuilder().setName('huy_diemdanh').setDescription('Hủy phiên điểm danh (không lưu lịch sử)'),
   new SlashCommandBuilder()
@@ -58,7 +52,7 @@ const commands = [
     .setDescription('Thêm thành viên điểm danh thủ công')
     .addUserOption(o => o.setName('member').setDescription('Thành viên cần thêm').setRequired(true))
     .addStringOption(o => o.setName('status').setDescription('Trạng thái').setRequired(true)
-      .addChoices({ name: '✅ Tham gia', value: 'tham_gia' }, { name: '❌ Không tham gia', value: 'khong_tham_gia' })),
+      .addChoices({ name: '✅ Tham Gia', value: 'tham_gia' }, { name: '❌ Vắng Mặt', value: 'khong_tham_gia' })),
   new SlashCommandBuilder()
     .setName('xoa_diemdanh')
     .setDescription('Xóa điểm danh của một thành viên')
@@ -68,19 +62,19 @@ const commands = [
     .setDescription('Sửa status điểm danh (tối đa 5 người)')
     .addUserOption(o => o.setName('member1').setDescription('Thành viên 1').setRequired(true))
     .addStringOption(o => o.setName('status1').setDescription('Status 1').setRequired(true)
-      .addChoices({ name: '✅ Tham gia', value: 'tham_gia' }, { name: '❌ Không', value: 'khong_tham_gia' }))
+      .addChoices({ name: '✅ Tham Gia', value: 'tham_gia' }, { name: '❌ Vắng Mặt', value: 'khong_tham_gia' }))
     .addUserOption(o => o.setName('member2').setDescription('Thành viên 2').setRequired(false))
     .addStringOption(o => o.setName('status2').setDescription('Status 2').setRequired(false)
-      .addChoices({ name: '✅ Tham gia', value: 'tham_gia' }, { name: '❌ Không', value: 'khong_tham_gia' }))
+      .addChoices({ name: '✅ Tham Gia', value: 'tham_gia' }, { name: '❌ Vắng Mặt', value: 'khong_tham_gia' }))
     .addUserOption(o => o.setName('member3').setDescription('Thành viên 3').setRequired(false))
     .addStringOption(o => o.setName('status3').setDescription('Status 3').setRequired(false)
-      .addChoices({ name: '✅ Tham gia', value: 'tham_gia' }, { name: '❌ Không', value: 'khong_tham_gia' }))
+      .addChoices({ name: '✅ Tham Gia', value: 'tham_gia' }, { name: '❌ Vắng Mặt', value: 'khong_tham_gia' }))
     .addUserOption(o => o.setName('member4').setDescription('Thành viên 4').setRequired(false))
     .addStringOption(o => o.setName('status4').setDescription('Status 4').setRequired(false)
-      .addChoices({ name: '✅ Tham gia', value: 'tham_gia' }, { name: '❌ Không', value: 'khong_tham_gia' }))
+      .addChoices({ name: '✅ Tham Gia', value: 'tham_gia' }, { name: '❌ Vắng Mặt', value: 'khong_tham_gia' }))
     .addUserOption(o => o.setName('member5').setDescription('Thành viên 5').setRequired(false))
     .addStringOption(o => o.setName('status5').setDescription('Status 5').setRequired(false)
-      .addChoices({ name: '✅ Tham gia', value: 'tham_gia' }, { name: '❌ Không', value: 'khong_tham_gia' })),
+      .addChoices({ name: '✅ Tham Gia', value: 'tham_gia' }, { name: '❌ Vắng Mặt', value: 'khong_tham_gia' })),
   new SlashCommandBuilder().setName('nhac_nho').setDescription('Ping người chưa điểm danh'),
   new SlashCommandBuilder()
     .setName('caidat_role')
@@ -116,32 +110,14 @@ async function registerCommands() {
   }
 }
 
-// ─── Button row cho phiên điểm danh ──────────────────────────
-function buildAttendanceButtons(disabled = false) {
-  return new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId('attend_yes')
-      .setLabel('✅ Tham gia')
-      .setStyle(ButtonStyle.Success)
-      .setDisabled(disabled),
-    new ButtonBuilder()
-      .setCustomId('attend_no')
-      .setLabel('❌ Không tham gia')
-      .setStyle(ButtonStyle.Danger)
-      .setDisabled(disabled),
-  );
-}
-
 // ─── Tính ms đến ngày/giờ/phút cố định (giờ VN UTC+7) ────────
 function msUntilFixedDateTime(day, hour, minute) {
   const VN_OFFSET_MS = 7 * 60 * 60 * 1000;
   const nowUtcMs = Date.now();
-
   const nowVnDate = new Date(nowUtcMs + VN_OFFSET_MS);
   const vnYear  = nowVnDate.getUTCFullYear();
   const vnMonth = nowVnDate.getUTCMonth();
   const vnDay   = nowVnDate.getUTCDate();
-
   const targetDay = day ?? vnDay;
 
   function buildTarget(year, month, d) {
@@ -153,22 +129,18 @@ function msUntilFixedDateTime(day, hour, minute) {
   }
 
   let result = buildTarget(vnYear, vnMonth, targetDay);
-
   if (!result || result.ms <= 0) {
     const nextMonth = vnMonth === 11 ? 0 : vnMonth + 1;
     const nextYear  = vnMonth === 11 ? vnYear + 1 : vnYear;
     result = buildTarget(nextYear, nextMonth, targetDay);
   }
-
   if (!result || result.ms <= 0) {
     return { ms: -1, targetDate: null,
       errorMsg: `Ngày **${targetDay}** không tồn tại trong tháng hiện tại lẫn tháng sau. Hãy kiểm tra lại.` };
   }
-
   return { ...result, errorMsg: null };
 }
 
-// ─── Format thời lượng ms ─────────────────────────────────────
 function formatDuration(ms) {
   const totalMin = Math.round(ms / 60000);
   if (totalMin < 60) return `${totalMin} phút`;
@@ -202,7 +174,7 @@ async function scheduleAutoClose(guild, session, channelId, ms) {
         const checkedIds = new Set(attended.map(a => a.user_id));
         const absentIds  = s.eligible_member_ids.filter(id => !checkedIds.has(id));
         if (absentIds.length > 0) {
-          await ch.send(`⏰ **Nhắc nhở:** Phiên **${s.session_name}** đóng sau 2 phút!\n${absentIds.map(id => `<@${id}>`).join(' ')}`);
+          await ch.send(`⏰ **Còn 2 phút!** Phiên **${s.session_name}** sắp đóng. Thành viên chưa điểm danh:\n${absentIds.map(id => `<@${id}>`).join(' ')}`);
         }
       } catch (e) { console.error('Reminder error:', e.message); }
     }, ms - 2 * 60 * 1000);
@@ -217,7 +189,6 @@ async function scheduleAutoClose(guild, session, channelId, ms) {
       await finishSession(guild, s, attended);
       clearTimers(guild.id);
       if (ch) {
-        // Vô hiệu hóa nút trên message gốc
         try {
           const msgs = await ch.messages.fetch({ limit: 20 });
           const sessionMsg = msgs.find(m =>
@@ -225,11 +196,8 @@ async function scheduleAutoClose(guild, session, channelId, ms) {
             m.components.length > 0 &&
             m.embeds[0]?.title?.includes(s.session_name)
           );
-          if (sessionMsg) {
-            await sessionMsg.edit({ components: [buildAttendanceButtons(true)] });
-          }
+          if (sessionMsg) await sessionMsg.edit({ components: [buildAttendanceButtons(true)] });
         } catch (_) {}
-
         const embed = buildSummaryEmbed(s, attended);
         await ch.send({ content: '🔒 **Phiên điểm danh đã tự động kết thúc!**', embeds: [embed] });
         await announceNewBadges(guild, ch, guild.id, s.id, attended);
@@ -240,33 +208,25 @@ async function scheduleAutoClose(guild, session, channelId, ms) {
   autoCloseTimers.set(guild.id, timers);
 }
 
-// ─── Recover timers sau khi bot restart ───────────────────────
 async function recoverTimers() {
   console.log('[Recover] Đang kiểm tra các phiên điểm danh còn dở...');
-  let recovered = 0;
-  let expired   = 0;
-
+  let recovered = 0, expired = 0;
   for (const guild of client.guilds.cache.values()) {
     try {
       const session = await db.getActiveSession(guild.id);
       if (!session || !session.auto_close_at) continue;
-
       const closeAt = new Date(session.auto_close_at);
       const msLeft  = closeAt.getTime() - Date.now();
-
       if (msLeft > 0) {
         const channelId = session.channel_id ?? (await findNotifyChannel(guild));
         if (channelId) {
           await scheduleAutoClose(guild, session, channelId, msLeft);
           console.log(`[Recover] Guild ${guild.name}: phiên "${session.session_name}" còn ${formatDuration(msLeft)}, đã recover timer.`);
           recovered++;
-
           const ch = await guild.channels.fetch(channelId).catch(() => null);
           if (ch) {
             const discordTs = Math.floor(closeAt.getTime() / 1000);
-            await ch.send(
-              `🔄 Bot vừa khởi động lại. Phiên điểm danh **${session.session_name}** vẫn đang mở — tự đóng lúc <t:${discordTs}:F> (còn ~${formatDuration(msLeft)}).`
-            ).catch(() => null);
+            await ch.send(`🔄 Bot vừa khởi động lại. Phiên điểm danh **${session.session_name}** vẫn đang mở — tự đóng lúc <t:${discordTs}:F> (còn ~${formatDuration(msLeft)}).`).catch(() => null);
           }
         }
       } else {
@@ -275,29 +235,21 @@ async function recoverTimers() {
         const attended = await db.getAttendances(session.id);
         await finishSession(guild, session, attended);
         expired++;
-
         const channelId = session.channel_id ?? (await findNotifyChannel(guild));
         if (channelId) {
           const ch = await guild.channels.fetch(channelId).catch(() => null);
           if (ch) {
             const embed = buildSummaryEmbed(session, attended);
-            await ch.send({
-              content: `🔒 **Phiên điểm danh "${session.session_name}" đã được đóng tự động** (bot restart — quá giờ).`,
-              embeds: [embed],
-            }).catch(() => null);
+            await ch.send({ content: `🔒 **Phiên "${session.session_name}" đã được đóng tự động** (bot restart — quá giờ).`, embeds: [embed] }).catch(() => null);
             await announceNewBadges(guild, ch, guild.id, session.id, attended).catch(() => null);
           }
         }
       }
-    } catch (e) {
-      console.error(`[Recover] Lỗi guild ${guild.name}:`, e.message);
-    }
+    } catch (e) { console.error(`[Recover] Lỗi guild ${guild.name}:`, e.message); }
   }
-
   console.log(`[Recover] Hoàn tất: ${recovered} timer recovered, ${expired} phiên đóng muộn.`);
 }
 
-// ─── Tìm channel để bot gửi thông báo ────────────────────────
 async function findNotifyChannel(guild) {
   if (guild.systemChannelId) {
     const ch = guild.channels.cache.get(guild.systemChannelId);
@@ -309,7 +261,7 @@ async function findNotifyChannel(guild) {
   return textCh?.id ?? null;
 }
 
-// ─── Helpers ──────────────────────────────────────────────────
+// ─── Badges ───────────────────────────────────────────────────
 const BADGE_MILESTONES = [
   { count: 5,   badge: '🌱', label: 'Lính Mới' },
   { count: 10,  badge: '⭐', label: 'Cần Cù' },
@@ -348,69 +300,6 @@ async function announceNewBadges(guild, channel, guildId, sessionId, attended) {
   if (msgs.length > 0) await channel.send(msgs.join('\n')).catch(() => null);
 }
 
-function buildSummaryEmbed(session, attended) {
-  const joined   = attended.filter(a => a.status === 'tham_gia');
-  const declined = attended.filter(a => a.status === 'khong_tham_gia');
-  const eligible = session.eligible_member_ids.length;
-  const pct = eligible > 0 ? Math.round((joined.length / eligible) * 100) : 0;
-  const bar = buildProgressBar(pct);
-  return new EmbedBuilder()
-    .setTitle(`📋 Kết Quả: ${session.session_name}`)
-    .setColor(Colors.Green)
-    .setDescription(`\`${bar}\` **${pct}%** (${joined.length}/${eligible})\n⏰ Bắt đầu: <t:${Math.floor(new Date(session.started_at).getTime()/1000)}:f>`)
-    .addFields(
-      { name: `✅ Tham Gia (${joined.length})`,        value: joined.map(a => a.username).join('\n') || '—', inline: true },
-      { name: `❌ Không Tham Gia (${declined.length})`, value: declined.map(a => a.username).join('\n') || '—', inline: true },
-    )
-    .setTimestamp();
-}
-
-// ─── Build embed phiên đang mở (live) ────────────────────────
-async function buildSessionEmbed(guild, session, attended) {
-  const joined   = attended.filter(a => a.status === 'tham_gia');
-  const declined = attended.filter(a => a.status === 'khong_tham_gia');
-  const eligible = session.eligible_member_ids.length;
-  const pct = eligible > 0 ? Math.round((joined.length / eligible) * 100) : 0;
-  const bar = buildProgressBar(pct);
-
-  const checkedIds = new Set(attended.map(a => a.user_id));
-  const absentIds  = session.eligible_member_ids.filter(id => !checkedIds.has(id));
-
-  let desc = `\`${bar}\` **${pct}%** (${joined.length}/${eligible})\n`;
-  desc += `👥 Role: **${session.role_name}** | Thành viên: **${eligible}**\n`;
-  desc += `⏰ Bắt đầu: <t:${Math.floor(new Date(session.started_at).getTime()/1000)}:f>`;
-
-  if (session.auto_close_at) {
-    const ts = Math.floor(new Date(session.auto_close_at).getTime() / 1000);
-    desc += `\n🔒 Kết thúc lúc: <t:${ts}:F>`;
-  }
-
-  const embed = new EmbedBuilder()
-    .setTitle(`⚔️ Điểm Danh: ${session.session_name}`)
-    .setColor(Colors.Blue)
-    .setDescription(desc)
-    .setTimestamp();
-
-  if (joined.length > 0) {
-    embed.addFields({ name: `✅ Tham Gia (${joined.length})`, value: joined.map(a => `**${a.username}**`).join('\n').slice(0, 1020) || '—', inline: true });
-  }
-  if (declined.length > 0) {
-    embed.addFields({ name: `❌ Không Tham Gia (${declined.length})`, value: declined.map(a => a.username).join('\n').slice(0, 1020) || '—', inline: true });
-  }
-  if (absentIds.length > 0) {
-    const MAX = 20;
-    const names = absentIds.slice(0, MAX).map(id => {
-      const m = guild.members.cache.get(id);
-      return m ? m.displayName : `<@${id}>`;
-    });
-    const extra = absentIds.length > MAX ? ` *(+${absentIds.length - MAX} nữa)*` : '';
-    embed.addFields({ name: `⏳ Chưa Điểm Danh (${absentIds.length})`, value: names.join(', ') + extra, inline: false });
-  }
-
-  embed.setFooter({ text: 'Bấm nút bên dưới để điểm danh' });
-  return embed;
-}
-
 function isAdmin(member, cfg) {
   if (!member) return false;
   if (member.permissions.has(PermissionFlagsBits.Administrator)) return true;
@@ -418,24 +307,44 @@ function isAdmin(member, cfg) {
   return false;
 }
 
+// ─── Helper: tìm session message gốc để edit buttons ─────────
+async function findSessionMessage(channel, sessionName) {
+  try {
+    const msgs = await channel.messages.fetch({ limit: 30 });
+    return msgs.find(m =>
+      m.author.id === client.user.id &&
+      m.components.length > 0 &&
+      m.embeds[0]?.title?.includes(sessionName)
+    ) ?? null;
+  } catch (_) { return null; }
+}
+
 // ─── Interaction Handler ──────────────────────────────────────
 client.on('interactionCreate', async (interaction) => {
   const { guild, member } = interaction;
   if (!guild) return;
 
-  // ── BUTTON: Tham gia / Không tham gia ───────────────────────
+  // ── BUTTON handler ───────────────────────────────────────────
   if (interaction.isButton()) {
     const { customId, user } = interaction;
-    if (customId !== 'attend_yes' && customId !== 'attend_no') return;
+    if (!['attend_yes', 'attend_no', 'attend_view'].includes(customId)) return;
 
     const session = await db.getActiveSession(guild.id);
     if (!session) {
-      return interaction.reply({ content: '❌ Không có phiên điểm danh đang mở.', ephemeral: true });
+      return interaction.reply({ content: '📭 Hiện không có phiên điểm danh nào đang mở.', ephemeral: true });
     }
 
-    // Kiểm tra thành viên có trong danh sách eligible không
+    // Button xem danh sách (ephemeral)
+    if (customId === 'attend_view') {
+      await guild.members.fetch().catch(() => null);
+      const attended = await db.getAttendances(session.id);
+      const embed = await buildSessionEmbed(guild, session, attended);
+      return interaction.reply({ embeds: [embed], ephemeral: true });
+    }
+
+    // Kiểm tra eligible
     if (!session.eligible_member_ids.includes(user.id)) {
-      return interaction.reply({ content: '❌ Bạn không có trong danh sách điểm danh của phiên này.', ephemeral: true });
+      return interaction.reply({ content: '🚫 Bạn không có trong danh sách điểm danh của phiên này.', ephemeral: true });
     }
 
     const status = customId === 'attend_yes' ? 'tham_gia' : 'khong_tham_gia';
@@ -444,7 +353,8 @@ client.on('interactionCreate', async (interaction) => {
 
     await db.upsertAttendance(session.id, guild.id, user.id, displayName, status);
 
-    const label = status === 'tham_gia' ? '✅ Đã ghi nhận **Tham gia**!' : '❌ Đã ghi nhận **Không tham gia**.';
+    // Cập nhật trạng thái cho người dùng
+    const statusLabel = status === 'tham_gia' ? '✅ **Tham Gia**' : '❌ **Vắng Mặt**';
 
     // Update embed gốc
     try {
@@ -453,63 +363,51 @@ client.on('interactionCreate', async (interaction) => {
       const newEmbed = await buildSessionEmbed(guild, session, attended);
       await interaction.update({ embeds: [newEmbed], components: [buildAttendanceButtons()] });
     } catch (_) {
-      // Nếu update thất bại thì reply bình thường
-      await interaction.reply({ content: label, ephemeral: true });
+      await interaction.reply({ content: `✅ Đã cập nhật trạng thái của bạn thành ${statusLabel}.`, ephemeral: true });
     }
     return;
   }
 
   if (!interaction.isChatInputCommand()) return;
   const { commandName } = interaction;
-
   const cfg = await db.getConfig(guild.id);
 
   // ── batdau_diemdanh ──────────────────────────────────────────
   if (commandName === 'batdau_diemdanh') {
-    if (!isAdmin(member, cfg)) return interaction.reply({ content: '❌ Bạn không có quyền dùng lệnh này.', ephemeral: true });
+    if (!isAdmin(member, cfg)) return interaction.reply({ content: '🚫 Bạn không có quyền thực hiện lệnh này.', ephemeral: true });
     const existing = await db.getActiveSession(guild.id);
-    if (existing) return interaction.reply({ content: '❌ Đã có phiên điểm danh đang mở. Hãy kết thúc phiên cũ trước.', ephemeral: true });
+    if (existing) return interaction.reply({ content: `⚠️ Đã có phiên **${existing.session_name}** đang mở. Kết thúc phiên cũ trước.`, ephemeral: true });
 
     const tenPhien    = interaction.options.getString('ten_phien');
     const gioKetThuc  = interaction.options.getInteger('gio_ket_thuc');
     const phutKetThuc = interaction.options.getInteger('phut_ket_thuc') ?? 0;
     const ngayKetThuc = interaction.options.getInteger('ngay_ket_thuc');
 
-    let autoCloseMs    = 0;
-    let autoCloseLabel = '';
-    let autoCloseAt    = null;
+    let autoCloseMs = 0, autoCloseLabel = '', autoCloseAt = null;
 
     if (gioKetThuc !== null) {
       const pad = n => String(n).padStart(2, '0');
       const { ms, targetDate, errorMsg } = msUntilFixedDateTime(ngayKetThuc, gioKetThuc, phutKetThuc);
-
       if (errorMsg) return interaction.reply({ content: `❌ ${errorMsg}`, ephemeral: true });
       if (ms <= 0) {
         const dateStr = ngayKetThuc ? `ngày **${ngayKetThuc}** ` : '';
-        return interaction.reply({
-          content: `❌ Thời gian kết thúc ${dateStr}**${pad(gioKetThuc)}:${pad(phutKetThuc)}** đã qua rồi.`,
-          ephemeral: true,
-        });
+        return interaction.reply({ content: `❌ Thời gian kết thúc ${dateStr}**${pad(gioKetThuc)}:${pad(phutKetThuc)}** đã qua rồi.`, ephemeral: true });
       }
-
-      autoCloseMs = ms;
-      autoCloseAt = targetDate.toISOString();
-
-      const discordTs  = Math.floor(targetDate.getTime() / 1000);
-      const dayPart    = ngayKetThuc ? `ngày ${ngayKetThuc}, ` : '';
-      autoCloseLabel   = `${dayPart}**${pad(gioKetThuc)}:${pad(phutKetThuc)}** (<t:${discordTs}:F>) — còn ~${formatDuration(ms)}`;
+      autoCloseMs  = ms;
+      autoCloseAt  = targetDate.toISOString();
+      const discordTs = Math.floor(targetDate.getTime() / 1000);
+      const dayPart   = ngayKetThuc ? `ngày ${ngayKetThuc}, ` : '';
+      autoCloseLabel  = `${dayPart}**${pad(gioKetThuc)}:${pad(phutKetThuc)}** (<t:${discordTs}:F>) — còn ~${formatDuration(ms)}`;
     }
 
     await guild.members.fetch().catch(() => null);
     const eligibleIds = cfg.allowed_role_id
       ? guild.members.cache.filter(m => !m.user.bot && m.roles.cache.has(cfg.allowed_role_id)).map(m => m.id)
       : guild.members.cache.filter(m => !m.user.bot).map(m => m.id);
-
     const roleName = cfg.allowed_role_id ? (guild.roles.cache.get(cfg.allowed_role_id)?.name ?? 'Unknown') : 'Tất cả';
 
     const session = await db.createSession(guild.id, {
-      sessionName: tenPhien,
-      roleName,
+      sessionName: tenPhien, roleName,
       allowedRoleId: cfg.allowed_role_id,
       eligibleMemberIds: eligibleIds,
       startedBy: member.id,
@@ -528,70 +426,50 @@ client.on('interactionCreate', async (interaction) => {
 
   // ── ket_thuc_diemdanh ────────────────────────────────────────
   if (commandName === 'ket_thuc_diemdanh') {
-    if (!isAdmin(member, cfg)) return interaction.reply({ content: '❌ Bạn không có quyền.', ephemeral: true });
+    if (!isAdmin(member, cfg)) return interaction.reply({ content: '🚫 Bạn không có quyền thực hiện lệnh này.', ephemeral: true });
     const session = await db.getActiveSession(guild.id);
-    if (!session) return interaction.reply({ content: '❌ Không có phiên điểm danh đang mở.', ephemeral: true });
+    if (!session) return interaction.reply({ content: '📭 Hiện không có phiên điểm danh nào đang mở.', ephemeral: true });
     await interaction.deferReply();
     const attended = await db.getAttendances(session.id);
     await finishSession(guild, session, attended);
     clearTimers(guild.id);
-
-    // Vô hiệu hóa nút trên message phiên gốc
-    try {
-      const msgs = await interaction.channel.messages.fetch({ limit: 30 });
-      const sessionMsg = msgs.find(m =>
-        m.author.id === client.user.id &&
-        m.components.length > 0 &&
-        m.embeds[0]?.title?.includes(session.session_name)
-      );
-      if (sessionMsg) await sessionMsg.edit({ components: [buildAttendanceButtons(true)] });
-    } catch (_) {}
-
+    const sessionMsg = await findSessionMessage(interaction.channel, session.session_name);
+    if (sessionMsg) await sessionMsg.edit({ components: [buildAttendanceButtons(true)] }).catch(() => null);
     const embed = buildSummaryEmbed(session, attended);
-    await interaction.editReply({ content: '🔒 Phiên điểm danh đã kết thúc!', embeds: [embed] });
+    await interaction.editReply({ content: `🔒 Phiên **${session.session_name}** đã kết thúc và lưu vào lịch sử.`, embeds: [embed] });
     await announceNewBadges(guild, interaction.channel, guild.id, session.id, attended);
     return;
   }
 
   // ── huy_diemdanh ─────────────────────────────────────────────
   if (commandName === 'huy_diemdanh') {
-    if (!isAdmin(member, cfg)) return interaction.reply({ content: '❌ Bạn không có quyền.', ephemeral: true });
+    if (!isAdmin(member, cfg)) return interaction.reply({ content: '🚫 Bạn không có quyền thực hiện lệnh này.', ephemeral: true });
     const session = await db.getActiveSession(guild.id);
-    if (!session) return interaction.reply({ content: '❌ Không có phiên nào đang mở.', ephemeral: true });
+    if (!session) return interaction.reply({ content: '📭 Hiện không có phiên điểm danh nào đang mở.', ephemeral: true });
     await db.cancelSession(session.id);
     clearTimers(guild.id);
-
-    // Vô hiệu hóa nút
-    try {
-      const msgs = await interaction.channel.messages.fetch({ limit: 30 });
-      const sessionMsg = msgs.find(m =>
-        m.author.id === client.user.id &&
-        m.components.length > 0 &&
-        m.embeds[0]?.title?.includes(session.session_name)
-      );
-      if (sessionMsg) await sessionMsg.edit({ components: [buildAttendanceButtons(true)] });
-    } catch (_) {}
-
-    return interaction.reply({ content: `🗑️ Đã hủy phiên **${session.session_name}** (không lưu lịch sử).` });
+    const sessionMsg = await findSessionMessage(interaction.channel, session.session_name);
+    if (sessionMsg) await sessionMsg.edit({ components: [buildAttendanceButtons(true)] }).catch(() => null);
+    return interaction.reply({ content: `🗑️ Đã hủy phiên **${session.session_name}**. Dữ liệu không được lưu.` });
   }
 
   // ── them_diemdanh ────────────────────────────────────────────
   if (commandName === 'them_diemdanh') {
-    if (!isAdmin(member, cfg)) return interaction.reply({ content: '❌ Bạn không có quyền.', ephemeral: true });
+    if (!isAdmin(member, cfg)) return interaction.reply({ content: '🚫 Bạn không có quyền thực hiện lệnh này.', ephemeral: true });
     const session = await db.getActiveSession(guild.id);
-    if (!session) return interaction.reply({ content: '❌ Không có phiên đang mở.', ephemeral: true });
+    if (!session) return interaction.reply({ content: '📭 Hiện không có phiên điểm danh nào đang mở.', ephemeral: true });
     const target = interaction.options.getMember('member');
     const status = interaction.options.getString('status');
     await db.upsertAttendance(session.id, guild.id, target.id, target.displayName, status);
-    const label = status === 'tham_gia' ? '✅ Tham gia' : '❌ Không tham gia';
+    const label = status === 'tham_gia' ? '✅ Tham Gia' : '❌ Vắng Mặt';
     return interaction.reply({ content: `✅ Đã thêm **${target.displayName}** — ${label}`, ephemeral: true });
   }
 
   // ── xoa_diemdanh ─────────────────────────────────────────────
   if (commandName === 'xoa_diemdanh') {
-    if (!isAdmin(member, cfg)) return interaction.reply({ content: '❌ Bạn không có quyền.', ephemeral: true });
+    if (!isAdmin(member, cfg)) return interaction.reply({ content: '🚫 Bạn không có quyền thực hiện lệnh này.', ephemeral: true });
     const session = await db.getActiveSession(guild.id);
-    if (!session) return interaction.reply({ content: '❌ Không có phiên đang mở.', ephemeral: true });
+    if (!session) return interaction.reply({ content: '📭 Hiện không có phiên điểm danh nào đang mở.', ephemeral: true });
     const target = interaction.options.getMember('member');
     await db.removeAttendance(session.id, target.id);
     return interaction.reply({ content: `🗑️ Đã xóa điểm danh của **${target.displayName}**.`, ephemeral: true });
@@ -599,16 +477,16 @@ client.on('interactionCreate', async (interaction) => {
 
   // ── sua_diemdanh ─────────────────────────────────────────────
   if (commandName === 'sua_diemdanh') {
-    if (!isAdmin(member, cfg)) return interaction.reply({ content: '❌ Bạn không có quyền.', ephemeral: true });
+    if (!isAdmin(member, cfg)) return interaction.reply({ content: '🚫 Bạn không có quyền thực hiện lệnh này.', ephemeral: true });
     const session = await db.getActiveSession(guild.id);
-    if (!session) return interaction.reply({ content: '❌ Không có phiên đang mở.', ephemeral: true });
+    if (!session) return interaction.reply({ content: '📭 Hiện không có phiên điểm danh nào đang mở.', ephemeral: true });
     const changes = [];
     for (let i = 1; i <= 5; i++) {
       const m = interaction.options.getMember(`member${i}`);
       const s = interaction.options.getString(`status${i}`);
       if (m && s) {
         await db.upsertAttendance(session.id, guild.id, m.id, m.displayName, s);
-        changes.push(`**${m.displayName}** → ${s === 'tham_gia' ? '✅' : '❌'}`);
+        changes.push(`**${m.displayName}** → ${s === 'tham_gia' ? '✅ Tham Gia' : '❌ Vắng Mặt'}`);
       }
     }
     return interaction.reply({ content: `✏️ Đã cập nhật:\n${changes.join('\n')}`, ephemeral: true });
@@ -616,19 +494,19 @@ client.on('interactionCreate', async (interaction) => {
 
   // ── nhac_nho ─────────────────────────────────────────────────
   if (commandName === 'nhac_nho') {
-    if (!isAdmin(member, cfg)) return interaction.reply({ content: '❌ Bạn không có quyền.', ephemeral: true });
+    if (!isAdmin(member, cfg)) return interaction.reply({ content: '🚫 Bạn không có quyền thực hiện lệnh này.', ephemeral: true });
     const session = await db.getActiveSession(guild.id);
-    if (!session) return interaction.reply({ content: '❌ Không có phiên đang mở.', ephemeral: true });
+    if (!session) return interaction.reply({ content: '📭 Hiện không có phiên điểm danh nào đang mở.', ephemeral: true });
     const attended   = await db.getAttendances(session.id);
     const checkedIds = new Set(attended.map(a => a.user_id));
     const absentIds  = session.eligible_member_ids.filter(id => !checkedIds.has(id));
-    if (absentIds.length === 0) return interaction.reply({ content: '✅ Tất cả đã điểm danh!', ephemeral: true });
+    if (absentIds.length === 0) return interaction.reply({ content: '✅ Tất cả đã điểm danh rồi!', ephemeral: true });
     return interaction.reply({ content: `📣 **Chưa điểm danh (${absentIds.length}):**\n${absentIds.map(id => `<@${id}>`).join(' ')}` });
   }
 
   // ── caidat_role ──────────────────────────────────────────────
   if (commandName === 'caidat_role') {
-    if (!isAdmin(member, cfg)) return interaction.reply({ content: '❌ Bạn không có quyền.', ephemeral: true });
+    if (!isAdmin(member, cfg)) return interaction.reply({ content: '🚫 Bạn không có quyền thực hiện lệnh này.', ephemeral: true });
     const role = interaction.options.getRole('role');
     await db.setConfig(guild.id, { allowed_role_id: role.id, allowed_role_name: role.name });
     return interaction.reply({ content: `✅ Đã cài role điểm danh: **${role.name}**`, ephemeral: true });
@@ -636,7 +514,7 @@ client.on('interactionCreate', async (interaction) => {
 
   // ── caidat_admin_role ────────────────────────────────────────
   if (commandName === 'caidat_admin_role') {
-    if (!member.permissions.has(PermissionFlagsBits.Administrator)) return interaction.reply({ content: '❌ Chỉ Server Admin.', ephemeral: true });
+    if (!member.permissions.has(PermissionFlagsBits.Administrator)) return interaction.reply({ content: '🚫 Chỉ Server Administrator mới có thể dùng lệnh này.', ephemeral: true });
     const role = interaction.options.getRole('role');
     await db.setConfig(guild.id, { admin_role_id: role.id, admin_role_name: role.name });
     return interaction.reply({ content: `✅ Đã cài role admin bot: **${role.name}**`, ephemeral: true });
@@ -644,20 +522,14 @@ client.on('interactionCreate', async (interaction) => {
 
   // ── caidat_xem ───────────────────────────────────────────────
   if (commandName === 'caidat_xem') {
-    const embed = new EmbedBuilder()
-      .setTitle('⚙️ Cấu Hình Bot')
-      .setColor(Colors.Grey)
-      .addFields(
-        { name: 'Role Điểm Danh', value: cfg.allowed_role_id ? `<@&${cfg.allowed_role_id}>` : 'Tất cả thành viên', inline: true },
-        { name: 'Role Admin Bot',  value: cfg.admin_role_id   ? `<@&${cfg.admin_role_id}>`   : 'Server Admin',       inline: true },
-      );
+    const embed = buildConfigEmbed(cfg);
     return interaction.reply({ embeds: [embed], ephemeral: true });
   }
 
   // ── xem_diemdanh ─────────────────────────────────────────────
   if (commandName === 'xem_diemdanh') {
     const session = await db.getActiveSession(guild.id);
-    if (!session) return interaction.reply({ content: '❌ Không có phiên điểm danh đang mở.', ephemeral: true });
+    if (!session) return interaction.reply({ content: '📭 Hiện không có phiên điểm danh nào đang mở.', ephemeral: true });
     await interaction.deferReply({ ephemeral: true });
     await guild.members.fetch().catch(() => null);
     const attended = await db.getAttendances(session.id);
@@ -669,15 +541,7 @@ client.on('interactionCreate', async (interaction) => {
   if (commandName === 'lich_su') {
     await interaction.deferReply();
     const history = await db.getSessionHistory(guild.id, 20);
-    if (history.length === 0) return interaction.editReply({ content: '📭 Chưa có phiên nào kết thúc.' });
-    const lines = history.map((s, i) =>
-      `\`${i + 1}.\` **${s.session_name}** — <t:${Math.floor(new Date(s.started_at).getTime()/1000)}:d>`
-    );
-    const embed = new EmbedBuilder()
-      .setTitle('📚 Lịch Sử Điểm Danh')
-      .setColor(Colors.Purple)
-      .setDescription(lines.join('\n'))
-      .setTimestamp();
+    const embed = buildHistoryEmbed(history);
     return interaction.editReply({ embeds: [embed] });
   }
 
@@ -688,24 +552,21 @@ client.on('interactionCreate', async (interaction) => {
     const allStats = await db.getAllMemberStats(guild.id);
     const top10 = allStats.slice(0, 10);
     const lines = top10.map((s, i) => {
-      const m = guild.members.cache.get(s.user_id);
+      const m    = guild.members.cache.get(s.user_id);
       const name = m ? m.displayName : `<@${s.user_id}>`;
       const pct  = s.total_sessions > 0 ? Math.round((s.total_joined / s.total_sessions) * 100) : 0;
+      const bar  = buildProgressBar(pct, 8);
       const badge = getBadge(s.total_joined);
-      return `\`${String(i+1).padStart(2)}.\` **${name}** — ${s.total_joined} lần | ${pct}% ${badge ? `| ${badge}` : ''} | 🔥 ${s.current_streak}`;
+      return `\`${String(i + 1).padStart(2)}.\` **${name}**\n    \`${bar}\` ${pct}% · ${s.total_joined} lần · 🔥${s.current_streak}${badge ? ` · ${badge}` : ''}`;
     });
-    const embed = new EmbedBuilder()
-      .setTitle('🏆 Top 10 Thành Viên')
-      .setColor(Colors.Gold)
-      .setDescription(lines.join('\n') || 'Chưa có dữ liệu.')
-      .setTimestamp();
+    const embed = buildStatsEmbed(lines);
     return interaction.editReply({ embeds: [embed] });
   }
 
   // ── xuat_diemdanh ────────────────────────────────────────────
   if (commandName === 'xuat_diemdanh') {
     const session = await db.getActiveSession(guild.id);
-    if (!session) return interaction.reply({ content: '❌ Không có phiên đang mở.', ephemeral: true });
+    if (!session) return interaction.reply({ content: '📭 Hiện không có phiên điểm danh nào đang mở.', ephemeral: true });
     await interaction.deferReply();
     const attended = await db.getAttendances(session.id);
     const joined   = attended.filter(a => a.status === 'tham_gia');
@@ -713,10 +574,10 @@ client.on('interactionCreate', async (interaction) => {
     let txt = `=== ĐIỂM DANH: ${session.session_name} ===\n`;
     txt += `Bắt đầu: ${new Date(session.started_at).toLocaleString('vi-VN')}\n\n`;
     txt += `✅ THAM GIA (${joined.length}):\n`;
-    joined.forEach((a, i)   => { txt += `${i+1}. ${a.username}\n`; });
-    txt += `\n❌ KHÔNG THAM GIA (${declined.length}):\n`;
-    declined.forEach((a, i) => { txt += `${i+1}. ${a.username}\n`; });
-    const file = new AttachmentBuilder(Buffer.from(txt, 'utf-8'), { name: `diemdanh_${session.session_name.replace(/\s+/g,'_')}.txt` });
+    joined.forEach((a, i)   => { txt += `${i + 1}. ${a.username}\n`; });
+    txt += `\n❌ VẮNG MẶT (${declined.length}):\n`;
+    declined.forEach((a, i) => { txt += `${i + 1}. ${a.username}\n`; });
+    const file = new AttachmentBuilder(Buffer.from(txt, 'utf-8'), { name: `diemdanh_${session.session_name.replace(/\s+/g, '_')}.txt` });
     return interaction.editReply({ content: '📄 Xuất thành công!', files: [file] });
   }
 
@@ -728,16 +589,7 @@ client.on('interactionCreate', async (interaction) => {
     const pct   = stats.total_sessions > 0 ? Math.round((stats.total_joined / stats.total_sessions) * 100) : 0;
     const badge = getBadge(stats.total_joined);
     const bar   = buildProgressBar(pct);
-    const embed = new EmbedBuilder()
-      .setTitle(`📋 Lịch Sử: ${target.displayName}`)
-      .setColor(Colors.Blue)
-      .setThumbnail(target.user.displayAvatarURL())
-      .setDescription([
-        `📈 Tỷ lệ: \`${bar}\` **${pct}%** (${stats.total_joined}/${stats.total_sessions})`,
-        `🔥 Streak: **${stats.current_streak}** phiên | Best: **${stats.best_streak}**`,
-        `🏅 Huy hiệu: ${badge || '(chưa có)'}`,
-      ].join('\n'))
-      .setTimestamp();
+    const embed = buildMemberEmbed(target, stats, badge, pct, bar);
     return interaction.editReply({ embeds: [embed] });
   }
 
@@ -747,20 +599,10 @@ client.on('interactionCreate', async (interaction) => {
     await interaction.deferReply();
     const history = await db.getSessionHistory(guild.id, soPhien + 5);
     const s = history[soPhien - 1];
-    if (!s) return interaction.editReply({ content: `❌ Không tìm thấy phiên số ${soPhien}.` });
+    if (!s) return interaction.editReply({ content: `❌ Không tìm thấy phiên số **${soPhien}**. Dùng /lich_su để xem danh sách.` });
     const attended = await db.getAttendances(s.id);
-    const joined   = attended.filter(a => a.status === 'tham_gia');
-    const eligible = s.eligible_member_ids.length;
-    const pct = eligible > 0 ? Math.round((joined.length / eligible) * 100) : 0;
-    const bar = buildProgressBar(pct);
-    const embed = new EmbedBuilder()
-      .setTitle(`📊 Chi Tiết: ${s.session_name}`)
-      .setColor(Colors.Green)
-      .setDescription(`\`${bar}\` **${pct}%** (${joined.length}/${eligible})\n⏰ Bắt đầu: <t:${Math.floor(new Date(s.started_at).getTime()/1000)}:f>`)
-      .addFields(
-        { name: `✅ Tham Gia (${joined.length})`, value: joined.map(a => a.username).join('\n') || '—', inline: false },
-      )
-      .setTimestamp();
+    const embed = buildSummaryEmbed(s, attended);
+    embed.setTitle(`🔍 Chi Tiết Phiên #${soPhien}: ${s.session_name}`);
     return interaction.editReply({ embeds: [embed] });
   }
 });
