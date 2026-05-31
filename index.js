@@ -1,14 +1,15 @@
 // index.js — Entry point Quản Gia
 require('dotenv').config();
 const { Client, GatewayIntentBits, Partials } = require('discord.js');
-const { loadCommands, handleCommand } = require('./handlers/commandHandler.js');
-const { handleButton }  = require('./handlers/buttonHandler.js');
-const { onReady }       = require('./events/ready.js');
-const { onMessageDelete } = require('./events/messageDelete.js');
-const { handleSelectMenu } = require('./commands/help.js');
-const { handleSetupUi } = require('./handlers/setupUiHandler.js');
-const { handleUserPanelButton } = require('./handlers/userPanelHandler.js');
-const log = require('./utils/logger.js');
+const { loadCommands, handleCommand }   = require('./handlers/commandHandler.js');
+const { handleButton }                  = require('./handlers/buttonHandler.js');
+const { onReady }                       = require('./events/ready.js');
+const { onMessageDelete }               = require('./events/messageDelete.js');
+const { handleSelectMenu }              = require('./commands/help.js');
+const { handleSetupUi }                 = require('./handlers/setupUiHandler.js');
+const { handleUserPanelButton }         = require('./handlers/userPanelHandler.js');
+const log                               = require('./utils/logger.js');
+const { handleInteractionError }        = require('./utils/errorHandler.js');
 
 if (!process.env.DISCORD_TOKEN) {
   log.error('SYSTEM', null, 'Thiếu DISCORD_TOKEN trong .env!');
@@ -58,13 +59,7 @@ client.on('interactionCreate', async interaction => {
 
     if (interaction.isChatInputCommand()) return handleCommand(interaction, commands);
   } catch (err) {
-    log.error('SYSTEM', interaction.guildId ?? null, 'interactionCreate lỗi: %s', err.stack ?? err.message);
-    const reply = { content: '❌ Có lỗi xảy ra. Vui lòng thử lại.', ephemeral: true };
-    if (interaction.deferred || interaction.replied) {
-      interaction.editReply(reply).catch(() => {});
-    } else {
-      interaction.reply(reply).catch(() => {});
-    }
+    await handleInteractionError(interaction, err, 'interactionCreate');
   }
 });
 

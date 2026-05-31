@@ -2,6 +2,7 @@
 const path = require('path');
 const fs   = require('fs');
 const log  = require('../utils/logger.js');
+const { handleInteractionError } = require('../utils/errorHandler.js');
 
 function loadCommands() {
   const dir = path.join(__dirname, '..', 'commands');
@@ -19,13 +20,7 @@ async function handleCommand(interaction, commands) {
   try {
     await cmd.execute(interaction);
   } catch (err) {
-    log.error('CMD', interaction.guildId, 'Lỗi lệnh /%s: %s', interaction.commandName, err.stack ?? err.message);
-    const reply = { content: '❌ Có lỗi xảy ra. Vui lòng thử lại.', ephemeral: true };
-    if (interaction.deferred || interaction.replied) {
-      interaction.editReply(reply).catch(() => {});
-    } else {
-      interaction.reply(reply).catch(() => {});
-    }
+    await handleInteractionError(interaction, err, `CMD /${interaction.commandName}`);
   }
 }
 
