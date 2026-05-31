@@ -3,56 +3,91 @@ const { test } = require('../testRunner.js');
 
 /**
  * Suite 8 — Unit test pure functions (zero DB, zero Discord API)
- * Test logic thuần của utils/helpers.js
+ *
+ * Test các functions thực tế export từ:
+ *   - utils/helpers.js  : layHuyHieu, formatThoiGian, laAdmin
+ *   - utils/timeCalc.js : msToNextWeekday, msFromOpenToClose, msToCloseFromNow
  */
 async function helpersSuite(_guildId) {
-  let helpers;
+  let helpers, timeCalc;
+
   try {
-    helpers = require('../../utils/helpers.js');
+    helpers  = require('../../utils/helpers.js');
+    timeCalc = require('../../utils/timeCalc.js');
   } catch (err) {
-    return [{ name: '[FATAL] load helpers.js', passed: false, error: err.message, durationMs: 0 }];
+    return [{ name: '[FATAL] load utils', passed: false, error: err.message, durationMs: 0 }];
   }
 
-  const { formatDongStr, ngayThucTe, pad } = helpers;
+  const { layHuyHieu, formatThoiGian, laAdmin } = helpers;
+  const { msToNextWeekday, msFromOpenToClose, msToCloseFromNow } = timeCalc;
 
   return Promise.all([
-    test('pad(5) → "05"', async () => {
-      if (typeof pad !== 'function') throw new Error('pad không phải function');
-      const r = pad(5);
-      if (r !== '05') throw new Error(`kết quả: ${r}`);
+    // ─── helpers.js ────────────────────────────────────────────
+    test('layHuyHieu(0) → chuỗi rỗng (chưa đủ mốc)', async () => {
+      if (typeof layHuyHieu !== 'function') throw new Error('layHuyHieu không export');
+      const r = layHuyHieu(0);
+      if (r !== '') throw new Error(`kết quả: "${r}"`);
     }),
 
-    test('pad(12) → "12"', async () => {
-      if (typeof pad !== 'function') throw new Error('pad không phải function');
-      const r = pad(12);
-      if (r !== '12') throw new Error(`kết quả: ${r}`);
+    test('layHuyHieu(5) → có 🌱 Lính Mới', async () => {
+      if (typeof layHuyHieu !== 'function') throw new Error('layHuyHieu không export');
+      const r = layHuyHieu(5);
+      if (!r.includes('🌱')) throw new Error(`thiếu 🌱: "${r}"`);
     }),
 
-    test('formatDongStr Thứ Bảy 21:00', async () => {
-      if (typeof formatDongStr !== 'function') throw new Error('formatDongStr không export');
-      const r = formatDongStr({ dayOfWeek: 6, hour: 21, minute: 0, closeHour: 23, closeMinute: 30, closeDayOfWeek: 6 });
-      if (typeof r !== 'string') throw new Error('không trả về string');
-      if (!r.includes('Thứ Bảy') && !r.includes('T7') && !r.includes('21')) {
-        throw new Error(`output không có ngày giờ đúng: ${r}`);
-      }
+    test('layHuyHieu(100) → có 👑 Vua Điểm Danh', async () => {
+      if (typeof layHuyHieu !== 'function') throw new Error('layHuyHieu không export');
+      const r = layHuyHieu(100);
+      if (!r.includes('👑')) throw new Error(`thiếu 👑: "${r}"`);
     }),
 
-    test('ngayThucTe trả về Date hợp lệ', async () => {
-      if (typeof ngayThucTe !== 'function') throw new Error('ngayThucTe không export');
-      const d = ngayThucTe({ dayOfWeek: 1, hour: 9, minute: 0 });
-      if (!(d instanceof Date) && typeof d !== 'string') throw new Error(`không trả về Date: ${typeof d}`);
+    test('formatThoiGian(3600000) → "1 giờ"', async () => {
+      if (typeof formatThoiGian !== 'function') throw new Error('formatThoiGian không export');
+      const r = formatThoiGian(3600000);
+      if (!r.includes('1') || !r.includes('giờ')) throw new Error(`kết quả: "${r}"`);
     }),
 
-    test('formatDongStr Chủ Nhật 00:00', async () => {
-      if (typeof formatDongStr !== 'function') throw new Error('formatDongStr không export');
-      const r = formatDongStr({ dayOfWeek: 0, hour: 0, minute: 0, closeHour: 1, closeMinute: 0, closeDayOfWeek: 0 });
-      if (typeof r !== 'string') throw new Error('không trả về string');
+    test('formatThoiGian(120000) → "2 phút"', async () => {
+      if (typeof formatThoiGian !== 'function') throw new Error('formatThoiGian không export');
+      const r = formatThoiGian(120000);
+      if (!r.includes('phút')) throw new Error(`kết quả: "${r}"`);
     }),
 
-    test('pad(0) → "00"', async () => {
-      if (typeof pad !== 'function') throw new Error('pad không export');
-      const r = pad(0);
-      if (r !== '00') throw new Error(`kết quả: ${r}`);
+    test('laAdmin(null, {}) → false (không throw)', async () => {
+      if (typeof laAdmin !== 'function') throw new Error('laAdmin không export');
+      const r = laAdmin(null, {});
+      if (r !== false) throw new Error(`kết quả: ${r}`);
+    }),
+
+    // ─── timeCalc.js ────────────────────────────────────────
+    test('msToNextWeekday trả về số dương', async () => {
+      if (typeof msToNextWeekday !== 'function') throw new Error('msToNextWeekday không export');
+      const ms = msToNextWeekday(6, 21, 0); // T7 21:00
+      if (typeof ms !== 'number') throw new Error(`không phải number: ${typeof ms}`);
+      if (ms <= 0) throw new Error(`ms không dương: ${ms}`);
+      if (ms > 7 * 24 * 3600 * 1000) throw new Error(`ms > 7 ngày: ${ms}`);
+    }),
+
+    test('msFromOpenToClose (CN 21:00 → CN 23:30) → 9000000ms', async () => {
+      if (typeof msFromOpenToClose !== 'function') throw new Error('msFromOpenToClose không export');
+      const ms = msFromOpenToClose(0, 21, 0, 0, 23, 30);
+      const expected = (23 * 60 + 30 - 21 * 60) * 60 * 1000; // 9000000
+      if (ms !== expected) throw new Error(`kết quả: ${ms}, expected: ${expected}`);
+    }),
+
+    test('msFromOpenToClose qua nửa đêm (T7 23:00 → CN 01:00)', async () => {
+      if (typeof msFromOpenToClose !== 'function') throw new Error('msFromOpenToClose không export');
+      const ms = msFromOpenToClose(6, 23, 0, 0, 1, 0);
+      const expected = 2 * 60 * 60 * 1000; // 7200000ms = 2 tiếng
+      if (ms !== expected) throw new Error(`kết quả: ${ms}, expected: ${expected}`);
+    }),
+
+    test('msToCloseFromNow trả về number (không throw)', async () => {
+      if (typeof msToCloseFromNow !== 'function') throw new Error('msToCloseFromNow không export');
+      // Session mở 1 giờ trước, đóng sau 2 tiếng → còn ~1 tiếng
+      const createdAt = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+      const ms = msToCloseFromNow(0, 0, 0, 0, 2, 0, createdAt);
+      if (typeof ms !== 'number') throw new Error(`không phải number: ${typeof ms}`);
     }),
   ]);
 }
