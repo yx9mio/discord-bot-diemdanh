@@ -1,11 +1,10 @@
 // commands/batdau.js
 const {
   SlashCommandBuilder,
-  PermissionFlagsBits,
 } = require('discord.js');
 const db = require('../db.js');
 const { buildSessionEmbed, buildAttendanceButtons, replyWarnEdit } = require('../utils/embeds.js');
-const { datHenGioTuDong } = require('../utils/timers.js');
+const { datHenGioDong } = require('../utils/timers.js'); // FIX B-2: datHenGioTuDong → datHenGioDong
 const { requireAdmin } = require('../utils/permissions.js');
 
 module.exports = {
@@ -71,15 +70,25 @@ module.exports = {
 
     const sessionName = tenOption ?? `Điểm danh ${new Date().toLocaleDateString('vi-VN')}`;
 
-    const session = await db.createSession(guild.id, {
+    // FIX B-4: createSession nhận positional args, không phải object
+    const session = await db.createSession(
+      guild.id,
       sessionName,
-      roleName,
-      allowedRoleId,
-      eligibleMemberIds: eligibleIds,
-      startedBy: member.user.tag,
+      member.user.tag,
       autoCloseAt,
-      channelId: channel.id,
-    });
+      channel.id,
+      eligibleIds,
+    );
+
+    // Lưu allowed_role_id vào session nếu có (update riêng sau khi tạo)
+    if (allowedRoleId) {
+      await db.supabase
+        .from('sessions')
+        .update({ allowed_role_id: allowedRoleId, role_name: roleName })
+        .eq('id', session.id);
+      session.allowed_role_id = allowedRoleId;
+      session.role_name = roleName;
+    }
 
     const attended    = [];
     const phaiRoleIds = phaiRole ? [phaiRole.id] : (cfg.phai_role_ids ?? []);
@@ -89,8 +98,9 @@ module.exports = {
     const msg = await interaction.editReply({ embeds: [embed], components: [buttons] });
     await db.updateSessionMessageId(session.id, msg.id);
 
-    if (autoCloseAt) {
-      datHenGioTuDong(guild.id, session.id, phutOption, interaction.client, channel);
+    if (phutOption > 0) {
+      // FIX B-2: đúng signature datHenGioDong(client, guild, session, channelId, ms)
+      datHenGioDong(interaction.client, guild, session, channel.id, phutOption * 60_000);
     }
   },
 };
