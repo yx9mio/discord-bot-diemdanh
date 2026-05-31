@@ -3,7 +3,7 @@
 const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
 const db = require('../db.js');
 const { buildDashboard } = require('../handlers/setupUiHandler.js');
-const { replyErr } = require('../utils/embeds.js');
+const { requireAdmin } = require('../utils/permissions.js');
 
 const data = new SlashCommandBuilder()
   .setName('setup')
@@ -11,9 +11,9 @@ const data = new SlashCommandBuilder()
   .setDefaultMemberPermissions(PermissionFlagsBits.Administrator);
 
 async function execute(interaction) {
-  if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
-    return interaction.reply(replyErr('🔒 Chỉ **Quản trị viên** mới dùng được `/setup`.'));
-  }
+  const { ok } = await requireAdmin(interaction, { cfgRequired: false, context: '/setup' });
+  if (!ok) return;
+
   await interaction.deferReply({ ephemeral: true });
   const cfg = await db.getConfig(interaction.guild.id);
   const payload = await buildDashboard(interaction.guild, cfg);

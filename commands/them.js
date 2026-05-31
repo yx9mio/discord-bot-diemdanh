@@ -3,72 +3,45 @@
 const { SlashCommandBuilder } = require('discord.js');
 const db = require('../db.js');
 const { buildSessionEmbed, buildAttendanceButtons, replyOkEdit, replyErrEdit } = require('../utils/embeds.js');
-const { laAdmin } = require('../utils/helpers.js');
+const { requireAdmin } = require('../utils/permissions.js');
 
-const LABEL_MAP = {
-  tham_gia:        '✅ Tham Gia',
-  tre:             '⏰ Đến Trễ',
-  khong_tham_gia:  '❌ Vắng Mặt',
-};
+module.exports = {
+  data: new SlashCommandBuilder()
+    .setName('them')
+    .setDescription('Thêm thành viên vào điểm danh (Admin)')
+    .addUserOption(o =>
+      o.setName('thanh_vien').setDescription('Thành viên cần thêm').setRequired(true)
+    ),
 
-const data = new SlashCommandBuilder()
-  .setName('them_diemdanh')
-  .setDescription('Thêm thành viên vào điểm danh thủ công')
-  .addUserOption(o =>
-    o.setName('thanh_vien').setDescription('Thành viên cần thêm').setRequired(true)
-  )
-  .addStringOption(o =>
-    o.setName('trang_thai')
-      .setDescription('Trạng thái (mặc định: Tham Gia)')
-      .addChoices(
-        { name: '✅ Tham Gia',  value: 'tham_gia' },
-        { name: '⏰ Đến Trễ',   value: 'tre' },
-        { name: '❌ Vắng Mặt', value: 'khong_tham_gia' },
-      )
-  );
+  async execute(interaction) {
+    await interaction.deferReply({ ephemeral: true });
+    const { guild } = interaction;
 
-async function execute(interaction) {
-  await interaction.deferReply({ ephemeral: true });
-  const guild = interaction.guild;
+    const { ok, cfg } = await requireAdmin(interaction, { context: '/them' });
+    if (!ok) return;
 
-  const cfg = await db.getConfig(guild.id);
-  if (!laAdmin(interaction.member, cfg)) {
-    return interaction.editReply(replyErrEdit('🔒 Bạn không có quyền thực hiện lệnh này.'));
-  }
+    const target  = interaction.options.getUser('thanh_vien');
+    const session = await db.getActiveSession(guild.id);
 
-  const session = await db.getActiveSession(guild.id);
-  if (!session) {
-    return interaction.editReply(replyErrEdit('📭 Không có phiên điểm danh nào đang mở.'));
-  }
-
-  const target      = interaction.options.getUser('thanh_vien');
-  const status      = interaction.options.getString('trang_thai') ?? 'tham_gia';
-  const gMember     = await guild.members.fetch(target.id).catch(() => null);
-  const displayName = gMember?.displayName ?? target.username;
-
-  try {
-    await db.upsertAttendance(session.id, guild.id, target.id, displayName, status);
-  } catch (err) {
-    console.error('[them_diemdanh] Lỗi upsertAttendance:', err);
-    return interaction.editReply(replyErrEdit('Có lỗi khi ghi điểm danh. Vui lòng thử lại.'));
-  }
-
-  // Cập nhật embed gốc
-  try {
-    if (session.message_id) {
-      const channel = interaction.channel;
-      const msg = await channel.messages.fetch(session.message_id).catch(() => null);
-      if (msg) {
-        const attended = await db.getAttendances(session.id);
-        const embed = await buildSessionEmbed(guild, session, attended);
-        await msg.edit({ embeds: [embed], components: [buildAttendanceButtons(false)] });
-      }
+    if (!session) {
+      return interaction.editReply(replyErrEdit('📭 Không có phiên điểm danh nào đang mở.'));
     }
-  } catch (_) {}
 
-  return interaction.editReply(
-    replyOkEdit(`Đã ghi nhận **${displayName}** — ${LABEL_MAP[status] ?? status} vào phiên **${session.session_name}**.`)
-  );
-}
+    try {
+      await db.markAttendance(session.id, target.id, interaction.user.id);
+    } catch {
+      return interaction.editReply(replyErrEdit('Có lỗi khi ghi điểm danh. Vui lòng thử lại.'));
+    }
 
-module.exports = { data, execute };
+    const attended    = await db.getAttendance(session.id);
+    const phaiRoleIds = cfg.phai_role_ids ?? [];
+    const embed       = await buildSessionEmbed(guild, session, attended, phaiRoleIds);
+    const buttons     = buildAttendanceButtons(false);
+
+    return interaction.editReply({
+      ...replyOkEdit(`Đã thêm <@${target.id}> vào điểm danh phiên **${session.session_name}**.`),
+      embeds: [embed],
+      components: [buttons],
+    });
+  },
+};

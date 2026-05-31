@@ -2,54 +2,46 @@
 'use strict';
 const { SlashCommandBuilder } = require('discord.js');
 const db = require('../db.js');
-const { laAdmin } = require('../utils/helpers.js');
 const { replyOkEdit, replyErrEdit, buildSessionEmbed, buildAttendanceButtons } = require('../utils/embeds.js');
+const { requireAdmin } = require('../utils/permissions.js');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('xoa')
-    .setDescription('[Admin] Xóa điểm danh của một thành viên khỏi phiên hiện tại')
-    .setDefaultMemberPermissions(0n)
+    .setDescription('Xóa điểm danh của một thành viên (Admin)')
     .addUserOption(o =>
-      o.setName('thanh_vien').setDescription('Thành viên cần xóa').setRequired(true)
+      o.setName('thanh_vien').setDescription('Thành viên cần xóa điểm danh').setRequired(true)
     ),
 
   async execute(interaction) {
     await interaction.deferReply({ ephemeral: true });
-    const { guild, member } = interaction;
+    const { guild } = interaction;
 
-    const cfg = await db.getConfig(guild.id);
-    if (!laAdmin(member, cfg)) {
-      return interaction.editReply(replyErrEdit('🔒 Bạn không có quyền dùng lệnh này.'));
-    }
+    const { ok, cfg } = await requireAdmin(interaction, { context: '/xoa' });
+    if (!ok) return;
 
+    const target  = interaction.options.getUser('thanh_vien');
     const session = await db.getActiveSession(guild.id);
+
     if (!session) {
       return interaction.editReply(replyErrEdit('📭 Không có phiên nào đang mở.'));
     }
 
-    const target = interaction.options.getUser('thanh_vien');
-
     try {
       await db.removeAttendance(session.id, target.id);
-    } catch (err) {
-      console.error('[xoa] Lỗi removeAttendance:', err);
+    } catch {
       return interaction.editReply(replyErrEdit('Có lỗi khi xóa điểm danh. Vui lòng thử lại.'));
     }
 
-    // Cập nhật embed gốc
-    try {
-      if (session.message_id) {
-        const channel = interaction.channel;
-        const msg = await channel.messages.fetch(session.message_id).catch(() => null);
-        if (msg) {
-          const attended = await db.getAttendances(session.id);
-          const embed = await buildSessionEmbed(guild, session, attended);
-          await msg.edit({ embeds: [embed], components: [buildAttendanceButtons(false)] });
-        }
-      }
-    } catch (_) {}
+    const attended    = await db.getAttendance(session.id);
+    const phaiRoleIds = cfg.phai_role_ids ?? [];
+    const embed       = await buildSessionEmbed(guild, session, attended, phaiRoleIds);
+    const buttons     = buildAttendanceButtons(false);
 
-    return interaction.editReply(replyOkEdit(`Đã xóa điểm danh của <@${target.id}> khỏi phiên **${session.session_name}**.`));
+    return interaction.editReply({
+      ...replyOkEdit(`Đã xóa điểm danh của <@${target.id}> khỏi phiên **${session.session_name}**.`),
+      embeds: [embed],
+      components: [buttons],
+    });
   },
 };

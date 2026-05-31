@@ -2,38 +2,30 @@
 'use strict';
 const { SlashCommandBuilder } = require('discord.js');
 const db = require('../db.js');
-const { ketThucPhien, thongBaoHuyHieu, voHieuHoaNutDiemDanh } = require('../utils/session.js');
-const { xoaHenGio } = require('../utils/timers.js');
-const { buildSummaryEmbed, replyOkEdit, replyErrEdit, replyWarnEdit } = require('../utils/embeds.js');
-const { laAdmin } = require('../utils/helpers.js');
+const { buildSummaryEmbed, replyOkEdit, replyWarnEdit } = require('../utils/embeds.js');
+const { requireAdmin } = require('../utils/permissions.js');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('ket_thuc')
-    .setDescription('Kết thúc phiên điểm danh hiện tại')
-    .setDefaultMemberPermissions(0n),
+    .setDescription('Kết thúc phiên điểm danh đang mở'),
 
   async execute(interaction) {
     await interaction.deferReply({ ephemeral: true });
-    const { guild, member, channel } = interaction;
+    const { guild } = interaction;
 
-    const cfg = await db.getConfig(guild.id);
-    if (!laAdmin(member, cfg)) {
-      return interaction.editReply(replyErrEdit('🔒 Bạn không có quyền dùng lệnh này.'));
-    }
+    const { ok, cfg } = await requireAdmin(interaction, { context: '/ket_thuc' });
+    if (!ok) return;
 
     const session = await db.getActiveSession(guild.id);
     if (!session) return interaction.editReply(replyWarnEdit('📭 Không có phiên nào đang mở.'));
 
-    const attended = await db.getAttendances(session.id);
-    xoaHenGio(guild.id);
-    const statsMap = await ketThucPhien(guild, session, attended);
-    await voHieuHoaNutDiemDanh(interaction.client, channel, session);
+    await db.closeSession(session.id);
 
+    const attended    = await db.getAttendance(session.id);
     const phaiRoleIds = cfg.phai_role_ids?.length ? cfg.phai_role_ids : null;
-    await channel.send({ embeds: [buildSummaryEmbed(session, attended, guild, phaiRoleIds)] });
-    await thongBaoHuyHieu(guild, channel, guild.id, session.id, attended, statsMap);
+    const embed       = await buildSummaryEmbed(guild, session, attended, phaiRoleIds);
 
-    return interaction.editReply(replyOkEdit('Đã kết thúc phiên điểm danh.'));
+    return interaction.editReply({ ...replyOkEdit('Đã kết thúc phiên điểm danh.'), embeds: [embed] });
   },
 };
