@@ -40,6 +40,16 @@ async function createPresetLich(interaction, guild, preset, channelId) {
   else await interaction.followUp({ ...payload, ephemeral: true });
 }
 
+// Row nút quay lại dashboard — dùng lại ở nhiều bước
+function rowBack() {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId('setup:dashboard')
+      .setLabel('← Quay lại')
+      .setStyle(ButtonStyle.Secondary),
+  );
+}
+
 async function handlePreset(interaction) {
   const { customId, guild } = interaction;
 
@@ -50,18 +60,17 @@ async function handlePreset(interaction) {
       .setTitle('⚡ Tạo Lịch Từ Preset')
       .setDescription('Chọn mẫu lịch có sẵn để tạo nhanh.')
       .setColor(0x57F287).setFooter({ text: FOOTER_DEFAULT });
-    const row = new ActionRowBuilder().addComponents(
+    const rowSelect = new ActionRowBuilder().addComponents(
       new StringSelectMenuBuilder()
         .setCustomId('setup:preset:select')
         .setPlaceholder('Chọn preset...')
-        // description được tính động tại runtime — hiển thị ngày thực tế
         .addOptions(PRESETS.map(p => ({
           label: p.label,
           value: p.value,
           description: buildPresetDescription(p.data),
         }))),
     );
-    await interaction.editReply({ embeds: [embed], components: [row], ephemeral: true });
+    await interaction.editReply({ embeds: [embed], components: [rowSelect, rowBack()], ephemeral: true });
     return true;
   }
 
@@ -73,27 +82,36 @@ async function handlePreset(interaction) {
     if (!preset.data) {
       await interaction.editReply({
         content: '✏️ Chọn **➕ Thêm mới** trong màn hình Quản lý Lịch để nhập tay.',
-        components: [new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId('setup:lich:menu').setLabel('📅 Quản lý Lịch').setStyle(ButtonStyle.Primary),
-        )],
+        components: [
+          new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId('setup:lich:menu').setLabel('📅 Quản lý Lịch').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId('setup:preset_menu').setLabel('← Quay lại').setStyle(ButtonStyle.Secondary),
+          ),
+        ],
         ephemeral: true,
       });
       return true;
     }
-    // Preset có data → hỏi kênh, description hiện ngày thực tế
+    // Preset có data → hỏi kênh
     const dynamicDesc = buildPresetDescription(preset.data);
     const embed = new EmbedBuilder()
       .setAuthor(AUTHOR_DEFAULT)
       .setTitle(`⚡ Preset: ${preset.label}`)
       .setDescription(`**Lịch:** ${dynamicDesc}\n\nChọn kênh để bot gửi thông báo cho lịch này.`)
       .setColor(0x57F287).setFooter({ text: FOOTER_DEFAULT });
-    const row = new ActionRowBuilder().addComponents(
+    const rowCh = new ActionRowBuilder().addComponents(
       new ChannelSelectMenuBuilder()
         .setCustomId(`setup:preset:kenh:${value}`)
         .setPlaceholder('Chọn kênh...')
         .setMinValues(1).setMaxValues(1),
     );
-    await interaction.editReply({ embeds: [embed], components: [row], ephemeral: true });
+    const rowBackPreset = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId('setup:preset_menu')
+        .setLabel('← Chọn lại preset')
+        .setStyle(ButtonStyle.Secondary),
+    );
+    await interaction.editReply({ embeds: [embed], components: [rowCh, rowBackPreset], ephemeral: true });
     return true;
   }
 
@@ -111,17 +129,47 @@ async function handlePreset(interaction) {
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId(`setup:preset_bc:save:${presetValue}:${channelId}`)
         .setLabel('✅ Tạo lịch').setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId(`setup:preset:select_back:${presetValue}`)
+        .setLabel('← Chọn lại kênh').setStyle(ButtonStyle.Secondary),
       new ButtonBuilder().setCustomId('setup:preset_menu')
-        .setLabel('← Chọn lại').setStyle(ButtonStyle.Secondary),
+        .setLabel('← Chọn lại preset').setStyle(ButtonStyle.Secondary),
     );
     await interaction.editReply({ embeds: [embed], components: [row], ephemeral: true });
     return true;
   }
 
+  // Quay về bước chọn kênh (sau khi đã chọn preset)
+  if (customId.startsWith('setup:preset:select_back:')) {
+    const presetValue = customId.replace('setup:preset:select_back:', '');
+    const preset = PRESETS.find(p => p.value === presetValue);
+    if (!preset?.data) { await interaction.deferUpdate(); await interaction.editReply({ content: '❌ Preset không hợp lệ.' }); return true; }
+    await interaction.deferUpdate();
+    const dynamicDesc = buildPresetDescription(preset.data);
+    const embed = new EmbedBuilder()
+      .setAuthor(AUTHOR_DEFAULT)
+      .setTitle(`⚡ Preset: ${preset.label}`)
+      .setDescription(`**Lịch:** ${dynamicDesc}\n\nChọn kênh để bot gửi thông báo cho lịch này.`)
+      .setColor(0x57F287).setFooter({ text: FOOTER_DEFAULT });
+    const rowCh = new ActionRowBuilder().addComponents(
+      new ChannelSelectMenuBuilder()
+        .setCustomId(`setup:preset:kenh:${presetValue}`)
+        .setPlaceholder('Chọn kênh...')
+        .setMinValues(1).setMaxValues(1),
+    );
+    const rowBackPreset = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId('setup:preset_menu')
+        .setLabel('← Chọn lại preset')
+        .setStyle(ButtonStyle.Secondary),
+    );
+    await interaction.editReply({ embeds: [embed], components: [rowCh, rowBackPreset], ephemeral: true });
+    return true;
+  }
+
   if (customId.startsWith('setup:preset_bc:save:')) {
-    const parts      = customId.replace('setup:preset_bc:save:', '').split(':');
+    const parts       = customId.replace('setup:preset_bc:save:', '').split(':');
     const presetValue = parts[0];
-    const channelId  = parts[1];
+    const channelId   = parts[1];
     await interaction.deferUpdate();
     const preset = PRESETS.find(p => p.value === presetValue);
     if (!preset?.data) { await interaction.editReply({ content: '❌ Preset không hợp lệ.' }); return true; }
