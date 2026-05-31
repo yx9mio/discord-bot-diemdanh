@@ -1,12 +1,15 @@
 // handlers/userPanelHandler.js — Panel thống kê cá nhân cho /toi
+// Fix: dùng COLORS & EmbedBuilder từ embeds.js; formatDate dùng Intl chuẩn VN
+'use strict';
 const {
-  EmbedBuilder,
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
   MessageFlags,
 } = require('discord.js');
+const { EmbedBuilder } = require('discord.js');
 const db = require('../db.js');
+const { COLORS } = require('../utils/embeds.js');
 
 const STATUS_ICON = {
   tham_gia:       '✅',
@@ -14,13 +17,15 @@ const STATUS_ICON = {
   khong_tham_gia: '❌',
 };
 
-const DAYS_VI = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
-
+// Dùng Intl thay vì DAYS_VI hardcode — nhất quán với locale VN
 function formatDate(dateStr) {
   if (!dateStr) return '?';
-  const d = new Date(dateStr);
-  const day = DAYS_VI[d.getDay()];
-  return `${day} ${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+  return new Intl.DateTimeFormat('vi-VN', {
+    timeZone:  'Asia/Ho_Chi_Minh',
+    weekday:   'short',
+    day:       '2-digit',
+    month:     '2-digit',
+  }).format(new Date(dateStr));
 }
 
 function rankEmoji(rank) {
@@ -36,7 +41,6 @@ async function buildUserPanel(guild, member, userId) {
   const history  = await db.getSessionHistory(guild.id, 10);
   const active   = await db.getActiveSession(guild.id);
 
-  // Guard: member chưa có row trong member_stats
   const safeStats = stats ?? { total_joined: 0, total_sessions: 0, current_streak: 0, best_streak: 0 };
 
   const rankIndex    = topList.findIndex(m => m.user_id === userId);
@@ -47,7 +51,6 @@ async function buildUserPanel(guild, member, userId) {
     ? Math.round((safeStats.total_joined / safeStats.total_sessions) * 100)
     : 0;
 
-  // Lịch sử 5 phiên gần nhất (nếu không có eligible_member_ids thì tính tất cả)
   const recentSessions = history
     .filter(s => !s.eligible_member_ids || s.eligible_member_ids.includes(userId))
     .slice(0, 5);
@@ -69,7 +72,7 @@ async function buildUserPanel(guild, member, userId) {
   const avatarUrl   = member.user.displayAvatarURL({ size: 64 });
 
   const embed = new EmbedBuilder()
-    .setColor(0x5865F2)
+    .setColor(COLORS.PRIMARY)
     .setAuthor({ name: `Thống kê của ${displayName}`, iconURL: avatarUrl })
     .setDescription('\u200b')
     .addFields(
@@ -130,7 +133,7 @@ async function buildRankPanel(guild) {
   });
 
   const embed = new EmbedBuilder()
-    .setColor(0xFFD700)
+    .setColor(COLORS.GOLD)
     .setTitle('🏆 Bảng xếp hạng điểm danh')
     .setDescription(lines.length ? lines.join('\n') : 'Chưa có dữ liệu.')
     .setFooter({ text: `Top ${topList.length} thành viên tích cực nhất` })
