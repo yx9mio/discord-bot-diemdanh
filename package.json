@@ -1,6 +1,6 @@
 {
   "name": "discord-bot-diemdanh",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Bot Discord điểm danh — Supabase Edition",
   "main": "index.js",
   "scripts": {
