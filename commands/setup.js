@@ -1,4 +1,4 @@
-// commands/setup.js — Wizard thiết lập mặc định khi thêm bot vào server
+// commands/setup.js — Wizard thiết lập đầy đủ: role, phái, lịch cố định
 const {
   SlashCommandBuilder, EmbedBuilder,
   ActionRowBuilder, ButtonBuilder, ButtonStyle,
@@ -8,120 +8,251 @@ const db = require('../db.js');
 const { FOOTER_DEFAULT, AUTHOR_DEFAULT } = require('../utils/embeds.js');
 const { timKenhThongBao } = require('../utils/helpers.js');
 
+// ── Dữ liệu dùng chung ──────────────────────────────────────────────────────
+const TEN_THU = ['Chủ nhật','Thứ hai','Thứ ba','Thứ tư','Thứ năm','Thứ sáu','Thứ bảy'];
+const pad = n => String(n ?? 0).padStart(2, '0');
+
+// Lịch mặc định gợi ý cho Bang Chiến
+const LICH_MAC_DINH = [
+  { ten: 'Bang Chiến', thuMo: 6, gioMo: 21, phutMo: 0, thuDong: 0, gioDong: 0, phutDong: 30 },
+];
+
+// ── Slash command ─────────────────────────────────────────────────────────────
 const data = new SlashCommandBuilder()
   .setName('setup')
-  .setDescription('Thiết lập cấu hình mặc định khi thêm bot vào server')
-  .setDefaultMemberPermissions(PermissionFlagsBits.Administrator);
+  .setDescription('Wizard thiết lập đầy đủ: role, phái và lịch cố định mặc định')
+  .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+  // Sub: tổng quan (mặc định)
+  .addSubcommand(s =>
+    s.setName('xem').setDescription('Xem tổng quan cấu hình hiện tại'))
+  // Sub: cài role + admin_role
+  .addSubcommand(s =>
+    s.setName('role')
+      .setDescription('Cài role điểm danh và role admin bot')
+      .addRoleOption(o => o.setName('role').setDescription('Role được điểm danh').setRequired(true))
+      .addRoleOption(o => o.setName('admin_role').setDescription('Role quản lý bot').setRequired(true)))
+  // Sub: cài phái (11 slots)
+  .addSubcommand(s => {
+    s.setName('phai').setDescription('Cài danh sách role phái cho server');
+    for (let i = 1; i <= 11; i++)
+      s.addRoleOption(o => o.setName(`phai_${i}`).setDescription(`Phái ${i}`).setRequired(i === 1));
+    return s;
+  })
+  // Sub: thêm lịch cố định
+  .addSubcommand(s =>
+    s.setName('lich')
+      .setDescription('Thêm lịch điểm danh cố định hằng tuần')
+      .addStringOption(o => o.setName('ten').setDescription('Tên phiên (vd: Bang Chiến)').setRequired(true))
+      .addIntegerOption(o => o.setName('thu_mo').setDescription('Thứ Mở (0=CN,1=T2…6=T7)').setRequired(true).setMinValue(0).setMaxValue(6))
+      .addIntegerOption(o => o.setName('gio_mo').setDescription('Giờ Mở (giờ VN, 0-23)').setRequired(true).setMinValue(0).setMaxValue(23))
+      .addIntegerOption(o => o.setName('phut_mo').setDescription('Phút Mở (0-59)').setRequired(true).setMinValue(0).setMaxValue(59))
+      .addIntegerOption(o => o.setName('thu_dong').setDescription('Thứ Đóng (0=CN…6=T7)').setMinValue(0).setMaxValue(6))
+      .addIntegerOption(o => o.setName('gio_dong').setDescription('Giờ Đóng (0-23)').setMinValue(0).setMaxValue(23))
+      .addIntegerOption(o => o.setName('phut_dong').setDescription('Phút Đóng (0-59)').setMinValue(0).setMaxValue(59))
+      .addChannelOption(o => o.setName('kenh').setDescription('Kênh gửi thông báo (mặc định kênh hiện tại)')))
+  // Sub: one-click preset Bang Chien
+  .addSubcommand(s =>
+    s.setName('preset_bang_chien')
+      .setDescription('Tạo nhanh lịch Bang Chiến T7 21:00 → CN 0:30')
+      .addChannelOption(o => o.setName('kenh').setDescription('Kênh gửi thông báo (mặc định kênh hiện tại)')));
 
+// ── Hàm phụ: build embed tổng quan ──────────────────────────────────────────
+async function buildOverviewEmbed(guild, cfg) {
+  const notifChannel = await timKenhThongBao(guild);
+  const daCaiDat = !!(cfg.allowed_role_id || cfg.admin_role_id || cfg.phai_role_ids?.length);
+
+  const lichList = await db.getLichCoDinh(guild.id);
+  const lichDesc = lichList.length
+    ? lichList.map((l, i) => {
+        const mo   = `${TEN_THU[l.day_of_week]} ${pad(l.hour)}:${pad(l.minute)}`;
+        const dong = l.close_day_of_week != null
+          ? `→ ${TEN_THU[l.close_day_of_week]} ${pad(l.close_hour)}:${pad(l.close_minute)}`
+          : '→ _ko tự đóng_';
+        return `${i+1}. **${l.session_name}** | ${mo} ${dong} | <#${l.channel_id}>`;
+      }).join('\n')
+    : '⚠️ Chưa có lịch cố định';
+
+  return new EmbedBuilder()
+    .setAuthor(AUTHOR_DEFAULT)
+    .setTitle('🛠️ Cấu Hình Bot Điểm Danh')
+    .setDescription(daCaiDat
+      ? '✅ Bot đã được cài đặt. Dưới đây là cấu hình hiện tại.'
+      : '👋 Chưa có cấu hình! Dùng `/setup role`, `/setup phai`, `/setup lich` để bắt đầu.')
+    .addFields(
+      { name: '🔔 Kênh thông báo', value: notifChannel ? `<#${notifChannel}>` : '_Chưa rõ_', inline: true },
+      { name: '🔑 Role điểm danh', value: cfg.allowed_role_id ? `<@&${cfg.allowed_role_id}>` : '⚠️ Chưa cài', inline: true },
+      { name: '🛡️ Role admin bot', value: cfg.admin_role_id ? `<@&${cfg.admin_role_id}>` : '⚠️ Chưa cài', inline: true },
+      {
+        name: `🏆 Phái (${cfg.phai_role_ids?.length ?? 0})`,
+        value: cfg.phai_role_ids?.length
+          ? cfg.phai_role_ids.map(id => `<@&${id}>`).join(' ')
+          : '⚠️ Chưa cài phái',
+        inline: false,
+      },
+      { name: `📅 Lịch cố định (${lichList.length})`, value: lichDesc, inline: false },
+    )
+    .setColor(daCaiDat ? 0x57F287 : 0xFEE75C)
+    .setFooter({ text: `${FOOTER_DEFAULT} • /setup xem để kiểm tra lại` })
+    .setTimestamp();
+}
+
+// ── Hàm phụ: build embed hướng dẫn bước tiếp theo ──────────────────────────
+function buildGuideEmbed(cfg) {
+  const steps = [];
+
+  if (!cfg.allowed_role_id || !cfg.admin_role_id)
+    steps.push('**[Cần làm]** `/setup role role:@... admin_role:@...` — cài role điểm danh & admin');
+  else
+    steps.push('✅ Role đã cài');
+
+  if (!cfg.phai_role_ids?.length)
+    steps.push('**[Cần làm]** `/setup phai phai_1:@... phai_2:@...` — cài danh sách phái');
+  else
+    steps.push(`✅ Phái đã cài (${cfg.phai_role_ids.length} phái)`);
+
+  steps.push('📅 `/setup lich` — thêm lịch tự động bất kỳ');
+  steps.push('⚡ `/setup preset_bang_chien` — tạo ngay lịch **Bang Chiến** T7 21:00 → CN 0:30');
+  steps.push('📖 `/help` — xem tất cả lệnh');
+
+  return new EmbedBuilder()
+    .setTitle('🚀 Bước Tiếp Theo')
+    .setDescription(steps.join('\n'))
+    .setColor(0x5865F2)
+    .setFooter({ text: FOOTER_DEFAULT });
+}
+
+// ── Hàm phụ: buttons ─────────────────────────────────────────────────────────
+function buildSetupButtons() {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId('setup_help').setLabel('📖 /help').setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId('setup_config').setLabel('⚙️ Cấu hình').setStyle(ButtonStyle.Secondary),
+  );
+}
+
+// ── Execute ───────────────────────────────────────────────────────────────────
 async function execute(interaction) {
   await interaction.deferReply({ ephemeral: true });
 
-  // Chỉ Administrator mới chạy được
-  if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+  if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator))
     return interaction.editReply({ content: '🔒 Chỉ **Quản trị viên** mới có thể chạy `/setup`.' });
-  }
 
   const guild = interaction.guild;
+  const sub   = interaction.options.getSubcommand();
   const cfg   = await db.getConfig(guild.id);
 
-  // Lấy thông tin thực tế của server
-  await guild.members.fetch().catch(() => null);
-  const totalMembers  = guild.memberCount;
-  const botCount      = guild.members.cache.filter(m => m.user.bot).size;
-  const humanCount    = totalMembers - botCount;
-  const channelId     = interaction.channelId;
-  const notifChannel  = await timKenhThongBao(guild);
+  // ── /setup xem ─────────────────────────────────────────────────────────────
+  if (sub === 'xem') {
+    const embed = await buildOverviewEmbed(guild, cfg);
+    return interaction.editReply({ embeds: [embed, buildGuideEmbed(cfg)], components: [buildSetupButtons()] });
+  }
 
-  // Kiểm tra đã cài chưa
-  const daCaiDat = !!cfg.allowed_role_id || !!cfg.admin_role_id || (cfg.phai_role_ids?.length > 0);
+  // ── /setup role ────────────────────────────────────────────────────────────
+  if (sub === 'role') {
+    const role      = interaction.options.getRole('role');
+    const adminRole = interaction.options.getRole('admin_role');
+    await db.setConfig(guild.id, { allowed_role_id: role.id, admin_role_id: adminRole.id });
+    const cfgMoi = await db.getConfig(guild.id);
+    const embed  = await buildOverviewEmbed(guild, cfgMoi);
+    return interaction.editReply({
+      content: `✅ Đã cài:\n• Role điểm danh: <@&${role.id}>\n• Role admin bot: <@&${adminRole.id}>`,
+      embeds: [embed, buildGuideEmbed(cfgMoi)],
+    });
+  }
 
-  // Build embed tổng quan
-  const fields = [
-    {
-      name: '👥 Thành viên',
-      value: `**${humanCount}** người (${botCount} bot)`,
-      inline: true,
-    },
-    {
-      name: '💬 Kênh hiện tại',
-      value: `<#${channelId}>`,
-      inline: true,
-    },
-    {
-      name: '🔔 Kênh thông báo',
-      value: notifChannel ? `<#${notifChannel}>` : 'Chưa tìm thấy',
-      inline: true,
-    },
-    {
-      name: '🔑 Role điểm danh hiện tại',
-      value: cfg.allowed_role_id ? `<@&${cfg.allowed_role_id}>` : '⚠️ Chưa cài — **tất cả thành viên** đều điểm danh được',
-      inline: false,
-    },
-    {
-      name: '🛡️ Role admin bot hiện tại',
-      value: cfg.admin_role_id ? `<@&${cfg.admin_role_id}>` : '⚠️ Chưa cài — chỉ **Administrator** mới dùng được',
-      inline: false,
-    },
-    {
-      name: '🏆 Phái đã cài',
-      value: cfg.phai_role_ids?.length > 0
-        ? cfg.phai_role_ids.map(id => `<@&${id}>`).join(' ')
-        : '⚠️ Chưa cài phái',
-      inline: false,
-    },
-  ];
+  // ── /setup phai ────────────────────────────────────────────────────────────
+  if (sub === 'phai') {
+    const phaiRoleIds = [];
+    for (let i = 1; i <= 11; i++) {
+      const r = interaction.options.getRole(`phai_${i}`);
+      if (r) phaiRoleIds.push(r.id);
+    }
+    await db.setConfig(guild.id, { phai_role_ids: phaiRoleIds });
+    const cfgMoi = await db.getConfig(guild.id);
+    const list   = phaiRoleIds.map((id, i) => `${i+1}. <@&${id}>`).join('\n');
+    const embed  = await buildOverviewEmbed(guild, cfgMoi);
+    return interaction.editReply({
+      content: `✅ Đã lưu **${phaiRoleIds.length}** phái:\n${list}`,
+      embeds: [embed],
+    });
+  }
 
-  const embed = new EmbedBuilder()
-    .setAuthor(AUTHOR_DEFAULT)
-    .setTitle('🛠️ Thiết Lập Bot Điểm Danh')
-    .setDescription(
-      daCaiDat
-        ? '✅ Bot đã được cài đặt trước đó. Dưới đây là **cấu hình hiện tại** của server.'
-        : '👋 Chưa có cấu hình nào! Hãy dùng các lệnh bên dưới để thiết lập.'
-    )
-    .addFields(fields)
-    .setColor(daCaiDat ? 0x57F287 : 0xFEE75C)
-    .setFooter({ text: FOOTER_DEFAULT })
-    .setTimestamp();
+  // ── /setup lich ────────────────────────────────────────────────────────────
+  if (sub === 'lich') {
+    const ten      = interaction.options.getString('ten');
+    const thuMo    = interaction.options.getInteger('thu_mo');
+    const gioMo    = interaction.options.getInteger('gio_mo');
+    const phutMo   = interaction.options.getInteger('phut_mo');
+    const kenh     = interaction.options.getChannel('kenh') ?? interaction.channel;
+    const thuDong  = interaction.options.getInteger('thu_dong')  ?? null;
+    const gioDong  = interaction.options.getInteger('gio_dong')  ?? null;
+    const phutDong = interaction.options.getInteger('phut_dong') ?? null;
+    const phaiRoleIds = cfg.phai_role_ids ?? [];
 
-  // Hướng dẫn tiếp theo
-  const guide = new EmbedBuilder()
-    .setTitle('🚀 Hướng Dẫn Thiết Lập Nhanh')
-    .setDescription(
-      [
-        '**Bước 1** — Cài role (bắt buộc)',
-        '> `/cai_dat role role:@TenRole` — ai được điểm danh',
-        '> `/cai_dat admin_role role:@TenRole` — ai quản lý bot',
-        '',
-        '**Bước 2** — Cài phái (nếu có)',
-        '> `/cai_dat_phai phai_1:@Role1 phai_2:@Role2 ...`',
-        '> Chạy **1 lần duy nhất**, tự động áp dụng cho lịch cố định',
-        '',
-        '**Bước 3** — Tạo lịch tự động (tùy chọn)',
-        '> `/lich_co_dinh them ten:... thu_mo:... gio_mo:... phut_mo:...`',
-        '',
-        '**Bước 4** — Mở phiên thủ công (tùy chọn)',
-        '> `/bat_dau ten:Tên phiên`',
-        '',
-        '📖 Gõ `/help` để xem tất cả lệnh.',
-      ].join('\n')
-    )
-    .setColor(0x5865F2)
-    .setFooter({ text: `${FOOTER_DEFAULT} • /cai_dat xem để kiểm tra lại bất kỳ lúc nào` });
+    const lich = await db.themLichCoDinh(guild.id, {
+      dayOfWeek: thuMo, hour: gioMo, minute: phutMo,
+      sessionName: ten,
+      closeDayOfWeek: thuDong, closeHour: gioDong, closeMinute: phutDong,
+      phaiRoleIds,
+      channelId: kenh.id,
+    });
 
-  // Button shortcuts
-  const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId('setup_help')
-      .setLabel('📖 Xem /help')
-      .setStyle(ButtonStyle.Primary),
-    new ButtonBuilder()
-      .setCustomId('setup_config')
-      .setLabel('⚙️ Xem cấu hình')
-      .setStyle(ButtonStyle.Secondary),
-  );
+    const { scheduleLichCoDinh } = require('../utils/scheduler.js');
+    await scheduleLichCoDinh(interaction.client, guild, lich);
 
-  await interaction.editReply({ embeds: [embed, guide], components: [row] });
+    const moStr   = `${TEN_THU[thuMo]} ${pad(gioMo)}:${pad(phutMo)}`;
+    const dongStr = thuDong != null
+      ? `${TEN_THU[thuDong]} ${pad(gioDong)}:${pad(phutDong)}`
+      : '_không tự đóng_';
+    const phaiStr = phaiRoleIds.length
+      ? phaiRoleIds.map(id => `<@&${id}>`).join(', ')
+      : '_chưa cài phái_';
+
+    const cfgMoi = await db.getConfig(guild.id);
+    const embed  = await buildOverviewEmbed(guild, cfgMoi);
+    return interaction.editReply({
+      content: [
+        `✅ Đã thêm & lên lịch cố định:`,
+        `**${ten}** | Mở: **${moStr}** → Đóng: **${dongStr}**`,
+        `Kênh: <#${kenh.id}> | Phái: ${phaiStr}`,
+        `ID: \`${lich.id}\``,
+      ].join('\n'),
+      embeds: [embed],
+    });
+  }
+
+  // ── /setup preset_bang_chien ───────────────────────────────────────────────
+  if (sub === 'preset_bang_chien') {
+    const kenh = interaction.options.getChannel('kenh') ?? interaction.channel;
+    const phaiRoleIds = cfg.phai_role_ids ?? [];
+    const preset = LICH_MAC_DINH[0];
+
+    const lich = await db.themLichCoDinh(guild.id, {
+      dayOfWeek:      preset.thuMo,
+      hour:           preset.gioMo,
+      minute:         preset.phutMo,
+      sessionName:    preset.ten,
+      closeDayOfWeek: preset.thuDong,
+      closeHour:      preset.gioDong,
+      closeMinute:    preset.phutDong,
+      phaiRoleIds,
+      channelId: kenh.id,
+    });
+
+    const { scheduleLichCoDinh } = require('../utils/scheduler.js');
+    await scheduleLichCoDinh(interaction.client, guild, lich);
+
+    const cfgMoi = await db.getConfig(guild.id);
+    const embed  = await buildOverviewEmbed(guild, cfgMoi);
+    return interaction.editReply({
+      content: [
+        `⚡ Đã tạo preset **Bang Chiến**:`,
+        `Mở: **T7 21:00** → Đóng: **CN 0:30** | Kênh: <#${kenh.id}>`,
+        phaiRoleIds.length ? `Phái (${phaiRoleIds.length}): ${phaiRoleIds.map(id=>`<@&${id}>`).join(', ')}` : '⚠️ Chưa cài phái — chạy `/setup phai` trước',
+        `ID: \`${lich.id}\``,
+      ].join('\n'),
+      embeds: [embed],
+    });
+  }
 }
 
 module.exports = { data, execute };
