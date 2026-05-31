@@ -30,6 +30,9 @@ async function getBadgeList(guildId) {
   }
 }
 
+// Các status được tính là "có mặt" để cộng điểm danh
+const PRESENT_STATUSES = new Set(['tham_gia', 'tre']);
+
 /**
  * Kết thúc phiên: cập nhật member_stats và trả về statsMap.
  * @returns {Promise<Map<userId, {total, streak, max}>>}
@@ -39,7 +42,8 @@ async function ketThucPhien(guild, session, attended) {
   const patches  = [];
 
   for (const record of attended) {
-    if (record.status !== 'present') continue;
+    // Fix: dùng PRESENT_STATUSES thay vì 'present' (không tồn tại trong hệ thống)
+    if (!PRESENT_STATUSES.has(record.status)) continue;
     const uid   = record.user_id;
     const gid   = guild.id;
     const stats = await db.getMemberStats(gid, uid) ?? { total_joined: 0, current_streak: 0, max_streak: 0 };
