@@ -48,188 +48,112 @@ async function scheduleLichCoDinh(client, guildId, lich) {
       } else {
         await scheduleLichCoDinh(client, guildId, lich);
       }
+      await scheduleLichCoDinh(client, guildId, lich);
     } catch (e) {
-      log.error('SCHEDULER', guildId, 'Lỗi _moPhien scheduled: %s', e.message);
+      log.error('SCHEDULER', guildId, 'Lỗi mở phiên: %s', e.message);
       await scheduleLichCoDinh(client, guildId, lich);
     }
   }, msOpen);
   _setTimer(guildId, `${lich.id}_open`, tidO);
 }
 
-// ── GIAI ĐOẠN 1a: Mở phiên ────────────────────────────────────────────────────
-async function _moPhien(g, lich) {
-  // Guard double-open
-  const existing = await db.getActiveSession(g.id);
-  if (existing && existing.session_name === lich.session_name) {
-    log.info('SCHEDULER', g.id, '%s — bỏ qua mở phiên "%s" (đã tồn tại)', g.name, lich.session_name);
+// ── GIAI ĐOẠN 2: Mở phiên ───────────────────────────────────────────────────────
+async function _moPhien(guild, lich) {
+  const existing = await db.getActiveSession(guild.id);
+  if (existing) {
+    log.info('SCHEDULER', guild.id, '%s — bỏ qua mở "%s": đã có phiên đang mở', guild.name, lich.session_name);
     return;
   }
 
-  await g.members.fetch();
-  const cfg = await db.getConfig(g.id);
-  let eligibleMembers;
-  if (cfg.allowed_role_id) {
-    const role = g.roles.cache.get(cfg.allowed_role_id);
-    eligibleMembers = role ? [...role.members.values()] : [];
-  } else {
-    eligibleMembers = [...g.members.cache.filter(m => !m.user.bot).values()];
-  }
-  const eligibleIds = eligibleMembers.map(m => m.id);
-  if (!eligibleIds.length) return;
-
-  const roleName = cfg.allowed_role_id
-    ? (g.roles.cache.get(cfg.allowed_role_id)?.name ?? 'Role không rõ')
-    : 'Tất cả';
-
-  const session = await db.createSession(
-    g.id,
-    lich.session_name,
-    'scheduler',
-    null,
-    lich.channel_id,
-    eligibleIds,
-  );
-
-  const patch = {};
-  if (cfg.allowed_role_id) {
-    patch.allowed_role_id = cfg.allowed_role_id;
-    patch.role_name = roleName;
-  }
-  if (lich.id) patch.lich_id = lich.id;
-  if (Object.keys(patch).length) {
-    await db.supabase.from('sessions').update(patch).eq('id', session.id);
-    Object.assign(session, patch);
+  const ch = await guild.channels.fetch(lich.channel_id).catch(() => null);
+  if (!ch) {
+    log.warn('SCHEDULER', guild.id, '%s — không tìm thấy kênh %s', guild.name, lich.channel_id);
+    return;
   }
 
-  const ch = await g.channels.fetch(lich.channel_id).catch(() => null);
-  if (!ch) return;
-
-  const embed = await buildSessionEmbed(g, session, [], lich.phai_role_ids ?? []);
-  const row   = buildAttendanceButtons(false);
-
-  // Phase H: ping role điểm danh (allowed_role_id) khi mở phiên tự động
-  // Nếu không có role cụ thể → không ping (tránh @everyone)
-  const pingContent = cfg.allowed_role_id
-    ? `${ICONS.BELL} <@&${cfg.allowed_role_id}> · Phiên **${lich.session_name}** đã mở!`
-    : null;
-
-  const msg = await ch.send({
-    ...(pingContent ? { content: pingContent } : {}),
-    embeds: [embed],
-    components: [row],
+  const session = await db.createSession({
+    guild_id:     guild.id,
+    channel_id:   lich.channel_id,
+    session_name: lich.session_name,
+    started_by:   'scheduler',
+    allowed_role_id: lich.allowed_role_id ?? null,
+    eligible_member_ids: null,
   });
 
-  await db.updateSessionMessageId(session.id, msg.id);
-  log.info('SCHEDULER', g.id, '%s — ĐÃ MỮ phiên: %s%s', g.name, lich.session_name,
-    pingContent ? ` (ping <@&${cfg.allowed_role_id}>)` : '');
+  const embed   = await buildSessionEmbed(guild, session, []);
+  const buttons = buildAttendanceButtons(false);
+
+  let pingContent = null;
+  if (lich.allowed_role_id) {
+    pingContent = `<@&${lich.allowed_role_id}>`;
+  }
+
+  const msg = await ch.send({
+    content: pingContent,
+    embeds:  [embed],
+    components: [buttons],
+  });
+
+  await db.updateSessionMessage(session.id, msg.id);
+  log.info('SCHEDULER', guild.id, '%s — ĐÃ MỮ phiên: %s (ping %s)', guild.name, lich.session_name, pingContent ?? 'không có');
 }
 
-// ── GIAI ĐOẠN 2: Đóng phiên ────────────────────────────────────────────────────
+// ── GIAI ĐOẠN 3: Đóng phiên + thống kê ────────────────────────────────────────
 async function runDongLich(client, guildId, lich) {
-  try {
-    const g = client.guilds.cache.get(guildId);
-    if (!g) {
-      _rescheduleClose(client, guildId, lich);
-      return;
-    }
-
-    const session = await db.getActiveSession(guildId);
-    if (!session) {
-      log.warn('SCHEDULER', guildId, 'runDongLich: không có phiên active — re-queue open');
-      await scheduleLichCoDinh(client, guildId, lich);
-      return;
-    }
-
-    const ch = await g.channels.fetch(lich.channel_id).catch(() => null);
-    if (!ch) {
-      _rescheduleClose(client, guildId, lich, session);
-      return;
-    }
-
-    await _dongPhienVaThongKe(g, session, ch, lich, client);
-  } catch (e) {
-    log.error('SCHEDULER', guildId, 'Lỗi runDongLich %s: %s', lich.id, e.message);
-    _rescheduleClose(client, guildId, lich);
-  }
+  const g = client.guilds.cache.get(guildId);
+  if (!g) return;
+  const session = await db.getActiveSession(guildId);
+  if (!session) return;
+  const ch = await g.channels.fetch(lich.channel_id).catch(() => null);
+  if (!ch) return;
+  await _dongPhienVaThongKe(g, session, ch, lich, client);
+  await scheduleLichCoDinh(client, guildId, lich);
 }
 
-// FIX #3: thêm thongBaoHuyHieu + guiCsvDinhKem
-async function _dongPhienVaThongKe(g, session, ch, lich, client) {
+async function _dongPhienVaThongKe(guild, session, ch, lich, client) {
   const attended = await db.getAttendances(session.id);
-  const statsMap = await ketThucPhien(g, session, attended);
-  await voHieuHoaNutDiemDanh(client, ch, session);
+  await ketThucPhien(session.id);
 
-  const tongThamGia = attended.filter(a => ['tham_gia', 'tre'].includes(a.status)).length;
-  const tongVang    = (session.eligible_member_ids?.length ?? 0) - tongThamGia;
-  const tongPhep    = attended.filter(a => a.status === 'co_phep').length;
-
-  const phaiRoleIds = lich.phai_role_ids ?? [];
-  const phaiMap     = new Map();
-  for (const a of attended) {
-    if (!['tham_gia', 'tre'].includes(a.status)) continue;
-    const member = g.members.cache.get(a.user_id);
-    if (!member) continue;
-    for (const rid of phaiRoleIds) {
-      if (member.roles.cache.has(rid)) _addToPhai(phaiMap, rid, a.user_id);
+  // Vô hiệu hóa nút điểm danh
+  try {
+    if (session.message_id) {
+      const msg = await ch.messages.fetch(session.message_id).catch(() => null);
+      if (msg) {
+        const closedEmbed = await buildSessionEmbed(guild, session, attended, true);
+        const disabledBtns = buildAttendanceButtons(true);
+        await msg.edit({ embeds: [closedEmbed], components: [disabledBtns] }).catch(() => null);
+      }
     }
-  }
-  const phaiLines = phaiRoleIds.map(rid => {
-    const role    = g.roles.cache.get(rid);
-    const members = phaiMap.get(rid) ?? [];
-    return `<@&${rid}> — **${members.length}** người *(${role?.name ?? rid})*`;
-  }).join('\n') || '_Không có phái_';
+  } catch (_) {}
 
-  const summaryEmbed = buildSummaryEmbed(session, attended, g, phaiRoleIds);
   const closedEmbed  = new EmbedBuilder()
-    .setTitle('\uD83D\uDD12 Phiên đã kết thúc tự động')
-    .setDescription([
-      `✅ Tham gia: ${tongThamGia} | ❌ Vắng: ${tongVang} | 📋 Có phép: ${tongPhep}`,
-      '',
-      '**── THỐNG KÊ THEO PHÁI ──**',
-      phaiLines,
-    ].join('\n'))
-    .setColor(0xE74C3C)
-    .setFooter({ text: 'Quản Gia' })
-    .setTimestamp();
+    .setColor(0xff4444)
+    .setTitle('🔒 Phiên đã kết thúc tự động')
+    .setDescription(
+      `✅ Tham gia: ${attended.filter(a => a.status === 'tham_gia').length} | ` +
+      `❌ Vắng: ${attended.filter(a => a.status === 'khong_tham_gia').length} | ` +
+      `📋 Có phép: ${attended.filter(a => a.status === 'co_phep').length}`
+    );
 
+  const summaryEmbed = await buildSummaryEmbed(guild, session, attended, lich);
   await ch.send({ embeds: [closedEmbed, summaryEmbed] });
 
-  await thongBaoHuyHieu(g, ch, g.id, session.id, attended, statsMap);
-  await _guiCsv(ch, session, attended);
-
-  log.info('SCHEDULER', g.id, '%s — ĐÃ ĐÓNG & thống kê: %s', g.name, session.session_name);
-
-  setImmediate(() => scheduleLichCoDinh(client, g.id, lich).catch(e =>
-    log.error('SCHEDULER', g.id, 'Lỗi re-queue open sau đóng: %s', e.message)
-  ));
-}
-
-// ── CSV helper ────────────────────────────────────────────────────────────────
-async function _guiCsv(ch, session, attended) {
+  // CSV đính kèm
   try {
-    const STATUS_LABEL = {
-      tham_gia: 'Có mặt',
-      tre:      'Trễ',
-      co_phep:  'Có phép',
-      vang:     'Vắng',
-    };
-    const header = 'UserID,Trạng thái,Thời gian';
-    const rows   = attended.map(a =>
-      `${a.user_id},${STATUS_LABEL[a.status] ?? a.status},${a.created_at ?? ''}`
-    );
-    const csv = [header, ...rows].join('\n');
-    const buf = Buffer.from(csv, 'utf-8');
-    const { AttachmentBuilder } = require('discord.js');
-    const date = new Date().toISOString().slice(0, 10);
-    const file = new AttachmentBuilder(buf, { name: `diemdanh_${date}.csv` });
-    await ch.send({ content: '\uD83D\uDCCE **Bảng điểm danh**', files: [file] });
-  } catch (e) {
-    log.warn('SCHEDULER', session.guild_id, 'Không gửi được CSV: %s', e.message);
-  }
+    const { guiCsvDinhKem } = require('./session.js');
+    await guiCsvDinhKem(ch, session, attended);
+  } catch (_) {}
+
+  // Thông báo hủy hiệu
+  try {
+    await thongBaoHuyHieu(client, guild.id, session, attended);
+  } catch (_) {}
+
+  log.info('SCHEDULER', guild.id, '%s — ĐÃ ĐÓNG & thống kê: %s', guild.name, session.session_name);
 }
 
-// FIX #2: reschedule close dùng ms còn lại từ hiện tại
-function _rescheduleClose(client, guildId, lich, session = null) {
+// ── FIX #2: reschedule close dùng ms còn lại từ hiện tại ───────────────────────
+async function _rescheduleClose(client, guildId, lich, session) {
   let msClose;
   if (session?.created_at && lich.close_day_of_week != null) {
     msClose = msToCloseFromNow(
@@ -237,30 +161,25 @@ function _rescheduleClose(client, guildId, lich, session = null) {
       lich.close_day_of_week, lich.close_hour, lich.close_minute,
       session.created_at
     );
-    if (msClose <= 0) msClose = 5000;
-  } else {
+  }
+  if (!msClose || msClose === null || msClose <= 0) {
     msClose = msFromOpenToClose(
       lich.day_of_week, lich.hour, lich.minute,
       lich.close_day_of_week, lich.close_hour, lich.close_minute
     );
   }
-  log.info('SCHEDULER', guildId, '"%s" ĐÓNG (tiếp) sau %s phút', lich.session_name, Math.round(msClose / 60000));
   const tidC = setTimeout(() => runDongLich(client, guildId, lich), msClose);
   _setTimer(guildId, `${lich.id}_close`, tidC);
 }
 
-function _addToPhai(map, phai, userId) {
-  if (!map.has(phai)) map.set(phai, []);
-  map.get(phai).push(userId);
-}
-
-// ── Hủy lịch ────────────────────────────────────────────────────────────────────────────
+// ── Hủy lịch ────────────────────────────────────────────────────────────────────
 function cancelLichCoDinh(guildId, lichId) {
   const gMap = schedulerMap.get(guildId);
   if (!gMap) return;
   for (const key of [`${lichId}_open`, `${lichId}_close`]) {
     const tid = gMap.get(key);
-    if (tid) { clearTimeout(tid); gMap.delete(key); }
+    if (tid != null) clearTimeout(tid);
+    gMap.delete(key);
   }
   if (gMap.size === 0) schedulerMap.delete(guildId);
   log.info('SCHEDULER', guildId, 'Đã hủy lịch %s', lichId);
@@ -283,6 +202,12 @@ async function _khoiPhucCloseTimer(client, guild, danhSach) {
     lich.close_day_of_week, lich.close_hour, lich.close_minute,
     session.created_at
   );
+
+  // Guard: nếu msRemaining = null (created_at null/invalid) → KHÔNG đóng, chỉ bỏ qua
+  if (msRemaining === null) {
+    log.warn('SCHEDULER', guild.id, '%s — bỏ qua close timer "%s": session.created_at không hợp lệ (%s)', guild.name, session.session_name, session.created_at);
+    return;
+  }
 
   if (msRemaining <= 0) {
     log.info('SCHEDULER', guild.id, '%s — phiên "%s" đã qua giờ đóng khi offline, đóng ngay', guild.name, session.session_name);
