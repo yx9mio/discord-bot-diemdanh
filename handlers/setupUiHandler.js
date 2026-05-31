@@ -8,6 +8,7 @@
 //            canEarlyClose = hasActiveSession && close_day_of_week != null
 //            early_close handler guard close_day_of_week == null
 // BUG #7:    formatDongStr() đúng
+// PHASE 2:   buildDashboard nâng cấp — stats phiên + thành viên
 'use strict';
 const {
   EmbedBuilder,
@@ -102,7 +103,26 @@ function formatDongStr(lich) {
   return note ? `${label} ${note}` : label;
 }
 
-// ─── buildDashboard ──────────────────────────────────────────────────────────
+// ─── PHASE 2: buildDashboardStats — lấy stats cho dashboard ─────────────────
+async function buildDashboardStats(guildId) {
+  const [activeSession, history, allMemberStats] = await Promise.all([
+    db.getActiveSession(guildId),
+    db.getSessionHistory(guildId, 10),
+    db.getAllMemberStats(guildId),
+  ]);
+
+  const totalSessions   = history.length;
+  const lastSession     = history[0] ?? null;
+  const totalMembers    = allMemberStats.length;
+  const avgAttendance   = totalMembers > 0
+    ? Math.round(allMemberStats.reduce((s, m) => s + (m.total_joined ?? 0), 0) / totalMembers)
+    : 0;
+  const topMember = allMemberStats[0] ?? null; // đã sort total_joined DESC
+
+  return { activeSession, lastSession, totalSessions, totalMembers, avgAttendance, topMember };
+}
+
+// ─── buildDashboard — PHASE 2 nâng cấp ──────────────────────────────────────
 async function buildDashboard(guild, cfg, viewMode = 'admin') {
   const notifCh  = await timKenhThongBao(guild);
   const lichList = await db.getLichCoDinh(guild.id);
@@ -137,11 +157,43 @@ async function buildDashboard(guild, cfg, viewMode = 'admin') {
     return { embeds: [embed], components: [row], ephemeral: true };
   }
 
-  // Admin view
+  // ── Admin view — PHASE 2: lấy stats ──────────────────────────────────────
+  const stats = await buildDashboardStats(guild.id);
+
   const phaiRoleIds = cfg.phai_role_ids ?? [];
   const phaiLines = phaiRoleIds.length
     ? phaiRoleIds.map(id => `<@&${id}>`).join(', ')
     : '⚠️ Chưa cài';
+
+  // Dòng trạng thái phiên hiện tại
+  let phienHienTai;
+  if (stats.activeSession) {
+    const startedAt = stats.activeSession.created_at
+      ? `<t:${Math.floor(new Date(stats.activeSession.created_at).getTime() / 1000)}:R>`
+      : '';
+    phienHienTai = `🟢 **${stats.activeSession.session_name}** đang mở ${startedAt} | <#${stats.activeSession.channel_id ?? notifCh ?? '?'}>`;
+  } else {
+    phienHienTai = '⚫ Không có phiên đang mở';
+  }
+
+  // Dòng phiên gần nhất
+  let phienGanNhat;
+  if (stats.lastSession) {
+    const endedAt = stats.lastSession.ended_at
+      ? `<t:${Math.floor(new Date(stats.lastSession.ended_at).getTime() / 1000)}:d>`
+      : '';
+    phienGanNhat = `**${stats.lastSession.session_name}** — ${endedAt}`;
+  } else {
+    phienGanNhat = '_Chưa có phiên nào_';
+  }
+
+  // Top thành viên
+  let topLine;
+  if (stats.topMember) {
+    topLine = `<@${stats.topMember.user_id}> — ${stats.topMember.total_joined}/${stats.topMember.total_sessions} phiên`;
+  } else {
+    topLine = '_Chưa có dữ liệu_';
+  }
 
   const embed = new EmbedBuilder()
     .setAuthor(AUTHOR_DEFAULT)
@@ -150,9 +202,19 @@ async function buildDashboard(guild, cfg, viewMode = 'admin') {
       { name: '🔔 Kênh thông báo', value: notifCh ? `<#${notifCh}>` : '⚠️ Chưa cài', inline: true },
       { name: '🎫 Role điểm danh', value: cfg.allowed_role_id ? `<@&${cfg.allowed_role_id}>` : '⚠️ Chưa cài', inline: true },
       { name: '⚔️ Role phái', value: phaiLines, inline: true },
+      // ── PHASE 2: Stats block ──
+      { name: '📊 Thống kê nhanh', value: [
+          `▸ Phiên đã lưu: **${stats.totalSessions}**`,
+          `▸ Thành viên theo dõi: **${stats.totalMembers}**`,
+          `▸ Trung bình điểm danh: **${stats.avgAttendance}** phiên/người`,
+        ].join('\n'), inline: false },
+      { name: '🟢 Phiên hiện tại', value: phienHienTai, inline: false },
+      { name: '🕐 Phiên gần nhất', value: phienGanNhat, inline: true },
+      { name: '🏆 Điểm danh nhiều nhất', value: topLine, inline: true },
+      // ── Lịch cố định ──
       { name: `📅 Lịch cố định (${lichList.length})`, value: lichLines },
     )
-    .setColor(0x5865F2)
+    .setColor(stats.activeSession ? 0x57F287 : 0x5865F2)  // xanh lá khi có phiên mở
     .setFooter({ text: `${FOOTER_DEFAULT} • Chế độ xem: Admin` })
     .setTimestamp();
 
@@ -165,6 +227,7 @@ async function buildDashboard(guild, cfg, viewMode = 'admin') {
   const row2 = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId('setup:lich:menu').setLabel('📅 Quản lý Lịch').setStyle(ButtonStyle.Primary),
     new ButtonBuilder().setCustomId('setup:preset_menu').setLabel('⚡ Tạo Preset').setStyle(ButtonStyle.Success),
+    new ButtonBuilder().setCustomId('setup:dashboard').setLabel('🔄 Làm mới').setStyle(ButtonStyle.Secondary),
   );
 
   return { embeds: [embed], components: [row1, row2], ephemeral: true };
@@ -719,10 +782,26 @@ async function handleSetupUi(interaction) {
 
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId(`setup:lich:delete:${lichId}`).setLabel('✅ Xác nhận Xóa').setStyle(ButtonStyle.Danger),
-      new ButtonBuilder().setCustomId('setup:lich:menu').setLabel('← Hủy').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId(`setup:lich:back:${lichId}`).setLabel('← Hủy, quay lại').setStyle(ButtonStyle.Secondary),
     );
 
     await interaction.update({ embeds: [embed], components: [row], ephemeral: true });
+    return true;
+  }
+
+  // ── PHASE 4: setup:lich:back:<id> — hủy xóa, về lại action panel ──────────
+  if (customId.startsWith('setup:lich:back:')) {
+    const lichId   = customId.replace('setup:lich:back:', '');
+    const lichList = await db.getLichCoDinh(guild.id);
+    const lich     = lichList.find(l => l.id === lichId);
+    if (!lich) {
+      // Lịch không còn tồn tại → về menu danh sách
+      const payload = lichMenuComponents(lichList);
+      await interaction.update(payload);
+      return true;
+    }
+    const activeSession = await db.getActiveSession(guild.id);
+    await interaction.update(lichActionComponents(lich, lichList, activeSession));
     return true;
   }
 
