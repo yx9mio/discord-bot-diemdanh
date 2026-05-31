@@ -195,7 +195,6 @@ async function datHenGioDong(guild, session, channelId, ms) {
       await ketThucPhien(guild, s, attended);
       xoaHenGio(guild.id);
       if (ch) {
-        // Vô hiệu hóa nút trên tin nhắn gốc nếu còn
         await voHieuHoaNutDiemDanh(ch, s);
         const embed = buildSummaryEmbed(s, attended);
         await ch.send({ content: '🔒 **Phiên điểm danh đã tự động kết thúc!**', embeds: [embed] });
@@ -207,44 +206,56 @@ async function datHenGioDong(guild, session, channelId, ms) {
   boHenGio.set(guild.id, timers);
 }
 
+// ─── Lock chống race condition khi khôi phục hẹn giờ ──────────
+let dangKhoiPhuc = false;
+
 async function khoiPhucHenGio() {
+  if (dangKhoiPhuc) {
+    console.log('[Khôi phục] Đang có tiến trình khôi phục, bỏ qua lần này.');
+    return;
+  }
+  dangKhoiPhuc = true;
   console.log('[Khôi phục] Đang kiểm tra các phiên điểm danh còn dở...');
   let daKhoiPhuc = 0, daQuaGio = 0;
-  for (const guild of client.guilds.cache.values()) {
-    try {
-      const session = await db.getActiveSession(guild.id);
-      if (!session || !session.auto_close_at) continue;
-      const dongLuc = new Date(session.auto_close_at);
-      const msConLai = dongLuc.getTime() - Date.now();
-      if (msConLai > 0) {
-        const channelId = session.channel_id ?? (await timKenhThongBao(guild));
-        if (channelId) {
-          await datHenGioDong(guild, session, channelId, msConLai);
-          console.log(`[Khôi phục] Guild ${guild.name}: phiên "${session.session_name}" còn ${formatThoiGian(msConLai)}, đã khôi phục hẹn giờ.`);
-          daKhoiPhuc++;
-          const ch = await guild.channels.fetch(channelId).catch(() => null);
-          if (ch) {
-            const discordTs = Math.floor(dongLuc.getTime() / 1000);
-            await ch.send(`🔄 Bot vừa khởi động lại. Phiên điểm danh **${session.session_name}** vẫn đang mở — tự đóng lúc <t:${discordTs}:F> (còn ~${formatThoiGian(msConLai)}).`).catch(() => null);
+  try {
+    for (const guild of client.guilds.cache.values()) {
+      try {
+        const session = await db.getActiveSession(guild.id);
+        if (!session || !session.auto_close_at) continue;
+        const dongLuc = new Date(session.auto_close_at);
+        const msConLai = dongLuc.getTime() - Date.now();
+        if (msConLai > 0) {
+          const channelId = session.channel_id ?? (await timKenhThongBao(guild));
+          if (channelId) {
+            await datHenGioDong(guild, session, channelId, msConLai);
+            console.log(`[Khôi phục] Guild ${guild.name}: phiên "${session.session_name}" còn ${formatThoiGian(msConLai)}, đã khôi phục hẹn giờ.`);
+            daKhoiPhuc++;
+            const ch = await guild.channels.fetch(channelId).catch(() => null);
+            if (ch) {
+              const discordTs = Math.floor(dongLuc.getTime() / 1000);
+              await ch.send(`🔄 Bot vừa khởi động lại. Phiên điểm danh **${session.session_name}** vẫn đang mở — tự đóng lúc <t:${discordTs}:F> (còn ~${formatThoiGian(msConLai)}).`).catch(() => null);
+            }
+          }
+        } else {
+          console.log(`[Khôi phục] Guild ${guild.name}: phiên "${session.session_name}" đã quá giờ, đóng ngay.`);
+          await guild.members.fetch().catch(() => null);
+          const attended = await db.getAttendances(session.id);
+          await ketThucPhien(guild, session, attended);
+          daQuaGio++;
+          const channelId = session.channel_id ?? (await timKenhThongBao(guild));
+          if (channelId) {
+            const ch = await guild.channels.fetch(channelId).catch(() => null);
+            if (ch) {
+              const embed = buildSummaryEmbed(session, attended);
+              await ch.send({ content: `🔒 **Phiên "${session.session_name}" đã được đóng tự động** (bot khởi động lại — quá giờ).`, embeds: [embed] }).catch(() => null);
+              await thongBaoHuyHieu(guild, ch, guild.id, session.id, attended).catch(() => null);
+            }
           }
         }
-      } else {
-        console.log(`[Khôi phục] Guild ${guild.name}: phiên "${session.session_name}" đã quá giờ, đóng ngay.`);
-        await guild.members.fetch().catch(() => null);
-        const attended = await db.getAttendances(session.id);
-        await ketThucPhien(guild, session, attended);
-        daQuaGio++;
-        const channelId = session.channel_id ?? (await timKenhThongBao(guild));
-        if (channelId) {
-          const ch = await guild.channels.fetch(channelId).catch(() => null);
-          if (ch) {
-            const embed = buildSummaryEmbed(session, attended);
-            await ch.send({ content: `🔒 **Phiên "${session.session_name}" đã được đóng tự động** (bot khởi động lại — quá giờ).`, embeds: [embed] }).catch(() => null);
-            await thongBaoHuyHieu(guild, ch, guild.id, session.id, attended).catch(() => null);
-          }
-        }
-      }
-    } catch (e) { console.error(`[Khôi phục] Lỗi guild ${guild.name}:`, e.message); }
+      } catch (e) { console.error(`[Khôi phục] Lỗi guild ${guild.name}:`, e.message); }
+    }
+  } finally {
+    dangKhoiPhuc = false;
   }
   console.log(`[Khôi phục] Hoàn tất: ${daKhoiPhuc} hẹn giờ đã khôi phục, ${daQuaGio} phiên đóng muộn.`);
 }
@@ -309,7 +320,7 @@ function laAdmin(member, cfg) {
 // ─── Vô hiệu hóa nút trên tin nhắn điểm danh gốc ─────────────
 async function voHieuHoaNutDiemDanh(channel, session) {
   try {
-    // Ưu tiên dùng message_id đã lưu trong DB
+    // Ưu tiên message_id đã lưu trong DB — chính xác nhất
     if (session.message_id) {
       const msg = await channel.messages.fetch(session.message_id).catch(() => null);
       if (msg) {
@@ -317,8 +328,14 @@ async function voHieuHoaNutDiemDanh(channel, session) {
         return;
       }
     }
-    // Fallback: tìm theo nội dung embed
-    const msgs = await channel.messages.fetch({ limit: 30 }).catch(() => null);
+
+    // Fallback: nếu session có channel_id, fetch từ đúng channel đó
+    // Tăng limit lên 100 để không bỏ sót khi phiên mở lâu
+    const targetChannel = session.channel_id
+      ? await channel.guild.channels.fetch(session.channel_id).catch(() => channel)
+      : channel;
+
+    const msgs = await targetChannel.messages.fetch({ limit: 100 }).catch(() => null);
     if (!msgs) return;
     const sessionMsg = msgs.find(m =>
       m.author.id === client.user.id &&
@@ -335,9 +352,7 @@ client.on('messageDelete', async (message) => {
     if (!message.guild) return;
     const session = await db.getActiveSession(message.guild.id);
     if (!session) return;
-    // Kiểm tra xem tin nhắn bị xóa có phải là tin nhắn điểm danh không
     if (session.message_id && message.id !== session.message_id) return;
-    // Nếu không có message_id lưu sẵn thì kiểm tra theo nội dung
     if (!session.message_id) {
       const laTinDiemDanh =
         message.author?.id === client.user.id &&
@@ -360,7 +375,6 @@ client.on('messageDelete', async (message) => {
       components: [row],
     });
 
-    // Cập nhật message_id mới vào DB
     await db.updateSessionMessageId(session.id, tinMoi.id);
     console.log(`[Tin nhắn bị xóa] Đã gửi lại thành công, message_id mới: ${tinMoi.id}`);
   } catch (e) {
@@ -383,7 +397,6 @@ client.on('interactionCreate', async (interaction) => {
       return interaction.reply({ content: '📭 Hiện không có phiên điểm danh nào đang mở.', ephemeral: true });
     }
 
-    // Nút xem danh sách (chỉ hiện với người dùng)
     if (customId === 'attend_view') {
       await guild.members.fetch().catch(() => null);
       const attended = await db.getAttendances(session.id);
@@ -391,7 +404,6 @@ client.on('interactionCreate', async (interaction) => {
       return interaction.reply({ embeds: [embed], ephemeral: true });
     }
 
-    // Kiểm tra danh sách đủ điều kiện
     if (!session.eligible_member_ids.includes(user.id)) {
       return interaction.reply({ content: '🚫 Bạn không có trong danh sách điểm danh của phiên này.', ephemeral: true });
     }
@@ -402,7 +414,6 @@ client.on('interactionCreate', async (interaction) => {
 
     await db.upsertAttendance(session.id, guild.id, user.id, displayName, status);
 
-    // Cập nhật embed gốc
     try {
       await guild.members.fetch().catch(() => null);
       const attended = await db.getAttendances(session.id);
@@ -467,7 +478,6 @@ client.on('interactionCreate', async (interaction) => {
     const row   = buildAttendanceButtons();
 
     const reply = await interaction.reply({ embeds: [embed], components: [row], fetchReply: true });
-    // Lưu message_id để theo dõi nếu bị xóa
     await db.updateSessionMessageId(session.id, reply.id);
 
     if (tgDongMs > 0) await datHenGioDong(guild, session, interaction.channelId, tgDongMs);
@@ -498,7 +508,8 @@ client.on('interactionCreate', async (interaction) => {
     await db.cancelSession(session.id);
     xoaHenGio(guild.id);
     await voHieuHoaNutDiemDanh(interaction.channel, session);
-    return interaction.reply({ content: `🗑️ Đã hủy phiên **${session.session_name}**. Dữ liệu không được lưu.` });
+    // Phiên bị hủy được đánh dấu cancelled=true, không hiện trong /lich_su
+    return interaction.reply({ content: `🗑️ Đã hủy phiên **${session.session_name}**. Phiên này sẽ không hiện trong lịch sử.` });
   }
 
   // ── /them_diemdanh ────────────────────────────────────────────
