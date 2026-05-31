@@ -18,6 +18,31 @@ const TEN_THU = ['CN','T2','T3','T4','T5','T6','T7'];
 const TEN_THU_FULL = ['Chủ nhật','Thứ hai','Thứ ba','Thứ tư','Thứ năm','Thứ sáu','Thứ bảy'];
 const pad = n => String(n ?? 0).padStart(2, '0');
 
+// ─── Tính ngày thực tế sắp tới (giờ VN UTC+7) ───────────────────────────────
+// Trả về string "Thứ X, DD/MM/YYYY HH:MM"
+function ngayThucTe(dayOfWeek, hour, minute) {
+  const VN_OFFSET = 7 * 60 * 60 * 1000;
+  const nowVn = new Date(Date.now() + VN_OFFSET);
+
+  const curDay = nowVn.getUTCDay();
+  const curH   = nowVn.getUTCHours();
+  const curM   = nowVn.getUTCMinutes();
+
+  let daysUntil = (dayOfWeek - curDay + 7) % 7;
+  if (daysUntil === 0) {
+    const secPassed = curH * 3600 + curM * 60;
+    const secTarget = hour * 3600 + minute * 60;
+    if (secPassed >= secTarget) daysUntil = 7;
+  }
+
+  const target = new Date(nowVn.getTime() + daysUntil * 86400000);
+  const dd  = pad(target.getUTCDate());
+  const mm  = pad(target.getUTCMonth() + 1);
+  const yyyy = target.getUTCFullYear();
+
+  return `${TEN_THU_FULL[dayOfWeek]}, ${dd}/${mm}/${yyyy} ${pad(hour)}:${pad(minute)}`;
+}
+
 // ─── Build UI helpers ────────────────────────────────────────────────────────
 
 async function buildDashboard(guild, cfg, viewMode = 'admin') {
@@ -143,17 +168,18 @@ function lichMenuComponents(lichList) {
 
 // ─── lichActionComponents — hiện 3 nút hành động cho 1 lịch ─────────────────
 function lichActionComponents(lich, lichList) {
-  const mo   = `${TEN_THU_FULL[lich.day_of_week]} ${pad(lich.hour)}:${pad(lich.minute)}`;
-  const dong = lich.close_day_of_week != null
-    ? `${TEN_THU_FULL[lich.close_day_of_week]} ${pad(lich.close_hour)}:${pad(lich.close_minute)}`
+  // Tính ngày thực tế sắp tới
+  const moStr   = ngayThucTe(lich.day_of_week, lich.hour, lich.minute);
+  const dongStr = lich.close_day_of_week != null
+    ? ngayThucTe(lich.close_day_of_week, lich.close_hour, lich.close_minute)
     : 'Không tự đóng';
 
   const embed = new EmbedBuilder()
     .setTitle(`⚙️ Hành động — ${lich.session_name}`)
     .setDescription([
       `📋 **Tên:** ${lich.session_name}`,
-      `⏰ **Mở:** ${mo}`,
-      `🔒 **Đóng:** ${dong}`,
+      `⏰ **Mở:** ${moStr}`,
+      `🔒 **Đóng:** ${dongStr}`,
       `📣 **Kênh:** <#${lich.channel_id}>`,
       `🆔 **ID:** \`${lich.id}\``,
       '',
@@ -546,8 +572,8 @@ async function handleSetupUi(interaction) {
     const { scheduleLichCoDinh } = require('../utils/scheduler.js');
     await scheduleLichCoDinh(interaction.client, guild, lich);
 
-    const moStr   = `${TEN_THU_FULL[parsed.thu]} ${pad(parsed.gio)}:${pad(parsed.phut)}`;
-    const dongStr = parsedDong ? `${TEN_THU_FULL[parsedDong.thu]} ${pad(parsedDong.gio)}:${pad(parsedDong.phut)}` : 'Không tự đóng';
+    const moStr   = ngayThucTe(parsed.thu, parsed.gio, parsed.phut);
+    const dongStr = parsedDong ? ngayThucTe(parsedDong.thu, parsedDong.gio, parsedDong.phut) : 'Không tự đóng';
     return interaction.editReply({
       content: [
         `✅ Đã thêm lịch **${ten}**`,
@@ -624,40 +650,28 @@ async function createPresetBangChien(interaction, guild, channelId) {
 
   const cfgFresh = await db.getConfig(guild.id);
   const payload  = await buildDashboard(guild, cfgFresh, 'admin');
+  const moStr    = ngayThucTe(6, 21, 0);
+  const dongStr  = ngayThucTe(6, 19, 30);
   payload.content = [
-    `⚡ Preset **Bang Chiến** đã được tạo!`,
-    `Mở: Thứ bảy 21:00 → Đóng: Thứ bảy 19:30 (tuần sau) | Kênh: <#${channelId}>`,
-    phaiRoleIds.length ? '' : '\n⚠️ Chưa cài phái — vào **🏆 Cài Phái** để hoàn thiện.',
-  ].filter(Boolean).join('\n');
+    `⚡ Đã tạo preset **Bang Chiến**!`,
+    `Mở: **${moStr}** → Đóng: **${dongStr}**`,
+    `Kênh: <#${channelId}> | ID: \`${lich.id}\``,
+  ].join('\n');
 
   if (interaction.deferred || interaction.replied) await interaction.editReply(payload);
-  else await interaction.update(payload);
+  else await interaction.followUp({ ...payload, ephemeral: true });
 }
 
-// ─── Parse chuỗi "T7 21:00" → { thu, gio, phut } ─────────────────────────────
-const THU_PARSE = {
-  'cn': 0, 'chu_nhat': 0,
-  't2': 1, 'thu_hai': 1, 'thứ_hai': 1,
-  't3': 2, 'thu_ba': 2,  'thứ_ba': 2,
-  't4': 3, 'thu_tu': 3,  'thứ_tư': 3,
-  't5': 4, 'thu_nam': 4, 'thứ_năm': 4,
-  't6': 5, 'thu_sau': 5, 'thứ_sáu': 5,
-  't7': 6, 'thu_bay': 6, 'thứ_bảy': 6,
-};
-
+// ─── Parse "T7 21:00" hoặc "CN 08:30" ──────────────────────────────────────
 function parseThuGio(raw) {
-  if (!raw) return null;
-  const parts = raw.trim().toLowerCase().split(/\s+/);
-  if (parts.length < 2) return null;
-  const thuKey = parts[0].replace(/[^a-z0-9]/g, '_');
-  const thu = THU_PARSE[thuKey];
-  if (thu === undefined) return null;
-  const gioPhut = parts[1].split(':');
-  if (gioPhut.length < 2) return null;
-  const gio  = parseInt(gioPhut[0], 10);
-  const phut = parseInt(gioPhut[1], 10);
-  if (isNaN(gio) || isNaN(phut) || gio < 0 || gio > 23 || phut < 0 || phut > 59) return null;
+  const m = raw.trim().toUpperCase().match(/^(CN|T[2-7])\s+(\d{1,2}):(\d{2})$/);
+  if (!m) return null;
+  const thuMap = { CN: 0, T2: 1, T3: 2, T4: 3, T5: 4, T6: 5, T7: 6 };
+  const thu = thuMap[m[1]];
+  const gio = parseInt(m[2], 10);
+  const phut = parseInt(m[3], 10);
+  if (gio < 0 || gio > 23 || phut < 0 || phut > 59) return null;
   return { thu, gio, phut };
 }
 
-module.exports = { handleSetupUi, buildDashboard };
+module.exports = { handleSetupUi };
