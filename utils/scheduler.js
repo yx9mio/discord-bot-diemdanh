@@ -57,7 +57,7 @@ async function scheduleLichCoDinh(client, guildId, lich) {
   _setTimer(guildId, `${lich.id}_open`, tidO);
 }
 
-// ── GIAI ĐOẠN 2: Mở phiên ───────────────────────────────────────────────────────
+// ── GIAI ĐOẠN 2: Mở phiên ────────────────────────────────────────────────────────
 async function _moPhien(guild, lich) {
   const existing = await db.getActiveSession(guild.id);
   if (existing) {
@@ -98,23 +98,23 @@ async function _moPhien(guild, lich) {
   log.info('SCHEDULER', guild.id, '%s — ĐÃ MỮ phiên: %s (ping %s)', guild.name, lich.session_name, pingContent ?? 'không có');
 }
 
-// ── GIAI ĐOẠN 3: Đóng phiên + thống kê ────────────────────────────────────────
-async function runDongLich(client, guildId, lich) {
+// ── GIAI ĐOẠN 3: Đóng phiên + thống kê ──────────────────────────────────────────
+async function runDongLich(client, guildId, lich, silent = false) {
   const g = client.guilds.cache.get(guildId);
   if (!g) return;
   const session = await db.getActiveSession(guildId);
   if (!session) return;
   const ch = await g.channels.fetch(lich.channel_id).catch(() => null);
   if (!ch) return;
-  await _dongPhienVaThongKe(g, session, ch, lich, client);
+  await _dongPhienVaThongKe(g, session, ch, lich, client, silent);
   await scheduleLichCoDinh(client, guildId, lich);
 }
 
-async function _dongPhienVaThongKe(guild, session, ch, lich, client) {
+async function _dongPhienVaThongKe(guild, session, ch, lich, client, silent = false) {
   const attended = await db.getAttendances(session.id);
   await ketThucPhien(session.id);
 
-  // Vô hiệu hóa nút điểm danh
+  // Vô hiệu hóa nút điểm danh (luôn làm, kể cả silent)
   try {
     if (session.message_id) {
       const msg = await ch.messages.fetch(session.message_id).catch(() => null);
@@ -126,30 +126,33 @@ async function _dongPhienVaThongKe(guild, session, ch, lich, client) {
     }
   } catch (_) {}
 
-  const closedEmbed  = new EmbedBuilder()
-    .setColor(0xff4444)
-    .setTitle('🔒 Phiên đã kết thúc tự động')
-    .setDescription(
-      `✅ Tham gia: ${attended.filter(a => a.status === 'tham_gia').length} | ` +
-      `❌ Vắng: ${attended.filter(a => a.status === 'khong_tham_gia').length} | ` +
-      `📋 Có phép: ${attended.filter(a => a.status === 'co_phep').length}`
-    );
+  // Chỉ gửi thông báo/thống kê khi KHÔNG phải silent close (restart)
+  if (!silent) {
+    const closedEmbed  = new EmbedBuilder()
+      .setColor(0xff4444)
+      .setTitle('🔒 Phiên đã kết thúc tự động')
+      .setDescription(
+        `✅ Tham gia: ${attended.filter(a => a.status === 'tham_gia').length} | ` +
+        `❌ Vắng: ${attended.filter(a => a.status === 'khong_tham_gia').length} | ` +
+        `📋 Có phép: ${attended.filter(a => a.status === 'co_phep').length}`
+      );
 
-  const summaryEmbed = await buildSummaryEmbed(guild, session, attended, lich);
-  await ch.send({ embeds: [closedEmbed, summaryEmbed] });
+    const summaryEmbed = await buildSummaryEmbed(guild, session, attended, lich);
+    await ch.send({ embeds: [closedEmbed, summaryEmbed] });
 
-  // CSV đính kèm
-  try {
-    const { guiCsvDinhKem } = require('./session.js');
-    await guiCsvDinhKem(ch, session, attended);
-  } catch (_) {}
+    // CSV đính kèm
+    try {
+      const { guiCsvDinhKem } = require('./session.js');
+      await guiCsvDinhKem(ch, session, attended);
+    } catch (_) {}
 
-  // Thông báo hủy hiệu
-  try {
-    await thongBaoHuyHieu(client, guild.id, session, attended);
-  } catch (_) {}
+    // Thông báo hủy hiệu
+    try {
+      await thongBaoHuyHieu(client, guild.id, session, attended);
+    } catch (_) {}
+  }
 
-  log.info('SCHEDULER', guild.id, '%s — ĐÃ ĐÓNG & thống kê: %s', guild.name, session.session_name);
+  log.info('SCHEDULER', guild.id, '%s — ĐÃ ĐÓNG%s & thống kê: %s', guild.name, silent ? ' (silent)' : '', session.session_name);
 }
 
 // ── FIX #2: reschedule close dùng ms còn lại từ hiện tại ───────────────────────
@@ -210,8 +213,9 @@ async function _khoiPhucCloseTimer(client, guild, danhSach) {
   }
 
   if (msRemaining <= 0) {
-    log.info('SCHEDULER', guild.id, '%s — phiên "%s" đã qua giờ đóng khi offline, đóng ngay', guild.name, session.session_name);
-    setImmediate(() => runDongLich(client, guild.id, lich));
+    // Phiên đã qua giờ đóng trong khi bot offline → đóng SILENT (không spam channel)
+    log.info('SCHEDULER', guild.id, '%s — phiên "%s" đã qua giờ đóng khi offline, đóng silent', guild.name, session.session_name);
+    setImmediate(() => runDongLich(client, guild.id, lich, true));
   } else {
     log.info('SCHEDULER', guild.id, '%s — khôi phục close timer "%s" sau %s phút', guild.name, session.session_name, Math.round(msRemaining / 60000));
     const tidC = setTimeout(() => runDongLich(client, guild.id, lich), msRemaining);
@@ -240,7 +244,7 @@ async function khoiPhucScheduler(client) {
   log.info('SCHEDULER', null, 'Tổng: khôi phục %s lịch trên %s guild(s)', totalLich, client.guilds.cache.size);
 }
 
-// ── PUBLIC API ──────────────────────────────────────────────────────────────────────────
+// ── PUBLIC API ──────────────────────────────────────────────────────────────────
 async function runLichNgay(client, guildId, lich) {
   const g = client.guilds.cache.get(guildId);
   if (!g) throw new Error('Guild không tìm thấy');
