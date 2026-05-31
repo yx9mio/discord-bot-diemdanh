@@ -30,25 +30,28 @@ function msToNextOccurrence(dayOfWeek, hour, minute) {
   return targetVnMs - VN_OFFSET - nowUtc;
 }
 
-// ── BUG #1/#8 FIX: Tính ms đến lần đóng kế tiếp, có xét quan hệ với giờ mở ──
-// Trường hợp BC: mở T7 21:00, đóng T7 19:30
-// → close_day === open_day VÀ closeHour < openHour
-// → đóng xảy ra TRƯỚC khi mở trong cùng ngày → chu kỳ đúng là:
-//   mở T7 21:00 → đóng T7+7ngày 19:30 (tức 22h30p sau)
-// msToNextOccurrence() cũ: daysUntil=7 vì 19:30 đã qua sau khi tính từ "hôm nay"
-// → sẽ schedule close ĐÚNG 7 ngày kể từ bây giờ, nhưng không tính từ thời điểm open
-// → fix: sau khi open chạy, tính ms từ openTime đến closeTime trong 7 ngày tới
+// ── BUG #1/#8 FIX: Tính ms từ thời điểm open đến close trong vòng tuần ───────
+// VD BC: mở T7 21:00, đóng T7 19:30 cùng ngày
+//   openMinTotal  = 6*24*60 + 21*60 + 0  = 9780
+//   closeMinTotal = 6*24*60 + 19*60 + 30 = 9690
+//   deltaMin = (9690 - 9780 + 10080) % 10080 = 9990 phút = 6d 22h 30m ✓
 function msFromOpenToClose(openDay, openHour, openMinute, closeDay, closeHour, closeMinute) {
   const openMinTotal  = openDay  * 24 * 60 + openHour  * 60 + openMinute;
   const closeMinTotal = closeDay * 24 * 60 + closeHour * 60 + closeMinute;
 
-  // Tính delta phút (close - open) trong vòng tuần 7 ngày (0..10079 phút)
   let deltaMin = (closeMinTotal - openMinTotal + 7 * 24 * 60) % (7 * 24 * 60);
-
-  // Nếu deltaMin === 0: close == open (không hợp lệ, fallback 7 ngày)
   if (deltaMin === 0) deltaMin = 7 * 24 * 60;
 
   return deltaMin * 60 * 1000;
+}
+
+// ── Tính ms từ NOW đến thời điểm close của phiên đang mở (khi restart) ───────
+// Biết session.created_at (= thời điểm open thực tế), tính deadline close = open + delta
+function msToCloseFromNow(openDay, openHour, openMinute, closeDay, closeHour, closeMinute, sessionCreatedAt) {
+  const deltaMs    = msFromOpenToClose(openDay, openHour, openMinute, closeDay, closeHour, closeMinute);
+  const openTime   = new Date(sessionCreatedAt).getTime();
+  const closeTime  = openTime + deltaMs;
+  return closeTime - Date.now();
 }
 
 // ── Lên lịch open ─────────────────────────────────────────────────────────────
@@ -58,8 +61,8 @@ async function scheduleLichCoDinh(client, guildId, lich) {
   const tid = setTimeout(() => runLich(client, guildId, lich), ms);
   _setTimer(guildId, `${lich.id}_open`, tid);
 
-  // Pre-schedule close chỉ khi bot restart VÀ close xảy ra SAU open trong tuần này
-  // (dùng msToNextOccurrence bình thường — chỉ áp dụng cho trường hợp close > open trong ngày)
+  // Pre-schedule close chỉ khi close xảy ra SAU open trong tuần này
+  // (trường hợp BC: closeHour < openHour cùng ngày → msClose < ms → bỏ qua, schedule sau khi open chạy)
   if (lich.close_day_of_week != null) {
     const msClose = msToNextOccurrence(lich.close_day_of_week, lich.close_hour, lich.close_minute);
     if (msClose > ms) {
@@ -101,15 +104,13 @@ async function runLich(client, guildId, lich) {
 
     await _moPhien(g, lich);
 
-    // BUG #1/#8 FIX: schedule close SAU KHI open thành công
-    // Dùng msFromOpenToClose() để tính đúng khoảng thời gian từ open đến close
-    // kể cả trường hợp close_day === open_day và closeHour < openHour (VD: BC)
+    // BUG #1/#8 FIX: schedule close SAU KHI open thành công bằng delta chính xác
     if (lich.close_day_of_week != null) {
       const msClose = msFromOpenToClose(
         lich.day_of_week, lich.hour, lich.minute,
         lich.close_day_of_week, lich.close_hour, lich.close_minute
       );
-      console.log(`[Scheduler] ${g.name} — "${lich.session_name}" ĐÓNG sau ${Math.round(msClose / 60000)}p (scheduled post-open, delta từ open)`);
+      console.log(`[Scheduler] ${g.name} — "${lich.session_name}" ĐÓNG sau ${Math.round(msClose / 60000)}p (scheduled post-open)`);
       const tidC = setTimeout(() => runDongLich(client, guildId, lich), msClose);
       _setTimer(guildId, `${lich.id}_close`, tidC);
     }
@@ -253,7 +254,7 @@ async function _dongPhienVaThongKe(g, session, ch, lich, client) {
   console.log(`[Scheduler] ${g.name} — ĐÃ ĐÓNG & thống kê: ${session.session_name}`);
 }
 
-// BUG #1/#8 FIX: _rescheduleClose cũng dùng msFromOpenToClose để nhất quán
+// ── BUG #1/#8 FIX: reschedule close 1 chu kỳ đầy đủ từ open ─────────────────
 function _rescheduleClose(client, guildId, lich) {
   const msClose = msFromOpenToClose(
     lich.day_of_week, lich.hour, lich.minute,
@@ -281,6 +282,42 @@ function cancelLichCoDinh(guildId, lichId) {
   console.log(`[Scheduler] Đã hủy lịch ${lichId} của guild ${guildId}`);
 }
 
+// ── PATCH: Khôi phục close timer cho phiên lịch cố định đang mở khi restart ──
+// Vấn đề: khoiPhucHenGio() (ready.js) chỉ xử lý session có auto_close_at.
+// Session mở bởi scheduler có auto_close_at = null → close timer bị mất sau restart.
+// Fix: sau khi scheduleLichCoDinh() chạy xong, kiểm tra xem có active session
+// nào khớp với lịch đó không. Nếu có → tính lại ms đến close và set timer.
+async function _khoiPhucCloseTimer(client, guild, danhSach) {
+  const session = await db.getActiveSession(guild.id);
+  // Chỉ xử lý session do scheduler tạo (startedBy = 'scheduler'), không có auto_close_at
+  if (!session || session.started_by !== 'scheduler' || session.auto_close_at) return;
+
+  const lich = danhSach.find(
+    l => l.session_name === session.session_name && l.channel_id === session.channel_id
+  );
+  if (!lich || lich.close_day_of_week == null) return;
+
+  // Tránh tạo timer trùng nếu pre-schedule đã set
+  const gMap = schedulerMap.get(guild.id);
+  if (gMap?.has(`${lich.id}_close`)) return;
+
+  const msRemaining = msToCloseFromNow(
+    lich.day_of_week, lich.hour, lich.minute,
+    lich.close_day_of_week, lich.close_hour, lich.close_minute,
+    session.created_at
+  );
+
+  if (msRemaining <= 0) {
+    // Đã qua mốc close trong lúc offline → đóng ngay
+    console.log(`[Scheduler] ${guild.name} — phiên "${session.session_name}" đã qua giờ đóng khi offline, đóng ngay`);
+    setImmediate(() => runDongLich(client, guild.id, lich));
+  } else {
+    console.log(`[Scheduler] ${guild.name} — khôi phục close timer "${session.session_name}" sau ${Math.round(msRemaining / 60000)}p`);
+    const tidC = setTimeout(() => runDongLich(client, guild.id, lich), msRemaining);
+    _setTimer(guild.id, `${lich.id}_close`, tidC);
+  }
+}
+
 // ── Khôi phục khi bot restart ─────────────────────────────────────────────────
 async function khoiPhucScheduler(client) {
   for (const guild of client.guilds.cache.values()) {
@@ -289,8 +326,11 @@ async function khoiPhucScheduler(client) {
       for (const lich of danhSach) {
         await scheduleLichCoDinh(client, guild.id, lich);
       }
-      if (danhSach.length > 0)
+      if (danhSach.length > 0) {
         console.log(`[Scheduler] ${guild.name} — khôi phục ${danhSach.length} lịch cố định`);
+        // PATCH: khôi phục close timer cho phiên đang mở (nếu có)
+        await _khoiPhucCloseTimer(client, guild, danhSach);
+      }
     } catch (e) {
       console.error(`[Scheduler] Lỗi khôi phục guild ${guild.id}:`, e.message);
     }
@@ -303,7 +343,6 @@ async function runLichNgay(client, guildId, lich) {
   if (!g) throw new Error('Guild không tìm thấy');
   await _moPhien(g, lich);
   if (lich.close_day_of_week != null) {
-    // BUG #1/#8 FIX: dùng msFromOpenToClose thay vì msToNextOccurrence
     const msClose = msFromOpenToClose(
       lich.day_of_week, lich.hour, lich.minute,
       lich.close_day_of_week, lich.close_hour, lich.close_minute
