@@ -20,6 +20,9 @@ const STATUS_LABEL = {
   khong_tham_gia: '❌ Vắng Mặt',
 };
 
+// ── In-memory lock để tránh double-submit (B-5 / H-5) ────────────────────────
+const _pendingLock = new Set(); // key = `${sessionId}:${userId}`
+
 async function handleButton(interaction) {
   const { customId, guild, member, user, channel } = interaction;
 
@@ -73,8 +76,6 @@ async function handleButton(interaction) {
   if (customId === 'attend_close') {
     await interaction.deferReply({ ephemeral: true });
 
-    // [Phase 7] dùng requireAdmin thay vì laAdmin thủ công
-    // truyền cfg sẵn để tránh query 2 lần (requireAdmin load 1 lần)
     const { ok, cfg } = await requireAdmin(interaction, { context: 'đóng phiên' });
     if (!ok) return;
 
@@ -88,11 +89,9 @@ async function handleButton(interaction) {
     const statsMap = await ketThucPhien(guild, session, attended);
     await voHieuHoaNutDiemDanh(interaction.client, channel, session);
 
-    // [Phase 7] fix param order: buildSummaryEmbed(session, attended, guild)
     await channel.send({ embeds: [buildSummaryEmbed(session, attended, guild)] });
     await thongBaoHuyHieu(guild, channel, guild.id, session.id, attended, statsMap);
 
-    // [Phase 7] embed reply thay vì raw content string
     return interaction.editReply(replyOkEdit('Phiên điểm danh đã được đóng thành công.'));
   }
 
@@ -118,10 +117,18 @@ async function handleButton(interaction) {
     }
   }
 
-  const displayName = member.nickname ?? user.globalName ?? user.username;
-  await db.upsertAttendance(session.id, guild.id, user.id, displayName, status);
+  // ── Rate-limit lock (H-5): ngăn double-submit trong 3s ───────────────────
+  const lockKey = `${session.id}:${user.id}`;
+  if (_pendingLock.has(lockKey)) {
+    return interaction.editReply({ content: '⏳ Đang xử lý, vui lòng chờ...' });
+  }
+  _pendingLock.add(lockKey);
+  setTimeout(() => _pendingLock.delete(lockKey), 3_000);
 
-  // [FIX] Luôn truyền components khi edit để Discord không xóa nút
+  // FIX B-1: đổi db.upsertAttendance → db.markAttendance (đúng tên + signature)
+  await db.markAttendance(session.id, user.id, status, user.id);
+
+  // Cập nhật embed session message
   try {
     const ch = guild.channels.cache.get(session.channel_id);
     if (ch && session.message_id) {
@@ -133,7 +140,7 @@ async function handleButton(interaction) {
         await msg.edit({ embeds: [embed], components: [buttons] }).catch(() => null);
       }
     }
-  } catch (_) { /* silent */ }
+  } catch (_) { /* silent — không làm crash flow chính */ }
 
   return interaction.editReply({
     content: `${STATUS_LABEL[status] ?? '✅'} Đã ghi nhận **${STATUS_LABEL[status]}** cho bạn.`,
