@@ -10,7 +10,7 @@ const supabase = createClient(
   process.env.SUPABASE_KEY,
   {
     realtime: {
-      transport: ws,   // Node.js 20 không có native WebSocket — dùng 'ws' package
+      transport: ws,
     },
   },
 );
@@ -37,9 +37,6 @@ async function getActiveSession(guildId) {
   return data;
 }
 
-/**
- * Phase 11.2 — Lấy tất cả phiên đang mở trên mọi guild trong 1 query.
- */
 async function getAllActiveSessions() {
   const { data, error } = await supabase
     .from('sessions').select('*')
@@ -133,11 +130,6 @@ async function upsertMemberStats(guildId, userId, patch) {
   throwIfError(error, 'upsertMemberStats');
 }
 
-/**
- * PERF H-4: Bulk upsert member stats trong 1 Supabase query.
- * @param {string} guildId
- * @param {Array<{user_id, total_joined, current_streak, max_streak, last_session_id}>} patches
- */
 async function batchUpsertMemberStats(guildId, patches) {
   if (!patches.length) return;
   const rows = patches.map(p => ({ guild_id: guildId, ...p }));
@@ -163,15 +155,13 @@ async function getAllMemberStats(guildId) {
 }
 
 /**
- * Lấy top N thành viên tích cực nhất của guild, sắp xếp theo total_joined DESC.
- * @param {string} guildId
- * @param {number} [limit=10]
- * @returns {Promise<Array>}
+ * Lấy top N thành viên tích cực nhất, sắp xếp theo total_joined DESC.
+ * Column thực tế trong DB: best_streak (không phải max_streak)
  */
 async function getTopMembers(guildId, limit = 10) {
   const { data, error } = await supabase
     .from('member_stats')
-    .select('user_id, total_joined, total_sessions, current_streak, max_streak')
+    .select('user_id, total_joined, total_sessions, current_streak, best_streak')
     .eq('guild_id', guildId)
     .order('total_joined', { ascending: false })
     .limit(limit);
@@ -181,11 +171,12 @@ async function getTopMembers(guildId, limit = 10) {
 
 // ─── Server / history helpers ─────────────────────────────────────────────────
 async function getSessionHistory(guildId, limitOrOpts = 10) {
-  // Accept both legacy getSessionHistory(guildId, 10) and object form
   const { limit = 10, offset = 0 } =
     typeof limitOrOpts === 'number' ? { limit: limitOrOpts } : limitOrOpts;
+  // sessions table không có created_at — dùng ended_at làm fallback trong handler
   const { data, error } = await supabase
-    .from('sessions').select('id, session_name, ended_at, created_at, eligible_member_ids')
+    .from('sessions')
+    .select('id, session_name, ended_at, eligible_member_ids')
     .eq('guild_id', guildId).eq('is_active', false).eq('cancelled', false)
     .order('ended_at', { ascending: false })
     .range(offset, offset + limit - 1);
@@ -218,7 +209,6 @@ async function upsertConfig(guildId, patch) {
   throwIfError(error, 'upsertConfig');
 }
 
-// alias — một số handler cũ gọi updateConfig thay vì upsertConfig
 const updateConfig = upsertConfig;
 
 // ─── Badges ───────────────────────────────────────────────────────────────────
@@ -306,7 +296,6 @@ async function deleteScheduledSession(id) {
   throwIfError(error, 'deleteScheduledSession');
 }
 
-// ─── getLichCoDinh alias (scheduler.js dùng tên này) ─────────────────────────
 const getLichCoDinh = getScheduledSessions;
 
 // ─── Exports ──────────────────────────────────────────────────────────────────
@@ -314,19 +303,14 @@ const closeSession = endSession;
 
 module.exports = {
   supabase,
-  // Session
   getDefaultSession, getActiveSession, getAllActiveSessions,
   getSessionById, getSessionByIdRaw, createSession, updateSessionMessageId, endSession, cancelSession,
   closeSession, getAttendance, markAttendance,
   getAttendances, getSessionHistory, getSessionsWithAttendance,
-  // Member
   getMemberStats, upsertMemberStats, batchUpsertMemberStats,
   resetMemberStreak, getAllMemberStats, getTopMembers,
-  // Config
   getConfig, upsertConfig, updateConfig,
-  // Badges
   getBadgesForSession, getBadges, upsertBadge, deleteBadge, getMemberBadges, upsertMemberBadge,
-  // Scheduled
   getScheduledSessions, getAllScheduledSessions, getScheduledSessionById,
   createScheduledSession, updateScheduledSession, deleteScheduledSession,
   getLichCoDinh,

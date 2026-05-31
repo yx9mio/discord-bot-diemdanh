@@ -36,43 +36,37 @@ async function buildUserPanel(guild, member, userId) {
   const history  = await db.getSessionHistory(guild.id, 10);
   const active   = await db.getActiveSession(guild.id);
 
-  // Guard: member belum ada data
-  const safeStats = stats ?? { total_joined: 0, total_sessions: 0, current_streak: 0, best_streak: 0, max_streak: 0 };
+  // Guard: member chưa có row trong member_stats
+  const safeStats = stats ?? { total_joined: 0, total_sessions: 0, current_streak: 0, best_streak: 0 };
 
-  // Tính rank
-  const rankIndex = topList.findIndex(m => m.user_id === userId);
-  const rank      = rankIndex >= 0 ? rankIndex + 1 : null;
+  const rankIndex    = topList.findIndex(m => m.user_id === userId);
+  const rank         = rankIndex >= 0 ? rankIndex + 1 : null;
   const totalMembers = topList.length;
 
-  // Tỉ lệ tham gia
   const pct = safeStats.total_sessions > 0
     ? Math.round((safeStats.total_joined / safeStats.total_sessions) * 100)
     : 0;
 
-  // Lịch sử 5 phiên gần nhất mà user là eligible
+  // Lịch sử 5 phiên gần nhất (nếu không có eligible_member_ids thì tính tất cả)
   const recentSessions = history
     .filter(s => !s.eligible_member_ids || s.eligible_member_ids.includes(userId))
     .slice(0, 5);
 
-  // Lấy attendance của các phiên đó (song song)
   const attResults = await Promise.all(
     recentSessions.map(s => db.getAttendances(s.id))
   );
 
   const historyLines = recentSessions.map((s, i) => {
-    const atts   = attResults[i];
-    const myAtt  = atts.find(a => a.user_id === userId);
-    const icon   = myAtt ? (STATUS_ICON[myAtt.status] ?? '❔') : '❌';
-    const label  = s.session_name ?? 'Phiên điểm danh';
-    const date   = formatDate(s.ended_at ?? s.created_at);
+    const atts  = attResults[i];
+    const myAtt = atts.find(a => a.user_id === userId);
+    const icon  = myAtt ? (STATUS_ICON[myAtt.status] ?? '❔') : '❌';
+    const label = s.session_name ?? 'Phiên điểm danh';
+    const date  = formatDate(s.ended_at);
     return `${icon} ${label} — ${date}`;
   });
 
-  // Embed
   const displayName = member.nickname ?? member.user.globalName ?? member.user.username;
   const avatarUrl   = member.user.displayAvatarURL({ size: 64 });
-
-  const bestStreak = safeStats.best_streak ?? safeStats.max_streak ?? 0;
 
   const embed = new EmbedBuilder()
     .setColor(0x5865F2)
@@ -83,7 +77,7 @@ async function buildUserPanel(guild, member, userId) {
         name: '📊 Tổng quan',
         value: [
           `> Tham gia: **${safeStats.total_joined}** / **${safeStats.total_sessions}** phiên  (${pct}%)`,
-          `> 🔥 Streak hiện tại: **${safeStats.current_streak}**  |  🏆 Best: **${bestStreak}**`,
+          `> 🔥 Streak hiện tại: **${safeStats.current_streak}**  |  🏆 Best: **${safeStats.best_streak ?? 0}**`,
           rank
             ? `> ${rankEmoji(rank)} Xếp hạng: **${rank}** / ${totalMembers} thành viên`
             : '> 📭 Chưa có dữ liệu xếp hạng',
@@ -91,7 +85,9 @@ async function buildUserPanel(guild, member, userId) {
         inline: false,
       },
       {
-        name: active ? `📋 Phiên đang mở — ${active.session_name ?? 'Điểm danh'}` : '📋 Phiên hiện tại',
+        name: active
+          ? `📋 Phiên đang mở — ${active.session_name ?? 'Điểm danh'}`
+          : '📋 Phiên hiện tại',
         value: active
           ? '> ✅ Có phiên đang mở. Hãy điểm danh nếu chưa!'
           : '> Không có phiên nào đang mở.',
@@ -103,12 +99,11 @@ async function buildUserPanel(guild, member, userId) {
           ? historyLines.join('\n')
           : '> Chưa có dữ liệu phiên nào.',
         inline: false,
-      }
+      },
     )
     .setFooter({ text: 'Cập nhật theo thời gian thực' })
     .setTimestamp();
 
-  // Buttons
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId('toi:refresh')
@@ -127,7 +122,7 @@ async function buildRankPanel(guild) {
   const topList = await db.getTopMembers(guild.id, 10);
 
   const lines = topList.map((m, i) => {
-    const pct = m.total_sessions > 0
+    const pct   = m.total_sessions > 0
       ? Math.round((m.total_joined / m.total_sessions) * 100)
       : 0;
     const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
@@ -161,7 +156,6 @@ async function handleUserPanelButton(interaction) {
   }
 
   if (customId === 'toi:rank') {
-    // Dùng flags thay vì ephemeral (tránh deprecation warning)
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const panel = await buildRankPanel(guild);
     return interaction.editReply(panel);
