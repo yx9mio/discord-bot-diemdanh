@@ -8,6 +8,7 @@
 // UX-C: buildSummaryEmbed cột phái
 // Phase G: buildSummaryEmbed thêm cột đến trễ
 // M-1: eligible_member_ids null guard — fix crash lịch cố định
+// Fix: export AUTHOR_DEFAULT
 'use strict';
 const { EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder, StringSelectMenuBuilder } = require('discord.js');
 
@@ -43,6 +44,9 @@ const ICONS = {
 };
 
 const FOOTER_DEFAULT = 'Quản Gia · Bot Điểm Danh';
+
+// AUTHOR_DEFAULT dùng trong setAuthor() — phải là object { name, iconURL? }
+const AUTHOR_DEFAULT = { name: 'Quản Gia · Bot Điểm Danh' };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function pctEmoji(pct) {
@@ -115,7 +119,7 @@ async function buildSessionEmbed(guild, session, attended, isClosed = false) {
   const pct = eligible > 0 ? Math.round(presentCount / eligible * 100) : 0;
 
   const checkedIds = new Set(attended.map(a => a.user_id));
-  const absentIds  = ( session.eligible_member_ids ?? []).filter(id => !checkedIds.has(id));
+  const absentIds  = (session.eligible_member_ids ?? []).filter(id => !checkedIds.has(id));
 
   const startedAt = session.created_at ?? session.started_at;
   const startTs   = Math.floor(new Date(startedAt).getTime() / 1000);
@@ -182,7 +186,6 @@ function buildSummaryEmbed(session, attended, guild = null, phaiRoleIds = null) 
     .setFooter({ text: FOOTER_DEFAULT })
     .setTimestamp();
 
-  // Cột tham gia
   if (joined.length > 0) {
     const MAX = 25;
     const names = joined.slice(0, MAX)
@@ -196,7 +199,6 @@ function buildSummaryEmbed(session, attended, guild = null, phaiRoleIds = null) 
     );
   }
 
-  // Cột đến trễ
   if (late.length > 0) {
     const MAX = 25;
     const names = late.slice(0, MAX)
@@ -208,8 +210,7 @@ function buildSummaryEmbed(session, attended, guild = null, phaiRoleIds = null) 
       }));
   }
 
-  // Cột vắng mặt
-  const absentIds2 = ( session.eligible_member_ids ?? []).filter(
+  const absentIds2 = (session.eligible_member_ids ?? []).filter(
     id => !new Set(attended.map(a => a.user_id)).has(id)
   );
   if (absentIds2.length > 0) {
@@ -417,6 +418,7 @@ module.exports = {
   COLORS,
   ICONS,
   FOOTER_DEFAULT,
+  AUTHOR_DEFAULT,
   buildSessionEmbed,
   buildSummaryEmbed,
   buildAttendanceButtons,
