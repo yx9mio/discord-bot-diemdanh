@@ -91,9 +91,9 @@ async function execute(interaction) {
       channelId: kenh.id,
     });
 
-    // ✅ MERGE từ lichcodinhh.js: lên lịch ngay sau khi thêm (không cần restart bot)
+    // BUG RUNTIME FIX: truyền guild.id (string) thay vì guild (object)
     const { scheduleLichCoDinh } = require('../utils/scheduler.js');
-    await scheduleLichCoDinh(interaction.client, guild, lich);
+    await scheduleLichCoDinh(interaction.client, guild.id, lich);
 
     const moStr   = `${TEN_THU[thuMo]} ${pad(gioMo)}:${pad(phutMo)}`;
     const dongStr = thuDong != null
