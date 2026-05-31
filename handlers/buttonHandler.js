@@ -15,8 +15,6 @@ async function handleButton(interaction) {
 
   // ── Setup shortcuts ─────────────────────────────────────────────
   if (customId === 'setup_help') {
-    const { handleSelectMenu } = require('../commands/help.js');
-    // Trigger /help trực tiếp bằng cách gọi execute
     const { execute } = require('../commands/help.js');
     return execute(interaction);
   }
@@ -38,7 +36,7 @@ async function handleButton(interaction) {
     return interaction.reply({ embeds: [embed], ephemeral: true });
   }
 
-  // ── Đóng phiên bằng nút (nếu có) ────────────────────────────────────
+  // ── Đóng phiên bằng nút ────────────────────────────────────────
   if (customId === 'attend_close') {
     await interaction.deferReply({ ephemeral: true });
     const cfg = await db.getConfig(guild.id);
@@ -68,7 +66,12 @@ async function handleButton(interaction) {
     return interaction.editReply({ content: '📭 Không có phiên điểm danh nào đang mở.' });
   }
 
-  // Kiểm tra quyền điểm danh
+  // BUG FIX #5: Check eligible_member_ids trước khi cho điểm danh
+  if (session.eligible_member_ids && !session.eligible_member_ids.includes(user.id)) {
+    return interaction.editReply({ content: '⚠️ Bạn không nằm trong danh sách điểm danh của phiên này.' });
+  }
+
+  // Check role nếu có
   if (session.allowed_role_id) {
     const hasRole = member.roles.cache.has(session.allowed_role_id);
     if (!hasRole) {

@@ -4,29 +4,23 @@ const { buildAttendanceButtons } = require('./embeds.js');
 const { MOC_HUY_HIEU } = require('./helpers.js');
 
 // ─── Kết thúc phiên & cập nhật stats ─────────────────────────────────────────
-// Trả về statsMap (snapshot TRƯỚC khi update) để caller dùng cho thongBaoHuyHieu
 async function ketThucPhien(guild, session, attended) {
-  // 1. Snapshot stats TRƯỚC khi update
   const statsMap = {};
   for (const uid of session.eligible_member_ids) {
     const s = await db.getMemberStats(guild.id, uid).catch(() => null);
     if (s) statsMap[uid] = { total_joined: s.total_joined, current_streak: s.current_streak };
   }
 
-  // 2. Cập nhật stats
   for (const uid of session.eligible_member_ids) {
     const thamGia = attended.some(a => a.user_id === uid && ['tham_gia', 'tre'].includes(a.status));
     await db.updateMemberStats(guild.id, uid, thamGia, session.id);
   }
 
-  // 3. Đóng phiên
   await db.endSession(session.id);
-
   return statsMap;
 }
 
 // ─── Thông báo huy hiệu mới ───────────────────────────────────────────────────
-// statsMap: snapshot TRƯỚC khi update (từ ketThucPhien)
 async function thongBaoHuyHieu(guild, channel, guildId, sessionId, attended, statsMap) {
   const msgs = [];
   for (const a of attended) {
@@ -69,6 +63,8 @@ async function voHieuHoaNutDiemDanh(client, channel, session) {
     const sessionMsg = msgs.find(m =>
       m.author.id === client.user.id &&
       m.components.length > 0 &&
+      // BUG FIX #8: chỉ target message còn nút active (chưa bị disable)
+      m.components[0]?.components[0]?.disabled !== true &&
       m.embeds.some(e => e.title?.includes(session.session_name))
     );
     if (sessionMsg) await sessionMsg.edit({ components: [buildAttendanceButtons(true)] }).catch(() => null);

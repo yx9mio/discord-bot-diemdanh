@@ -83,7 +83,6 @@ async function runLich(client, guild, lich) {
       ? (g.roles.cache.get(cfg.allowed_role_id)?.name ?? 'Role không rõ')
       : 'Tất cả';
 
-    // Phiên không có auto_close_at — đóng thủ công qua runDongLich
     const session = await db.createSession(lich.guild_id, {
       sessionName:       lich.session_name,
       roleName,
@@ -113,16 +112,25 @@ async function runLich(client, guild, lich) {
 async function runDongLich(client, guild, lich) {
   try {
     const g = client.guilds.cache.get(lich.guild_id);
-    if (!g) return;
+    if (!g) {
+      // Guild offline nhưng vẫn phải reschedule tuần sau
+      _rescheduleClose(client, guild, lich);
+      return;
+    }
 
     const session = await db.getActiveSession(lich.guild_id);
     if (!session || session.session_name !== lich.session_name) {
       console.log(`[Scheduler] ${g.name} — không có phiên "${lich.session_name}" để đóng`);
+      // BUG FIX #2+#3: vẫn reschedule cho tuần sau dù không có phiên
+      _rescheduleClose(client, g, lich);
       return;
     }
 
     const ch = await g.channels.fetch(lich.channel_id).catch(() => null);
-    if (!ch) return;
+    if (!ch) {
+      _rescheduleClose(client, g, lich);
+      return;
+    }
 
     const attended = await db.getAttendances(session.id);
     await ketThucPhien(g, session, attended);
@@ -130,13 +138,12 @@ async function runDongLich(client, guild, lich) {
 
     // Thống kê theo phái (role Discord)
     await g.members.fetch();
-    const phaiBattleMap = new Map(); // roleName → [memberId]
+    const phaiBattleMap = new Map();
 
     const phaRoleIds = lich.phai_role_ids ?? [];
     const daThamGia  = attended.filter(a => ['tham_gia', 'tre'].includes(a.status));
 
     if (phaRoleIds.length > 0) {
-      // Chỉ đếm các role được cài làm "phái"
       for (const roleId of phaRoleIds) {
         const role = g.roles.cache.get(roleId);
         if (!role) continue;
@@ -147,7 +154,6 @@ async function runDongLich(client, guild, lich) {
         phaiBattleMap.set(role.name, members.map(a => a.user_id));
       }
     } else {
-      // Không cài role phái → nhóm theo role cao nhất của member
       for (const att of daThamGia) {
         const member = g.members.cache.get(att.user_id);
         if (!member) { _addToPhai(phaiBattleMap, 'Không rõ', att.user_id); continue; }
@@ -160,7 +166,6 @@ async function runDongLich(client, guild, lich) {
       }
     }
 
-    // Build embed thống kê
     const tongThamGia = daThamGia.length;
     const tongVang    = attended.filter(a => a.status === 'vang').length;
     const tongPhep    = attended.filter(a => a.status === 'co_phep').length;
@@ -191,6 +196,16 @@ async function runDongLich(client, guild, lich) {
   } catch (e) {
     console.error(`[Scheduler] Lỗi runDongLich ${lich.id}:`, e.message);
   }
+  // BUG FIX #3: luôn reschedule close cho tuần sau (dù có lỗi hay không)
+  _rescheduleClose(client, guild, lich);
+}
+
+// ── Helper reschedule close ───────────────────────────────────────────────────
+function _rescheduleClose(client, guild, lich) {
+  const msClose = msToNextOccurrence(lich.close_day_of_week, lich.close_hour, lich.close_minute);
+  console.log(`[Scheduler] ${guild.name} — "${lich.session_name}" ĐÓNG (tiếp) sau ${Math.round(msClose/60000)}p`);
+  const tidC = setTimeout(() => runDongLich(client, guild, lich), msClose);
+  _setTimer(guild.id, `${lich.id}_close`, tidC);
 }
 
 function _addToPhai(map, phai, userId) {
