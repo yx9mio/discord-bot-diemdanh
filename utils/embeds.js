@@ -59,6 +59,40 @@ function formatDuration(seconds) {
   return `${seconds % 60} giây`;
 }
 
+// ─── Thống kê phái helper ─────────────────────────────────────────────────────
+// guild: Guild object (hoặc null nếu không có)
+// phaiRoleIds: string[] — danh sách role ID của các phái
+// attended: attendance[] — danh sách đã điểm danh (có user_id, status)
+// eligible: string[] — danh sách user_id eligible (để tính tổng)
+// Trả về string nhiều dòng hoặc null nếu không có phái
+function buildPhaiStatsText(guild, phaiRoleIds, attended, eligible) {
+  if (!guild || !phaiRoleIds?.length) return null;
+
+  const presentSet = new Set(
+    attended.filter(a => ['tham_gia', 'tre'].includes(a.status)).map(a => a.user_id)
+  );
+  const eligibleSet = new Set(eligible ?? []);
+
+  const lines = [];
+  for (const roleId of phaiRoleIds) {
+    const role = guild.roles.cache.get(roleId);
+    if (!role) continue;
+
+    // Tổng member eligible của role này
+    const total = [...eligibleSet].filter(uid => guild.members.cache.get(uid)?.roles.cache.has(roleId)).length;
+    if (total === 0) continue;
+
+    // Số đã tham gia trong role này
+    const present = [...presentSet].filter(uid => guild.members.cache.get(uid)?.roles.cache.has(roleId)).length;
+
+    const pct = Math.round((present / total) * 100);
+    const bar = buildProgressBar(pct);
+    lines.push(`<@&${roleId}> · **${present}/${total}** ${bar} ${pct}%`);
+  }
+
+  return lines.length > 0 ? lines.join('\n') : null;
+}
+
 // ─── Buttons ─────────────────────────────────────────────────────────────────
 function buildAttendanceButtons(disabled = false) {
   return new ActionRowBuilder().addComponents(
@@ -90,7 +124,8 @@ function buildAttendanceButtons(disabled = false) {
 }
 
 // ─── Session Embed (đang mở) ──────────────────────────────────────────────────
-async function buildSessionEmbed(guild, session, attended) {
+// Nhận thêm phaiRoleIds (optional) để hiển thị thống kê phái
+async function buildSessionEmbed(guild, session, attended, phaiRoleIds = null) {
   const joined   = attended.filter(a => a.status === 'tham_gia');
   const late     = attended.filter(a => a.status === 'tre');
   const declined = attended.filter(a => a.status === 'khong_tham_gia');
@@ -165,12 +200,19 @@ async function buildSessionEmbed(guild, session, attended) {
     });
   }
 
+  // ── Thống kê phái (nếu có phaiRoleIds)
+  const phaiText = buildPhaiStatsText(guild, phaiRoleIds, attended, session.eligible_member_ids);
+  if (phaiText) {
+    embed.addFields({ name: '⚔️ Thống Kê Phái', value: phaiText, inline: false });
+  }
+
   embed.setFooter({ text: `${FOOTER_DEFAULT} · Phiên đang mở — bấm nút để điểm danh` });
   return embed;
 }
 
 // ─── Summary Embed (đã đóng) ──────────────────────────────────────────────────
-function buildSummaryEmbed(session, attended) {
+// Nhận thêm guild (optional) để hiển thị thống kê phái theo phai_role_ids
+function buildSummaryEmbed(session, attended, guild = null, phaiRoleIds = null) {
   const joined   = attended.filter(a => a.status === 'tham_gia');
   const late     = attended.filter(a => a.status === 'tre');
   const declined = attended.filter(a => a.status === 'khong_tham_gia');
@@ -223,6 +265,12 @@ function buildSummaryEmbed(session, attended) {
       embed.addFields({ name: i === 0 ? `❌ Vắng Mặt — ${declined.length}` : '\u200b', value: chunk, inline: true }));
   else
     embed.addFields({ name: '❌ Vắng Mặt — 0', value: '—', inline: true });
+
+  // ── Thống kê phái (nếu có guild + phaiRoleIds)
+  const phaiText = buildPhaiStatsText(guild, phaiRoleIds, attended, session.eligible_member_ids);
+  if (phaiText) {
+    embed.addFields({ name: '⚔️ Thống Kê Phái', value: phaiText, inline: false });
+  }
 
   embed.setFooter({ text: `${FOOTER_DEFAULT} · Role: ${session.role_name}` });
   return embed;
@@ -303,6 +351,7 @@ function buildConfigEmbed(cfg) {
 module.exports = {
   pctColor, pctEmoji, pctLabel, chunkLines, formatDuration,
   FOOTER_DEFAULT, AUTHOR_DEFAULT,
+  buildPhaiStatsText,
   buildAttendanceButtons,
   buildSessionEmbed,
   buildSummaryEmbed,

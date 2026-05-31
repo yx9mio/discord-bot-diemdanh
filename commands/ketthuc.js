@@ -29,7 +29,9 @@ module.exports = {
     const statsMap = await ketThucPhien(guild, session, attended);
     await voHieuHoaNutDiemDanh(interaction.client, channel, session);
 
-    await channel.send({ embeds: [buildSummaryEmbed(session, attended)] });
+    // Truyền guild + phai_role_ids để hiển thị thống kê phái trong tổng kết
+    const phaiRoleIds = cfg.phai_role_ids?.length ? cfg.phai_role_ids : null;
+    await channel.send({ embeds: [buildSummaryEmbed(session, attended, guild, phaiRoleIds)] });
     await thongBaoHuyHieu(guild, channel, guild.id, session.id, attended, statsMap);
 
     return interaction.editReply({ content: '✅ Đã kết thúc phiên điểm danh.' });

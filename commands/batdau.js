@@ -88,14 +88,16 @@ module.exports = {
     });
 
     const attended = [];
-    const embed    = await buildSessionEmbed(guild, session, attended);
+    // Truyền phai_role_ids từ cfg để hiển thị thống kê phái ngay khi mở
+    const phaiRoleIds = phaiRole ? [phaiRole.id] : (cfg.phai_role_ids ?? []);
+    const embed    = await buildSessionEmbed(guild, session, attended, phaiRoleIds);
     const buttons  = buildAttendanceButtons(false);
 
     const msg = await interaction.editReply({ embeds: [embed], components: [buttons] });
     await db.updateSessionMessageId(session.id, msg.id);
 
     if (autoCloseAt) {
-      datHenGioTuDong(interaction.client, guild.id, session.id, phutOption);
+      datHenGioTuDong(guild.id, session.id, phutOption, interaction.client, channel);
     }
   },
 };
