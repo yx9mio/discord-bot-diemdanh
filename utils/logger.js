@@ -4,16 +4,30 @@
 //   log.info('SCHEDULER', guildId, 'Đã mở phiên "%s"', session_name);
 //   log.warn('READY',     null,    'Không xóa được commands: %s', err.message);
 //   log.error('CMD',      guildId, 'Lỗi lệnh /batdau: %s', err.stack);
+//   log.debug('DB',       guildId, 'query: %s', sql);
+//
+// LOG_LEVEL env (mặc định: 'info'):
+//   debug → tất cả
+//   info  → info, warn, error
+//   warn  → warn, error
+//   error → chỉ error
+'use strict';
+
+const LEVEL_RANK = { debug: 0, info: 1, warn: 2, error: 3 };
+
+// Đọc từ env, fallback 'info' nếu không hợp lệ
+const _envLevel = (process.env.LOG_LEVEL ?? 'info').toLowerCase();
+const MIN_RANK  = LEVEL_RANK[_envLevel] ?? LEVEL_RANK.info;
 
 const ANSI = {
   reset:  '\x1b[0m',
   bold:   '\x1b[1m',
   dim:    '\x1b[2m',
   // levels
+  debug:  '\x1b[35m',   // magenta
   info:   '\x1b[36m',   // cyan
   warn:   '\x1b[33m',   // yellow
   error:  '\x1b[31m',   // red
-  debug:  '\x1b[35m',   // magenta
   // accents
   guild:  '\x1b[32m',   // green
   tag:    '\x1b[34m',   // blue
@@ -38,6 +52,9 @@ function buildLine(level, tag, guildId, msg) {
 }
 
 function log(level, tag, guildId, ...args) {
+  // L-2: bỏ qua nếu level thấp hơn MIN_RANK
+  if ((LEVEL_RANK[level] ?? 0) < MIN_RANK) return;
+
   // Hỗ trợ format string đơn giản với %s
   let msg;
   if (args.length === 0) {
@@ -57,8 +74,8 @@ function log(level, tag, guildId, ...args) {
 }
 
 module.exports = {
+  debug: (tag, guildId, ...args) => log('debug', tag, guildId, ...args),
   info:  (tag, guildId, ...args) => log('info',  tag, guildId, ...args),
   warn:  (tag, guildId, ...args) => log('warn',  tag, guildId, ...args),
   error: (tag, guildId, ...args) => log('error', tag, guildId, ...args),
-  debug: (tag, guildId, ...args) => log('debug', tag, guildId, ...args),
 };
