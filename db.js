@@ -329,6 +329,19 @@ async function capNhatPhaiRoles(lichId, phaiRoleIds) {
   throwIfError(error, 'capNhatPhaiRoles');
 }
 
+// ─── Phase 7.4: Naming aliases ────────────────────────────────────────────────
+// Một số command cũ dùng tên khác — alias để không cần refactor toàn bộ command
+const closeSession  = endSession;    // commands/dong.js và một số command dùng closeSession
+const getAttendance = getAttendances; // alias singular → plural
+
+// markAttendance(sessionId, userId, addedBy) — convenience wrapper
+async function markAttendance(sessionId, userId, addedBy) {
+  // Cần guildId để upsert đúng — lấy từ session
+  const { data: s } = await supabase.from('sessions').select('guild_id').eq('id', sessionId).maybeSingle();
+  if (!s) throw new Error('markAttendance: session không tồn tại');
+  return upsertAttendance(sessionId, s.guild_id, userId, userId, addedBy ?? 'manual');
+}
+
 module.exports = {
   supabase,
   getConfig, setConfig,
@@ -338,4 +351,6 @@ module.exports = {
   getTopMembers, resetMemberStreak,
   getSessionHistory, getSessionHistoryWithRange, getAttendanceSummaryForSessions,
   getLichCoDinh, getLichCoDinhById, getLichCoDinhByShortId, themLichCoDinh, xoaLichCoDinh, capNhatLichCoDinh, capNhatPhaiRoles,
+  // Phase 7.4 aliases
+  closeSession, getAttendance, markAttendance,
 };

@@ -2,6 +2,7 @@
 // Phase 1: Design system thống nhất — COLORS, ICONS, helpers
 // Phase 3: buildSessionEmbed & buildSummaryEmbed nâng cấp visual
 // Phase 5: Feedback states — replyLoading, replyOkEdit, replyErrEdit, replyConfirm
+// Phase 6: buildServerStatsEmbed — topLimit param, periodLabel
 'use strict';
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { buildProgressBar } = require('./progress.js');
@@ -448,10 +449,11 @@ function buildConfigEmbed(cfg) {
 
 // ─── Phase 6: Server Stats Embed ──────────────────────────────────────────────
 // Dùng bởi /thongke_server
-function buildServerStatsEmbed(guild, stats, topMembers) {
+// @param topLimit  — số thành viên top hiển thị (truyền từ command, default 10)
+function buildServerStatsEmbed(guild, stats, topMembers, topLimit = 10) {
   const {
     totalSessions, totalMembers, avgAttendance,
-    overallPct, lastSession, activeSession,
+    overallPct, lastSession, activeSession, periodLabel,
   } = stats;
 
   const richBar  = buildRichProgressBar(overallPct);
@@ -477,9 +479,9 @@ function buildServerStatsEmbed(guild, stats, topMembers) {
     lastLine = `**${lastSession.session_name}** — <t:${ts}:d>  ·  ${lPct}% (${attended}/${eligible})`;
   }
 
-  // Top thành viên
+  // Top thành viên — dùng topLimit thực tế từ command option
   const topLines = topMembers.length > 0
-    ? topMembers.slice(0, 10).map((m, i) => {
+    ? topMembers.slice(0, topLimit).map((m, i) => {
         const medals = ['🥇','🥈','🥉'];
         const medal  = medals[i] ?? `\`${i + 1}.\``;
         const mPct   = m.total_sessions > 0 ? Math.round((m.total_joined / m.total_sessions) * 100) : 0;
@@ -499,6 +501,7 @@ function buildServerStatsEmbed(guild, stats, topMembers) {
       {
         name: `${ICONS.CHART_UP} Tổng quan`,
         value: [
+          `▸ Kỳ: **${periodLabel ?? 'Tất cả'}**`,
           `▸ Tổng phiên: **${totalSessions}**`,
           `▸ Thành viên theo dõi: **${totalMembers}**`,
           `▸ Trung bình mỗi người: **${avgAttendance}** phiên`,
@@ -507,7 +510,7 @@ function buildServerStatsEmbed(guild, stats, topMembers) {
       },
       { name: `${ICONS.PIN} Phiên hiện tại`, value: phienLine,  inline: false },
       { name: `${ICONS.CLOCK} Phiên gần nhất`, value: lastLine, inline: false },
-      { name: `${ICONS.TROPHY} Top điểm danh`, value: topLines,  inline: false },
+      { name: `${ICONS.TROPHY} Top điểm danh (Top ${topLimit})`, value: topLines, inline: false },
     );
 
   if (guild.iconURL) {
@@ -516,7 +519,7 @@ function buildServerStatsEmbed(guild, stats, topMembers) {
   }
 
   embed
-    .setFooter({ text: `${FOOTER_DEFAULT} · ${totalSessions} phiên · ${totalMembers} thành viên` })
+    .setFooter({ text: `${FOOTER_DEFAULT} · ${periodLabel ?? 'Tất cả'} · ${totalSessions} phiên · ${totalMembers} thành viên` })
     .setTimestamp();
 
   return embed;
