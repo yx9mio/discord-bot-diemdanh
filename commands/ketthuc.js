@@ -1,9 +1,10 @@
 // commands/ketthuc.js
-const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
+'use strict';
+const { SlashCommandBuilder } = require('discord.js');
 const db = require('../db.js');
 const { ketThucPhien, thongBaoHuyHieu, voHieuHoaNutDiemDanh } = require('../utils/session.js');
 const { xoaHenGio } = require('../utils/timers.js');
-const { buildSummaryEmbed } = require('../utils/embeds.js');
+const { buildSummaryEmbed, replyOkEdit, replyErrEdit, replyWarnEdit } = require('../utils/embeds.js');
 const { laAdmin } = require('../utils/helpers.js');
 
 module.exports = {
@@ -18,22 +19,21 @@ module.exports = {
 
     const cfg = await db.getConfig(guild.id);
     if (!laAdmin(member, cfg)) {
-      return interaction.editReply({ content: '🔒 Bạn không có quyền dùng lệnh này.' });
+      return interaction.editReply(replyErrEdit('🔒 Bạn không có quyền dùng lệnh này.'));
     }
 
     const session = await db.getActiveSession(guild.id);
-    if (!session) return interaction.editReply({ content: '📭 Không có phiên nào đang mở.' });
+    if (!session) return interaction.editReply(replyWarnEdit('📭 Không có phiên nào đang mở.'));
 
     const attended = await db.getAttendances(session.id);
     xoaHenGio(guild.id);
     const statsMap = await ketThucPhien(guild, session, attended);
     await voHieuHoaNutDiemDanh(interaction.client, channel, session);
 
-    // Truyền guild + phai_role_ids để hiển thị thống kê phái trong tổng kết
     const phaiRoleIds = cfg.phai_role_ids?.length ? cfg.phai_role_ids : null;
     await channel.send({ embeds: [buildSummaryEmbed(session, attended, guild, phaiRoleIds)] });
     await thongBaoHuyHieu(guild, channel, guild.id, session.id, attended, statsMap);
 
-    return interaction.editReply({ content: '✅ Đã kết thúc phiên điểm danh.' });
+    return interaction.editReply(replyOkEdit('Đã kết thúc phiên điểm danh.'));
   },
 };

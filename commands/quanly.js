@@ -1,7 +1,9 @@
 // commands/quanly.js — /quanly: Mở bảng quản lý bot (Admin)
+'use strict';
 const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
 const db = require('../db.js');
 const { buildDashboard } = require('../handlers/setupUiHandler.js');
+const { replyErr } = require('../utils/embeds.js');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -11,7 +13,7 @@ module.exports = {
 
   async execute(interaction) {
     if (!interaction.guild) {
-      return interaction.reply({ content: '❌ Lệnh này chỉ dùng được trong server.', ephemeral: true });
+      return interaction.reply(replyErr('❌ Lệnh này chỉ dùng được trong server.'));
     }
     await interaction.deferReply({ ephemeral: true });
     const cfg = await db.getConfig(interaction.guild.id);

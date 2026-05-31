@@ -1,9 +1,11 @@
 // commands/huy.js
-const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
+'use strict';
+const { SlashCommandBuilder } = require('discord.js');
 const db = require('../db.js');
 const { voHieuHoaNutDiemDanh } = require('../utils/session.js');
 const { xoaHenGio } = require('../utils/timers.js');
 const { laAdmin } = require('../utils/helpers.js');
+const { replyOkEdit, replyErrEdit, replyWarnEdit } = require('../utils/embeds.js');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -17,16 +19,16 @@ module.exports = {
 
     const cfg = await db.getConfig(guild.id);
     if (!laAdmin(member, cfg)) {
-      return interaction.editReply({ content: '🔒 Bạn không có quyền dùng lệnh này.' });
+      return interaction.editReply(replyErrEdit('🔒 Bạn không có quyền dùng lệnh này.'));
     }
 
     const session = await db.getActiveSession(guild.id);
-    if (!session) return interaction.editReply({ content: '📭 Không có phiên nào đang mở.' });
+    if (!session) return interaction.editReply(replyWarnEdit('📭 Không có phiên nào đang mở.'));
 
     xoaHenGio(guild.id);
     await db.cancelSession(session.id);
     await voHieuHoaNutDiemDanh(interaction.client, channel, session);
 
-    return interaction.editReply({ content: '✅ Đã hủy phiên điểm danh.' });
+    return interaction.editReply(replyOkEdit('Đã hủy phiên điểm danh.'));
   },
 };
