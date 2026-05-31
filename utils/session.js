@@ -3,23 +3,35 @@ const db = require('../db.js');
 const { buildAttendanceButtons } = require('./embeds.js');
 const { MOC_HUY_HIEU } = require('./helpers.js');
 
-// ─── Kết thúc phiên & cập nhật stats ─────────────────────────
+// ─── Kết thúc phiên & cập nhật stats ─────────────────────────────────────────
+// Trả về statsMap (snapshot TRƯỚC khi update) để caller dùng cho thongBaoHuyHieu
 async function ketThucPhien(guild, session, attended) {
+  // 1. Snapshot stats TRƯỚC khi update
+  const statsMap = {};
+  for (const uid of session.eligible_member_ids) {
+    const s = await db.getMemberStats(guild.id, uid).catch(() => null);
+    if (s) statsMap[uid] = { total_joined: s.total_joined, current_streak: s.current_streak };
+  }
+
+  // 2. Cập nhật stats
   for (const uid of session.eligible_member_ids) {
     const thamGia = attended.some(a => a.user_id === uid && ['tham_gia', 'tre'].includes(a.status));
     await db.updateMemberStats(guild.id, uid, thamGia, session.id);
   }
+
+  // 3. Đóng phiên
   await db.endSession(session.id);
+
+  return statsMap;
 }
 
-// ─── Thông báo huy hiệu mới ───────────────────────────────────
-// Fix: nhận statsMap (snapshot TRƯỚC khi update) để so sánh đúng
+// ─── Thông báo huy hiệu mới ───────────────────────────────────────────────────
+// statsMap: snapshot TRƯỚC khi update (từ ketThucPhien)
 async function thongBaoHuyHieu(guild, channel, guildId, sessionId, attended, statsMap) {
   const msgs = [];
   for (const a of attended) {
     if (!['tham_gia', 'tre'].includes(a.status)) continue;
 
-    // Nếu có statsMap (snapshot trước update), dùng nó; fallback lấy lại từ DB
     const statsTruoc = statsMap?.[a.user_id];
     const statsSau   = await db.getMemberStats(guildId, a.user_id);
 
@@ -35,11 +47,10 @@ async function thongBaoHuyHieu(guild, channel, guildId, sessionId, attended, sta
   if (msgs.length > 0) await channel.send(msgs.join('\n')).catch(() => null);
 }
 
-// ─── Vô hiệu hóa nút điểm danh trên tin nhắn gốc ─────────────
+// ─── Vô hiệu hóa nút điểm danh trên tin nhắn gốc ────────────────────────────
 async function voHieuHoaNutDiemDanh(client, channel, session) {
   try {
     if (session.message_id) {
-      // Ưu tiên session.channel_id để fetch đúng channel
       const targetCh = session.channel_id
         ? await channel.guild.channels.fetch(session.channel_id).catch(() => channel)
         : channel;
@@ -49,7 +60,7 @@ async function voHieuHoaNutDiemDanh(client, channel, session) {
         return;
       }
     }
-    // Fallback: tìm trong 100 message gần nhất theo message_id embed
+    // Fallback: tìm trong 100 message gần nhất
     const targetChannel = session.channel_id
       ? await channel.guild.channels.fetch(session.channel_id).catch(() => channel)
       : channel;

@@ -25,10 +25,11 @@ async function execute(interaction) {
   }
 
   const attended = await db.getAttendances(session.id);
-  await ketThucPhien(guild, session, attended);
+
+  // ketThucPhien trả về statsMap (snapshot trước update) để dùng cho huy hiệu
+  const statsMap = await ketThucPhien(guild, session, attended);
   xoaHenGio(guild.id);
 
-  // Fix: dùng session.channel_id thay vì interaction.channel
   const sessionChannel = session.channel_id
     ? await guild.channels.fetch(session.channel_id).catch(() => interaction.channel)
     : interaction.channel;
@@ -41,7 +42,9 @@ async function execute(interaction) {
     .setFooter({ text: FOOTER_DEFAULT });
 
   await interaction.editReply({ embeds: [thongBao, summaryEmbed] });
-  await thongBaoHuyHieu(guild, interaction.channel, guild.id, session.id, attended);
+
+  // Pass statsMap để tính huy hiệu đúng
+  await thongBaoHuyHieu(guild, interaction.channel, guild.id, session.id, attended, statsMap);
 }
 
 module.exports = { data, execute };
