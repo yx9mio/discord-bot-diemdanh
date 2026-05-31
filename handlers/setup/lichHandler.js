@@ -40,9 +40,9 @@ function makePlaceholderFromNums(dayOfWeek, hour, minute) {
 
 // ─── Bảng lý do thất bại → message người dùng ────────────────────────────────
 const MO_PHIEN_ERROR_MSG = {
-  already_open:    '⚠️ Đang có phiên khác đang mở. Đóng phiên hiện tại trước khi mở mới.',
+  already_open:      '⚠️ Đang có phiên khác đang mở. Đóng phiên hiện tại trước khi mở mới.',
   channel_not_found: '❌ Không tìm thấy kênh của lịch này. Kiểm tra lại Channel ID hoặc quyền của bot.',
-  db_error:        '❌ Lỗi cơ sở dữ liệu khi tạo phiên. Vui lòng thử lại sau.',
+  db_error:          '❌ Lỗi cơ sở dữ liệu khi tạo phiên. Vui lòng thử lại sau.',
 };
 
 // ─── lichMenuComponents ───────────────────────────────────────────────────────
@@ -87,22 +87,27 @@ function lichMenuComponents(lichList) {
 }
 
 // ─── lichActionComponents ─────────────────────────────────────────────────────
-function lichActionComponents(lich, lichList, activeSession = null) {
+function lichActionComponents(lich, lichList, activeSession = null, notice = null) {
   const { label: moLabel } = ngayThucTe(lich.day_of_week, lich.hour, lich.minute);
   const dong = formatDongStr(lich);
-  const embed = new EmbedBuilder()
-    .setTitle(`⚙️ Quản lý: ${lich.session_name}`)
-    .setDescription([
-      `**Mở:** ${moLabel}`,
-      `**Đóng:** ${dong}`,
-      `**Kênh:** <#${lich.channel_id}>`,
-      `**ID:** \`${lich.id}\``,
-    ].join('\n'))
-    .setColor(0x5865F2)
-    .setFooter({ text: FOOTER_DEFAULT });
 
   const hasActiveSession = !!activeSession;
   const canEarlyClose    = hasActiveSession && lich.close_day_of_week != null;
+
+  const descLines = [
+    `**Mở:** ${moLabel}`,
+    `**Đóng:** ${dong}`,
+    `**Kênh:** <#${lich.channel_id}>`,
+    `**ID:** \`${lich.id}\``,
+  ];
+  if (hasActiveSession) descLines.push(`\n🔴 Đang có phiên mở — nút **▶️ Mở ngay** bị khoá.`);
+  if (notice) descLines.push(`\n${notice}`);
+
+  const embed = new EmbedBuilder()
+    .setTitle(`⚙️ Quản lý: ${lich.session_name}`)
+    .setDescription(descLines.join('\n'))
+    .setColor(hasActiveSession ? 0xED4245 : 0x5865F2)
+    .setFooter({ text: FOOTER_DEFAULT });
 
   const row1 = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId(`setup:lich:early_open:${lich.id}`)
@@ -155,7 +160,6 @@ async function handleLich(interaction) {
   const { customId, guild } = interaction;
 
   if (customId === 'setup:lich:menu') {
-    // Bug 1 fix: deferUpdate có thể fail nếu interaction đã hết token (>3s)
     try { await interaction.deferUpdate(); } catch (_) { return true; }
     const lichList = await db.getLichCoDinh(guild.id);
     await interaction.editReply(lichMenuComponents(lichList));
@@ -163,7 +167,6 @@ async function handleLich(interaction) {
   }
 
   if (customId === 'setup:lich:select') {
-    // Bug 1 fix: same guard
     try { await interaction.deferUpdate(); } catch (_) { return true; }
     const lichId = interaction.values[0];
     const lichList = await db.getLichCoDinh(guild.id);
@@ -177,57 +180,83 @@ async function handleLich(interaction) {
     return true;
   }
 
+  // ── Mở ngay ────────────────────────────────────────────────────────────────
+  // FIX: dùng deferUpdate thay vì deferReply → update chính message embed
+  // → sau thành công/thất bại embed refresh đúng trạng thái nút
   if (customId.startsWith('setup:lich:early_open:')) {
     const lichId = customId.replace('setup:lich:early_open:', '');
-    await interaction.deferReply({ ephemeral: true });
+    try { await interaction.deferUpdate(); } catch (_) { return true; }
+
     const lichList = await db.getLichCoDinh(guild.id);
     const lich = lichList.find(l => l.id === lichId);
-    if (!lich) { await interaction.editReply({ content: '❌ Không tìm thấy lịch.' }); return true; }
+    if (!lich) {
+      await interaction.editReply({ embeds: [], components: [], content: '❌ Không tìm thấy lịch.' });
+      return true;
+    }
 
-    // Double-check phiên đang mở trước khi gọi scheduler (UI có thể stale)
-    const activeSession = await db.getActiveSession(guild.id);
-    if (activeSession) {
-      await interaction.editReply({ content: MO_PHIEN_ERROR_MSG.already_open });
+    // Double-check phiên đang mở (UI có thể stale)
+    const activeNow = await db.getActiveSession(guild.id);
+    if (activeNow) {
+      await interaction.editReply(lichActionComponents(lich, lichList, activeNow, MO_PHIEN_ERROR_MSG.already_open));
       return true;
     }
 
     const { runLichNgay } = require('../../utils/scheduler.js');
-    // FIX #8: runLichNgay trả về { ok, reason } — đọc để hiển thị đúng message
     let result;
     try {
       result = await runLichNgay(interaction.client, guild.id, lich);
     } catch (e) {
-      await interaction.editReply({ content: `❌ Lỗi không xác định: ${e.message}` });
+      await interaction.editReply(lichActionComponents(lich, lichList, null, `❌ Lỗi không xác định: ${e.message}`));
       return true;
     }
 
     if (!result.ok) {
-      const msg = MO_PHIEN_ERROR_MSG[result.reason] ?? `❌ Không thể mở phiên (${result.reason}).`;
-      await interaction.editReply({ content: msg });
+      // Fetch lại activeSession để render đúng disabled state
+      const activeAfter = await db.getActiveSession(guild.id);
+      const errMsg = MO_PHIEN_ERROR_MSG[result.reason] ?? `❌ Không thể mở phiên (${result.reason}).`;
+      await interaction.editReply(lichActionComponents(lich, lichList, activeAfter, errMsg));
       return true;
     }
 
-    await interaction.editReply({ content: `✅ Đã mở phiên **${lich.session_name}** trong <#${lich.channel_id}>.` });
+    // Thành công: fetch activeSession mới → nút "Mở ngay" tự disable, "Đóng ngay" enable
+    const activeAfter = await db.getActiveSession(guild.id);
+    await interaction.editReply(lichActionComponents(lich, lichList, activeAfter, `✅ Đã mở phiên **${lich.session_name}** trong <#${lich.channel_id}>.`));
     return true;
   }
 
+  // ── Đóng ngay ──────────────────────────────────────────────────────────────
+  // FIX: tương tự — deferUpdate để refresh embed sau khi đóng
   if (customId.startsWith('setup:lich:early_close:')) {
     const lichId = customId.replace('setup:lich:early_close:', '');
-    await interaction.deferReply({ ephemeral: true });
+    try { await interaction.deferUpdate(); } catch (_) { return true; }
+
     const lichList = await db.getLichCoDinh(guild.id);
     const lich = lichList.find(l => l.id === lichId);
-    if (!lich) { await interaction.editReply({ content: '❌ Không tìm thấy lịch.' }); return true; }
-    if (lich.close_day_of_week == null) { await interaction.editReply({ content: '⚠️ Lịch này không có giờ đóng tự động.' }); return true; }
-    // Bug 4 fix: đúng tên export là runDongLichNgay (không phải dongPhienTheoLich)
+    if (!lich) {
+      await interaction.editReply({ embeds: [], components: [], content: '❌ Không tìm thấy lịch.' });
+      return true;
+    }
+    if (lich.close_day_of_week == null) {
+      await interaction.editReply(lichActionComponents(lich, lichList, await db.getActiveSession(guild.id), '⚠️ Lịch này không có giờ đóng tự động.'));
+      return true;
+    }
+
     const { runDongLichNgay } = require('../../utils/scheduler.js');
-    await runDongLichNgay(interaction.client, guild.id, lich);
-    await interaction.editReply({ content: `✅ Đã đóng phiên **${lich.session_name}** ngay lập tức.` });
+    try {
+      await runDongLichNgay(interaction.client, guild.id, lich);
+    } catch (e) {
+      const activeNow = await db.getActiveSession(guild.id);
+      await interaction.editReply(lichActionComponents(lich, lichList, activeNow, `❌ Lỗi khi đóng: ${e.message}`));
+      return true;
+    }
+
+    // Đóng xong → activeSession = null → nút "Mở ngay" sáng lại
+    await interaction.editReply(lichActionComponents(lich, lichList, null, `✅ Đã đóng phiên **${lich.session_name}** ngay lập tức.`));
     return true;
   }
 
   if (customId.startsWith('setup:lich:edit:') && !customId.includes(':modal:')) {
     const lichId = customId.replace('setup:lich:edit:', '');
-    // Bug 2 fix: guard double-trigger — nếu đã acknowledged thì bỏ qua
     if (interaction.replied || interaction.deferred) return true;
     const lichList = await db.getLichCoDinh(guild.id);
     const lich = lichList.find(l => l.id === lichId);
@@ -274,7 +303,6 @@ async function handleLich(interaction) {
           .setMaxLength(10),
       ),
     );
-    // Bug 2 fix: wrap showModal để không crash nếu interaction đã expire
     try {
       await interaction.showModal(modal);
     } catch (e) {
@@ -305,7 +333,6 @@ async function handleLich(interaction) {
     const ten       = lich.session_name;
     const channelId = lich.channel_id;
 
-    // Bug 3 fix: dùng db.suaLichCoDinh (alias mới trong db.js)
     const updated = await db.suaLichCoDinh(guild.id, lichId, {
       dayOfWeek: parsed.thu, hour: parsed.gio, minute: parsed.phut,
       sessionName: ten,
@@ -355,7 +382,6 @@ async function handleLich(interaction) {
 
   if (customId.startsWith('setup:lich:delete:')) {
     const lichId = customId.replace('setup:lich:delete:', '');
-    // Bug 3 fix: dùng db.xoaLichCoDinh (alias mới trong db.js)
     await db.xoaLichCoDinh(guild.id, lichId);
     try { const { cancelLichCoDinh } = require('../../utils/scheduler.js'); cancelLichCoDinh(guild.id, lichId); } catch (_) {}
     const lichList = await db.getLichCoDinh(guild.id);
