@@ -42,7 +42,7 @@ function chunkLines(lines, maxLen = 950) {
   return chunks;
 }
 
-// ─── buildAttendanceButtons (L1: thêm nút Đến Trễ) ──────────────
+// ─── buildAttendanceButtons ────────────────────────────────────
 function buildAttendanceButtons(disabled = false) {
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
@@ -64,7 +64,7 @@ function buildAttendanceButtons(disabled = false) {
       .setCustomId('attend_view')
       .setLabel('📋 Xem DS')
       .setStyle(ButtonStyle.Secondary)
-      .setDisabled(false), // luôn enable — xem DS không cần phiên mở
+      .setDisabled(false), // luôn enable
   );
 }
 
@@ -74,7 +74,6 @@ async function buildSessionEmbed(guild, session, attended) {
   const late     = attended.filter(a => a.status === 'tre');
   const declined = attended.filter(a => a.status === 'khong_tham_gia');
   const eligible = session.eligible_member_ids.length;
-  // tre tính vào tỉ lệ hiện diện
   const presentCount = joined.length + late.length;
   const pct = eligible > 0 ? Math.round((presentCount / eligible) * 100) : 0;
   const bar = buildProgressBar(pct);
@@ -107,17 +106,14 @@ async function buildSessionEmbed(guild, session, attended) {
     chunkLines(joined.map((a, i) => `\`${String(i + 1).padStart(2)}.\` **${a.username}**`))
       .forEach((chunk, i) => embed.addFields({ name: i === 0 ? `✅ Tham Gia (${joined.length})` : '\u200b', value: chunk, inline: true }));
   }
-
   if (late.length > 0) {
     chunkLines(late.map((a, i) => `\`${String(i + 1).padStart(2)}.\` ${a.username}`))
       .forEach((chunk, i) => embed.addFields({ name: i === 0 ? `⏰ Đến Trễ (${late.length})` : '\u200b', value: chunk, inline: true }));
   }
-
   if (declined.length > 0) {
     chunkLines(declined.map((a, i) => `\`${String(i + 1).padStart(2)}.\` ${a.username}`))
       .forEach((chunk, i) => embed.addFields({ name: i === 0 ? `❌ Vắng Mặt (${declined.length})` : '\u200b', value: chunk, inline: true }));
   }
-
   if (absentIds.length > 0) {
     const MAX = 25;
     const mentions = absentIds.slice(0, MAX).map(id => `<@${id}>`);
@@ -163,12 +159,10 @@ function buildSummaryEmbed(session, attended) {
   } else {
     embed.addFields({ name: '✅ Tham Gia (0)', value: '—', inline: true });
   }
-
   if (lateLines.length > 0) {
     chunkLines(lateLines).forEach((chunk, i) =>
       embed.addFields({ name: i === 0 ? `⏰ Đến Trễ (${late.length})` : '\u200b', value: chunk, inline: true }));
   }
-
   if (decLines.length > 0) {
     chunkLines(decLines).forEach((chunk, i) =>
       embed.addFields({ name: i === 0 ? `❌ Vắng Mặt (${declined.length})` : '\u200b', value: chunk, inline: true }));
@@ -180,7 +174,7 @@ function buildSummaryEmbed(session, attended) {
   return embed;
 }
 
-// ─── buildMemberEmbed (lịch sử cá nhân) ───────────────────────
+// ─── buildMemberEmbed ──────────────────────────────────────────
 function buildMemberEmbed(member, stats, badge, pct, bar) {
   return new EmbedBuilder()
     .setAuthor(AUTHOR_DEFAULT)
@@ -208,7 +202,7 @@ function buildStatsEmbed(lines) {
     .setTimestamp();
 }
 
-// ─── buildHistoryEmbed (danh sách phiên) ─────────────────────
+// ─── buildHistoryEmbed — Fix: hiển thị session_id để dùng với /sua_diemdanh & /thong_ke_phien
 function buildHistoryEmbed(history) {
   if (history.length === 0) {
     return new EmbedBuilder()
@@ -220,14 +214,15 @@ function buildHistoryEmbed(history) {
   }
   const lines = history.map((s, i) => {
     const ts = Math.floor(new Date(s.started_at).getTime() / 1000);
-    return `\`${String(i + 1).padStart(2)}.\` **${s.session_name}** — <t:${ts}:d>`;
+    // Hiện session_id (8 ký tự đầu) để user copy dùng cho /thong_ke_phien và /sua_diemdanh
+    return `\`${String(i + 1).padStart(2)}.\` **${s.session_name}** — <t:${ts}:d>\n    \`ID: ${s.id}\``;
   });
   return new EmbedBuilder()
     .setAuthor(AUTHOR_DEFAULT)
     .setTitle(`📚 Lịch Sử Điểm Danh (${history.length} phiên gần nhất)`)
     .setColor(COLOR_GOLD)
     .setDescription(lines.join('\n'))
-    .setFooter({ text: `${FOOTER_DEFAULT} · Dùng /thong_ke_phien để xem chi tiết` })
+    .setFooter({ text: `${FOOTER_DEFAULT} · Dùng ID với /thong_ke_phien và /sua_diemdanh` })
     .setTimestamp();
 }
 

@@ -1,9 +1,14 @@
 // events/ready.js
-const { REST, Routes } = require('discord.js');
+const { REST, Routes, EmbedBuilder } = require('discord.js');
 const path = require('path');
 const fs   = require('fs');
 const db   = require('../db.js');
-const { datHenGioDong } = require('../utils/timers.js');
+const { datHenGioDong }    = require('../utils/timers.js');
+const { ketThucPhien, thongBaoHuyHieu, voHieuHoaNutDiemDanh } = require('../utils/session.js');
+const { buildSummaryEmbed, FOOTER_DEFAULT } = require('../utils/embeds.js');
+
+// Fix: khai báo ngoài function để giữ state giữa các lần gọi
+let dangKhoiPhuc = false;
 
 async function dangKyCommands(client) {
   const dir = path.join(__dirname, '..', 'commands');
@@ -20,7 +25,6 @@ async function dangKyCommands(client) {
 }
 
 async function khoiPhucHenGio(client) {
-  let dangKhoiPhuc = false;
   if (dangKhoiPhuc) return;
   dangKhoiPhuc = true;
   try {
@@ -29,9 +33,10 @@ async function khoiPhucHenGio(client) {
         const session = await db.getActiveSession(guild.id);
         if (!session || !session.auto_close_at) continue;
 
-        const ms = new Date(session.auto_close_at).getTime() - Date.now();
         const channelId = session.channel_id;
         if (!channelId) continue;
+
+        const ms = new Date(session.auto_close_at).getTime() - Date.now();
 
         if (ms > 0) {
           await datHenGioDong(client, guild, session, channelId, ms);
@@ -41,9 +46,6 @@ async function khoiPhucHenGio(client) {
           const ch = await guild.channels.fetch(channelId).catch(() => null);
           if (!ch) continue;
           const attended = await db.getAttendances(session.id);
-          const { ketThucPhien, thongBaoHuyHieu, voHieuHoaNutDiemDanh } = require('../utils/session.js');
-          const { buildSummaryEmbed, FOOTER_DEFAULT } = require('../utils/embeds.js');
-          const { EmbedBuilder } = require('discord.js');
           await ketThucPhien(guild, session, attended);
           await voHieuHoaNutDiemDanh(client, ch, session);
           const thongBao = new EmbedBuilder()
