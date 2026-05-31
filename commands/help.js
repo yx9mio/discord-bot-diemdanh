@@ -1,273 +1,109 @@
-// commands/help.js — Hướng dẫn bot với select menu phân danh mục
-const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder } = require('discord.js');
-const { FOOTER_DEFAULT, AUTHOR_DEFAULT } = require('../utils/embeds.js');
+// commands/help.js
+const {
+  SlashCommandBuilder,
+  EmbedBuilder,
+  ActionRowBuilder,
+  StringSelectMenuBuilder,
+} = require('discord.js');
 
-const CATEGORIES = {
+const SECTIONS = {
   diemdanh: {
     label: '📋 Điểm Danh',
-    description: 'Mở, đóng, hủy phiên điểm danh',
-    color: 0x5865F2,
-    commands: [
-      {
-        name: '/bat_dau',
-        usage: '/bat_dau ten:[tên] [phut:X] [gio_dong:H] [phut_dong:P]',
-        desc: 'Mở phiên điểm danh mới.',
-        note: 'Admin only. Chỉ 1 phiên tại 1 thời điểm.',
-        examples: [
-          '`/bat_dau ten:Bang Chiến` → mở phiên, không tự đóng',
-          '`/bat_dau ten:Bang Chiến phut:60` → tự đóng sau 60 phút',
-          '`/bat_dau ten:Bang Chiến gio_dong:22 phut_dong:0` → tự đóng lúc 22:00',
-        ],
-      },
-      {
-        name: '/ket_thuc',
-        usage: '/ket_thuc',
-        desc: 'Đóng phiên điểm danh đang mở, hiển thị kết quả.',
-        note: 'Admin only.',
-        examples: ['`/ket_thuc` → đóng phiên hiện tại'],
-      },
-      {
-        name: '/huy_diemdanh',
-        usage: '/huy_diemdanh',
-        desc: 'Hủy phiên hiện tại. Phiên bị hủy sẽ không hiện trong lịch sử.',
-        note: 'Admin only. Khác /ket_thuc — không tính vào thống kê.',
-        examples: ['`/huy_diemdanh` → hủy phiên, dữ liệu bị ẩn khỏi lịch sử'],
-      },
-      {
-        name: '/xem',
-        usage: '/xem',
-        desc: 'Xem danh sách điểm danh của phiên hiện tại.',
-        note: 'Ai cũng dùng được.',
-        examples: ['`/xem` → hiển thị danh sách tham gia/vắng'],
-      },
-    ],
-  },
-  thanhvien: {
-    label: '👤 Thành Viên',
-    description: 'Điểm danh thủ công, sửa, xoá',
-    color: 0x57F287,
-    commands: [
-      {
-        name: '/them',
-        usage: '/them thanh_vien:[@user] [trang_thai:...]',
-        desc: 'Thêm thành viên vào phiên điểm danh thủ công.',
-        note: 'Admin only.',
-        examples: [
-          '`/them thanh_vien:@Mio` → thêm với trạng thái mặc định (tham gia)',
-          '`/them thanh_vien:@Mio trang_thai:tre` → thêm với trạng thái trễ',
-        ],
-      },
-      {
-        name: '/sua_diem_danh',
-        usage: '/sua_diem_danh thanh_vien:[@user] trang_thai:[...]',
-        desc: 'Sửa trạng thái điểm danh của thành viên trong phiên hiện tại.',
-        note: 'Admin only.',
-        examples: ['`/sua_diem_danh thanh_vien:@Mio trang_thai:vang_mat`'],
-      },
-      {
-        name: '/xoa',
-        usage: '/xoa thanh_vien:[@user]',
-        desc: 'Xoá thành viên khỏi phiên điểm danh hiện tại.',
-        note: 'Admin only.',
-        examples: ['`/xoa thanh_vien:@Mio`'],
-      },
-      {
-        name: '/sua',
-        usage: '/sua ten:[tên mới]',
-        desc: 'Đổi tên phiên điểm danh đang mở.',
-        note: 'Admin only.',
-        examples: ['`/sua ten:Bang Chiến Tuần 2`'],
-      },
-    ],
-  },
-  lichco: {
-    label: '📅 Lịch Cố Định',
-    description: 'Tạo lịch điểm danh tự động hằng tuần',
-    color: 0xFEE75C,
-    commands: [
-      {
-        name: '/lich_co_dinh them',
-        usage: '/lich_co_dinh them ten:[tên] thu_mo:[thứ] gio_mo:[H] phut_mo:[P] ...',
-        desc: 'Tạo lịch điểm danh tự động mở mỗi tuần theo thứ/giờ đã cài.',
-        note: 'Admin only. Phái lấy từ /cai_dat_phai (không cần nhập lại).',
-        examples: [
-          '`/lich_co_dinh them ten:Bang Chiến thu_mo:Thứ 6 gio_mo:20 phut_mo:0`',
-          'Thêm thu_dong/gio_dong/phut_dong để cài giờ tự đóng',
-        ],
-      },
-      {
-        name: '/lich_co_dinh xem',
-        usage: '/lich_co_dinh xem',
-        desc: 'Xem danh sách lịch cố định đang kích hoạt.',
-        note: 'Ai cũng dùng được.',
-        examples: ['`/lich_co_dinh xem`'],
-      },
-      {
-        name: '/lich_co_dinh xoa',
-        usage: '/lich_co_dinh xoa id:[ID]',
-        desc: 'Xoá lịch cố định theo ID. Lấy ID từ `/lich_co_dinh xem`.',
-        note: 'Admin only.',
-        examples: ['`/lich_co_dinh xoa id:ab12cd34`'],
-      },
-    ],
-  },
-  caidat: {
-    label: '⚙️ Cài Đặt',
-    description: 'Cấu hình bot cho server',
-    color: 0xEB459E,
-    commands: [
-      {
-        name: '/cai_dat',
-        usage: '/cai_dat [role_diem_danh:@role] [role_admin:@role]',
-        desc: 'Cài role được phép điểm danh và role admin bot.',
-        note: 'Cần quyền Quản trị server.',
-        examples: [
-          '`/cai_dat role_diem_danh:@Thành Viên` → chỉ role này mới được điểm danh',
-          '`/cai_dat role_admin:@BQL` → role này có quyền dùng lệnh admin',
-        ],
-      },
-      {
-        name: '/cai_dat_phai',
-        usage: '/cai_dat_phai phai_1:@role phai_2:@role ...',
-        desc: 'Cài danh sách role phái cho server. Chạy 1 lần — tự động áp dụng cho mọi lịch.',
-        note: 'Admin only. Tối đa 11 phái.',
-        examples: [
-          '`/cai_dat_phai phai_1:@Thiết Y phai_2:@Huyết Hà ...`',
-        ],
-      },
-      {
-        name: '/nhac_nho',
-        usage: '/nhac_nho [phut:X]',
-        desc: 'Bật/tắt nhắc nhở trước khi phiên mở (từ lịch cố định). Mặc định 15 phút.',
-        note: 'Admin only.',
-        examples: ['`/nhac_nho phut:10` → nhắc 10 phút trước khi mở'],
-      },
+    desc: 'Các lệnh quản lý phiên điểm danh',
+    fields: [
+      { name: '/bat_dau', value: 'Bắt đầu phiên điểm danh mới' },
+      { name: '/ket_thuc', value: 'Kết thúc phiên hiện tại' },
+      { name: '/huy_diemdanh', value: 'Hủy phiên (không lưu kết quả)' },
+      { name: '/diem_danh', value: 'Sửa trạng thái điểm danh từ dịch vụ' },
+      { name: '/broadcast', value: 'Ping những người chưa điểm danh' },
     ],
   },
   thongke: {
     label: '📊 Thống Kê',
-    description: 'Xem lịch sử, thống kê thành viên',
-    color: 0xED4245,
-    commands: [
-      {
-        name: '/thong_ke',
-        usage: '/thong_ke',
-        desc: 'Xem bảng xếp hạng top 10 thành viên chuyên cần nhất server.',
-        note: 'Ai cũng dùng được.',
-        examples: [
-          '`/thong_ke` → hiển thị top 10 leaderboard',
-        ],
-      },
-      {
-        name: '/thong_ke_phien',
-        usage: '/thong_ke_phien session_id:[ID]',
-        desc: 'Xem chi tiết một phiên đã kết thúc. Lấy ID từ `/lich_su`.',
-        note: 'Ai cũng dùng được.',
-        examples: ['`/thong_ke_phien session_id:abc123` → xem chi tiết phiên đó'],
-      },
-      {
-        name: '/lich_su',
-        usage: '/lich_su [so_phien:N]',
-        desc: 'Xem lịch sử N phiên gần nhất.',
-        note: 'Ai cũng dùng được.',
-        examples: ['`/lich_su` → 10 phiên gần nhất', '`/lich_su so_phien:20`'],
-      },
-      {
-        name: '/xuat',
-        usage: '/xuat [phien_id:ID]',
-        desc: 'Xuất danh sách điểm danh ra file CSV.',
-        note: 'Admin only.',
-        examples: ['`/xuat` → xuất phiên gần nhất'],
-      },
-      {
-        name: '/member',
-        usage: '/member thanh_vien:[@user]',
-        desc: 'Xem chi tiết lịch sử điểm danh của 1 thành viên.',
-        note: 'Ai cũng dùng được.',
-        examples: ['`/member thanh_vien:@Mio`'],
-      },
+    desc: 'Xem thống kê và xếp hạng',
+    fields: [
+      { name: '/toi', value: 'Xem thống kê cá nhân của bạn' },
+      { name: '/rank', value: 'Bảng xếp hạng điểm danh' },
+      { name: '/thong_ke', value: 'Thống kê toàn bộ server' },
+      { name: '/lich_su', value: 'Lịch sử phiên điểm danh' },
+    ],
+  },
+  caidat: {
+    label: '⚙️ Cài Đặt',
+    desc: 'Cấu hình bot',
+    fields: [
+      { name: '/quanly', value: 'Mở bảng quản lý bot (Admin)' },
+      { name: '/cai_dat', value: 'Thiết lập role điểm danh / admin' },
+      { name: '/cai_dat_phai', value: 'Cấu hình role phái' },
     ],
   },
 };
 
-const data = new SlashCommandBuilder()
-  .setName('help')
-  .setDescription('Hướng dẫn sử dụng bot điểm danh');
-
-function buildOverviewEmbed() {
-  const desc = Object.entries(CATEGORIES)
-    .map(([, cat]) => `${cat.label}\n> ${cat.description}`)
-    .join('\n\n');
+function buildMainEmbed() {
   return new EmbedBuilder()
-    .setAuthor(AUTHOR_DEFAULT)
-    .setTitle('📖 Hướng Dẫn Bot Điểm Danh')
-    .setDescription(
-      '**Chọn danh mục bên dưới để xem chi tiết lệnh.**\n\n' + desc
-    )
-    .addFields(
-      { name: '🔑 Phân quyền', value: '**Admin**: owner server hoặc role admin cài trong `/cai_dat`\n**Thành viên**: mọi người đều dùng được', inline: false },
-      { name: '🚀 Bắt đầu nhanh', value: '1. `/cai_dat` — cài role\n2. `/cai_dat_phai` — cài role phái (1 lần)\n3. `/lich_co_dinh them` — tạo lịch tự động\nhoặc `/bat_dau` — mở phiên thủ công', inline: false },
-    )
+    .setTitle('📖 Hướng Dẫn Sử Dụng Bot')
     .setColor(0x5865F2)
-    .setFooter({ text: FOOTER_DEFAULT })
+    .setDescription('Chọn danh mục bên dưới để xem chi tiết các lệnh.')
+    .addFields(
+      { name: '📋 Điểm Danh', value: 'Quản lý phiên điểm danh', inline: true },
+      { name: '📊 Thống Kê', value: 'Xem thống kê, xếp hạng', inline: true },
+      { name: '⚙️ Cài Đặt', value: 'Cấu hình bot', inline: true },
+    )
+    .setFooter({ text: 'Quản Gia — Bot điểm danh' })
     .setTimestamp();
 }
 
-function buildCategoryEmbed(catKey) {
-  const cat = CATEGORIES[catKey];
-  if (!cat) return null;
-  const fields = cat.commands.map(cmd => ({
-    name: cmd.name,
-    value: [
-      `> ${cmd.desc}`,
-      `**Cú pháp:** \`${cmd.usage}\``,
-      cmd.note ? `**Lưu ý:** ${cmd.note}` : null,
-      `**Ví dụ:**\n${cmd.examples.join('\n')}`,
-    ].filter(Boolean).join('\n'),
-    inline: false,
-  }));
+function buildSectionEmbed(key) {
+  const s = SECTIONS[key];
+  if (!s) return buildMainEmbed();
   return new EmbedBuilder()
-    .setAuthor(AUTHOR_DEFAULT)
-    .setTitle(cat.label)
-    .setDescription(cat.description)
-    .addFields(fields)
-    .setColor(cat.color)
-    .setFooter({ text: `${FOOTER_DEFAULT} • Dùng /help để quay lại tổng quan` })
+    .setTitle(s.label)
+    .setColor(0x5865F2)
+    .setDescription(s.desc)
+    .addFields(s.fields)
+    .setFooter({ text: 'Quản Gia — Bot điểm danh' })
     .setTimestamp();
 }
 
-function buildSelectMenu() {
+function buildSelectMenu(placeholder = 'Chọn danh mục...') {
   return new ActionRowBuilder().addComponents(
     new StringSelectMenuBuilder()
-      .setCustomId('help_category')
-      .setPlaceholder('Chọn danh mục...')
+      .setCustomId('help:menu')
+      .setPlaceholder(placeholder)
       .addOptions(
-        { label: 'Tổng quan', description: 'Xem tất cả danh mục', value: 'overview', emoji: '📖' },
-        ...Object.entries(CATEGORIES).map(([key, cat]) => ({
-          label: cat.label.replace(/^\S+ /, ''),
-          description: cat.description,
-          value: key,
-          emoji: cat.label.split(' ')[0],
+        Object.entries(SECTIONS).map(([value, s]) => ({
+          label: s.label,
+          description: s.desc,
+          value,
         }))
       )
   );
 }
 
-async function execute(interaction) {
-  await interaction.deferReply({ ephemeral: true });
-  const embed = buildOverviewEmbed();
-  const menu  = buildSelectMenu();
-  await interaction.editReply({ embeds: [embed], components: [menu] });
-}
-
-// Xử lý select menu — được gọi từ index.js (isStringSelectMenu)
 async function handleSelectMenu(interaction) {
-  if (interaction.customId !== 'help_category') return;
+  if (interaction.customId !== 'help:menu') return;
   await interaction.deferUpdate();
-  const val = interaction.values[0];
-  const embed = val === 'overview' ? buildOverviewEmbed() : buildCategoryEmbed(val);
-  if (!embed) return;
-  await interaction.editReply({ embeds: [embed], components: [buildSelectMenu()] });
+  const key   = interaction.values[0];
+  const embed = buildSectionEmbed(key);
+  return interaction.editReply({ embeds: [embed], components: [buildSelectMenu()] });
 }
 
-module.exports = { data, execute, handleSelectMenu };
+module.exports = {
+  data: new SlashCommandBuilder()
+    .setName('help')
+    .setDescription('Xem hướng dẫn sử dụng bot')
+    .setDefaultMemberPermissions(0n),
+
+  async execute(interaction) {
+    await interaction.deferReply({ ephemeral: true });
+    return interaction.editReply({
+      embeds: [buildMainEmbed()],
+      components: [buildSelectMenu()],
+    });
+  },
+
+  handleSelectMenu,
+  buildMainEmbed,
+  buildSectionEmbed,
+  buildSelectMenu,
+};

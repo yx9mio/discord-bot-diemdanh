@@ -1,5 +1,5 @@
 // commands/broadcast.js — Ping những người chưa điểm danh (Admin)
-const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits, ChannelType } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, ChannelType } = require('discord.js');
 const db = require('../db.js');
 const { laAdmin } = require('../utils/helpers.js');
 const { FOOTER_DEFAULT, AUTHOR_DEFAULT } = require('../utils/embeds.js');
@@ -8,6 +8,7 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('broadcast')
     .setDescription('[Admin] Ping những thành viên chưa điểm danh trong phiên hiện tại')
+    .setDefaultMemberPermissions(0n)
     .addChannelOption(o =>
       o.setName('kenh')
         .setDescription('Kênh gửi thông báo (mặc định: kênh hiện tại)')
@@ -32,7 +33,7 @@ module.exports = {
       return interaction.editReply({ content: '🚫 Không có phiên điểm danh nào đang mở.' });
     }
 
-    const attended  = await db.getAttendances(session.id);
+    const attended   = await db.getAttendances(session.id);
     const checkedIds = new Set(attended.map(a => a.user_id));
     const absentIds  = (session.eligible_member_ids ?? []).filter(id => !checkedIds.has(id));
 
