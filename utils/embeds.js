@@ -84,8 +84,13 @@ async function buildSessionEmbed(guild, session, attended) {
     .setTitle(`⚔️ Điểm Danh: ${session.session_name}`)
     .setColor(COLOR_ACTIVE)
     .setDescription(desc)
-    .setThumbnail(guild.iconURL({ dynamic: true }) ?? null)
     .setTimestamp();
+
+  // Guard: chỉ set thumbnail nếu guild hợp lệ và có icon
+  if (guild) {
+    const iconURL = guild.iconURL({ dynamic: true });
+    if (iconURL) embed.setThumbnail(iconURL);
+  }
 
   if (joined.length > 0) {
     const lines = joined.map((a, i) => `\`${String(i + 1).padStart(2)}.\` **${a.username}**`);
