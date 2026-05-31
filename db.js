@@ -219,7 +219,7 @@ async function themLichCoDinh(guildId, { dayOfWeek, hour, minute, sessionName, c
 async function xoaLichCoDinh(guildId, id) {
   const { data, error } = await supabase.from('scheduled_sessions').update({ is_active: false })
     .eq('guild_id', guildId).eq('id', id).select().maybeSingle();
-  throwIfError(error,, 'xoaLichCoDinh');
+  throwIfError(error, 'xoaLichCoDinh');
   return !!data;
 }
 
