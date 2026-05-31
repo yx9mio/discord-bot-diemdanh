@@ -218,7 +218,7 @@ function buildConfigEmbed(cfg) {
       },
       {
         name: '🛡️ Role Admin Bot',
-        value: cfg.admin_role_id ? `<@&${cfg.admin_role_id}>` : '*(Server Administrator)*',
+        value: cfg.admin_role_id ? `<@&${cfg.admin_role_id}>` : '*(Quản trị viên máy chủ)*',
         inline: true,
       },
     )
