@@ -50,6 +50,19 @@ async function getActiveSession(guildId) {
   return data;
 }
 
+// Lấy phiên theo ID (dùng cho L4 — sửa phiên đã đóng)
+async function getSessionById(sessionId, guildId) {
+  const { data, error } = await supabase
+    .from('sessions')
+    .select('*')
+    .eq('id', sessionId)
+    .eq('guild_id', guildId)
+    .eq('cancelled', false)
+    .maybeSingle();
+  throwIfError(error, 'getSessionById');
+  return data;
+}
+
 async function createSession(guildId, { sessionName, roleName, allowedRoleId, eligibleMemberIds, startedBy, autoCloseAt, channelId }) {
   const { data, error } = await supabase
     .from('sessions')
@@ -108,6 +121,7 @@ async function getAttendances(sessionId) {
   return data ?? [];
 }
 
+// Điểm danh bình thường — cập nhật checked_in_at
 async function upsertAttendance(sessionId, guildId, userId, username, status) {
   const { error } = await supabase
     .from('attendances')
@@ -116,6 +130,31 @@ async function upsertAttendance(sessionId, guildId, userId, username, status) {
       { onConflict: 'session_id,user_id' }
     );
   throwIfError(error, 'upsertAttendance');
+}
+
+// Sửa điểm danh phiên đã đóng — KHÔNG đổi checked_in_at (L4)
+async function upsertAttendanceNoTime(sessionId, guildId, userId, username, status) {
+  // Thử update trước (nếu đã có bản ghi)
+  const { data: existing } = await supabase
+    .from('attendances')
+    .select('id')
+    .eq('session_id', sessionId)
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (existing) {
+    const { error } = await supabase
+      .from('attendances')
+      .update({ username, status })
+      .eq('session_id', sessionId)
+      .eq('user_id', userId);
+    throwIfError(error, 'upsertAttendanceNoTime:update');
+  } else {
+    const { error } = await supabase
+      .from('attendances')
+      .insert({ session_id: sessionId, guild_id: guildId, user_id: userId, username, status, checked_in_at: new Date().toISOString() });
+    throwIfError(error, 'upsertAttendanceNoTime:insert');
+  }
 }
 
 async function removeAttendance(sessionId, userId) {
@@ -145,16 +184,12 @@ async function updateMemberStats(guildId, userId, joined, sessionId) {
   const newTotal  = existing.total_sessions + 1;
   const newJoined = existing.total_joined + (joined ? 1 : 0);
 
-  // Streak: nếu tham gia và phiên trước cũng tham gia (last_session_id có streak > 0)
-  // thì tăng tiếp, ngược lại reset về 1 (không kế thừa streak cũ nếu vắng giữa chừng)
   let newStreak;
   if (!joined) {
     newStreak = 0;
   } else if (existing.current_streak > 0) {
-    // Phên trước có streak — tiếp tục chuỗi
     newStreak = existing.current_streak + 1;
   } else {
-    // Phên trước vắng (streak = 0) — bắt đầu chuỗi mới
     newStreak = 1;
   }
 
@@ -177,6 +212,62 @@ async function updateMemberStats(guildId, userId, joined, sessionId) {
   return { ...existing, total_sessions: newTotal, total_joined: newJoined, current_streak: newStreak, best_streak: newBest };
 }
 
+// Tính lại toàn bộ stats từ lịch sử — dùng sau khi sửa phiên đã đóng (L4)
+async function recalculateMemberStats(guildId, userId) {
+  // Lấy tất cả phiên đã kết thúc (không cancelled), theo thứ tự thời gian
+  const { data: sessions, error: sErr } = await supabase
+    .from('sessions')
+    .select('id, ended_at, eligible_member_ids')
+    .eq('guild_id', guildId)
+    .eq('is_active', false)
+    .eq('cancelled', false)
+    .order('ended_at', { ascending: true });
+  throwIfError(sErr, 'recalculateMemberStats:sessions');
+
+  let total_sessions = 0;
+  let total_joined   = 0;
+  let current_streak = 0;
+  let best_streak    = 0;
+  let last_session_id = null;
+
+  for (const s of sessions ?? []) {
+    // Chỉ tính phiên mà member được eligible
+    if (!s.eligible_member_ids.includes(userId)) continue;
+    total_sessions++;
+    last_session_id = s.id;
+
+    const { data: att } = await supabase
+      .from('attendances')
+      .select('status')
+      .eq('session_id', s.id)
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    const joined = att && ['tham_gia', 'tre'].includes(att.status);
+    if (joined) {
+      total_joined++;
+      current_streak++;
+      if (current_streak > best_streak) best_streak = current_streak;
+    } else {
+      current_streak = 0;
+    }
+  }
+
+  const { error } = await supabase
+    .from('member_stats')
+    .upsert({
+      guild_id: guildId,
+      user_id: userId,
+      total_sessions,
+      total_joined,
+      current_streak,
+      best_streak,
+      last_session_id,
+      updated_at: new Date().toISOString(),
+    });
+  throwIfError(error, 'recalculateMemberStats:upsert');
+}
+
 async function getAllMemberStats(guildId) {
   const { data, error } = await supabase
     .from('member_stats')
@@ -194,7 +285,7 @@ async function getSessionHistory(guildId, limit = 20) {
     .select('*')
     .eq('guild_id', guildId)
     .eq('is_active', false)
-    .eq('cancelled', false)       // Loại bỏ phiên bị hủy
+    .eq('cancelled', false)
     .order('ended_at', { ascending: false })
     .limit(limit);
   throwIfError(error, 'getSessionHistory');
@@ -204,8 +295,8 @@ async function getSessionHistory(guildId, limit = 20) {
 module.exports = {
   supabase,
   getConfig, setConfig,
-  getActiveSession, createSession, updateSessionMessageId, endSession, cancelSession,
-  getAttendances, upsertAttendance, removeAttendance,
-  getMemberStats, updateMemberStats, getAllMemberStats,
+  getActiveSession, getSessionById, createSession, updateSessionMessageId, endSession, cancelSession,
+  getAttendances, upsertAttendance, upsertAttendanceNoTime, removeAttendance,
+  getMemberStats, updateMemberStats, recalculateMemberStats, getAllMemberStats,
   getSessionHistory,
 };
