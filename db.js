@@ -21,7 +21,7 @@ function throwIfError(error, context) {
   }
 }
 
-// ─── Cấu hình Guild ──────────────────────────────────────────────────────────────────────
+// ─── Cấu hình Guild ────────────────────────────────────────────────────────────────
 function getDefaultConfig(guildId) {
   return { guild_id: guildId, allowed_role_id: null, admin_role_id: null, phai_role_ids: [] };
 }
@@ -41,7 +41,7 @@ async function setConfig(guildId, updates) {
   throwIfError(error, 'setConfig');
 }
 
-// ─── Phiên Điểm Danh ────────────────────────────────────────────────────────────────
+// ─── Phiên Điểm Danh ──────────────────────────────────────────────────────────────────
 function getDefaultSession() { return null; }
 
 async function getActiveSession(guildId) {
@@ -99,7 +99,7 @@ async function cancelSession(sessionId) {
   throwIfError(error, 'cancelSession');
 }
 
-// ─── Điểm Danh ──────────────────────────────────────────────────────────────────────────
+// ─── Điểm Danh ───────────────────────────────────────────────────────────────────────────
 async function getAttendances(sessionId) {
   const { data, error } = await supabase
     .from('attendances').select('*').eq('session_id', sessionId).order('checked_in_at', { ascending: true });
@@ -132,7 +132,7 @@ async function removeAttendance(sessionId, userId) {
   throwIfError(error, 'removeAttendance');
 }
 
-// ─── Thống Kê Thành Viên ────────────────────────────────────────────────────────────────
+// ─── Thống Kê Thành Viên ──────────────────────────────────────────────────────────────────
 async function getMemberStats(guildId, userId) {
   const { data, error } = await supabase.from('member_stats').select('*')
     .eq('guild_id', guildId).eq('user_id', userId).maybeSingle();
@@ -220,7 +220,44 @@ async function getSessionHistory(guildId, limit = 20) {
   return data ?? [];
 }
 
-// ─── Lịch Cố Định ───────────────────────────────────────────────────────────────────────
+/**
+ * Phase 6: Lấy lịch sử phiên trong khoảng thời gian.
+ * @param {string} guildId
+ * @param {string|null} since  — ISO timestamp hoặc null (không giới hạn)
+ * @param {number} limit
+ */
+async function getSessionHistoryWithRange(guildId, since = null, limit = 100) {
+  let query = supabase.from('sessions').select('*')
+    .eq('guild_id', guildId).eq('is_active', false).eq('cancelled', false)
+    .order('ended_at', { ascending: false }).limit(limit);
+  if (since) query = query.gte('ended_at', since);
+  const { data, error } = await query;
+  throwIfError(error, 'getSessionHistoryWithRange');
+  return data ?? [];
+}
+
+/**
+ * Phase 6: Lấy tất cả attendance của một danh sách session_ids.
+ * Trả về Map<sessionId, attendance[]> để lookup O(1).
+ * @param {string[]} sessionIds
+ */
+async function getAttendanceSummaryForSessions(sessionIds) {
+  if (!sessionIds || sessionIds.length === 0) return new Map();
+  const { data, error } = await supabase
+    .from('attendances')
+    .select('session_id, user_id, status')
+    .in('session_id', sessionIds);
+  throwIfError(error, 'getAttendanceSummaryForSessions');
+  const map = new Map();
+  for (const row of data ?? []) {
+    const arr = map.get(row.session_id) ?? [];
+    arr.push(row);
+    map.set(row.session_id, arr);
+  }
+  return map;
+}
+
+// ─── Lịch Cố Định ────────────────────────────────────────────────────────────────────────
 async function getLichCoDinh(guildId) {
   const { data, error } = await supabase.from('scheduled_sessions').select('*')
     .eq('guild_id', guildId).eq('is_active', true)
@@ -299,6 +336,6 @@ module.exports = {
   getAttendances, upsertAttendance, upsertAttendanceNoTime, removeAttendance,
   getMemberStats, updateMemberStats, recalculateMemberStats, getAllMemberStats,
   getTopMembers, resetMemberStreak,
-  getSessionHistory,
+  getSessionHistory, getSessionHistoryWithRange, getAttendanceSummaryForSessions,
   getLichCoDinh, getLichCoDinhById, getLichCoDinhByShortId, themLichCoDinh, xoaLichCoDinh, capNhatLichCoDinh, capNhatPhaiRoles,
 };
