@@ -6,7 +6,6 @@ const { MOC_HUY_HIEU } = require('./helpers.js');
 // ─── Kết thúc phiên & cập nhật stats ─────────────────────────
 async function ketThucPhien(guild, session, attended) {
   for (const uid of session.eligible_member_ids) {
-    // tre (đến trễ) vẫn tính là tham gia cho stats/streak
     const thamGia = attended.some(a => a.user_id === uid && ['tham_gia', 'tre'].includes(a.status));
     await db.updateMemberStats(guild.id, uid, thamGia, session.id);
   }
@@ -14,14 +13,21 @@ async function ketThucPhien(guild, session, attended) {
 }
 
 // ─── Thông báo huy hiệu mới ───────────────────────────────────
-async function thongBaoHuyHieu(guild, channel, guildId, sessionId, attended) {
+// Fix: nhận statsMap (snapshot TRƯỚC khi update) để so sánh đúng
+async function thongBaoHuyHieu(guild, channel, guildId, sessionId, attended, statsMap) {
   const msgs = [];
   for (const a of attended) {
     if (!['tham_gia', 'tre'].includes(a.status)) continue;
-    const stats = await db.getMemberStats(guildId, a.user_id);
-    const truocKhi = stats.total_joined - 1;
+
+    // Nếu có statsMap (snapshot trước update), dùng nó; fallback lấy lại từ DB
+    const statsTruoc = statsMap?.[a.user_id];
+    const statsSau   = await db.getMemberStats(guildId, a.user_id);
+
+    const truocKhi = statsTruoc != null ? statsTruoc.total_joined : Math.max(0, statsSau.total_joined - 1);
+    const sauKhi   = statsSau.total_joined;
+
     for (const m of MOC_HUY_HIEU) {
-      if (truocKhi < m.count && stats.total_joined >= m.count) {
+      if (truocKhi < m.count && sauKhi >= m.count) {
         msgs.push(`🎉 <@${a.user_id}> đạt huy hiệu **${m.badge} ${m.label}** (${m.count} lần tham gia)!`);
       }
     }
@@ -33,13 +39,17 @@ async function thongBaoHuyHieu(guild, channel, guildId, sessionId, attended) {
 async function voHieuHoaNutDiemDanh(client, channel, session) {
   try {
     if (session.message_id) {
-      const msg = await channel.messages.fetch(session.message_id).catch(() => null);
+      // Ưu tiên session.channel_id để fetch đúng channel
+      const targetCh = session.channel_id
+        ? await channel.guild.channels.fetch(session.channel_id).catch(() => channel)
+        : channel;
+      const msg = await targetCh.messages.fetch(session.message_id).catch(() => null);
       if (msg) {
         await msg.edit({ components: [buildAttendanceButtons(true)] }).catch(() => null);
         return;
       }
     }
-    // Fallback: tìm trong channel gốc
+    // Fallback: tìm trong 100 message gần nhất theo message_id embed
     const targetChannel = session.channel_id
       ? await channel.guild.channels.fetch(session.channel_id).catch(() => channel)
       : channel;
@@ -48,7 +58,7 @@ async function voHieuHoaNutDiemDanh(client, channel, session) {
     const sessionMsg = msgs.find(m =>
       m.author.id === client.user.id &&
       m.components.length > 0 &&
-      m.embeds[0]?.title?.includes(session.session_name)
+      m.embeds.some(e => e.title?.includes(session.session_name))
     );
     if (sessionMsg) await sessionMsg.edit({ components: [buildAttendanceButtons(true)] }).catch(() => null);
   } catch (_) {}

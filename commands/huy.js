@@ -25,7 +25,12 @@ async function execute(interaction) {
 
   await db.cancelSession(session.id);
   xoaHenGio(guild.id);
-  await voHieuHoaNutDiemDanh(interaction.client, interaction.channel, session);
+
+  // Fix: dùng session.channel_id thay vì interaction.channel
+  const sessionChannel = session.channel_id
+    ? await guild.channels.fetch(session.channel_id).catch(() => interaction.channel)
+    : interaction.channel;
+  await voHieuHoaNutDiemDanh(interaction.client, sessionChannel, session);
 
   await interaction.editReply({
     content: `🗑️ Phiên **${session.session_name}** đã bị hủy. Phiên này sẽ không hiện trong lịch sử.`,

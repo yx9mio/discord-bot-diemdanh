@@ -1,12 +1,10 @@
 // commands/ketthuc.js
-const { SlashCommandBuilder } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const db = require('../db.js');
-const { buildSummaryEmbed } = require('../utils/embeds.js');
+const { buildSummaryEmbed, FOOTER_DEFAULT } = require('../utils/embeds.js');
 const { laAdmin } = require('../utils/helpers.js');
 const { xoaHenGio } = require('../utils/timers.js');
 const { ketThucPhien, thongBaoHuyHieu, voHieuHoaNutDiemDanh } = require('../utils/session.js');
-const { EmbedBuilder } = require('discord.js');
-const { FOOTER_DEFAULT } = require('../utils/embeds.js');
 
 const data = new SlashCommandBuilder()
   .setName('ket_thuc')
@@ -18,7 +16,7 @@ async function execute(interaction) {
   const cfg   = await db.getConfig(guild.id);
 
   if (!laAdmin(interaction.member, cfg)) {
-    return interaction.editReply({ content: '🔒 Bạn không có quyền thực hiện lệnh này.', ephemeral: true });
+    return interaction.editReply({ content: '🔒 Bạn không có quyền thực hiện lệnh này.' });
   }
 
   const session = await db.getActiveSession(guild.id);
@@ -29,7 +27,12 @@ async function execute(interaction) {
   const attended = await db.getAttendances(session.id);
   await ketThucPhien(guild, session, attended);
   xoaHenGio(guild.id);
-  await voHieuHoaNutDiemDanh(interaction.client, interaction.channel, session);
+
+  // Fix: dùng session.channel_id thay vì interaction.channel
+  const sessionChannel = session.channel_id
+    ? await guild.channels.fetch(session.channel_id).catch(() => interaction.channel)
+    : interaction.channel;
+  await voHieuHoaNutDiemDanh(interaction.client, sessionChannel, session);
 
   const summaryEmbed = buildSummaryEmbed(session, attended);
   const thongBao = new EmbedBuilder()

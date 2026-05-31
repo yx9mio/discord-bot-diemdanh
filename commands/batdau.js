@@ -15,12 +15,13 @@ const data = new SlashCommandBuilder()
   .addIntegerOption(o => o.setName('ngay_dong').setDescription('Ngày tự đóng (1-31, mặc định hôm nay)').setMinValue(1).setMaxValue(31));
 
 async function execute(interaction) {
+  // Fix: defer public (phiên mở cần ai cũng thấy), lỗi quyền reply ephemeral riêng
   await interaction.deferReply();
   const guild = interaction.guild;
   const cfg   = await db.getConfig(guild.id);
 
   if (!laAdmin(interaction.member, cfg)) {
-    return interaction.editReply({ content: '🔒 Bạn không có quyền thực hiện lệnh này.', ephemeral: true });
+    return interaction.editReply({ content: '🔒 Bạn không có quyền thực hiện lệnh này.' });
   }
 
   const existing = await db.getActiveSession(guild.id);
@@ -34,7 +35,6 @@ async function execute(interaction) {
   const phutDong = interaction.options.getInteger('phut_dong') ?? null;
   const ngayDong = interaction.options.getInteger('ngay_dong') ?? null;
 
-  // Lấy danh sách eligible members
   await guild.members.fetch();
   let eligibleMembers;
   if (cfg.allowed_role_id) {
@@ -46,10 +46,12 @@ async function execute(interaction) {
   const eligibleIds = eligibleMembers.map(m => m.id);
 
   if (eligibleIds.length === 0) {
-    return interaction.editReply({ content: '⚠️ Không tìm thấy thành viên hợp lệ để điểm danh.' });
+    const roleName = cfg.allowed_role_id
+      ? (guild.roles.cache.get(cfg.allowed_role_id)?.name ?? `ID: ${cfg.allowed_role_id}`)
+      : 'tất cả thành viên';
+    return interaction.editReply({ content: `⚠️ Không tìm thấy thành viên hợp lệ trong role **${roleName}**.` });
   }
 
-  // Tính thời điểm tự đóng
   let autoCloseAt = null;
   let msDelay = null;
 
@@ -78,9 +80,9 @@ async function execute(interaction) {
     channelId: interaction.channelId,
   });
 
-  const embed    = await buildSessionEmbed(guild, session, []);
-  const buttons  = buildAttendanceButtons(false);
-  const message  = await interaction.editReply({ embeds: [embed], components: [buttons] });
+  const embed   = await buildSessionEmbed(guild, session, []);
+  const buttons = buildAttendanceButtons(false);
+  const message = await interaction.editReply({ embeds: [embed], components: [buttons] });
   await db.updateSessionMessageId(session.id, message.id);
 
   if (msDelay) {
