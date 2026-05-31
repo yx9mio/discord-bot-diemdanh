@@ -1,22 +1,20 @@
 // ============================================================
-// db.js — Supabase client + all DB operations
+// db.js — Supabase client + toàn bộ thao tác cơ sở dữ liệu
 // ============================================================
 require('dotenv').config();
 const { createClient } = require('@supabase/supabase-js');
 const ws = require('ws');
 
 if (!process.env.SUPABASE_URL || !process.env.SUPABASE_KEY) {
-  console.error('[FATAL] Thiếu SUPABASE_URL hoặc SUPABASE_KEY trong .env!');
+  console.error('[LỖI NGHIÊM TRỌNG] Thiếu SUPABASE_URL hoặc SUPABASE_KEY trong .env!');
   process.exit(1);
 }
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY, {
-  realtime: {
-    transport: ws,
-  },
+  realtime: { transport: ws },
 });
 
-// ─── Guild Config ─────────────────────────────────────────────
+// ─── Cấu hình Guild ───────────────────────────────────────────
 async function getConfig(guildId) {
   const { data } = await supabase
     .from('guild_configs')
@@ -33,7 +31,7 @@ async function setConfig(guildId, updates) {
     .upsert({ ...existing, ...updates, guild_id: guildId, updated_at: new Date().toISOString() });
 }
 
-// ─── Sessions ─────────────────────────────────────────────────
+// ─── Phiên Điểm Danh ──────────────────────────────────────────
 async function getActiveSession(guildId) {
   const { data } = await supabase
     .from('sessions')
@@ -56,12 +54,20 @@ async function createSession(guildId, { sessionName, roleName, allowedRoleId, el
       started_by: startedBy,
       auto_close_at: autoCloseAt ?? null,
       channel_id: channelId ?? null,
+      message_id: null,
       is_active: true,
     })
     .select()
     .single();
   if (error) throw error;
   return data;
+}
+
+async function updateSessionMessageId(sessionId, messageId) {
+  await supabase
+    .from('sessions')
+    .update({ message_id: messageId })
+    .eq('id', sessionId);
 }
 
 async function endSession(sessionId) {
@@ -75,7 +81,7 @@ async function cancelSession(sessionId) {
   await supabase.from('sessions').delete().eq('id', sessionId);
 }
 
-// ─── Attendances ──────────────────────────────────────────────
+// ─── Điểm Danh ────────────────────────────────────────────────
 async function getAttendances(sessionId) {
   const { data } = await supabase
     .from('attendances')
@@ -102,7 +108,7 @@ async function removeAttendance(sessionId, userId) {
     .eq('user_id', userId);
 }
 
-// ─── Member Stats ─────────────────────────────────────────────
+// ─── Thống Kê Thành Viên ──────────────────────────────────────
 async function getMemberStats(guildId, userId) {
   const { data } = await supabase
     .from('member_stats')
@@ -115,10 +121,10 @@ async function getMemberStats(guildId, userId) {
 
 async function updateMemberStats(guildId, userId, joined, sessionId) {
   const existing = await getMemberStats(guildId, userId);
-  const newTotal = existing.total_sessions + 1;
+  const newTotal  = existing.total_sessions + 1;
   const newJoined = existing.total_joined + (joined ? 1 : 0);
   const newStreak = joined ? existing.current_streak + 1 : 0;
-  const newBest = Math.max(existing.best_streak, newStreak);
+  const newBest   = Math.max(existing.best_streak, newStreak);
 
   await supabase
     .from('member_stats')
@@ -145,7 +151,7 @@ async function getAllMemberStats(guildId) {
   return data ?? [];
 }
 
-// ─── Session History ──────────────────────────────────────────
+// ─── Lịch Sử Phiên ────────────────────────────────────────────
 async function getSessionHistory(guildId, limit = 20) {
   const { data } = await supabase
     .from('sessions')
@@ -160,7 +166,7 @@ async function getSessionHistory(guildId, limit = 20) {
 module.exports = {
   supabase,
   getConfig, setConfig,
-  getActiveSession, createSession, endSession, cancelSession,
+  getActiveSession, createSession, updateSessionMessageId, endSession, cancelSession,
   getAttendances, upsertAttendance, removeAttendance,
   getMemberStats, updateMemberStats, getAllMemberStats,
   getSessionHistory,
