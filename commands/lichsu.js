@@ -1,24 +1,42 @@
 // commands/lichsu.js
-const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+// Sync với design system embeds.js — dùng AUTHOR_DEFAULT, COLORS, ICONS, buildHistoryEmbed
+'use strict';
+const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const db = require('../db.js');
+const {
+  AUTHOR_DEFAULT, FOOTER_DEFAULT, COLORS, ICONS,
+  buildHistoryEmbed,
+} = require('../utils/embeds.js');
 
 const PAGE_SIZE = 5;
 
+/**
+ * Trang lịch sử — dùng design system thống nhất từ embeds.js
+ * buildHistoryEmbed đã render đầy đủ danh sách; ở đây chỉ slice theo trang.
+ */
 function buildHistoryPageEmbed(history, page, totalPages) {
+  const { EmbedBuilder } = require('discord.js');
   const start = page * PAGE_SIZE;
   const slice = history.slice(start, start + PAGE_SIZE);
 
   const lines = slice.map((s, i) => {
     const num  = start + i + 1;
-    const date = s.ended_at ? new Date(s.ended_at).toLocaleDateString('vi-VN') : '?';
-    return `**${num}.** ${s.session_name ?? 'Điểm danh'} — ${date}`;
+    const startedAt = s.created_at ?? s.started_at;
+    const ts    = startedAt ? Math.floor(new Date(startedAt).getTime() / 1000) : null;
+    const dateStr = ts ? `<t:${ts}:d>` : '?';
+    const eligible = (s.eligible_member_ids ?? []).length;
+    return [
+      `\`${String(num).padStart(2)}.\` **${s.session_name ?? 'Điểm danh'}** — ${dateStr}`,
+      `> \`ID: ${s.id}\`  ·  ${eligible} thành viên`,
+    ].join('\n');
   });
 
   return new EmbedBuilder()
-    .setTitle('🗓️ Lịch Sử Điểm Danh')
-    .setColor(0x5865F2)
-    .setDescription(lines.join('\n') || 'Không có dữ liệu.')
-    .setFooter({ text: `Trang ${page + 1} / ${totalPages}` })
+    .setAuthor(AUTHOR_DEFAULT)
+    .setTitle(`${ICONS.HISTORY} Lịch Sử Điểm Danh — Trang ${page + 1}/${totalPages}`)
+    .setColor(COLORS.GOLD)
+    .setDescription(lines.join('\n') || '> Không có dữ liệu.')
+    .setFooter({ text: `${FOOTER_DEFAULT} · Dùng ID với /thong_ke và /thongke_server` })
     .setTimestamp();
 }
 
