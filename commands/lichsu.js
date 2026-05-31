@@ -2,7 +2,7 @@
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const db = require('../db.js');
 
-export const PAGE_SIZE = 5;
+const PAGE_SIZE = 5;
 
 function buildHistoryPageEmbed(history, page, totalPages) {
   const start = page * PAGE_SIZE;
