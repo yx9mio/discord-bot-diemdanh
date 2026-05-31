@@ -16,6 +16,14 @@ async function dangKyCommands(client) {
   const commandData = files.map(f => require(path.join(dir, f)).data.toJSON());
   const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
 
+  // ── Xóa global commands (nếu còn tồn tại từ trước) để tránh trùng lặp ──
+  try {
+    await rest.put(Routes.applicationCommands(client.user.id), { body: [] });
+    console.log('[Quản Gia] Đã xóa global commands cũ.');
+  } catch (err) {
+    console.warn('[Quản Gia] Không xóa được global commands:', err.message);
+  }
+
   // ── Guild-specific: hiện ngay lập tức cho mọi guild bot đang ở ──────────
   const guilds = client.guilds.cache.values();
   let guildOk = 0;
@@ -30,15 +38,7 @@ async function dangKyCommands(client) {
       console.error(`[Quản Gia] Lỗi đăng ký guild ${guild.id}:`, err.message);
     }
   }
-  console.log(`[Quản Gia] Đã đăng ký ${commandData.length} lệnh cho ${guildOk} guild(s) — hiện ngay lập tức.`);
-
-  // ── Global: đồng bộ cho các guild mới thêm bot sau này (cập nhật sau ~1h) ─
-  try {
-    await rest.put(Routes.applicationCommands(client.user.id), { body: commandData });
-    console.log(`[Quản Gia] Đã đăng ký ${commandData.length} lệnh global (Discord cache ~1h).`);
-  } catch (err) {
-    console.error('[Quản Gia] Lỗi đăng ký lệnh global:', err);
-  }
+  console.log(`[Quản Gia] Đã đăng ký ${commandData.length} lệnh cho ${guildOk} guild(s) — guild-only, hiện ngay lập tức.`);
 }
 
 async function khoiPhucHenGio(client) {
