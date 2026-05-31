@@ -89,6 +89,24 @@ function formatDongStr(lich) {
 }
 
 /**
+ * parseThuGio('T7 21:00') → { thu: 6, gio: 21, phut: 0 }
+ * parseThuGio('CN 08:30') → { thu: 0, gio: 8, phut: 30 }
+ * Trả về null nếu format không hợp lệ.
+ */
+function parseThuGio(str) {
+  if (!str) return null;
+  const s = str.trim().toUpperCase();
+  const match = s.match(/^(CN|T2|T3|T4|T5|T6|T7)\s+(\d{1,2}):(\d{2})$/);
+  if (!match) return null;
+  const thuMap = { CN:0, T2:1, T3:2, T4:3, T5:4, T6:5, T7:6 };
+  const thu  = thuMap[match[1]];
+  const gio  = parseInt(match[2], 10);
+  const phut = parseInt(match[3], 10);
+  if (gio > 23 || phut > 59) return null;
+  return { thu, gio, phut };
+}
+
+/**
  * buildPresetDescription(data)
  * Tính description động cho preset tại runtime.
  * Discord option description giới hạn 100 ký tự.
@@ -111,4 +129,4 @@ function buildPresetDescription(data) {
   }
 }
 
-module.exports = { TEN_THU, TEN_THU_FULL, pad, PRESETS, ngayThucTe, formatDongStr, buildPresetDescription };
+module.exports = { TEN_THU, TEN_THU_FULL, pad, PRESETS, ngayThucTe, formatDongStr, parseThuGio, buildPresetDescription };
