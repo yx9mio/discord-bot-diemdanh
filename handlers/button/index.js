@@ -1,6 +1,7 @@
 // handlers/button/index.js — router tổng hợp toàn bộ button interactions
 // Phase G: route admin:override button + admin:override_modal
 // Phase I: phiên đóng → edit message gốc với buildClosedSessionEmbed + buttons disabled
+// Phase N: route upgrade:confirm → ephemeral confirm
 'use strict';
 const { handleAttend }                                   = require('./attendHandler.js');
 const { handleLichsu }                                   = require('./lichsuHandler.js');
@@ -10,6 +11,7 @@ const { handleSetupShortcut }                            = require('./setupShort
 const { handleSetupUi }                                  = require('../setupUiHandler.js');
 const { handleRefresh }                                  = require('./refreshHandler.js');
 const { handleAdminOverride, handleAdminOverrideModal }  = require('./adminOverrideHandler.js');
+const { handleUpgradeConfirm }                           = require('./upgradeHandler.js');
 
 async function handleButton(interaction) {
   const { customId } = interaction;
@@ -29,6 +31,9 @@ async function handleButton(interaction) {
 
   // Phase G: Admin override
   if (customId === 'admin:override') return handleAdminOverride(interaction);
+
+  // Phase N: Upgrade confirm
+  if (customId === 'upgrade:confirm') return handleUpgradeConfirm(interaction);
 
   // Xem danh sách
   if (customId === 'attend_view')    return handleView(interaction);

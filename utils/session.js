@@ -42,7 +42,6 @@ async function ketThucPhien(guild, session, attended) {
   const patches  = [];
 
   for (const record of attended) {
-    // Fix: dùng PRESENT_STATUSES thay vì 'present' (không tồn tại trong hệ thống)
     if (!PRESENT_STATUSES.has(record.status)) continue;
     const uid   = record.user_id;
     const gid   = guild.id;
@@ -100,11 +99,7 @@ async function thongBaoHuyHieu(guild, channel, guildId, sessionId, attended, sta
 
 /**
  * Phase I: Vô hiệu hoá nút điểm danh trên message cũ VÀ cập nhật embed → 🔴 Đã Đóng.
- * Cần attended để render thống kê cuối trong buildClosedSessionEmbed.
- * @param {Client}   client
- * @param {Channel}  channel
- * @param {Object}   session   — phải có session.message_id
- * @param {Array}    attended  — mảng attendance records (có thể [] nếu chưa có)
+ * Fix K: truyền guild vào buildClosedSessionEmbed để render danh sách.
  */
 async function voHieuHoaNutDiemDanh(client, channel, session, attended = []) {
   if (!session.message_id) return;
@@ -112,7 +107,8 @@ async function voHieuHoaNutDiemDanh(client, channel, session, attended = []) {
     const msg = await channel.messages.fetch(session.message_id);
     if (!msg) return;
 
-    const closedEmbed   = buildClosedSessionEmbed(session, attended);
+    // Fix K: pass guild cho buildClosedSessionEmbed
+    const closedEmbed   = buildClosedSessionEmbed(session, attended, channel.guild ?? null);
     const disabledButtons = buildAttendanceButtons(true);
 
     await msg.edit({ embeds: [closedEmbed], components: [disabledButtons] });

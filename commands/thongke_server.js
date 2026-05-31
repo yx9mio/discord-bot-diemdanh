@@ -3,6 +3,7 @@
 // Fix: overallPct tính đúng từ per-session attendance data
 // Fix: avgAttendance tính theo kỳ được chọn
 // Fix: migrate laAdmin → requireAdmin
+// Fix O: thêm phaiRoleIds + allAttended vào stats object cho phái breakdown
 'use strict';
 const { SlashCommandBuilder } = require('discord.js');
 const db = require('../db.js');
@@ -85,11 +86,13 @@ module.exports = {
       const since    = getStartOf(period);
 
       // ─ Lấy dữ liệu song song ─────────────────────────────────────────────────
-      const [activeSession, history, allMemberStats] = await Promise.all([
+      const [activeSession, history, allMemberStats, cfg] = await Promise.all([
         db.getActiveSession(guild.id),
         db.getSessionHistoryWithRange(guild.id, since, 100),
         db.getAllMemberStats(guild.id),
+        db.getConfig(guild.id),
       ]);
+      const phaiRoleIds = cfg?.phai_role_ids ?? [];
 
       // ─ Attendance thực tế cho các phiên trong kỳ ─────────────────────────────
       const sessionIds = history.map(s => s.id);
@@ -109,7 +112,6 @@ module.exports = {
           .sort((a, b) => b.total_joined - a.total_joined)
           .slice(0, topLimit);
       } else {
-        // Tính lại từ per-session data trong kỳ
         const userJoinMap  = new Map();
         const userTotalMap = new Map();
         for (const s of history) {
@@ -140,9 +142,14 @@ module.exports = {
       const lastSession  = enrichLastSession(history[0] ?? null, attMap);
       const periodLabel  = { week: 'Tuần này', month: 'Tháng này', all: 'Tất cả' }[period];
 
+      // Flatten tất cả attendance rows cho phái breakdown
+      const allAttended = [];
+      for (const [, rows] of attMap) allAttended.push(...rows);
+
       const stats = {
         totalSessions, totalMembers, avgAttendance,
         overallPct, lastSession, activeSession, periodLabel,
+        phaiRoleIds, allAttended,
       };
 
       const embed = buildServerStatsEmbed(guild, stats, topMembers, topLimit);
