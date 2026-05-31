@@ -3,6 +3,7 @@
 // Fix #2: _rescheduleClose dùng msToCloseFromNow (không tính lại từ đầu chu kỳ)
 // Fix #3: _dongPhienVaThongKe gọi thongBaoHuyHieu + guiCsvDinhKem
 // Fix #4: loại bỏ ephemeral deprecated warning khỏi handler setup
+// Fix #5: ketThucPhien(guild, session, attended) — sửa TypeError
 // Phase H: ping role điểm danh khi mở phiên tự động
 'use strict';
 const { EmbedBuilder, MessageFlags } = require('discord.js');
@@ -112,7 +113,7 @@ async function runDongLich(client, guildId, lich, silent = false) {
 
 async function _dongPhienVaThongKe(guild, session, ch, lich, client, silent = false) {
   const attended = await db.getAttendances(session.id);
-  await ketThucPhien(session.id);
+  const statsMap = await ketThucPhien(guild, session, attended);
 
   // Vô hiệu hóa nút điểm danh (luôn làm, kể cả silent)
   try {
