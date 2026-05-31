@@ -674,4 +674,4 @@ function parseThuGio(raw) {
   return { thu, gio, phut };
 }
 
-module.exports = { handleSetupUi };
+module.exports = { handleSetupUi, buildDashboard };
