@@ -6,6 +6,7 @@ const { handleButton }  = require('./handlers/buttonHandler.js');
 const { onReady }       = require('./events/ready.js');
 const { onMessageDelete } = require('./events/messageDelete.js');
 const { handleSelectMenu } = require('./commands/help.js');
+const { handleSetupUi } = require('./handlers/setupUiHandler.js');
 
 if (!process.env.DISCORD_TOKEN) {
   console.error('[LỖI] Thiếu DISCORD_TOKEN trong .env!');
@@ -27,9 +28,38 @@ const commands = loadCommands();
 client.once('ready', () => onReady(client));
 
 client.on('interactionCreate', async interaction => {
-  if (interaction.isButton())             return handleButton(interaction);
-  if (interaction.isStringSelectMenu())   return handleSelectMenu(interaction);
-  if (interaction.isChatInputCommand())   return handleCommand(interaction, commands);
+  try {
+    if (interaction.isButton()) return handleButton(interaction);
+
+    // ── Setup UI: RoleSelect / ChannelSelect / ModalSubmit ──────────────────
+    if (
+      interaction.isRoleSelectMenu()    ||
+      interaction.isChannelSelectMenu() ||
+      interaction.isModalSubmit()
+    ) {
+      if (interaction.customId?.startsWith('setup:')) {
+        return handleSetupUi(interaction);
+      }
+    }
+
+    // ── StringSelectMenu: setup: trước, help sau ───────────────────────────
+    if (interaction.isStringSelectMenu()) {
+      if (interaction.customId?.startsWith('setup:')) {
+        return handleSetupUi(interaction);
+      }
+      return handleSelectMenu(interaction);
+    }
+
+    if (interaction.isChatInputCommand()) return handleCommand(interaction, commands);
+  } catch (err) {
+    console.error('[interactionCreate]', err);
+    const reply = { content: '❌ Có lỗi xảy ra. Vui lòng thử lại.', ephemeral: true };
+    if (interaction.deferred || interaction.replied) {
+      interaction.editReply(reply).catch(() => {});
+    } else {
+      interaction.reply(reply).catch(() => {});
+    }
+  }
 });
 
 client.on('messageDelete', message => onMessageDelete(client, message));
