@@ -111,6 +111,7 @@ async function handleButton(interaction) {
   const displayName = member.nickname ?? user.globalName ?? user.username;
   await db.upsertAttendance(session.id, guild.id, user.id, displayName, status);
 
+  // [FIX] Luôn truyền components khi edit để Discord không xóa nút
   try {
     const ch = guild.channels.cache.get(session.channel_id);
     if (ch && session.message_id) {
@@ -118,7 +119,8 @@ async function handleButton(interaction) {
       if (msg) {
         const attended = await db.getAttendances(session.id);
         const embed    = await buildSessionEmbed(guild, session, attended);
-        await msg.edit({ embeds: [embed] }).catch(() => null);
+        const buttons  = buildAttendanceButtons(false);
+        await msg.edit({ embeds: [embed], components: [buttons] }).catch(() => null);
       }
     }
   } catch (_) { /* silent */ }

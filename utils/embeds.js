@@ -105,25 +105,25 @@ async function buildSessionEmbed(guild, session, attended) {
   const startedAt = session.created_at ?? session.started_at;
   const startTs   = Math.floor(new Date(startedAt).getTime() / 1000);
 
-  // [FIX BUG-2] Dùng allowed_role_id (đúng schema), KHÔNG dùng role_id
   const roleDisplay = session.allowed_role_id
     ? `<@&${session.allowed_role_id}>`
     : (session.role_name ?? 'Tất cả');
 
   const descLines = [
-    `${pctEmoji(pct)} **${pct}%** — ${pctLabel(pct)} · \`${bar}\``,
-    `> ✅ \`${joined.length}\`  ⏰ \`${late.length}\`  ❌ \`${declined.length}\`  ⏳ \`${absentIds.length}\`  👥 \`${eligible} thành viên\``,
-    '',
-    `📌 Role: ${roleDisplay} · Bắt đầu <t:${startTs}:R>`,
+    `${bar} ${pct}% (${presentCount}/${eligible})`,
+    ` Role: ${roleDisplay} · ${eligible} thành viên`,
+    ` Bắt đầu: <t:${startTs}:f>`,
   ];
+
+  // [FIX] Tự đóng dùng <t:ts:f> — hiện full date giống "31 Tháng Năm 2026 8:00 CH"
   if (session.auto_close_at) {
     const ts = Math.floor(new Date(session.auto_close_at).getTime() / 1000);
-    descLines.push(`🔒 Tự đóng <t:${ts}:R> · <t:${ts}:T>`);
+    descLines.push(` Tự đóng: <t:${ts}:f>`);
   }
 
   const embed = new EmbedBuilder()
-    .setAuthor(AUTHOR_DEFAULT)
-    .setTitle(`⚔️ ${session.session_name}`)
+    .setAuthor({ name: `🏩 ${FOOTER_DEFAULT}` })
+    .setTitle(`Điểm Danh: ${session.session_name}`)
     .setColor(COLOR_ACTIVE)
     .setDescription(descLines.join('\n'))
     .setTimestamp();
@@ -159,13 +159,13 @@ async function buildSessionEmbed(guild, session, attended) {
     const mentions = absentIds.slice(0, MAX).map(id => `<@${id}>`);
     const extra = absentIds.length > MAX ? ` *(+${absentIds.length - MAX} nữa)*` : '';
     embed.addFields({
-      name: `⏳ Chưa Điểm Danh — ${absentIds.length}`,
+      name: `⏳ Chưa Điểm Danh (${absentIds.length})`,
       value: mentions.join(' ') + extra,
       inline: false,
     });
   }
 
-  embed.setFooter({ text: `${FOOTER_DEFAULT} · Phiên đang mở — nhấn nút bên dưới để điểm danh` });
+  embed.setFooter({ text: `${FOOTER_DEFAULT} · Phiên đang mở — bấm nút để điểm danh` });
   return embed;
 }
 
@@ -238,7 +238,6 @@ function buildHistoryEmbed(history) {
       .setFooter({ text: FOOTER_DEFAULT });
   }
 
-  // [FIX BUG-3] Xóa pct calculation — sessions không lưu total_joined/total_late
   const lines = history.map((s, i) => {
     const startedAt = s.created_at ?? s.started_at;
     const ts = Math.floor(new Date(startedAt).getTime() / 1000);
@@ -259,7 +258,6 @@ function buildHistoryEmbed(history) {
 }
 
 // ─── Member Embed ─────────────────────────────────────────────────────────────
-// [FIX BUG-6] Xóa stats.total_late — cột không tồn tại trong member_stats
 function buildMemberEmbed(member, stats, badge, pct, bar) {
   const streakBar = stats.current_streak > 0
     ? '🔥'.repeat(Math.min(stats.current_streak, 10)) + (stats.current_streak > 10 ? ` x${stats.current_streak}` : '')
