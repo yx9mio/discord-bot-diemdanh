@@ -98,6 +98,7 @@ async function buildDashboard(guild, cfg, viewMode = 'admin') {
   return { embeds: [embed], components: [row1, row2], ephemeral: true };
 }
 
+// ─── lichMenuComponents — menu chính quản lý lịch ───────────────────────────
 function lichMenuComponents(lichList) {
   const embed = new EmbedBuilder()
     .setTitle('📅 Quản lý Lịch Cố Định')
@@ -122,7 +123,7 @@ function lichMenuComponents(lichList) {
     new ButtonBuilder().setCustomId('setup:home').setLabel('← Quay lại').setStyle(ButtonStyle.Secondary),
   ));
 
-  // Nếu có lịch → select để xóa
+  // Nếu có lịch → select để chọn lịch → xem chi tiết hành động
   if (lichList.length) {
     const options = lichList.map((l, i) => ({
       label: `${i+1}. ${l.session_name}`,
@@ -131,8 +132,8 @@ function lichMenuComponents(lichList) {
     }));
     rows.push(new ActionRowBuilder().addComponents(
       new StringSelectMenuBuilder()
-        .setCustomId('setup:lich:delete')
-        .setPlaceholder('🗑️ Chọn lịch để xóa...')
+        .setCustomId('setup:lich:select')
+        .setPlaceholder('⚙️ Chọn lịch để xem hành động...')
         .addOptions(options),
     ));
   }
@@ -140,8 +141,56 @@ function lichMenuComponents(lichList) {
   return { embeds: [embed], components: rows, ephemeral: true };
 }
 
+// ─── lichActionComponents — hiện 3 nút hành động cho 1 lịch ─────────────────
+function lichActionComponents(lich, lichList) {
+  const mo   = `${TEN_THU_FULL[lich.day_of_week]} ${pad(lich.hour)}:${pad(lich.minute)}`;
+  const dong = lich.close_day_of_week != null
+    ? `${TEN_THU_FULL[lich.close_day_of_week]} ${pad(lich.close_hour)}:${pad(lich.close_minute)}`
+    : 'Không tự đóng';
+
+  const embed = new EmbedBuilder()
+    .setTitle(`⚙️ Hành động — ${lich.session_name}`)
+    .setDescription([
+      `📋 **Tên:** ${lich.session_name}`,
+      `⏰ **Mở:** ${mo}`,
+      `🔒 **Đóng:** ${dong}`,
+      `📣 **Kênh:** <#${lich.channel_id}>`,
+      `🆔 **ID:** \`${lich.id}\``,
+      '',
+      '> Chọn hành động bên dưới:',
+    ].join('\n'))
+    .setColor(0xFEE75C)
+    .setFooter({ text: FOOTER_DEFAULT });
+
+  const canClose = lich.close_day_of_week != null;
+
+  const row1 = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`setup:lich:early_open:${lich.id}`)
+      .setLabel('▶️ Mở Sớm Ngay')
+      .setStyle(ButtonStyle.Success),
+    new ButtonBuilder()
+      .setCustomId(`setup:lich:early_close:${lich.id}`)
+      .setLabel('⏹️ Đóng Sớm Ngay')
+      .setStyle(ButtonStyle.Danger)
+      .setDisabled(!canClose),
+    new ButtonBuilder()
+      .setCustomId(`setup:lich:confirm_delete:${lich.id}`)
+      .setLabel('🗑️ Xóa Lịch')
+      .setStyle(ButtonStyle.Secondary),
+  );
+
+  const row2 = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId('setup:lich:menu')
+      .setLabel('← Quay lại Danh sách')
+      .setStyle(ButtonStyle.Secondary),
+  );
+
+  return { embeds: [embed], components: [row1, row2], ephemeral: true };
+}
+
 // ─── Guard quyền admin ───────────────────────────────────────────────────────
-// FIX BUG #2: kiểm tra cả Discord Administrator VÀ admin_role_id từ config
 async function isAdmin(member, cfg) {
   if (member.permissions.has(PermissionFlagsBits.Administrator)) return true;
   if (cfg?.admin_role_id && member.roles.cache.has(cfg.admin_role_id)) return true;
@@ -152,26 +201,21 @@ async function isAdmin(member, cfg) {
 async function handleSetupUi(interaction) {
   const { customId, guild, member } = interaction;
 
-  // Chỉ xử lý customId bắt đầu bằng 'setup:'
   if (!customId?.startsWith('setup:')) return false;
 
-  // Guard quyền — FIX BUG #2: load cfg trước để check admin_role_id
   const cfg = await db.getConfig(guild.id);
   if (!(await isAdmin(member, cfg))) {
     await interaction.reply({ content: '🔒 Bạn cần có **quyền Quản trị viên** hoặc **Role Admin Bot** để dùng setup.', ephemeral: true });
     return true;
   }
 
-  // ── setup:view:user / setup:view:admin — toggle chế độ xem ─────────────────
+  // ── setup:view:user / setup:view:admin ──────────────────────────────────────
   if (customId === 'setup:view:user') {
-    const payload = await buildDashboard(guild, cfg, 'user');
-    await interaction.update(payload);
+    await interaction.update(await buildDashboard(guild, cfg, 'user'));
     return true;
   }
-
   if (customId === 'setup:view:admin') {
-    const payload = await buildDashboard(guild, cfg, 'admin');
-    await interaction.update(payload);
+    await interaction.update(await buildDashboard(guild, cfg, 'admin'));
     return true;
   }
 
@@ -179,15 +223,12 @@ async function handleSetupUi(interaction) {
   if (customId === 'setup:home' || customId === 'setup:refresh') {
     const cfgFresh = await db.getConfig(guild.id);
     const payload = await buildDashboard(guild, cfgFresh, 'admin');
-    if (interaction.deferred || interaction.replied) {
-      await interaction.editReply(payload);
-    } else {
-      await interaction.update(payload);
-    }
+    if (interaction.deferred || interaction.replied) await interaction.editReply(payload);
+    else await interaction.update(payload);
     return true;
   }
 
-  // ── setup:role — mở Select chọn role ────────────────────────────────────────
+  // ── setup:role ──────────────────────────────────────────────────────────────
   if (customId === 'setup:role') {
     const embed = new EmbedBuilder()
       .setTitle('🎫 Cài Role')
@@ -225,7 +266,6 @@ async function handleSetupUi(interaction) {
     return true;
   }
 
-  // ── setup:role:select_allowed / select_admin — ghi vào cfg tạm ────────────
   if (customId === 'setup:role:select_allowed') {
     const roleId = interaction.values[0];
     await db.setConfig(guild.id, { allowed_role_id: roleId });
@@ -240,7 +280,6 @@ async function handleSetupUi(interaction) {
     return true;
   }
 
-  // ── setup:role:save — refresh dashboard ────────────────────────────────────
   if (customId === 'setup:role:save') {
     const cfgFresh = await db.getConfig(guild.id);
     const ok = cfgFresh.allowed_role_id && cfgFresh.admin_role_id;
@@ -252,7 +291,7 @@ async function handleSetupUi(interaction) {
     return true;
   }
 
-  // ── setup:phai — mở Role Select nhiều giá trị ────────────────────────────────
+  // ── setup:phai ──────────────────────────────────────────────────────────────
   if (customId === 'setup:phai') {
     const embed = new EmbedBuilder()
       .setTitle('🏆 Cài Phái')
@@ -284,7 +323,6 @@ async function handleSetupUi(interaction) {
     return true;
   }
 
-  // ── setup:phai:select — lưu phái và refresh dashboard ──────────────────────
   if (customId === 'setup:phai:select') {
     const phaiRoleIds = interaction.values;
     await db.setConfig(guild.id, { phai_role_ids: phaiRoleIds });
@@ -295,15 +333,132 @@ async function handleSetupUi(interaction) {
     return true;
   }
 
-  // ── setup:lich:menu — màn quản lý lịch ─────────────────────────────────────
+  // ── setup:lich:menu ─────────────────────────────────────────────────────────
   if (customId === 'setup:lich:menu') {
     const lichList = await db.getLichCoDinh(guild.id);
-    const payload = lichMenuComponents(lichList);
+    await interaction.update(lichMenuComponents(lichList));
+    return true;
+  }
+
+  // ── setup:lich:select — chọn lịch → hiện 3 nút hành động ───────────────────
+  if (customId === 'setup:lich:select') {
+    const lichId   = interaction.values[0];
+    const lichList = await db.getLichCoDinh(guild.id);
+    const lich     = lichList.find(l => l.id === lichId);
+    if (!lich) {
+      await interaction.reply({ content: '❌ Không tìm thấy lịch này.', ephemeral: true });
+      return true;
+    }
+    await interaction.update(lichActionComponents(lich, lichList));
+    return true;
+  }
+
+  // ── setup:lich:early_open:<id> — mở sớm ngay lập tức ───────────────────────
+  if (customId.startsWith('setup:lich:early_open:')) {
+    const lichId = customId.replace('setup:lich:early_open:', '');
+    await interaction.deferReply({ ephemeral: true });
+
+    const lichList = await db.getLichCoDinh(guild.id);
+    const lich     = lichList.find(l => l.id === lichId);
+    if (!lich) {
+      await interaction.editReply({ content: '❌ Không tìm thấy lịch.' });
+      return true;
+    }
+
+    // Kiểm tra đã có phiên đang mở chưa
+    const existing = await db.getActiveSession(guild.id);
+    if (existing) {
+      await interaction.editReply({
+        content: `⚠️ Đang có phiên **${existing.session_name}** đang mở. Vui lòng đóng phiên đó trước.`,
+      });
+      return true;
+    }
+
+    try {
+      const { runLichNgay } = require('../utils/scheduler.js');
+      await runLichNgay(interaction.client, guild.id, lich);
+      await interaction.editReply({
+        content: `▶️ Đã **mở sớm** phiên **${lich.session_name}** trong <#${lich.channel_id}>!`,
+      });
+    } catch (e) {
+      console.error('[SetupUI] early_open error:', e.message);
+      await interaction.editReply({ content: `❌ Lỗi khi mở sớm: ${e.message}` });
+    }
+    return true;
+  }
+
+  // ── setup:lich:early_close:<id> — đóng sớm ngay lập tức ────────────────────
+  if (customId.startsWith('setup:lich:early_close:')) {
+    const lichId = customId.replace('setup:lich:early_close:', '');
+    await interaction.deferReply({ ephemeral: true });
+
+    const lichList = await db.getLichCoDinh(guild.id);
+    const lich     = lichList.find(l => l.id === lichId);
+    if (!lich) {
+      await interaction.editReply({ content: '❌ Không tìm thấy lịch.' });
+      return true;
+    }
+
+    try {
+      const { runDongLichNgay } = require('../utils/scheduler.js');
+      await runDongLichNgay(interaction.client, guild.id, lich);
+      await interaction.editReply({
+        content: `⏹️ Đã **đóng sớm** phiên **${lich.session_name}** và gửi thống kê!`,
+      });
+    } catch (e) {
+      console.error('[SetupUI] early_close error:', e.message);
+      await interaction.editReply({ content: `❌ Lỗi khi đóng sớm: ${e.message}` });
+    }
+    return true;
+  }
+
+  // ── setup:lich:confirm_delete:<id> — xác nhận trước khi xóa ─────────────────
+  if (customId.startsWith('setup:lich:confirm_delete:')) {
+    const lichId   = customId.replace('setup:lich:confirm_delete:', '');
+    const lichList = await db.getLichCoDinh(guild.id);
+    const lich     = lichList.find(l => l.id === lichId);
+    const ten      = lich?.session_name ?? lichId.slice(0,8);
+
+    const embed = new EmbedBuilder()
+      .setTitle('🗑️ Xác nhận xóa lịch')
+      .setDescription(`Bạn có chắc muốn xóa lịch **${ten}**?\n> Hành động này không thể hoàn tác.`)
+      .setColor(0xED4245)
+      .setFooter({ text: FOOTER_DEFAULT });
+
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`setup:lich:delete:${lichId}`)
+        .setLabel('✅ Xác nhận Xóa')
+        .setStyle(ButtonStyle.Danger),
+      new ButtonBuilder()
+        .setCustomId('setup:lich:menu')
+        .setLabel('← Hủy')
+        .setStyle(ButtonStyle.Secondary),
+    );
+
+    await interaction.update({ embeds: [embed], components: [row], ephemeral: true });
+    return true;
+  }
+
+  // ── setup:lich:delete:<id> — xóa lịch sau khi xác nhận ─────────────────────
+  if (customId.startsWith('setup:lich:delete:')) {
+    const lichId = customId.replace('setup:lich:delete:', '');
+    await db.xoaLichCoDinh(guild.id, lichId);
+
+    // Hủy scheduler nếu đang chạy
+    try {
+      const { cancelLichCoDinh } = require('../utils/scheduler.js');
+      cancelLichCoDinh(guild.id, lichId);
+    } catch (_) {}
+
+    const lichList = await db.getLichCoDinh(guild.id);
+    const payload  = lichMenuComponents(lichList);
+    payload.content = `🗑️ Đã xóa lịch \`${lichId.slice(0,8)}...\``;
     await interaction.update(payload);
     return true;
   }
 
-  // ── setup:lich:add — mở Modal nhập thông tin lịch ─────────────────────────
+  // ── setup:lich:add — mở Modal nhập lịch ────────────────────────────────────
   if (customId === 'setup:lich:add') {
     const modal = new ModalBuilder()
       .setCustomId('setup:lich:modal')
@@ -347,7 +502,7 @@ async function handleSetupUi(interaction) {
     return true;
   }
 
-  // ── setup:lich:modal — submit modal, lưu lịch ────────────────────────────────
+  // ── setup:lich:modal — submit modal ────────────────────────────────────────
   if (customId === 'setup:lich:modal') {
     await interaction.deferReply({ ephemeral: true });
     const ten     = interaction.fields.getTextInputValue('ten').trim();
@@ -373,7 +528,7 @@ async function handleSetupUi(interaction) {
       return interaction.editReply({ content: '❌ Không xác định được kênh. Vui lòng nhập Channel ID.' });
     }
 
-    const cfgCurrent = await db.getConfig(guild.id);
+    const cfgCurrent  = await db.getConfig(guild.id);
     const phaiRoleIds = cfgCurrent.phai_role_ids ?? [];
 
     const lich = await db.themLichCoDinh(guild.id, {
@@ -402,19 +557,7 @@ async function handleSetupUi(interaction) {
     });
   }
 
-  // ── setup:lich:delete — xóa lịch đã chọn ───────────────────────────────────
-  // FIX BUG #1: truyền cả guild.id vào xoaLichCoDinh (trước đây thiếu guildId)
-  if (customId === 'setup:lich:delete') {
-    const lichId = interaction.values[0];
-    await db.xoaLichCoDinh(guild.id, lichId);
-    const lichList = await db.getLichCoDinh(guild.id);
-    const payload = lichMenuComponents(lichList);
-    payload.content = `🗑️ Đã xóa lịch \`${lichId.slice(0,8)}...\``;
-    await interaction.update(payload);
-    return true;
-  }
-
-  // ── setup:preset_bc — preset Bang Chiến ─────────────────────────────────────
+  // ── setup:preset_bc ─────────────────────────────────────────────────────────
   if (customId === 'setup:preset_bc') {
     const embed = new EmbedBuilder()
       .setTitle('⚡ Preset Bang Chiến')
@@ -442,7 +585,6 @@ async function handleSetupUi(interaction) {
     return true;
   }
 
-  // ── setup:preset_bc:kenh — chọn kênh rồi lưu ngay ─────────────────────────
   if (customId === 'setup:preset_bc:kenh') {
     await interaction.deferReply({ ephemeral: true });
     const channelId = interaction.values[0];
@@ -450,7 +592,6 @@ async function handleSetupUi(interaction) {
     return true;
   }
 
-  // ── setup:preset_bc:save — dùng kênh hiện tại ────────────────────────────────
   if (customId === 'setup:preset_bc:save') {
     await interaction.deferUpdate();
     const channelId = interaction.channel?.id;
@@ -462,12 +603,12 @@ async function handleSetupUi(interaction) {
     return true;
   }
 
-  return false; // customId 'setup:' nhưng không match → bỏ qua
+  return false;
 }
 
 // ─── Tạo preset Bang Chiến ──────────────────────────────────────────────────
 async function createPresetBangChien(interaction, guild, channelId) {
-  const cfg = await db.getConfig(guild.id);
+  const cfg         = await db.getConfig(guild.id);
   const phaiRoleIds = cfg.phai_role_ids ?? [];
 
   const lich = await db.themLichCoDinh(guild.id, {
@@ -482,18 +623,15 @@ async function createPresetBangChien(interaction, guild, channelId) {
   await scheduleLichCoDinh(interaction.client, guild, lich);
 
   const cfgFresh = await db.getConfig(guild.id);
-  const payload = await buildDashboard(guild, cfgFresh, 'admin');
+  const payload  = await buildDashboard(guild, cfgFresh, 'admin');
   payload.content = [
     `⚡ Preset **Bang Chiến** đã được tạo!`,
     `Mở: Thứ bảy 21:00 → Đóng: Thứ bảy 19:30 (tuần sau) | Kênh: <#${channelId}>`,
     phaiRoleIds.length ? '' : '\n⚠️ Chưa cài phái — vào **🏆 Cài Phái** để hoàn thiện.',
   ].filter(Boolean).join('\n');
 
-  if (interaction.deferred || interaction.replied) {
-    await interaction.editReply(payload);
-  } else {
-    await interaction.update(payload);
-  }
+  if (interaction.deferred || interaction.replied) await interaction.editReply(payload);
+  else await interaction.update(payload);
 }
 
 // ─── Parse chuỗi "T7 21:00" → { thu, gio, phut } ─────────────────────────────
