@@ -7,6 +7,7 @@
 // Fix #6: buildSummaryEmbed(session, attended, guild) — sửa thứ tự params
 // Fix #7: guard createSession null trong _moPhien → reschedule mở tuần sau thay vì crash
 // Fix #8: _moPhien trả về { ok, reason } thay vì null thuần — handler hiển thị đúng message
+// Fix #9: _dongPhienVaThongKe gọi db.closeSession(session.id) → set ended_at, tránh getActiveSession trả về phiên đã đóng
 // Phase H: ping role điểm danh khi mở phiên tự động
 'use strict';
 const { EmbedBuilder, MessageFlags } = require('discord.js');
@@ -123,6 +124,14 @@ async function runDongLich(client, guildId, lich, silent = false) {
 }
 
 async function _dongPhienVaThongKe(guild, session, ch, lich, client, silent = false) {
+  // FIX #9: đóng session trong DB TRƯỚC — set ended_at để getActiveSession không trả về nữa
+  try {
+    await db.closeSession(session.id);
+  } catch (e) {
+    log.error('SCHEDULER', guild.id, 'closeSession thất bại cho %s: %s', session.id, e.message);
+    // Vẫn tiếp tục để gửi thống kê, nhưng log lỗi để debug
+  }
+
   const attended = await db.getAttendances(session.id);
   const statsMap = await ketThucPhien(guild, session, attended);
 
