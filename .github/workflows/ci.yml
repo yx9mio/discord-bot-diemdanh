@@ -2,7 +2,7 @@
 # Chạy trên mọi push/PR vào main:
 #   1. Cài dependencies
 #   2. Kiểm tra syntax tất cả .js (node --check)
-#   3. Dry-run require graph (không cần env thật)
+#   3. Chạy test suite (node:test)
 
 name: CI
 
@@ -13,8 +13,8 @@ on:
     branches: [main]
 
 jobs:
-  lint:
-    name: Syntax & require check
+  test:
+    name: Syntax check + Unit tests
     runs-on: ubuntu-latest
 
     steps:
@@ -30,7 +30,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # Kiểm tra syntax từng file .js (bắt SyntaxError sớm)
+      # Bước 1: Kiểm tra syntax từng file .js
       - name: Check JS syntax (node --check)
         run: |
           find . -name '*.js' \
@@ -40,27 +40,12 @@ jobs:
           | xargs -0 node --check
           echo "✅ All .js files passed syntax check"
 
-      # Dry-run: load toàn bộ module graph với env giả
-      # Phát hiện MODULE_NOT_FOUND trước khi deploy
-      - name: Dry-run module graph
+      # Bước 2: Chạy toàn bộ test suite
+      - name: Run tests
         env:
           SUPABASE_URL: https://placeholder.supabase.co
           SUPABASE_KEY: placeholder_key_for_ci_only
           DISCORD_TOKEN: placeholder_token_for_ci_only
           NODE_ENV: test
         run: |
-          node -e "
-            // Load toàn bộ require graph từ index.js
-            // Nếu có file thiếu sẽ throw MODULE_NOT_FOUND ngay tại đây
-            try {
-              require('./index.js');
-            } catch (e) {
-              if (e.code === 'MODULE_NOT_FOUND') {
-                console.error('❌ MODULE_NOT_FOUND:', e.message);
-                process.exit(1);
-              }
-              // Các lỗi khác (DISCORD_TOKEN invalid, v.v.) là bình thường trong CI
-              console.log('ℹ️  Non-fatal startup error (expected in CI):', e.message);
-            }
-          "
-          echo "✅ Module graph OK"
+          node --test tests/*.test.js
