@@ -1,14 +1,15 @@
 // handlers/setupUiHandler.js
 // Xử lý toàn bộ interaction từ Setup UI Wizard
 // customId convention: setup:<action>[:<payload>]
-// ── BUG FIX LOG ──────────────────────────────────────────────────────────────
-// #1 #8: ngayThucTe() nhận thêm refDay/refHour/refMinute để phân biệt
-//        đóng-trước-giờ-mở (cùng ngày) khác tuần sau
-// #2:    Preset BC không còn hardcode mô tả sai
-// #3 #4: Modal kenh_id có placeholder & hướng dẫn rõ ràng, validate sau submit
-// #5:    Placeholder giờ đóng không ghi "tuần sau" nữa
-// #6:    lichActionComponents nhận activeSession, disable Đóng Sớm khi không có phiên mở
-// #7:    Preset BC description bỏ "(tuần sau)" sai, hiển thị đúng
+// ── CHANGELOG ────────────────────────────────────────────────────────────────
+// BUG #1 #8: ngayThucTe() nhận refDay/refHour/refMinute
+// BUG #2:    Preset BC description đúng
+// BUG #3 #4: Modal kenh_id placeholder & validate
+// BUG #5:    Placeholder giờ đóng không ghi "tuần sau"
+// BUG #6:    lichActionComponents nhận activeSession
+// BUG #7:    formatDongStr() đúng
+// FEAT 1.3:  PRESETS menu (BC / Hội Đồng / Luyện Tập / Tùy chỉnh)
+// FEAT 1.4:  Sửa Lịch — modal edit, db.capNhatLichCoDinh, reschedule
 // ─────────────────────────────────────────────────────────────────────────────
 
 const {
@@ -27,18 +28,35 @@ const TEN_THU = ['CN','T2','T3','T4','T5','T6','T7'];
 const TEN_THU_FULL = ['Chủ nhật','Thứ hai','Thứ ba','Thứ tư','Thứ năm','Thứ sáu','Thứ bảy'];
 const pad = n => String(n ?? 0).padStart(2, '0');
 
-// ─── BUG #1 #7 #8 FIX: ngayThucTe() ────────────────────────────────────────
-// Tính ngày thực tế sắp tới (giờ VN UTC+7).
-//
-// Tham số refDay/refHour/refMinute (optional): chỉ truyền khi tính chiều "đóng".
-//   Dùng để phân biệt 2 trường hợp khi close_day === open_day:
-//   - closeTime > openTime → đóng SAU giờ mở cùng ngày → bình thường
-//   - closeTime < openTime → đóng TRƯỚC giờ mở (prep/cutoff) → cùng ngày,
-//     KHÔNG cộng thêm 7 ngày (BUG #1 #8 fix)
-//
-// Trả về object { label: string, note: string|null }
-//   label: "Thứ X, DD/MM/YYYY HH:MM"
-//   note:  "*(trước giờ mở — cùng ngày)*" | null
+// ─── FEAT 1.3: Danh sách preset ─────────────────────────────────────────────
+const PRESETS = [
+  {
+    value: 'bang_chien',
+    label: '⚔️ Bang Chiến',
+    description: 'T7 21:00 → T7 23:30 (2h30p)',
+    data: { day_of_week:6, hour:21, minute:0, close_day_of_week:6, close_hour:23, close_minute:30 },
+  },
+  {
+    value: 'hoi_dong',
+    label: '🏛️ Hội Đồng Môn Phái',
+    description: 'CN 20:00 → CN 22:00 (2h)',
+    data: { day_of_week:0, hour:20, minute:0, close_day_of_week:0, close_hour:22, close_minute:0 },
+  },
+  {
+    value: 'luyen_tap',
+    label: '🥋 Luyện Tập Thường',
+    description: 'T3 20:00 → T3 21:30 (1h30p)',
+    data: { day_of_week:2, hour:20, minute:0, close_day_of_week:2, close_hour:21, close_minute:30 },
+  },
+  {
+    value: 'tuy_chinh',
+    label: '✏️ Tùy chỉnh',
+    description: 'Nhập tay qua form',
+    data: null,
+  },
+];
+
+// ─── ngayThucTe() — BUG #1 #7 #8 FIX ───────────────────────────────────────
 function ngayThucTe(dayOfWeek, hour, minute, refDay = null, refHour = null, refMinute = null) {
   const VN_OFFSET = 7 * 60 * 60 * 1000;
   const nowVn  = new Date(Date.now() + VN_OFFSET);
@@ -46,45 +64,33 @@ function ngayThucTe(dayOfWeek, hour, minute, refDay = null, refHour = null, refM
   const curH   = nowVn.getUTCHours();
   const curM   = nowVn.getUTCMinutes();
 
-  // ── BUG #1 #8 core fix ──────────────────────────────────────────────────
-  // Nếu đây là chiều "đóng" và close_day === open_day:
-  //   closeTime < openTime → đóng TRƯỚC giờ mở = cùng ngày
-  //   → KHÔNG thêm 7 ngày, chỉ tìm ngày thứ đó sắp tới bình thường
   let isSameDayBeforeOpen = false;
   if (refDay !== null && dayOfWeek === refDay) {
     const closeMin = hour * 60 + minute;
     const openMin  = refHour * 60 + refMinute;
-    if (closeMin < openMin) {
-      isSameDayBeforeOpen = true;
-    }
+    if (closeMin < openMin) isSameDayBeforeOpen = true;
   }
 
   let daysUntil = (dayOfWeek - curDay + 7) % 7;
 
   if (!isSameDayBeforeOpen) {
-    // Logic bình thường: hôm nay đúng thứ nhưng đã qua giờ → tuần sau
     if (daysUntil === 0) {
       const secPassed = curH * 3600 + curM * 60;
       const secTarget = hour * 3600 + minute * 60;
       if (secPassed >= secTarget) daysUntil = 7;
     }
   }
-  // Nếu isSameDayBeforeOpen = true: daysUntil giữ nguyên (không +7)
-  // vì đây là thời điểm đóng trước khi mở trong cùng ngày đó
 
   const target = new Date(nowVn.getTime() + daysUntil * 86400000);
   const dd     = pad(target.getUTCDate());
   const mm     = pad(target.getUTCMonth() + 1);
   const yyyy   = target.getUTCFullYear();
   const label  = `${TEN_THU_FULL[dayOfWeek]}, ${dd}/${mm}/${yyyy} ${pad(hour)}:${pad(minute)}`;
-
-  // BUG #7 FIX: note rõ ràng thay vì im lặng ghi sai
-  const note = isSameDayBeforeOpen ? '*(trước giờ mở — cùng ngày)*' : null;
+  const note   = isSameDayBeforeOpen ? '*(trước giờ mở — cùng ngày)*' : null;
 
   return { label, note };
 }
 
-// Helper: format chuỗi đóng cho embed (truyền đúng ref để fix #1 #7 #8)
 function formatDongStr(lich) {
   if (lich.close_day_of_week == null) return 'Không tự đóng';
   const { label, note } = ngayThucTe(
@@ -94,8 +100,7 @@ function formatDongStr(lich) {
   return note ? `${label} ${note}` : label;
 }
 
-// ─── Build UI helpers ────────────────────────────────────────────────────────
-
+// ─── buildDashboard ──────────────────────────────────────────────────────────
 async function buildDashboard(guild, cfg, viewMode = 'admin') {
   const notifCh  = await timKenhThongBao(guild);
   const lichList = await db.getLichCoDinh(guild.id);
@@ -163,8 +168,9 @@ async function buildDashboard(guild, cfg, viewMode = 'admin') {
     new ButtonBuilder().setCustomId('setup:phai').setLabel('🏆 Cài Phái').setStyle(ButtonStyle.Primary),
     new ButtonBuilder().setCustomId('setup:lich:menu').setLabel('📅 Quản lý Lịch').setStyle(ButtonStyle.Primary),
   );
+  // FEAT 1.3: Đổi button preset_bc → button mở preset menu
   const row2 = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId('setup:preset_bc').setLabel('⚡ Preset Bang Chiến').setStyle(ButtonStyle.Success),
+    new ButtonBuilder().setCustomId('setup:preset_menu').setLabel('⚡ Thêm từ Preset').setStyle(ButtonStyle.Success),
     new ButtonBuilder().setCustomId('setup:refresh').setLabel('🔄 Làm mới').setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId('setup:view:user').setLabel('👁️ User View').setStyle(ButtonStyle.Secondary),
   );
@@ -179,7 +185,6 @@ function lichMenuComponents(lichList) {
     .setDescription(lichList.length
       ? lichList.map((l, i) => {
           const mo   = `${TEN_THU_FULL[l.day_of_week]} ${pad(l.hour)}:${pad(l.minute)}`;
-          // BUG #1 #7 fix: dùng formatDongStr thay vì gọi ngayThucTe trực tiếp
           const dong = l.close_day_of_week != null
             ? `${TEN_THU_FULL[l.close_day_of_week]} ${pad(l.close_hour)}:${pad(l.close_minute)}`
             : 'Không tự đóng';
@@ -192,7 +197,8 @@ function lichMenuComponents(lichList) {
   const rows = [];
   rows.push(new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId('setup:lich:add').setLabel('➕ Thêm lịch mới').setStyle(ButtonStyle.Success),
-    new ButtonBuilder().setCustomId('setup:preset_bc').setLabel('⚡ Preset Bang Chiến').setStyle(ButtonStyle.Success),
+    // FEAT 1.3: đổi preset_bc → preset_menu
+    new ButtonBuilder().setCustomId('setup:preset_menu').setLabel('⚡ Thêm từ Preset').setStyle(ButtonStyle.Success),
     new ButtonBuilder().setCustomId('setup:home').setLabel('← Quay lại').setStyle(ButtonStyle.Secondary),
   ));
 
@@ -213,9 +219,8 @@ function lichMenuComponents(lichList) {
   return { embeds: [embed], components: rows, ephemeral: true };
 }
 
-// ─── lichActionComponents ────────────────────────────────────────────────────
-// BUG #6 FIX: nhận activeSession để disable "Đóng Sớm" khi không có phiên mở
-// BUG #1 #7 FIX: dùng formatDongStr() để hiển thị đúng
+// ─── lichActionComponents ─────────────────────────────────────────────────────
+// BUG #6 FIX + FEAT 1.4: thêm nút Sửa Lịch
 function lichActionComponents(lich, lichList, activeSession = null) {
   const { label: moLabel } = ngayThucTe(lich.day_of_week, lich.hour, lich.minute);
   const dongStr = formatDongStr(lich);
@@ -234,8 +239,6 @@ function lichActionComponents(lich, lichList, activeSession = null) {
     .setColor(0xFEE75C)
     .setFooter({ text: FOOTER_DEFAULT });
 
-  // BUG #6 FIX: "Đóng Sớm" chỉ enable khi CÓ phiên đang mở
-  // (không chỉ dựa vào close_day_of_week != null như code cũ)
   const hasActiveSession = !!activeSession;
 
   const row1 = new ActionRowBuilder().addComponents(
@@ -247,7 +250,12 @@ function lichActionComponents(lich, lichList, activeSession = null) {
       .setCustomId(`setup:lich:early_close:${lich.id}`)
       .setLabel('⏹️ Đóng Sớm Ngay')
       .setStyle(ButtonStyle.Danger)
-      .setDisabled(!hasActiveSession),  // BUG #6: disabled nếu không có phiên mở
+      .setDisabled(!hasActiveSession),
+    // FEAT 1.4: nút Sửa Lịch
+    new ButtonBuilder()
+      .setCustomId(`setup:lich:edit:${lich.id}`)
+      .setLabel('✏️ Sửa Lịch')
+      .setStyle(ButtonStyle.Primary),
     new ButtonBuilder()
       .setCustomId(`setup:lich:confirm_delete:${lich.id}`)
       .setLabel('🗑️ Xóa Lịch')
@@ -283,7 +291,7 @@ async function handleSetupUi(interaction) {
     return true;
   }
 
-  // ── setup:view:user / setup:view:admin ──────────────────────────────────────
+  // ── setup:view ──────────────────────────────────────────────────────────────
   if (customId === 'setup:view:user') {
     await interaction.update(await buildDashboard(guild, cfg, 'user'));
     return true;
@@ -423,9 +431,102 @@ async function handleSetupUi(interaction) {
       await interaction.reply({ content: '❌ Không tìm thấy lịch này.', ephemeral: true });
       return true;
     }
-    // BUG #6 FIX: lấy activeSession truyền vào lichActionComponents
     const activeSession = await db.getActiveSession(guild.id);
     await interaction.update(lichActionComponents(lich, lichList, activeSession));
+    return true;
+  }
+
+  // ── FEAT 1.3: setup:preset_menu — StringSelectMenu chọn preset ─────────────
+  if (customId === 'setup:preset_menu' || customId === 'setup:preset_bc') {
+    const embed = new EmbedBuilder()
+      .setTitle('⚡ Thêm Lịch Từ Preset')
+      .setDescription(
+        'Chọn mẫu lịch có sẵn bên dưới.\n' +
+        '> Chọn **Tùy chỉnh** để mở form nhập tay.')
+      .setColor(0xED4245)
+      .setFooter({ text: FOOTER_DEFAULT });
+
+    const selectMenu = new StringSelectMenuBuilder()
+      .setCustomId('setup:preset:select')
+      .setPlaceholder('Chọn preset lịch...')
+      .addOptions(PRESETS.map(p => ({ label: p.label, description: p.description, value: p.value })));
+
+    const rows = [
+      new ActionRowBuilder().addComponents(selectMenu),
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('setup:lich:menu').setLabel('← Quay lại').setStyle(ButtonStyle.Secondary),
+      ),
+    ];
+
+    await interaction.update({ embeds: [embed], components: rows, ephemeral: true });
+    return true;
+  }
+
+  // ── FEAT 1.3: setup:preset:select — user chọn preset từ menu ───────────────
+  if (customId === 'setup:preset:select') {
+    const chosen = PRESETS.find(p => p.value === interaction.values[0]);
+    if (!chosen) return false;
+
+    // Tùy chỉnh → mở modal nhập tay
+    if (chosen.data === null) {
+      return handleShowAddModal(interaction);
+    }
+
+    // Preset có sẵn → chọn kênh
+    const embed = new EmbedBuilder()
+      .setTitle(`⚡ Preset: ${chosen.label}`)
+      .setDescription(
+        `**Thông tin:**\n` +
+        `• **Mở:** ${TEN_THU_FULL[chosen.data.day_of_week]} ${pad(chosen.data.hour)}:${pad(chosen.data.minute)}\n` +
+        `• **Đóng:** ${TEN_THU_FULL[chosen.data.close_day_of_week]} ${pad(chosen.data.close_hour)}:${pad(chosen.data.close_minute)}\n\n` +
+        'Chọn kênh bên dưới, hoặc bấm **✅ Tạo (kênh hiện tại)**.')
+      .setColor(0xED4245)
+      .setFooter({ text: FOOTER_DEFAULT });
+
+    const rows = [
+      new ActionRowBuilder().addComponents(
+        new ChannelSelectMenuBuilder()
+          .setCustomId(`setup:preset:kenh:${chosen.value}`)
+          .setPlaceholder('Chọn kênh thông báo...')
+          .addChannelTypes(ChannelType.GuildText)
+          .setMinValues(1).setMaxValues(1),
+      ),
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`setup:preset:save:${chosen.value}`)
+          .setLabel('✅ Tạo (kênh hiện tại)')
+          .setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId('setup:preset_menu').setLabel('← Quay lại').setStyle(ButtonStyle.Secondary),
+      ),
+    ];
+
+    await interaction.update({ embeds: [embed], components: rows, ephemeral: true });
+    return true;
+  }
+
+  // ── FEAT 1.3: setup:preset:kenh:<value> — chọn kênh xong ──────────────────
+  if (customId.startsWith('setup:preset:kenh:')) {
+    const presetValue = customId.replace('setup:preset:kenh:', '');
+    const chosen      = PRESETS.find(p => p.value === presetValue);
+    if (!chosen || !chosen.data) return false;
+    await interaction.deferReply({ ephemeral: true });
+    const channelId = interaction.values[0];
+    await createPresetLich(interaction, guild, chosen, channelId);
+    return true;
+  }
+
+  // ── FEAT 1.3: setup:preset:save:<value> — dùng kênh hiện tại ───────────────
+  if (customId.startsWith('setup:preset:save:')) {
+    const presetValue = customId.replace('setup:preset:save:', '');
+    const chosen      = PRESETS.find(p => p.value === presetValue);
+    if (!chosen || !chosen.data) return false;
+    await interaction.deferUpdate();
+    const channelId = interaction.channel?.id;
+    if (!channelId) {
+      await interaction.followUp({ content: '❌ Không xác định kênh. Dùng menu chọn kênh ở trên.', ephemeral: true });
+      return true;
+    }
+    await createPresetLich(interaction, guild, chosen, channelId);
     return true;
   }
 
@@ -436,25 +537,18 @@ async function handleSetupUi(interaction) {
 
     const lichList = await db.getLichCoDinh(guild.id);
     const lich     = lichList.find(l => l.id === lichId);
-    if (!lich) {
-      await interaction.editReply({ content: '❌ Không tìm thấy lịch.' });
-      return true;
-    }
+    if (!lich) { await interaction.editReply({ content: '❌ Không tìm thấy lịch.' }); return true; }
 
     const existing = await db.getActiveSession(guild.id);
     if (existing) {
-      await interaction.editReply({
-        content: `⚠️ Đang có phiên **${existing.session_name}** đang mở. Vui lòng đóng phiên đó trước.`,
-      });
+      await interaction.editReply({ content: `⚠️ Đang có phiên **${existing.session_name}** đang mở. Vui lòng đóng phiên đó trước.` });
       return true;
     }
 
     try {
       const { runLichNgay } = require('../utils/scheduler.js');
       await runLichNgay(interaction.client, guild.id, lich);
-      await interaction.editReply({
-        content: `▶️ Đã **mở sớm** phiên **${lich.session_name}** trong <#${lich.channel_id}>!`,
-      });
+      await interaction.editReply({ content: `▶️ Đã **mở sớm** phiên **${lich.session_name}** trong <#${lich.channel_id}>!` });
     } catch (e) {
       console.error('[SetupUI] early_open error:', e.message);
       await interaction.editReply({ content: `❌ Lỗi khi mở sớm: ${e.message}` });
@@ -469,21 +563,159 @@ async function handleSetupUi(interaction) {
 
     const lichList = await db.getLichCoDinh(guild.id);
     const lich     = lichList.find(l => l.id === lichId);
+    if (!lich) { await interaction.editReply({ content: '❌ Không tìm thấy lịch.' }); return true; }
+
+    try {
+      const { runDongLichNgay } = require('../utils/scheduler.js');
+      await runDongLichNgay(interaction.client, guild.id, lich);
+      await interaction.editReply({ content: `⏹️ Đã **đóng sớm** phiên **${lich.session_name}** và gửi thống kê!` });
+    } catch (e) {
+      console.error('[SetupUI] early_close error:', e.message);
+      await interaction.editReply({ content: `❌ Lỗi khi đóng sớm: ${e.message}` });
+    }
+    return true;
+  }
+
+  // ── FEAT 1.4: setup:lich:edit:<id> — mở modal sửa lịch ────────────────────
+  if (customId.startsWith('setup:lich:edit:')) {
+    const lichId   = customId.replace('setup:lich:edit:', '');
+    const lichList = await db.getLichCoDinh(guild.id);
+    const lich     = lichList.find(l => l.id === lichId);
+    if (!lich) {
+      await interaction.reply({ content: '❌ Không tìm thấy lịch.', ephemeral: true });
+      return true;
+    }
+
+    const moStr   = `${TEN_THU[lich.day_of_week]} ${pad(lich.hour)}:${pad(lich.minute)}`;
+    const dongStr = lich.close_day_of_week != null
+      ? `${TEN_THU[lich.close_day_of_week]} ${pad(lich.close_hour)}:${pad(lich.close_minute)}`
+      : '';
+
+    const modal = new ModalBuilder()
+      .setCustomId(`setup:lich:edit:modal:${lichId}`)
+      .setTitle(`✏️ Sửa Lịch — ${lich.session_name.slice(0, 30)}`);
+
+    modal.addComponents(
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('ten')
+          .setLabel('Tên phiên')
+          .setStyle(TextInputStyle.Short)
+          .setValue(lich.session_name)
+          .setRequired(true).setMaxLength(50),
+      ),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('gio_mo')
+          .setLabel('Thứ & Giờ MỞ — format: T7 21:00')
+          .setStyle(TextInputStyle.Short)
+          .setValue(moStr)
+          .setRequired(true).setMaxLength(10),
+      ),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('gio_dong')
+          .setLabel('Thứ & Giờ ĐÓNG — để trống = không tự đóng')
+          .setStyle(TextInputStyle.Short)
+          .setValue(dongStr)
+          .setRequired(false).setMaxLength(10),
+      ),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('kenh_id')
+          .setLabel('Channel ID — để trống = giữ nguyên')
+          .setStyle(TextInputStyle.Short)
+          .setValue(lich.channel_id ?? '')
+          .setRequired(false).setMaxLength(20),
+      ),
+    );
+
+    await interaction.showModal(modal);
+    return true;
+  }
+
+  // ── FEAT 1.4: setup:lich:edit:modal:<id> — submit modal sửa ───────────────
+  if (customId.startsWith('setup:lich:edit:modal:')) {
+    const lichId = customId.replace('setup:lich:edit:modal:', '');
+    await interaction.deferReply({ ephemeral: true });
+
+    const lichList = await db.getLichCoDinh(guild.id);
+    const lich     = lichList.find(l => l.id === lichId);
     if (!lich) {
       await interaction.editReply({ content: '❌ Không tìm thấy lịch.' });
       return true;
     }
 
-    try {
-      const { runDongLichNgay } = require('../utils/scheduler.js');
-      await runDongLichNgay(interaction.client, guild.id, lich);
-      await interaction.editReply({
-        content: `⏹️ Đã **đóng sớm** phiên **${lich.session_name}** và gửi thống kê!`,
-      });
-    } catch (e) {
-      console.error('[SetupUI] early_close error:', e.message);
-      await interaction.editReply({ content: `❌ Lỗi khi đóng sớm: ${e.message}` });
+    const ten     = interaction.fields.getTextInputValue('ten').trim();
+    const moRaw   = interaction.fields.getTextInputValue('gio_mo').trim();
+    const dongRaw = interaction.fields.getTextInputValue('gio_dong').trim();
+    const kenhRaw = interaction.fields.getTextInputValue('kenh_id').trim();
+
+    const parsed = parseThuGio(moRaw);
+    if (!parsed) {
+      await interaction.editReply({ content: '❌ Định dạng giờ mở không hợp lệ. Dùng: `T7 21:00`' });
+      return true;
     }
+
+    let parsedDong = null;
+    if (dongRaw) {
+      parsedDong = parseThuGio(dongRaw);
+      if (!parsedDong) {
+        await interaction.editReply({ content: '❌ Định dạng giờ đóng không hợp lệ.' });
+        return true;
+      }
+    }
+
+    const channelId = kenhRaw || lich.channel_id;
+    if (kenhRaw) {
+      const ch = guild.channels.cache.get(kenhRaw) || await guild.channels.fetch(kenhRaw).catch(() => null);
+      if (!ch) {
+        await interaction.editReply({ content: `❌ Không tìm thấy kênh ID \`${kenhRaw}\`.` });
+        return true;
+      }
+    }
+
+    // FEAT 1.4: gọi db.capNhatLichCoDinh thay vì xóa + tạo lại
+    const updated = await db.capNhatLichCoDinh(guild.id, lichId, {
+      sessionName:    ten,
+      dayOfWeek:      parsed.thu,
+      hour:           parsed.gio,
+      minute:         parsed.phut,
+      closeDayOfWeek: parsedDong?.thu  ?? null,
+      closeHour:      parsedDong?.gio  ?? null,
+      closeMinute:    parsedDong?.phut ?? null,
+      channelId,
+    });
+
+    if (!updated) {
+      await interaction.editReply({ content: '❌ Cập nhật thất bại.' });
+      return true;
+    }
+
+    // Reschedule timer
+    try {
+      const { cancelLichCoDinh, scheduleLichCoDinh } = require('../utils/scheduler.js');
+      cancelLichCoDinh(guild.id, lichId);
+      await scheduleLichCoDinh(interaction.client, guild, updated);
+    } catch (e) {
+      console.warn('[SetupUI] reschedule sau edit thất bại:', e.message);
+    }
+
+    const { label: moLabel } = ngayThucTe(parsed.thu, parsed.gio, parsed.phut);
+    const dongDisplay = parsedDong
+      ? (() => {
+          const { label, note } = ngayThucTe(parsedDong.thu, parsedDong.gio, parsedDong.phut, parsed.thu, parsed.gio, parsed.phut);
+          return note ? `${label} ${note}` : label;
+        })()
+      : 'Không tự đóng';
+
+    await interaction.editReply({
+      content: [
+        `✅ Đã cập nhật lịch **${ten}**`,
+        `Mở: **${moLabel}** → Đóng: **${dongDisplay}**`,
+        `Kênh: <#${channelId}> | ID: \`${lichId}\``,
+      ].join('\n'),
+    });
     return true;
   }
 
@@ -501,14 +733,8 @@ async function handleSetupUi(interaction) {
       .setFooter({ text: FOOTER_DEFAULT });
 
     const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`setup:lich:delete:${lichId}`)
-        .setLabel('✅ Xác nhận Xóa')
-        .setStyle(ButtonStyle.Danger),
-      new ButtonBuilder()
-        .setCustomId('setup:lich:menu')
-        .setLabel('← Hủy')
-        .setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId(`setup:lich:delete:${lichId}`).setLabel('✅ Xác nhận Xóa').setStyle(ButtonStyle.Danger),
+      new ButtonBuilder().setCustomId('setup:lich:menu').setLabel('← Hủy').setStyle(ButtonStyle.Secondary),
     );
 
     await interaction.update({ embeds: [embed], components: [row], ephemeral: true });
@@ -519,12 +745,7 @@ async function handleSetupUi(interaction) {
   if (customId.startsWith('setup:lich:delete:')) {
     const lichId = customId.replace('setup:lich:delete:', '');
     await db.xoaLichCoDinh(guild.id, lichId);
-
-    try {
-      const { cancelLichCoDinh } = require('../utils/scheduler.js');
-      cancelLichCoDinh(guild.id, lichId);
-    } catch (_) {}
-
+    try { const { cancelLichCoDinh } = require('../utils/scheduler.js'); cancelLichCoDinh(guild.id, lichId); } catch (_) {}
     const lichList = await db.getLichCoDinh(guild.id);
     const payload  = lichMenuComponents(lichList);
     payload.content = `🗑️ Đã xóa lịch \`${lichId.slice(0,8)}...\``;
@@ -532,55 +753,12 @@ async function handleSetupUi(interaction) {
     return true;
   }
 
-  // ── setup:lich:add — BUG #3 #4 #5 FIX: Modal với placeholder/hướng dẫn rõ ─
+  // ── setup:lich:add ──────────────────────────────────────────────────────────
   if (customId === 'setup:lich:add') {
-    const modal = new ModalBuilder()
-      .setCustomId('setup:lich:modal')
-      .setTitle('➕ Thêm Lịch Cố Định');
-
-    modal.addComponents(
-      new ActionRowBuilder().addComponents(
-        new TextInputBuilder()
-          .setCustomId('ten')
-          .setLabel('Tên phiên (vd: Bang Chiến, Hội Đồng...)')
-          .setStyle(TextInputStyle.Short)
-          .setPlaceholder('Bang Chiến')
-          .setRequired(true).setMaxLength(50),
-      ),
-      new ActionRowBuilder().addComponents(
-        new TextInputBuilder()
-          .setCustomId('gio_mo')
-          // BUG #5 FIX: label rõ hơn
-          .setLabel('Thứ & Giờ MỞ — format: T7 21:00')
-          .setStyle(TextInputStyle.Short)
-          .setPlaceholder('CN T2 T3 T4 T5 T6 T7 — vd: T7 21:00')
-          .setRequired(true).setMaxLength(10),
-      ),
-      new ActionRowBuilder().addComponents(
-        new TextInputBuilder()
-          .setCustomId('gio_dong')
-          // BUG #5 FIX: placeholder KHÔNG ghi "tuần sau" nữa, giải thích đúng
-          .setLabel('Thứ & Giờ ĐÓNG — để trống = không tự đóng')
-          .setStyle(TextInputStyle.Short)
-          .setPlaceholder('vd: T7 23:30  |  CN 02:00  |  (cùng ngày hoặc khác ngày đều được)')
-          .setRequired(false).setMaxLength(10),
-      ),
-      // BUG #3 #4 FIX: hướng dẫn Channel ID rõ ràng hơn, validate sau submit
-      new ActionRowBuilder().addComponents(
-        new TextInputBuilder()
-          .setCustomId('kenh_id')
-          .setLabel('Channel ID — để trống = kênh hiện tại')
-          .setStyle(TextInputStyle.Short)
-          .setPlaceholder('Chuột phải kênh → Copy ID  (vd: 1234567890123456789)')
-          .setRequired(false).setMaxLength(20),
-      ),
-    );
-
-    await interaction.showModal(modal);
-    return true;
+    return handleShowAddModal(interaction);
   }
 
-  // ── setup:lich:modal — submit modal ─────────────────────────────────────────
+  // ── setup:lich:modal — submit modal thêm mới ────────────────────────────────
   if (customId === 'setup:lich:modal') {
     await interaction.deferReply({ ephemeral: true });
     const ten     = interaction.fields.getTextInputValue('ten').trim();
@@ -589,56 +767,38 @@ async function handleSetupUi(interaction) {
     const kenhRaw = interaction.fields.getTextInputValue('kenh_id').trim();
 
     const parsed = parseThuGio(moRaw);
-    if (!parsed) {
-      return interaction.editReply({ content: '❌ Định dạng giờ mở không hợp lệ. Dùng: `T7 21:00` hoặc `CN 08:30`' });
-    }
+    if (!parsed) return interaction.editReply({ content: '❌ Định dạng giờ mở không hợp lệ. Dùng: `T7 21:00` hoặc `CN 08:30`' });
 
     let parsedDong = null;
     if (dongRaw) {
       parsedDong = parseThuGio(dongRaw);
-      if (!parsedDong) {
-        return interaction.editReply({ content: '❌ Định dạng giờ đóng không hợp lệ. Dùng: `T7 19:30` hoặc để trống.' });
-      }
+      if (!parsedDong) return interaction.editReply({ content: '❌ Định dạng giờ đóng không hợp lệ.' });
     }
 
-    // BUG #3 FIX: validate channel tồn tại sau submit
     const channelId = kenhRaw || interaction.channel?.id;
-    if (!channelId) {
-      return interaction.editReply({ content: '❌ Không xác định được kênh. Vui lòng nhập Channel ID.' });
-    }
+    if (!channelId) return interaction.editReply({ content: '❌ Không xác định được kênh.' });
     if (kenhRaw) {
       const ch = guild.channels.cache.get(kenhRaw) || await guild.channels.fetch(kenhRaw).catch(() => null);
-      if (!ch) {
-        return interaction.editReply({ content: `❌ Không tìm thấy kênh ID \`${kenhRaw}\`. Kiểm tra lại ID hoặc để trống để dùng kênh hiện tại.` });
-      }
+      if (!ch) return interaction.editReply({ content: `❌ Không tìm thấy kênh ID \`${kenhRaw}\`.` });
     }
 
     const cfgCurrent  = await db.getConfig(guild.id);
     const phaiRoleIds = cfgCurrent.phai_role_ids ?? [];
 
     const lich = await db.themLichCoDinh(guild.id, {
-      dayOfWeek:      parsed.thu,
-      hour:           parsed.gio,
-      minute:         parsed.phut,
-      sessionName:    ten,
-      closeDayOfWeek: parsedDong?.thu  ?? null,
-      closeHour:      parsedDong?.gio  ?? null,
-      closeMinute:    parsedDong?.phut ?? null,
-      phaiRoleIds,
-      channelId,
+      dayOfWeek: parsed.thu, hour: parsed.gio, minute: parsed.phut,
+      sessionName: ten,
+      closeDayOfWeek: parsedDong?.thu ?? null, closeHour: parsedDong?.gio ?? null, closeMinute: parsedDong?.phut ?? null,
+      phaiRoleIds, channelId,
     });
 
     const { scheduleLichCoDinh } = require('../utils/scheduler.js');
     await scheduleLichCoDinh(interaction.client, guild, lich);
 
-    // BUG #1 #7 FIX: dùng ngayThucTe mới với ref để hiển thị đúng
     const { label: moLabel } = ngayThucTe(parsed.thu, parsed.gio, parsed.phut);
     const dongDisplay = parsedDong
       ? (() => {
-          const { label, note } = ngayThucTe(
-            parsedDong.thu, parsedDong.gio, parsedDong.phut,
-            parsed.thu, parsed.gio, parsed.phut,
-          );
+          const { label, note } = ngayThucTe(parsedDong.thu, parsedDong.gio, parsedDong.phut, parsed.thu, parsed.gio, parsed.phut);
           return note ? `${label} ${note}` : label;
         })()
       : 'Không tự đóng';
@@ -652,70 +812,61 @@ async function handleSetupUi(interaction) {
     });
   }
 
-  // ── setup:preset_bc ─────────────────────────────────────────────────────────
-  if (customId === 'setup:preset_bc') {
-    // BUG #7 FIX: Bỏ "(tuần sau)" sai, thay bằng mô tả trung lập
-    // BUG #2 FIX: Hiển thị mô tả đúng logic thực tế
-    const embed = new EmbedBuilder()
-      .setTitle('⚡ Preset Bang Chiến')
-      .setDescription(
-        '**Lịch mặc định:**\n' +
-        '• **Mở:** Thứ bảy 21:00\n' +
-        '• **Đóng:** Thứ bảy 19:30 *(trước giờ mở — cùng ngày)*\n\n' +
-        '> Giờ đóng 19:30 < giờ mở 21:00 → bot hiểu là đóng **trước** khi mở (cutoff)\n\n' +
-        'Chọn kênh thông báo rồi bấm **✅ Tạo Ngay**.')
-      .setColor(0xED4245)
-      .setFooter({ text: FOOTER_DEFAULT });
-
-    const rows = [
-      new ActionRowBuilder().addComponents(
-        new ChannelSelectMenuBuilder()
-          .setCustomId('setup:preset_bc:kenh')
-          .setPlaceholder('Chọn kênh gửi thông báo...')
-          .addChannelTypes(ChannelType.GuildText)
-          .setMinValues(1).setMaxValues(1),
-      ),
-      new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('setup:preset_bc:save').setLabel('✅ Tạo Ngay (dùng kênh hiện tại)').setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId('setup:lich:menu').setLabel('← Quay lại').setStyle(ButtonStyle.Secondary),
-      ),
-    ];
-
-    await interaction.update({ embeds: [embed], components: rows, ephemeral: true });
-    return true;
-  }
-
-  if (customId === 'setup:preset_bc:kenh') {
-    await interaction.deferReply({ ephemeral: true });
-    const channelId = interaction.values[0];
-    await createPresetBangChien(interaction, guild, channelId);
-    return true;
-  }
-
-  if (customId === 'setup:preset_bc:save') {
-    await interaction.deferUpdate();
-    const channelId = interaction.channel?.id;
-    if (!channelId) {
-      await interaction.followUp({ content: '❌ Không xác định kênh. Dùng menu chọn kênh ở trên.', ephemeral: true });
-      return true;
-    }
-    await createPresetBangChien(interaction, guild, channelId);
-    return true;
-  }
-
   return false;
 }
 
-// ─── Tạo preset Bang Chiến ──────────────────────────────────────────────────
-// BUG #1 #2 #7 FIX: dùng ngayThucTe mới để hiển thị đúng "cùng ngày"
-async function createPresetBangChien(interaction, guild, channelId) {
+// ─── Helper: hiển thị modal thêm lịch ────────────────────────────────────────
+async function handleShowAddModal(interaction) {
+  const modal = new ModalBuilder()
+    .setCustomId('setup:lich:modal')
+    .setTitle('➕ Thêm Lịch Cố Định');
+
+  modal.addComponents(
+    new ActionRowBuilder().addComponents(
+      new TextInputBuilder()
+        .setCustomId('ten').setLabel('Tên phiên (vd: Bang Chiến, Hội Đồng...)')
+        .setStyle(TextInputStyle.Short).setPlaceholder('Bang Chiến')
+        .setRequired(true).setMaxLength(50),
+    ),
+    new ActionRowBuilder().addComponents(
+      new TextInputBuilder()
+        .setCustomId('gio_mo').setLabel('Thứ & Giờ MỞ — format: T7 21:00')
+        .setStyle(TextInputStyle.Short).setPlaceholder('CN T2 T3 T4 T5 T6 T7 — vd: T7 21:00')
+        .setRequired(true).setMaxLength(10),
+    ),
+    new ActionRowBuilder().addComponents(
+      new TextInputBuilder()
+        .setCustomId('gio_dong').setLabel('Thứ & Giờ ĐÓNG — để trống = không tự đóng')
+        .setStyle(TextInputStyle.Short)
+        .setPlaceholder('vd: T7 23:30  |  CN 02:00  |  (cùng ngày hoặc khác ngày đều được)')
+        .setRequired(false).setMaxLength(10),
+    ),
+    new ActionRowBuilder().addComponents(
+      new TextInputBuilder()
+        .setCustomId('kenh_id').setLabel('Channel ID — để trống = kênh hiện tại')
+        .setStyle(TextInputStyle.Short).setPlaceholder('Chuột phải kênh → Copy ID  (vd: 1234567890123456789)')
+        .setRequired(false).setMaxLength(20),
+    ),
+  );
+
+  await interaction.showModal(modal);
+  return true;
+}
+
+// ─── FEAT 1.3: Tạo lịch từ preset bất kỳ ────────────────────────────────────
+async function createPresetLich(interaction, guild, preset, channelId) {
   const cfg         = await db.getConfig(guild.id);
   const phaiRoleIds = cfg.phai_role_ids ?? [];
+  const d           = preset.data;
 
   const lich = await db.themLichCoDinh(guild.id, {
-    dayOfWeek: 6, hour: 21, minute: 0,
-    sessionName: 'Bang Chiến',
-    closeDayOfWeek: 6, closeHour: 19, closeMinute: 30,
+    dayOfWeek:      d.day_of_week,
+    hour:           d.hour,
+    minute:         d.minute,
+    sessionName:    preset.label.replace(/^[^a-zA-ZÀ-ỹ0-9]+/, '').trim(), // bỏ emoji prefix
+    closeDayOfWeek: d.close_day_of_week ?? null,
+    closeHour:      d.close_hour ?? null,
+    closeMinute:    d.close_minute ?? null,
     phaiRoleIds,
     channelId,
   });
@@ -726,13 +877,15 @@ async function createPresetBangChien(interaction, guild, channelId) {
   const cfgFresh = await db.getConfig(guild.id);
   const payload  = await buildDashboard(guild, cfgFresh, 'admin');
 
-  const { label: moLabel } = ngayThucTe(6, 21, 0);
-  // BUG #1 #7 FIX: truyền ref (open day=6, 21:00) để hiển thị đúng
-  const { label: dongLabel, note: dongNote } = ngayThucTe(6, 19, 30, 6, 21, 0);
+  const { label: moLabel } = ngayThucTe(d.day_of_week, d.hour, d.minute);
+  const { label: dongLabel, note: dongNote } = ngayThucTe(
+    d.close_day_of_week, d.close_hour, d.close_minute,
+    d.day_of_week, d.hour, d.minute,
+  );
   const dongDisplay = dongNote ? `${dongLabel} ${dongNote}` : dongLabel;
 
   payload.content = [
-    `⚡ Đã tạo preset **Bang Chiến**!`,
+    `⚡ Đã tạo preset **${preset.label}**!`,
     `Mở: **${moLabel}** → Đóng: **${dongDisplay}**`,
     `Kênh: <#${channelId}> | ID: \`${lich.id}\``,
   ].join('\n');
@@ -741,7 +894,7 @@ async function createPresetBangChien(interaction, guild, channelId) {
   else await interaction.followUp({ ...payload, ephemeral: true });
 }
 
-// ─── Parse "T7 21:00" hoặc "CN 08:30" ──────────────────────────────────────
+// ─── Parse "T7 21:00" ────────────────────────────────────────────────────────
 function parseThuGio(raw) {
   const m = raw.trim().toUpperCase().match(/^(CN|T[2-7])\s+(\d{1,2}):(\d{2})$/);
   if (!m) return null;

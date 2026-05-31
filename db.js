@@ -44,7 +44,6 @@ async function setConfig(guildId, updates) {
 // ─── Phiên Điểm Danh ────────────────────────────────────────────────────────────────
 function getDefaultSession() { return null; }
 
-// BUG-5 FIX: thêm filter cancelled=false để tránh trả về session đã cancel nhưng is_active chưa update
 async function getActiveSession(guildId) {
   const { data, error } = await supabase
     .from('sessions').select('*')
@@ -63,7 +62,6 @@ async function getSessionById(sessionId, guildId) {
   return data;
 }
 
-// Hàm riêng không filter cancelled — dùng cho debug/admin
 async function getSessionByIdRaw(sessionId, guildId) {
   const { data, error } = await supabase
     .from('sessions').select('*').eq('id', sessionId).eq('guild_id', guildId).maybeSingle();
@@ -109,7 +107,6 @@ async function getAttendances(sessionId) {
   return data ?? [];
 }
 
-// BUG-2 FIX: đổi display_name → username để khớp với schema bảng attendances
 async function upsertAttendance(sessionId, guildId, userId, displayName, status) {
   const { error } = await supabase.from('attendances').upsert({
     session_id: sessionId, guild_id: guildId, user_id: userId,
@@ -118,7 +115,6 @@ async function upsertAttendance(sessionId, guildId, userId, displayName, status)
   throwIfError(error, 'upsertAttendance');
 }
 
-// BUG-2 FIX: đổi display_name → username
 async function upsertAttendanceNoTime(sessionId, guildId, userId, displayName, status) {
   const existing = await supabase.from('attendances').select('checked_in_at')
     .eq('session_id', sessionId).eq('user_id', userId).maybeSingle();
@@ -159,7 +155,6 @@ async function updateMemberStats(guildId, userId, joined, sessionId) {
   return { ...existing, total_sessions: newTotal, total_joined: newJoined, current_streak: newStreak, best_streak: newBest };
 }
 
-// recalculateMemberStats — tránh N+1 query bằng 1 lần fetch attendances
 async function recalculateMemberStats(guildId, userId) {
   const { data: sessions, error: sErr } = await supabase
     .from('sessions').select('id, ended_at, eligible_member_ids')
@@ -198,7 +193,6 @@ async function getAllMemberStats(guildId) {
   return data ?? [];
 }
 
-// Top N thành viên theo số lần tham gia
 async function getTopMembers(guildId, limit = 10) {
   const { data, error } = await supabase.from('member_stats').select('*')
     .eq('guild_id', guildId)
@@ -208,15 +202,11 @@ async function getTopMembers(guildId, limit = 10) {
   return data ?? [];
 }
 
-// Reset streak của 1 thành viên
 async function resetMemberStreak(guildId, userId) {
   const existing = await getMemberStats(guildId, userId);
   const { error } = await supabase.from('member_stats').upsert({
-    ...existing,
-    guild_id: guildId,
-    user_id: userId,
-    current_streak: 0,
-    updated_at: new Date().toISOString(),
+    ...existing, guild_id: guildId, user_id: userId,
+    current_streak: 0, updated_at: new Date().toISOString(),
   });
   throwIfError(error, 'resetMemberStreak');
 }
@@ -277,6 +267,24 @@ async function xoaLichCoDinh(guildId, id) {
   return !!data;
 }
 
+// FEAT 1.4: Cập nhật lịch cố định không cần xóa + tạo lại
+async function capNhatLichCoDinh(guildId, id, { sessionName, dayOfWeek, hour, minute, closeDayOfWeek, closeHour, closeMinute, channelId }) {
+  const { data, error } = await supabase.from('scheduled_sessions').update({
+    session_name:      sessionName,
+    day_of_week:       dayOfWeek,
+    hour,
+    minute,
+    close_day_of_week: closeDayOfWeek ?? null,
+    close_hour:        closeHour ?? null,
+    close_minute:      closeMinute ?? null,
+    channel_id:        channelId,
+    updated_at:        new Date().toISOString(),
+  }).eq('guild_id', guildId).eq('id', id).eq('is_active', true)
+    .select().maybeSingle();
+  throwIfError(error, 'capNhatLichCoDinh');
+  return data ?? null;
+}
+
 async function capNhatPhaiRoles(lichId, phaiRoleIds) {
   const { error } = await supabase.from('scheduled_sessions')
     .update({ phai_role_ids: phaiRoleIds })
@@ -292,5 +300,5 @@ module.exports = {
   getMemberStats, updateMemberStats, recalculateMemberStats, getAllMemberStats,
   getTopMembers, resetMemberStreak,
   getSessionHistory,
-  getLichCoDinh, getLichCoDinhById, getLichCoDinhByShortId, themLichCoDinh, xoaLichCoDinh, capNhatPhaiRoles,
+  getLichCoDinh, getLichCoDinhById, getLichCoDinhByShortId, themLichCoDinh, xoaLichCoDinh, capNhatLichCoDinh, capNhatPhaiRoles,
 };
