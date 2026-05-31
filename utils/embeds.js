@@ -2,18 +2,18 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { buildProgressBar } = require('./progress.js');
 
-// ─── Constants ─────────────────────────────────────────────────
-const COLOR_HIGH   = 0x57F287;  // xanh lá — tham gia cao
-const COLOR_MID    = 0xFEE75C;  // vàng — trung bình
-const COLOR_LOW    = 0xED4245;  // đỏ — thấp
-const COLOR_ACTIVE = 0x5865F2;  // tím Discord — phiên đang mở
-const COLOR_GREY   = 0x99AAB5;  // xám — trung tính
-const COLOR_GOLD   = 0xF0B132;  // vàng đậm — rank/top
+// ─── Constants ──────────────────────────────────────────────────────────────
+const COLOR_HIGH   = 0x57F287;
+const COLOR_MID    = 0xFEE75C;
+const COLOR_LOW    = 0xED4245;
+const COLOR_ACTIVE = 0x5865F2;
+const COLOR_GREY   = 0x99AAB5;
+const COLOR_GOLD   = 0xF0B132;
 
 const FOOTER_DEFAULT = 'Quản Gia';
 const AUTHOR_DEFAULT = { name: '📋 Quản Gia · Điểm Danh' };
 
-// ─── Helpers ────────────────────────────────────────────────────
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 function pctColor(pct) {
   if (pct >= 80) return COLOR_HIGH;
   if (pct >= 50) return COLOR_MID;
@@ -26,7 +26,6 @@ function pctEmoji(pct) {
   return '🔴';
 }
 
-/** Phân cấp tỉ lệ thành text mô tả */
 function pctLabel(pct) {
   if (pct >= 90) return 'Xuất sắc';
   if (pct >= 80) return 'Tốt';
@@ -51,18 +50,16 @@ function chunkLines(lines, maxLen = 950) {
   return chunks;
 }
 
-/** Format số giây thành chuỗi HH:mm:ss hoặc mm:ss */
 function formatDuration(seconds) {
   if (!seconds || seconds <= 0) return null;
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
-  const s = seconds % 60;
   if (h > 0) return `${h}g ${m}p`;
   if (m > 0) return `${m} phút`;
-  return `${s} giây`;
+  return `${seconds % 60} giây`;
 }
 
-// ─── Buttons ────────────────────────────────────────────────────
+// ─── Buttons ─────────────────────────────────────────────────────────────────
 function buildAttendanceButtons(disabled = false) {
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
@@ -92,7 +89,7 @@ function buildAttendanceButtons(disabled = false) {
   );
 }
 
-// ─── Session Embed (đang mở) ────────────────────────────────────
+// ─── Session Embed (đang mở) ──────────────────────────────────────────────────
 async function buildSessionEmbed(guild, session, attended) {
   const joined   = attended.filter(a => a.status === 'tham_gia');
   const late     = attended.filter(a => a.status === 'tre');
@@ -108,12 +105,16 @@ async function buildSessionEmbed(guild, session, attended) {
   const startedAt = session.created_at ?? session.started_at;
   const startTs   = Math.floor(new Date(startedAt).getTime() / 1000);
 
-  // Header mô tả — compact, rõ ràng
+  // [FIX BUG-2] Dùng allowed_role_id (đúng schema), KHÔNG dùng role_id
+  const roleDisplay = session.allowed_role_id
+    ? `<@&${session.allowed_role_id}>`
+    : (session.role_name ?? 'Tất cả');
+
   const descLines = [
     `${pctEmoji(pct)} **${pct}%** — ${pctLabel(pct)} · \`${bar}\``,
     `> ✅ \`${joined.length}\`  ⏰ \`${late.length}\`  ❌ \`${declined.length}\`  ⏳ \`${absentIds.length}\`  👥 \`${eligible} thành viên\``,
     '',
-    `📌 Role: <@&${session.role_id ?? '0'}> · Bắt đầu <t:${startTs}:R>`,
+    `📌 Role: ${roleDisplay} · Bắt đầu <t:${startTs}:R>`,
   ];
   if (session.auto_close_at) {
     const ts = Math.floor(new Date(session.auto_close_at).getTime() / 1000);
@@ -132,7 +133,6 @@ async function buildSessionEmbed(guild, session, attended) {
     if (iconURL) embed.setThumbnail(iconURL);
   }
 
-  // Danh sách thành viên — dùng display_name
   if (joined.length > 0)
     chunkLines(joined.map((a, i) => `\`${String(i + 1).padStart(2)}.\` **${a.display_name}**`))
       .forEach((chunk, i) => embed.addFields({
@@ -169,7 +169,7 @@ async function buildSessionEmbed(guild, session, attended) {
   return embed;
 }
 
-// ─── Summary Embed (đã đóng) ────────────────────────────────────
+// ─── Summary Embed (đã đóng) ──────────────────────────────────────────────────
 function buildSummaryEmbed(session, attended) {
   const joined   = attended.filter(a => a.status === 'tham_gia');
   const late     = attended.filter(a => a.status === 'tre');
@@ -183,7 +183,6 @@ function buildSummaryEmbed(session, attended) {
   const startTs   = Math.floor(new Date(startedAt).getTime() / 1000);
   const endTs     = session.ended_at ? Math.floor(new Date(session.ended_at).getTime() / 1000) : null;
 
-  // Tính thời lượng
   let durationStr = '';
   if (endTs) {
     const dur = formatDuration(endTs - startTs);
@@ -228,7 +227,7 @@ function buildSummaryEmbed(session, attended) {
   return embed;
 }
 
-// ─── History Embed ──────────────────────────────────────────────
+// ─── History Embed ────────────────────────────────────────────────────────────
 function buildHistoryEmbed(history) {
   if (history.length === 0) {
     return new EmbedBuilder()
@@ -239,16 +238,14 @@ function buildHistoryEmbed(history) {
       .setFooter({ text: FOOTER_DEFAULT });
   }
 
+  // [FIX BUG-3] Xóa pct calculation — sessions không lưu total_joined/total_late
   const lines = history.map((s, i) => {
     const startedAt = s.created_at ?? s.started_at;
     const ts = Math.floor(new Date(startedAt).getTime() / 1000);
     const eligible = (s.eligible_member_ids ?? []).length;
-    const presentCount = (s.total_joined ?? 0) + (s.total_late ?? 0);
-    const pct = eligible > 0 ? Math.round((presentCount / eligible) * 100) : 0;
-    const emoji = pctEmoji(pct);
     return [
-      `\`${String(i + 1).padStart(2)}.\` ${emoji} **${s.session_name}** — <t:${ts}:d>`,
-      `> \`ID: ${s.id}\`  ·  ${presentCount}/${eligible} người (${pct}%)`,
+      `\`${String(i + 1).padStart(2)}.\` **${s.session_name}** — <t:${ts}:d>`,
+      `> \`ID: ${s.id}\`  ·  ${eligible} thành viên`,
     ].join('\n');
   });
 
@@ -261,7 +258,8 @@ function buildHistoryEmbed(history) {
     .setTimestamp();
 }
 
-// ─── Member Embed ───────────────────────────────────────────────
+// ─── Member Embed ─────────────────────────────────────────────────────────────
+// [FIX BUG-6] Xóa stats.total_late — cột không tồn tại trong member_stats
 function buildMemberEmbed(member, stats, badge, pct, bar) {
   const streakBar = stats.current_streak > 0
     ? '🔥'.repeat(Math.min(stats.current_streak, 10)) + (stats.current_streak > 10 ? ` x${stats.current_streak}` : '')
@@ -275,7 +273,7 @@ function buildMemberEmbed(member, stats, badge, pct, bar) {
     .setDescription([
       `${pctEmoji(pct)} **${pct}%** — ${pctLabel(pct)}`,
       `\`${bar}\``,
-      `> 📅 ${stats.total_joined} tham gia · ${stats.total_late ?? 0} trễ · ${stats.total_sessions} tổng phiên`,
+      `> 📅 ${stats.total_joined} tham gia · ${stats.total_sessions} tổng phiên`,
     ].join('\n'))
     .addFields(
       { name: '🔥 Streak Hiện Tại', value: streakBar, inline: true },
@@ -286,7 +284,7 @@ function buildMemberEmbed(member, stats, badge, pct, bar) {
     .setTimestamp();
 }
 
-// ─── Stats Embed ────────────────────────────────────────────────
+// ─── Stats Embed ──────────────────────────────────────────────────────────────
 function buildStatsEmbed(lines) {
   return new EmbedBuilder()
     .setAuthor(AUTHOR_DEFAULT)
@@ -297,7 +295,7 @@ function buildStatsEmbed(lines) {
     .setTimestamp();
 }
 
-// ─── Config Embed ───────────────────────────────────────────────
+// ─── Config Embed ─────────────────────────────────────────────────────────────
 function buildConfigEmbed(cfg) {
   return new EmbedBuilder()
     .setAuthor(AUTHOR_DEFAULT)
@@ -319,7 +317,7 @@ function buildConfigEmbed(cfg) {
     .setTimestamp();
 }
 
-// ─── Exports ────────────────────────────────────────────────────
+// ─── Exports ──────────────────────────────────────────────────────────────────
 module.exports = {
   buildAttendanceButtons,
   buildSessionEmbed,

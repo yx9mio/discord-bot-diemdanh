@@ -1,9 +1,8 @@
 // commands/diemdanh.js — Lệnh điểm danh trực tiếp bằng slash command
-const { SlashCommandBuilder } = require('discord.js');
-const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const db = require('../db.js');
 const { layHuyHieu } = require('../utils/helpers.js');
-const { pctColor, pctEmoji, FOOTER_DEFAULT, AUTHOR_DEFAULT } = require('../utils/embeds.js');
+const { pctColor, pctEmoji, pctLabel, FOOTER_DEFAULT, AUTHOR_DEFAULT, buildSessionEmbed } = require('../utils/embeds.js');
 const { buildProgressBar } = require('../utils/progress.js');
 
 const STATUS_MAP = {
@@ -55,13 +54,17 @@ module.exports = {
     const displayName = member.nickname ?? user.globalName ?? user.username;
     await db.upsertAttendance(session.id, guild.id, user.id, displayName, status);
 
-    // Lấy stats sau khi upsert
+    // [FIX BUG-7] Stats lấy từ phiên đã kết thúc — note rõ cho user
     const stats = await db.getMemberStats(guild.id, user.id).catch(() => null);
-    const totalJoined = stats?.total_joined ?? 0;
-    const totalSessions = stats?.total_sessions ?? 1;
-    const pct = totalSessions > 0 ? Math.round((totalJoined / totalSessions) * 100) : 0;
-    const bar = buildProgressBar(pct);
+    const totalJoined   = stats?.total_joined   ?? 0;
+    const totalSessions = stats?.total_sessions ?? 0;
+    const pct   = totalSessions > 0 ? Math.round((totalJoined / totalSessions) * 100) : 0;
+    const bar   = buildProgressBar(pct);
     const badge = layHuyHieu(totalJoined);
+
+    const statsNote = totalSessions > 0
+      ? `${pctEmoji(pct)} \`${bar}\` **${pct}%** — ${pctLabel(pct)} (${totalJoined}/${totalSessions} phiên đã kết thúc)`
+      : `*(Chưa có thống kê — tính sau khi phiên đóng)*`;
 
     const embed = new EmbedBuilder()
       .setAuthor(AUTHOR_DEFAULT)
@@ -71,7 +74,7 @@ module.exports = {
       .setDescription([
         `**${displayName}** ${info.verb} phiên **${session.session_name}**.`,
         '',
-        `${pctEmoji(pct)} \`${bar}\` **${pct}%** tổng thể (${totalJoined}/${totalSessions})`,
+        statsNote,
         badge ? `🏅 Huy hiệu: ${badge}` : '',
         `🔥 Streak: **${stats?.current_streak ?? 0}** phiên liên tiếp`,
       ].filter(Boolean).join('\n'))
@@ -83,14 +86,13 @@ module.exports = {
       .setFooter({ text: `${FOOTER_DEFAULT} · Dùng lại lệnh để đổi trạng thái` })
       .setTimestamp();
 
-    // Cập nhật embed phiên gốc
+    // [FIX BUG-1] Sửa đường dẫn require — dùng import ở đầu file thay vì require động
     try {
       const ch = guild.channels.cache.get(session.channel_id);
       if (ch && session.message_id) {
         const msg = await ch.messages.fetch(session.message_id).catch(() => null);
         if (msg) {
           const attended = await db.getAttendances(session.id);
-          const { buildSessionEmbed } = require('./utils/embeds.js');
           const sessionEmbed = await buildSessionEmbed(guild, session, attended);
           await msg.edit({ embeds: [sessionEmbed] }).catch(() => null);
         }
