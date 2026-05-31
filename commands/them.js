@@ -27,13 +27,24 @@ module.exports = {
       return interaction.editReply(replyErrEdit('📭 Không có phiên điểm danh nào đang mở.'));
     }
 
+    // Lấy displayName từ guild member nếu có
+    const guildMember = await guild.members.fetch(target.id).catch(() => null);
+    const displayName = guildMember?.nickname ?? target.globalName ?? target.username;
+
     try {
-      await db.markAttendance(session.id, target.id, interaction.user.id);
+      await db.upsertAttendance(
+        session.id,
+        guild.id,
+        target.id,
+        displayName,
+        'tham_gia',
+        interaction.user.id, // marked_by = admin
+      );
     } catch {
       return interaction.editReply(replyErrEdit('Có lỗi khi ghi điểm danh. Vui lòng thử lại.'));
     }
 
-    const attended    = await db.getAttendance(session.id);
+    const attended    = await db.getAttendances(session.id);
     const phaiRoleIds = cfg.phai_role_ids ?? [];
     const embed       = await buildSessionEmbed(guild, session, attended, phaiRoleIds);
     const buttons     = buildAttendanceButtons(false);

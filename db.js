@@ -108,11 +108,61 @@ async function getAttendances(sessionId) {
   return data ?? [];
 }
 
+/**
+ * markAttendance — upsert cơ bản, không lưu username/guild_id.
+ * Dùng cho các flow cũ (button handler). Ưu tiên dùng upsertAttendance.
+ */
 async function markAttendance(sessionId, userId, status, markedBy = null) {
   const { error } = await supabase
     .from('attendances')
-    .upsert({ session_id: sessionId, user_id: userId, status, marked_by: markedBy }, { onConflict: 'session_id,user_id' });
+    .upsert(
+      { session_id: sessionId, user_id: userId, status, marked_by: markedBy },
+      { onConflict: 'session_id,user_id' },
+    );
   throwIfError(error, 'markAttendance');
+}
+
+/**
+ * upsertAttendance — upsert đầy đủ với username + guild_id + checked_in_at.
+ * Dùng cho /diemdanh (self check-in) và /them (admin thêm).
+ */
+async function upsertAttendance(sessionId, guildId, userId, username, status, markedBy = null) {
+  const { error } = await supabase
+    .from('attendances')
+    .upsert(
+      {
+        session_id: sessionId,
+        guild_id: guildId,
+        user_id: userId,
+        username,
+        status,
+        marked_by: markedBy,
+        checked_in_at: new Date().toISOString(),
+      },
+      { onConflict: 'session_id,user_id' },
+    );
+  throwIfError(error, 'upsertAttendance');
+}
+
+/**
+ * upsertAttendanceNoTime — upsert với username + guild_id nhưng KHÔNG cập nhật checked_in_at.
+ * Dùng cho /sua (admin sửa trạng thái sau điểm danh).
+ */
+async function upsertAttendanceNoTime(sessionId, guildId, userId, username, status, markedBy = null) {
+  const { error } = await supabase
+    .from('attendances')
+    .upsert(
+      {
+        session_id: sessionId,
+        guild_id: guildId,
+        user_id: userId,
+        username,
+        status,
+        marked_by: markedBy,
+      },
+      { onConflict: 'session_id,user_id', ignoreDuplicates: false },
+    );
+  throwIfError(error, 'upsertAttendanceNoTime');
 }
 
 // ─── Member stats ─────────────────────────────────────────────────────────────
@@ -305,8 +355,10 @@ module.exports = {
   supabase,
   getDefaultSession, getActiveSession, getAllActiveSessions,
   getSessionById, getSessionByIdRaw, createSession, updateSessionMessageId, endSession, cancelSession,
-  closeSession, getAttendance, markAttendance,
-  getAttendances, getSessionHistory, getSessionsWithAttendance,
+  closeSession,
+  getAttendance, getAttendances,
+  markAttendance, upsertAttendance, upsertAttendanceNoTime,
+  getSessionHistory, getSessionsWithAttendance,
   getMemberStats, upsertMemberStats, batchUpsertMemberStats,
   resetMemberStreak, getAllMemberStats, getTopMembers,
   getConfig, upsertConfig, updateConfig,
