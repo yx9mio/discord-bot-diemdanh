@@ -1,0 +1,324 @@
+// handlers/setup/lichHandler.js — quản lý lịch cố định (menu, add, edit, delete, early open/close)
+'use strict';
+const {
+  EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle,
+  StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle,
+} = require('discord.js');
+const db = require('../../db.js');
+const { FOOTER_DEFAULT, AUTHOR_DEFAULT } = require('../../utils/embeds.js');
+const { TEN_THU, TEN_THU_FULL, pad, ngayThucTe, formatDongStr, parseThuGio } = require('./helpers.js');
+const { buildDashboard } = require('./dashboardHandler.js');
+
+// ─── lichMenuComponents ───────────────────────────────────────────────────────
+function lichMenuComponents(lichList) {
+  const embed = new EmbedBuilder()
+    .setTitle('📅 Quản lý Lịch Cố Định')
+    .setDescription(
+      lichList.length
+        ? lichList.map((l, i) => {
+            const mo   = `${TEN_THU_FULL[l.day_of_week]} ${pad(l.hour)}:${pad(l.minute)}`;
+            const dong = formatDongStr(l);
+            return `**${i+1}.** \`${l.id.slice(0,8)}\` **${l.session_name}**\n> Mở: ${mo} | Đóng: ${dong} | <#${l.channel_id}>`;
+          }).join('\n\n')
+        : '⚠️ Chưa có lịch nào. Nhấn **Thêm mới** để tạo.',
+    )
+    .setColor(0x5865F2)
+    .setFooter({ text: FOOTER_DEFAULT })
+    .setTimestamp();
+
+  const rows = [];
+  if (lichList.length) {
+    rows.push(new ActionRowBuilder().addComponents(
+      new StringSelectMenuBuilder()
+        .setCustomId('setup:lich:select')
+        .setPlaceholder('Chọn lịch để quản lý...')
+        .addOptions(lichList.slice(0,25).map(l => ({
+          label: l.session_name.slice(0,100),
+          description: `${TEN_THU[l.day_of_week]} ${pad(l.hour)}:${pad(l.minute)} | ${l.id.slice(0,8)}`,
+          value: l.id,
+        }))),
+    ));
+  }
+  rows.push(new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId('setup:lich:add').setLabel('➕ Thêm mới').setStyle(ButtonStyle.Success),
+    new ButtonBuilder().setCustomId('setup:dashboard').setLabel('← Quay lại').setStyle(ButtonStyle.Secondary),
+  ));
+  return { embeds: [embed], components: rows, ephemeral: true };
+}
+
+// ─── lichActionComponents ─────────────────────────────────────────────────────
+function lichActionComponents(lich, lichList, activeSession = null) {
+  const mo   = `${TEN_THU_FULL[lich.day_of_week]} ${pad(lich.hour)}:${pad(lich.minute)}`;
+  const dong = formatDongStr(lich);
+  const embed = new EmbedBuilder()
+    .setTitle(`⚙️ Quản lý: ${lich.session_name}`)
+    .setDescription([
+      `**Mở:** ${mo}`,
+      `**Đóng:** ${dong}`,
+      `**Kênh:** <#${lich.channel_id}>`,
+      `**ID:** \`${lich.id}\``,
+    ].join('\n'))
+    .setColor(0x5865F2)
+    .setFooter({ text: FOOTER_DEFAULT });
+
+  const hasActiveSession = !!activeSession;
+  const canEarlyClose    = hasActiveSession && lich.close_day_of_week != null;
+
+  const row1 = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(`setup:lich:early_open:${lich.id}`)
+      .setLabel('▶️ Mở ngay').setStyle(ButtonStyle.Success)
+      .setDisabled(hasActiveSession),
+    new ButtonBuilder().setCustomId(`setup:lich:early_close:${lich.id}`)
+      .setLabel('⏹️ Đóng ngay').setStyle(ButtonStyle.Danger)
+      .setDisabled(!canEarlyClose),
+    new ButtonBuilder().setCustomId(`setup:lich:edit:${lich.id}`)
+      .setLabel('✏️ Sửa').setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId(`setup:lich:confirm_delete:${lich.id}`)
+      .setLabel('🗑️ Xóa').setStyle(ButtonStyle.Danger),
+  );
+  const row2 = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId('setup:lich:menu').setLabel('← Danh sách').setStyle(ButtonStyle.Secondary),
+  );
+  return { embeds: [embed], components: [row1, row2], ephemeral: true };
+}
+
+// ─── handleShowAddModal ───────────────────────────────────────────────────────
+async function handleShowAddModal(interaction) {
+  const modal = new ModalBuilder()
+    .setCustomId('setup:lich:modal')
+    .setTitle('➕ Thêm Lịch Cố Định');
+  modal.addComponents(
+    new ActionRowBuilder().addComponents(
+      new TextInputBuilder().setCustomId('ten').setLabel('Tên phiên').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(50),
+    ),
+    new ActionRowBuilder().addComponents(
+      new TextInputBuilder().setCustomId('gio_mo').setLabel('Thứ & Giờ MỞ — VD: T7 21:00').setStyle(TextInputStyle.Short)
+        .setPlaceholder('T7 21:00').setRequired(true).setMaxLength(10),
+    ),
+    new ActionRowBuilder().addComponents(
+      new TextInputBuilder().setCustomId('gio_dong').setLabel('Thứ & Giờ ĐÓNG — để trống = không tự đóng').setStyle(TextInputStyle.Short)
+        .setPlaceholder('T7 23:30').setRequired(false).setMaxLength(10),
+    ),
+    new ActionRowBuilder().addComponents(
+      new TextInputBuilder().setCustomId('kenh_id').setLabel('Channel ID (để trống = kênh hiện tại)').setStyle(TextInputStyle.Short)
+        .setPlaceholder('Dán Channel ID vào đây').setRequired(false).setMaxLength(20),
+    ),
+  );
+  await interaction.showModal(modal);
+  return true;
+}
+
+async function handleLich(interaction) {
+  const { customId, guild } = interaction;
+
+  if (customId === 'setup:lich:menu') {
+    await interaction.deferUpdate();
+    const lichList = await db.getLichCoDinh(guild.id);
+    await interaction.editReply(lichMenuComponents(lichList));
+    return true;
+  }
+
+  if (customId === 'setup:lich:select') {
+    await interaction.deferUpdate();
+    const lichId = interaction.values[0];
+    const lichList = await db.getLichCoDinh(guild.id);
+    const lich = lichList.find(l => l.id === lichId);
+    if (!lich) {
+      await interaction.editReply({ content: '❌ Không tìm thấy lịch.', ephemeral: true });
+      return true;
+    }
+    const activeSession = await db.getActiveSession(guild.id);
+    await interaction.editReply(lichActionComponents(lich, lichList, activeSession));
+    return true;
+  }
+
+  // Early open
+  if (customId.startsWith('setup:lich:early_open:')) {
+    const lichId = customId.replace('setup:lich:early_open:', '');
+    await interaction.deferReply({ ephemeral: true });
+    const lichList = await db.getLichCoDinh(guild.id);
+    const lich = lichList.find(l => l.id === lichId);
+    if (!lich) { await interaction.editReply({ content: '❌ Không tìm thấy lịch.' }); return true; }
+    const activeSession = await db.getActiveSession(guild.id);
+    if (activeSession) { await interaction.editReply({ content: '⚠️ Đang có phiên mở, không thể mở thêm.' }); return true; }
+    const { morPhienTheoLich } = require('../../utils/scheduler.js');
+    await morPhienTheoLich(interaction.client, guild, lich);
+    await interaction.editReply({ content: `✅ Đã mở phiên **${lich.session_name}** ngay lập tức.` });
+    return true;
+  }
+
+  // Early close
+  if (customId.startsWith('setup:lich:early_close:')) {
+    const lichId = customId.replace('setup:lich:early_close:', '');
+    await interaction.deferReply({ ephemeral: true });
+    const lichList = await db.getLichCoDinh(guild.id);
+    const lich = lichList.find(l => l.id === lichId);
+    if (!lich) { await interaction.editReply({ content: '❌ Không tìm thấy lịch.' }); return true; }
+    if (lich.close_day_of_week == null) { await interaction.editReply({ content: '⚠️ Lịch này không có giờ đóng tự động.' }); return true; }
+    const { dongPhienTheoLich } = require('../../utils/scheduler.js');
+    await dongPhienTheoLich(interaction.client, guild, lich);
+    await interaction.editReply({ content: `✅ Đã đóng phiên **${lich.session_name}** ngay lập tức.` });
+    return true;
+  }
+
+  // Edit modal show
+  if (customId.startsWith('setup:lich:edit:') && !customId.includes(':modal:')) {
+    const lichId = customId.replace('setup:lich:edit:', '');
+    const lichList = await db.getLichCoDinh(guild.id);
+    const lich = lichList.find(l => l.id === lichId);
+    if (!lich) { await interaction.reply({ content: '❌ Không tìm thấy lịch.', ephemeral: true }); return true; }
+    const moStr   = `${TEN_THU[lich.day_of_week]} ${pad(lich.hour)}:${pad(lich.minute)}`;
+    const dongStr = lich.close_day_of_week != null
+      ? `${TEN_THU[lich.close_day_of_week]} ${pad(lich.close_hour)}:${pad(lich.close_minute)}`
+      : '';
+    const modal = new ModalBuilder()
+      .setCustomId(`setup:lich:edit:modal:${lichId}`)
+      .setTitle(`✏️ Sửa Lịch — ${lich.session_name.slice(0, 30)}`);
+    modal.addComponents(
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder().setCustomId('ten').setLabel('Tên phiên').setStyle(TextInputStyle.Short).setValue(lich.session_name).setRequired(true).setMaxLength(50),
+      ),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder().setCustomId('gio_mo').setLabel('Thứ & Giờ MỞ — format: T7 21:00').setStyle(TextInputStyle.Short).setValue(moStr).setRequired(true).setMaxLength(10),
+      ),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder().setCustomId('gio_dong').setLabel('Thứ & Giờ ĐÓNG — để trống = không tự đóng').setStyle(TextInputStyle.Short).setValue(dongStr).setRequired(false).setMaxLength(10),
+      ),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder().setCustomId('kenh_id').setLabel('Channel ID — để trống = giữ nguyên').setStyle(TextInputStyle.Short).setValue(lich.channel_id ?? '').setRequired(false).setMaxLength(20),
+      ),
+    );
+    await interaction.showModal(modal);
+    return true;
+  }
+
+  // Edit modal submit
+  if (customId.startsWith('setup:lich:edit:modal:')) {
+    const lichId = customId.replace('setup:lich:edit:modal:', '');
+    await interaction.deferReply({ ephemeral: true });
+    const lichList = await db.getLichCoDinh(guild.id);
+    const lich = lichList.find(l => l.id === lichId);
+    if (!lich) { await interaction.editReply({ content: '❌ Không tìm thấy lịch.' }); return true; }
+    const ten     = interaction.fields.getTextInputValue('ten').trim();
+    const moRaw   = interaction.fields.getTextInputValue('gio_mo').trim();
+    const dongRaw = interaction.fields.getTextInputValue('gio_dong').trim();
+    const kenhRaw = interaction.fields.getTextInputValue('kenh_id').trim();
+    const parsed = parseThuGio(moRaw);
+    if (!parsed) { await interaction.editReply({ content: '❌ Định dạng giờ mở không hợp lệ. Dùng: `T7 21:00`' }); return true; }
+    let parsedDong = null;
+    if (dongRaw) {
+      parsedDong = parseThuGio(dongRaw);
+      if (!parsedDong) { await interaction.editReply({ content: '❌ Định dạng giờ đóng không hợp lệ.' }); return true; }
+    }
+    const channelId = kenhRaw || lich.channel_id;
+    if (kenhRaw) {
+      const ch = guild.channels.cache.get(kenhRaw) || await guild.channels.fetch(kenhRaw).catch(() => null);
+      if (!ch) { await interaction.editReply({ content: `❌ Không tìm thấy kênh ID \`${kenhRaw}\`.` }); return true; }
+    }
+    const updated = await db.capNhatLichCoDinh(guild.id, lichId, {
+      sessionName: ten, dayOfWeek: parsed.thu, hour: parsed.gio, minute: parsed.phut,
+      closeDayOfWeek: parsedDong?.thu ?? null, closeHour: parsedDong?.gio ?? null, closeMinute: parsedDong?.phut ?? null,
+      channelId,
+    });
+    if (!updated) { await interaction.editReply({ content: '❌ Cập nhật thất bại.' }); return true; }
+    try {
+      const { cancelLichCoDinh, scheduleLichCoDinh } = require('../../utils/scheduler.js');
+      cancelLichCoDinh(guild.id, lichId);
+      await scheduleLichCoDinh(interaction.client, guild, updated);
+    } catch (e) { console.warn('[lichHandler] reschedule sau edit:', e.message); }
+    const { label: moLabel } = ngayThucTe(parsed.thu, parsed.gio, parsed.phut);
+    const dongDisplay = parsedDong
+      ? (() => { const { label, note } = ngayThucTe(parsedDong.thu, parsedDong.gio, parsedDong.phut, parsed.thu, parsed.gio, parsed.phut); return note ? `${label} ${note}` : label; })()
+      : 'Không tự đóng';
+    await interaction.editReply({ content: [`✅ Đã cập nhật lịch **${ten}**`, `Mở: **${moLabel}** → Đóng: **${dongDisplay}**`, `Kênh: <#${channelId}> | ID: \`${lichId}\``].join('\n') });
+    return true;
+  }
+
+  // Confirm delete
+  if (customId.startsWith('setup:lich:confirm_delete:')) {
+    const lichId = customId.replace('setup:lich:confirm_delete:', '');
+    const lichList = await db.getLichCoDinh(guild.id);
+    const lich = lichList.find(l => l.id === lichId);
+    const ten  = lich?.session_name ?? lichId.slice(0,8);
+    const embed = new EmbedBuilder()
+      .setTitle('🗑️ Xác nhận xóa lịch')
+      .setDescription(`Bạn có chắc muốn xóa lịch **${ten}**?\n> Hành động này không thể hoàn tác.`)
+      .setColor(0xED4245).setFooter({ text: FOOTER_DEFAULT });
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`setup:lich:delete:${lichId}`).setLabel('✅ Xác nhận Xóa').setStyle(ButtonStyle.Danger),
+      new ButtonBuilder().setCustomId(`setup:lich:back:${lichId}`).setLabel('← Hủy, quay lại').setStyle(ButtonStyle.Secondary),
+    );
+    await interaction.update({ embeds: [embed], components: [row], ephemeral: true });
+    return true;
+  }
+
+  // Back from delete confirm
+  if (customId.startsWith('setup:lich:back:')) {
+    const lichId = customId.replace('setup:lich:back:', '');
+    const lichList = await db.getLichCoDinh(guild.id);
+    const lich = lichList.find(l => l.id === lichId);
+    if (!lich) { await interaction.update(lichMenuComponents(lichList)); return true; }
+    const activeSession = await db.getActiveSession(guild.id);
+    await interaction.update(lichActionComponents(lich, lichList, activeSession));
+    return true;
+  }
+
+  // Delete
+  if (customId.startsWith('setup:lich:delete:')) {
+    const lichId = customId.replace('setup:lich:delete:', '');
+    await db.xoaLichCoDinh(guild.id, lichId);
+    try { const { cancelLichCoDinh } = require('../../utils/scheduler.js'); cancelLichCoDinh(guild.id, lichId); } catch (_) {}
+    const lichList = await db.getLichCoDinh(guild.id);
+    const payload = lichMenuComponents(lichList);
+    payload.content = `🗑️ Đã xóa lịch \`${lichId.slice(0,8)}...\``;
+    await interaction.update(payload);
+    return true;
+  }
+
+  // Add modal
+  if (customId === 'setup:lich:add') return handleShowAddModal(interaction);
+
+  // Add modal submit
+  if (customId === 'setup:lich:modal') {
+    await interaction.deferReply({ ephemeral: true });
+    const ten     = interaction.fields.getTextInputValue('ten').trim();
+    const moRaw   = interaction.fields.getTextInputValue('gio_mo').trim();
+    const dongRaw = interaction.fields.getTextInputValue('gio_dong').trim();
+    const kenhRaw = interaction.fields.getTextInputValue('kenh_id').trim();
+    const parsed = parseThuGio(moRaw);
+    if (!parsed) return interaction.editReply({ content: '❌ Định dạng giờ mở không hợp lệ. Dùng: `T7 21:00` hoặc `CN 08:30`' });
+    let parsedDong = null;
+    if (dongRaw) {
+      parsedDong = parseThuGio(dongRaw);
+      if (!parsedDong) return interaction.editReply({ content: '❌ Định dạng giờ đóng không hợp lệ.' });
+    }
+    const channelId = kenhRaw || interaction.channel?.id;
+    if (!channelId) return interaction.editReply({ content: '❌ Không xác định được kênh.' });
+    if (kenhRaw) {
+      const ch = guild.channels.cache.get(kenhRaw) || await guild.channels.fetch(kenhRaw).catch(() => null);
+      if (!ch) return interaction.editReply({ content: `❌ Không tìm thấy kênh ID \`${kenhRaw}\`.` });
+    }
+    const cfgCurrent  = await db.getConfig(guild.id);
+    const phaiRoleIds = cfgCurrent.phai_role_ids ?? [];
+    const lich = await db.themLichCoDinh(guild.id, {
+      dayOfWeek: parsed.thu, hour: parsed.gio, minute: parsed.phut,
+      sessionName: ten,
+      closeDayOfWeek: parsedDong?.thu ?? null, closeHour: parsedDong?.gio ?? null, closeMinute: parsedDong?.phut ?? null,
+      phaiRoleIds, channelId,
+    });
+    try {
+      const { scheduleLichCoDinh } = require('../../utils/scheduler.js');
+      await scheduleLichCoDinh(interaction.client, guild, lich);
+    } catch (e) { console.warn('[lichHandler] scheduleLichCoDinh sau add:', e.message); }
+    const { label: moLabel } = ngayThucTe(parsed.thu, parsed.gio, parsed.phut);
+    const dongDisplay = parsedDong
+      ? (() => { const { label, note } = ngayThucTe(parsedDong.thu, parsedDong.gio, parsedDong.phut, parsed.thu, parsed.gio, parsed.phut); return note ? `${label} ${note}` : label; })()
+      : 'Không tự đóng';
+    await interaction.editReply({ content: [`✅ Đã thêm lịch **${ten}**`, `Mở: **${moLabel}** → Đóng: **${dongDisplay}**`, `Kênh: <#${channelId}> | ID: \`${lich.id}\``].join('\n') });
+    return true;
+  }
+
+  return false;
+}
+
+module.exports = { handleLich, lichMenuComponents, lichActionComponents };
