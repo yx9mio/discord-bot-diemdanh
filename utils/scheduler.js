@@ -6,9 +6,10 @@ const log = require('./logger.js');
 const { msToNextWeekday, msFromOpenToClose, msToCloseFromNow } = require('./timeCalc.js');
 const { buildSessionEmbed, buildAttendanceButtons, buildSummaryEmbed } = require('./embeds.js');
 const { ketThucPhien, thongBaoHuyHieu, voHieuHoaNutDiemDanh }         = require('./session.js');
-const { setSessionMessageId } = db;
+// FIX B-3: không destructure setSessionMessageId từ db nữa (không tồn tại)
+// Dùng db.updateSessionMessageId(id, msgId) trực tiếp
 
-// ── Map<guildId, Map<key, timeoutId>> ─────────────────────────────────────────
+// ── Map<guildId, Map<key, timeoutId>> ───────────────────────────────────────────────
 const schedulerMap = new Map();
 
 function _setTimer(guildId, key, tid) {
@@ -16,8 +17,8 @@ function _setTimer(guildId, key, tid) {
   schedulerMap.get(guildId).set(key, tid);
 }
 
-// ── GIAI ĐOẠN 1: Lên lịch mở phiên theo tuần ────────────────────────────────
-async function scheduleLichCoDinh(client, guildId, lich) {
+// ── GIAI ĐOẠN 1: Lên lịch mở phiên theo tuần ───────────────────────────────────
+asy nc function scheduleLichCoDinh(client, guildId, lich) {
   const msOpen = msToNextWeekday(lich.day_of_week, lich.hour, lich.minute);
   log.info('SCHEDULER', guildId, '"Lịch" %s — MỞ sau %s phút', lich.session_name, Math.round(msOpen / 60000));
 
@@ -49,8 +50,8 @@ async function scheduleLichCoDinh(client, guildId, lich) {
   _setTimer(guildId, `${lich.id}_open`, tidO);
 }
 
-// ── GIAI ĐOẠN 1a: Mở phiên ───────────────────────────────────────────────────
-async function _moPhien(g, lich) {
+// ── GIAI ĐOẠN 1a: Mở phiên ────────────────────────────────────────────────────
+asy nc function _moPhien(g, lich) {
   // Phase 7.5: guard double-open — skip nếu đã có phiên cùng session_name đang mở
   const existing = await db.getActiveSession(g.id);
   if (existing && existing.session_name === lich.session_name) {
@@ -74,27 +75,42 @@ async function _moPhien(g, lich) {
     ? (g.roles.cache.get(cfg.allowed_role_id)?.name ?? 'Role không rõ')
     : 'Tất cả';
 
-  const session = await db.createSession(g.id, {
-    sessionName:       lich.session_name,
-    roleName,
-    allowedRoleId:     cfg.allowed_role_id ?? null,
-    eligibleMemberIds: eligibleIds,
-    startedBy:         'scheduler',
-    lichId:            lich.id,
-  });
+  // FIX B-4: createSession nhận positional args
+  const session = await db.createSession(
+    g.id,
+    lich.session_name,
+    'scheduler',
+    null,       // autoCloseAt — scheduler tự quản lý timer, không cần field này
+    lich.channel_id,
+    eligibleIds,
+  );
+
+  // Lưu allowed_role_id + lich_id vào session nếu có
+  const patch = {};
+  if (cfg.allowed_role_id) {
+    patch.allowed_role_id = cfg.allowed_role_id;
+    patch.role_name = roleName;
+  }
+  if (lich.id) patch.lich_id = lich.id;
+  if (Object.keys(patch).length) {
+    await db.supabase.from('sessions').update(patch).eq('id', session.id);
+    Object.assign(session, patch);
+  }
 
   const ch = await g.channels.fetch(lich.channel_id).catch(() => null);
   if (!ch) return;
 
-  const embed = buildSessionEmbed(session, eligibleIds.length, roleName);
+  const embed = await buildSessionEmbed(g, session, [], lich.phai_role_ids ?? []);
   const row   = buildAttendanceButtons(false);
   const msg   = await ch.send({ embeds: [embed], components: [row] });
-  await db.setSessionMessageId(session.id, msg.id, ch.id);
+
+  // FIX B-3: dùng db.updateSessionMessageId thay vì db.setSessionMessageId
+  await db.updateSessionMessageId(session.id, msg.id);
   log.info('SCHEDULER', g.id, '%s — ĐÃ MỞ phiên: %s', g.name, lich.session_name);
 }
 
-// ── GIAI ĐOẠN 2: Đóng phiên ──────────────────────────────────────────────────
-async function runDongLich(client, guildId, lich) {
+// ── GIAI ĐOẠN 2: Đóng phiên ────────────────────────────────────────────────────
+asy nc function runDongLich(client, guildId, lich) {
   try {
     const g = client.guilds.cache.get(guildId);
     if (!g) {
@@ -122,17 +138,15 @@ async function runDongLich(client, guildId, lich) {
   }
 }
 
-async function _dongPhienVaThongKe(g, session, ch, lich, client) {
+asy nc function _dongPhienVaThongKe(g, session, ch, lich, client) {
   const attended = await db.getAttendances(session.id);
   const statsMap = await ketThucPhien(g, session, attended);
   await voHieuHoaNutDiemDanh(client, ch, session);
 
-  // Tính thống kê phái
   const tongThamGia = attended.filter(a => ['tham_gia', 'tre'].includes(a.status)).length;
   const tongVang    = (session.eligible_member_ids?.length ?? 0) - tongThamGia;
   const tongPhep    = attended.filter(a => a.status === 'co_phep').length;
 
-  // Build phái lines
   const phaiRoleIds = lich.phai_role_ids ?? [];
   const phaiMap     = new Map();
   for (const a of attended) {
@@ -187,7 +201,7 @@ function _addToPhai(map, phai, userId) {
   map.get(phai).push(userId);
 }
 
-// ── Hủy lịch ──────────────────────────────────────────────────────────────────
+// ── Hủy lịch ─────────────────────────────────────────────────────────────
 function cancelLichCoDinh(guildId, lichId) {
   const gMap = schedulerMap.get(guildId);
   if (!gMap) return;
@@ -199,7 +213,7 @@ function cancelLichCoDinh(guildId, lichId) {
   log.info('SCHEDULER', guildId, 'Đã hủy lịch %s', lichId);
 }
 
-async function _khoiPhucCloseTimer(client, guild, danhSach) {
+asy nc function _khoiPhucCloseTimer(client, guild, danhSach) {
   const session = await db.getActiveSession(guild.id);
   if (!session || session.started_by !== 'scheduler' || session.auto_close_at) return;
 
@@ -227,8 +241,8 @@ async function _khoiPhucCloseTimer(client, guild, danhSach) {
   }
 }
 
-// ── Khôi phục khi bot restart ─────────────────────────────────────────────────
-async function khoiPhucScheduler(client) {
+// ── Khôi phục khi bot restart ──────────────────────────────────────────────────
+asy nc function khoiPhucScheduler(client) {
   let totalLich = 0;
   for (const guild of client.guilds.cache.values()) {
     try {
@@ -249,7 +263,7 @@ async function khoiPhucScheduler(client) {
 }
 
 // ── PUBLIC API ────────────────────────────────────────────────────────────────
-async function runLichNgay(client, guildId, lich) {
+asy nc function runLichNgay(client, guildId, lich) {
   const g = client.guilds.cache.get(guildId);
   if (!g) throw new Error('Guild không tìm thấy');
   await _moPhien(g, lich);
@@ -264,7 +278,7 @@ async function runLichNgay(client, guildId, lich) {
   }
 }
 
-async function runDongLichNgay(client, guildId, lich) {
+asy nc function runDongLichNgay(client, guildId, lich) {
   const g = client.guilds.cache.get(guildId);
   if (!g) throw new Error('Guild không tìm thấy');
   const session = await db.getActiveSession(guildId);
