@@ -3,12 +3,13 @@
 // Fix #2: _rescheduleClose dùng msToCloseFromNow (không tính lại từ đầu chu kỳ)
 // Fix #3: _dongPhienVaThongKe gọi thongBaoHuyHieu + guiCsvDinhKem
 // Fix #4: loại bỏ ephemeral deprecated warning khỏi handler setup
+// Phase H: ping role điểm danh khi mở phiên tự động
 'use strict';
 const { EmbedBuilder, MessageFlags } = require('discord.js');
 const db  = require('../db.js');
 const log = require('./logger.js');
 const { msToNextWeekday, msFromOpenToClose, msToCloseFromNow } = require('./timeCalc.js');
-const { buildSessionEmbed, buildAttendanceButtons, buildSummaryEmbed } = require('./embeds.js');
+const { buildSessionEmbed, buildAttendanceButtons, buildSummaryEmbed, ICONS } = require('./embeds.js');
 const { ketThucPhien, thongBaoHuyHieu, voHieuHoaNutDiemDanh } = require('./session.js');
 
 // ── Map<guildId, Map<key, timeoutId>> ────────────────────────────────────────────────
@@ -32,7 +33,6 @@ async function scheduleLichCoDinh(client, guildId, lich) {
     try {
       const g = client.guilds.cache.get(guildId);
       if (!g) {
-        // Guild không có trong cache: re-queue cho lần sau
         await scheduleLichCoDinh(client, guildId, lich);
         return;
       }
@@ -46,7 +46,6 @@ async function scheduleLichCoDinh(client, guildId, lich) {
         const tidC = setTimeout(() => runDongLich(client, guildId, lich), msClose);
         _setTimer(guildId, `${lich.id}_close`, tidC);
       } else {
-        // Không có close tự động: re-queue open cho cycle tiếp theo
         await scheduleLichCoDinh(client, guildId, lich);
       }
     } catch (e) {
@@ -59,7 +58,7 @@ async function scheduleLichCoDinh(client, guildId, lich) {
 
 // ── GIAI ĐOẠN 1a: Mở phiên ────────────────────────────────────────────────────
 async function _moPhien(g, lich) {
-  // Guard double-open — skip nếu đã có phiên cùng session_name đang mở
+  // Guard double-open
   const existing = await db.getActiveSession(g.id);
   if (existing && existing.session_name === lich.session_name) {
     log.info('SCHEDULER', g.id, '%s — bỏ qua mở phiên "%s" (đã tồn tại)', g.name, lich.session_name);
@@ -107,10 +106,22 @@ async function _moPhien(g, lich) {
 
   const embed = await buildSessionEmbed(g, session, [], lich.phai_role_ids ?? []);
   const row   = buildAttendanceButtons(false);
-  const msg   = await ch.send({ embeds: [embed], components: [row] });
+
+  // Phase H: ping role điểm danh (allowed_role_id) khi mở phiên tự động
+  // Nếu không có role cụ thể → không ping (tránh @everyone)
+  const pingContent = cfg.allowed_role_id
+    ? `${ICONS.BELL} <@&${cfg.allowed_role_id}> · Phiên **${lich.session_name}** đã mở!`
+    : null;
+
+  const msg = await ch.send({
+    ...(pingContent ? { content: pingContent } : {}),
+    embeds: [embed],
+    components: [row],
+  });
 
   await db.updateSessionMessageId(session.id, msg.id);
-  log.info('SCHEDULER', g.id, '%s — ĐÃ MỮ phiên: %s', g.name, lich.session_name);
+  log.info('SCHEDULER', g.id, '%s — ĐÃ MỮ phiên: %s%s', g.name, lich.session_name,
+    pingContent ? ` (ping <@&${cfg.allowed_role_id}>)` : '');
 }
 
 // ── GIAI ĐOẠN 2: Đóng phiên ────────────────────────────────────────────────────
@@ -142,7 +153,7 @@ async function runDongLich(client, guildId, lich) {
   }
 }
 
-// FIX #3: thêm thongBaoHuyHieu + guiCsvDinhKem (giống timers.js)
+// FIX #3: thêm thongBaoHuyHieu + guiCsvDinhKem
 async function _dongPhienVaThongKe(g, session, ch, lich, client) {
   const attended = await db.getAttendances(session.id);
   const statsMap = await ketThucPhien(g, session, attended);
@@ -183,19 +194,17 @@ async function _dongPhienVaThongKe(g, session, ch, lich, client) {
 
   await ch.send({ embeds: [closedEmbed, summaryEmbed] });
 
-  // FIX #3: trao badge + gửi CSV (như timers.js)
   await thongBaoHuyHieu(g, ch, g.id, session.id, attended, statsMap);
   await _guiCsv(ch, session, attended);
 
   log.info('SCHEDULER', g.id, '%s — ĐÃ ĐÓNG & thống kê: %s', g.name, session.session_name);
 
-  // Re-queue open timer cho cycle tiếp theo
   setImmediate(() => scheduleLichCoDinh(client, g.id, lich).catch(e =>
     log.error('SCHEDULER', g.id, 'Lỗi re-queue open sau đóng: %s', e.message)
   ));
 }
 
-// ── CSV helper (inline, không phụ thuộc timers.js) ───────────────────────────
+// ── CSV helper ────────────────────────────────────────────────────────────────
 async function _guiCsv(ch, session, attended) {
   try {
     const STATUS_LABEL = {
@@ -219,19 +228,17 @@ async function _guiCsv(ch, session, attended) {
   }
 }
 
-// FIX #2: reschedule close dùng ms còn lại từ hiện tại (không tính lại từ open)
+// FIX #2: reschedule close dùng ms còn lại từ hiện tại
 function _rescheduleClose(client, guildId, lich, session = null) {
   let msClose;
   if (session?.created_at && lich.close_day_of_week != null) {
-    // Dùng msToCloseFromNow — ms còn lại tính từ lúc phiên mở
     msClose = msToCloseFromNow(
       lich.day_of_week, lich.hour, lich.minute,
       lich.close_day_of_week, lich.close_hour, lich.close_minute,
       session.created_at
     );
-    if (msClose <= 0) msClose = 5000; // đã qua giờ: chờ 5s rồi đóng ngay
+    if (msClose <= 0) msClose = 5000;
   } else {
-    // Fallback: toàn bộ chu kỳ
     msClose = msFromOpenToClose(
       lich.day_of_week, lich.hour, lich.minute,
       lich.close_day_of_week, lich.close_hour, lich.close_minute
