@@ -82,7 +82,7 @@ function lichActionComponents(lich, lichList, activeSession = null) {
   return { embeds: [embed], components: [row1, row2], ephemeral: true };
 }
 
-// ─── handleShowAddModal ───────────────────────────────────────────────────────
+// ─── handleShowAddModal — 4 field (tạo mới cần đủ thông tin) ─────────────────
 async function handleShowAddModal(interaction) {
   const modal = new ModalBuilder()
     .setCustomId('setup:lich:modal')
@@ -161,71 +161,84 @@ async function handleLich(interaction) {
     return true;
   }
 
-  // Edit modal show
+  // ─── Edit modal SHOW — chỉ 2 field: Giờ MỞ & Giờ ĐÓNG ─────────────────────
+  // Tên phiên và Channel ID được giữ nguyên từ DB, không hiển thị trong modal.
   if (customId.startsWith('setup:lich:edit:') && !customId.includes(':modal:')) {
     const lichId = customId.replace('setup:lich:edit:', '');
     const lichList = await db.getLichCoDinh(guild.id);
     const lich = lichList.find(l => l.id === lichId);
     if (!lich) { await interaction.reply({ content: '❌ Không tìm thấy lịch.', ephemeral: true }); return true; }
+
     const moStr   = `${TEN_THU[lich.day_of_week]} ${pad(lich.hour)}:${pad(lich.minute)}`;
     const dongStr = lich.close_day_of_week != null
       ? `${TEN_THU[lich.close_day_of_week]} ${pad(lich.close_hour)}:${pad(lich.close_minute)}`
       : '';
+
     const modal = new ModalBuilder()
       .setCustomId(`setup:lich:edit:modal:${lichId}`)
-      .setTitle(`✏️ Sửa Lịch — ${lich.session_name.slice(0, 30)}`);
+      .setTitle(`✏️ Sửa Giờ — ${lich.session_name.slice(0, 35)}`);
     modal.addComponents(
       new ActionRowBuilder().addComponents(
-        new TextInputBuilder().setCustomId('ten').setLabel('Tên phiên').setStyle(TextInputStyle.Short).setValue(lich.session_name).setRequired(true).setMaxLength(50),
+        new TextInputBuilder()
+          .setCustomId('gio_mo')
+          .setLabel('Thứ & Giờ MỞ — VD: T7 21:00')
+          .setStyle(TextInputStyle.Short)
+          .setValue(moStr)
+          .setPlaceholder('T7 21:00')
+          .setRequired(true)
+          .setMaxLength(10),
       ),
       new ActionRowBuilder().addComponents(
-        new TextInputBuilder().setCustomId('gio_mo').setLabel('Thứ & Giờ MỞ — format: T7 21:00').setStyle(TextInputStyle.Short).setValue(moStr).setRequired(true).setMaxLength(10),
-      ),
-      new ActionRowBuilder().addComponents(
-        new TextInputBuilder().setCustomId('gio_dong').setLabel('Thứ & Giờ ĐÓNG — để trống = không tự đóng').setStyle(TextInputStyle.Short).setValue(dongStr).setRequired(false).setMaxLength(10),
-      ),
-      new ActionRowBuilder().addComponents(
-        new TextInputBuilder().setCustomId('kenh_id').setLabel('Channel ID — để trống = giữ nguyên').setStyle(TextInputStyle.Short).setValue(lich.channel_id ?? '').setRequired(false).setMaxLength(20),
+        new TextInputBuilder()
+          .setCustomId('gio_dong')
+          .setLabel('Thứ & Giờ ĐÓNG — để trống = không tự đóng')
+          .setStyle(TextInputStyle.Short)
+          .setValue(dongStr)
+          .setPlaceholder('T7 23:30')
+          .setRequired(false)
+          .setMaxLength(10),
       ),
     );
     await interaction.showModal(modal);
     return true;
   }
 
-  // Edit modal submit
+  // ─── Edit modal SUBMIT — lấy ten & channel_id từ DB, chỉ cập nhật giờ ──────
   if (customId.startsWith('setup:lich:edit:modal:')) {
     const lichId = customId.replace('setup:lich:edit:modal:', '');
     await interaction.deferReply({ ephemeral: true });
     const lichList = await db.getLichCoDinh(guild.id);
     const lich = lichList.find(l => l.id === lichId);
     if (!lich) { await interaction.editReply({ content: '❌ Không tìm thấy lịch.' }); return true; }
-    const ten     = interaction.fields.getTextInputValue('ten').trim();
+
     const moRaw   = interaction.fields.getTextInputValue('gio_mo').trim();
     const dongRaw = interaction.fields.getTextInputValue('gio_dong').trim();
-    const kenhRaw = interaction.fields.getTextInputValue('kenh_id').trim();
+
     const parsed = parseThuGio(moRaw);
-    if (!parsed) { await interaction.editReply({ content: '❌ Định dạng giờ mở không hợp lệ. Dùng: `T7 21:00`' }); return true; }
+    if (!parsed) return interaction.editReply({ content: '❌ Định dạng giờ mở không hợp lệ. Dùng: `T7 21:00` hoặc `CN 08:30`' });
+
     let parsedDong = null;
     if (dongRaw) {
       parsedDong = parseThuGio(dongRaw);
-      if (!parsedDong) { await interaction.editReply({ content: '❌ Định dạng giờ đóng không hợp lệ.' }); return true; }
+      if (!parsedDong) return interaction.editReply({ content: '❌ Định dạng giờ đóng không hợp lệ.' });
     }
-    const channelId = kenhRaw || lich.channel_id;
-    if (kenhRaw) {
-      const ch = guild.channels.cache.get(kenhRaw) || await guild.channels.fetch(kenhRaw).catch(() => null);
-      if (!ch) { await interaction.editReply({ content: `❌ Không tìm thấy kênh ID \`${kenhRaw}\`.` }); return true; }
-    }
-    const updated = await db.capNhatLichCoDinh(guild.id, lichId, {
-      sessionName: ten, dayOfWeek: parsed.thu, hour: parsed.gio, minute: parsed.phut,
+
+    // Giữ nguyên tên phiên và kênh từ DB
+    const ten       = lich.session_name;
+    const channelId = lich.channel_id;
+
+    const updated = await db.suaLichCoDinh(guild.id, lichId, {
+      dayOfWeek: parsed.thu, hour: parsed.gio, minute: parsed.phut,
+      sessionName: ten,
       closeDayOfWeek: parsedDong?.thu ?? null, closeHour: parsedDong?.gio ?? null, closeMinute: parsedDong?.phut ?? null,
       channelId,
     });
-    if (!updated) { await interaction.editReply({ content: '❌ Cập nhật thất bại.' }); return true; }
     try {
       const { cancelLichCoDinh, scheduleLichCoDinh } = require('../../utils/scheduler.js');
       cancelLichCoDinh(guild.id, lichId);
       await scheduleLichCoDinh(interaction.client, guild, updated);
     } catch (e) { console.warn('[lichHandler] reschedule sau edit:', e.message); }
+
     const { label: moLabel } = ngayThucTe(parsed.thu, parsed.gio, parsed.phut);
     const dongDisplay = parsedDong
       ? (() => { const { label, note } = ngayThucTe(parsedDong.thu, parsedDong.gio, parsedDong.phut, parsed.thu, parsed.gio, parsed.phut); return note ? `${label} ${note}` : label; })()
