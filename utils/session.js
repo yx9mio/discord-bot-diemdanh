@@ -4,7 +4,7 @@
 const { EmbedBuilder }     = require('discord.js');
 const db                   = require('../db.js');
 const log                  = require('./logger.js');
-const { FOOTER_DEFAULT, buildSummaryEmbed } = require('./embeds.js');
+const { FOOTER_DEFAULT, buildSummaryEmbed, buildAttendanceButtons, buildClosedSessionEmbed } = require('./embeds.js');
 
 // ── Huy hiệu mặc định nếu DB chưa có row nào ─────────────────────────────────
 const DEFAULT_BADGES = [
@@ -99,19 +99,23 @@ async function thongBaoHuyHieu(guild, channel, guildId, sessionId, attended, sta
 }
 
 /**
- * Vô hiệu hoá nút điểm danh trên message cũ.
+ * Phase I: Vô hiệu hoá nút điểm danh trên message cũ VÀ cập nhật embed → 🔴 Đã Đóng.
+ * Cần attended để render thống kê cuối trong buildClosedSessionEmbed.
+ * @param {Client}   client
+ * @param {Channel}  channel
+ * @param {Object}   session   — phải có session.message_id
+ * @param {Array}    attended  — mảng attendance records (có thể [] nếu chưa có)
  */
-async function voHieuHoaNutDiemDanh(client, channel, session) {
+async function voHieuHoaNutDiemDanh(client, channel, session, attended = []) {
   if (!session.message_id) return;
   try {
     const msg = await channel.messages.fetch(session.message_id);
     if (!msg) return;
-    const rows = msg.components.map(row => {
-      const newRow = row.toJSON();
-      newRow.components = newRow.components.map(c => ({ ...c, disabled: true }));
-      return newRow;
-    });
-    await msg.edit({ components: rows });
+
+    const closedEmbed   = buildClosedSessionEmbed(session, attended);
+    const disabledButtons = buildAttendanceButtons(true);
+
+    await msg.edit({ embeds: [closedEmbed], components: [disabledButtons] });
   } catch (e) {
     log.warn('SESSION', session.guild_id, 'Không vô hiệu hoá được nút: %s', e.message);
   }
