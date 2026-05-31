@@ -3,42 +3,50 @@
 // ============================================================
 require('dotenv').config();
 const { createClient } = require('@supabase/supabase-js');
-const ws = require('ws');
 
 if (!process.env.SUPABASE_URL || !process.env.SUPABASE_KEY) {
   console.error('[LỖI NGHIÊM TRỌNG] Thiếu SUPABASE_URL hoặc SUPABASE_KEY trong .env!');
   process.exit(1);
 }
 
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY, {
-  realtime: { transport: ws },
-});
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
 
-// ─── Cấu hình Guild ───────────────────────────────────────────
+// ─── Helper ─────────────────────────────────────────────────────
+function throwIfError(error, context) {
+  if (error) {
+    console.error(`[DB LỖI] ${context}:`, error.message);
+    throw error;
+  }
+}
+
+// ─── Cấu hình Guild ─────────────────────────────────────────────
 async function getConfig(guildId) {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('guild_configs')
     .select('*')
     .eq('guild_id', guildId)
     .maybeSingle();
+  throwIfError(error, 'getConfig');
   return data ?? { guild_id: guildId, allowed_role_id: null, admin_role_id: null };
 }
 
 async function setConfig(guildId, updates) {
   const existing = await getConfig(guildId);
-  await supabase
+  const { error } = await supabase
     .from('guild_configs')
     .upsert({ ...existing, ...updates, guild_id: guildId, updated_at: new Date().toISOString() });
+  throwIfError(error, 'setConfig');
 }
 
-// ─── Phiên Điểm Danh ──────────────────────────────────────────
+// ─── Phiên Điểm Danh ──────────────────────────────────────────────
 async function getActiveSession(guildId) {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('sessions')
     .select('*')
     .eq('guild_id', guildId)
     .eq('is_active', true)
     .maybeSingle();
+  throwIfError(error, 'getActiveSession');
   return data;
 }
 
@@ -56,77 +64,103 @@ async function createSession(guildId, { sessionName, roleName, allowedRoleId, el
       channel_id: channelId ?? null,
       message_id: null,
       is_active: true,
+      cancelled: false,
     })
     .select()
     .single();
-  if (error) throw error;
+  throwIfError(error, 'createSession');
   return data;
 }
 
 async function updateSessionMessageId(sessionId, messageId) {
-  await supabase
+  const { error } = await supabase
     .from('sessions')
     .update({ message_id: messageId })
     .eq('id', sessionId);
+  throwIfError(error, 'updateSessionMessageId');
 }
 
 async function endSession(sessionId) {
-  await supabase
+  const { error } = await supabase
     .from('sessions')
     .update({ is_active: false, ended_at: new Date().toISOString() })
     .eq('id', sessionId);
+  throwIfError(error, 'endSession');
 }
 
+// Soft-delete: đánh dấu cancelled=true thay vì xóa hẳn
 async function cancelSession(sessionId) {
-  await supabase.from('sessions').delete().eq('id', sessionId);
+  const { error } = await supabase
+    .from('sessions')
+    .update({ is_active: false, cancelled: true, ended_at: new Date().toISOString() })
+    .eq('id', sessionId);
+  throwIfError(error, 'cancelSession');
 }
 
-// ─── Điểm Danh ────────────────────────────────────────────────
+// ─── Điểm Danh ────────────────────────────────────────────────────────
 async function getAttendances(sessionId) {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('attendances')
     .select('*')
     .eq('session_id', sessionId)
     .order('checked_in_at', { ascending: true });
+  throwIfError(error, 'getAttendances');
   return data ?? [];
 }
 
 async function upsertAttendance(sessionId, guildId, userId, username, status) {
-  await supabase
+  const { error } = await supabase
     .from('attendances')
     .upsert(
       { session_id: sessionId, guild_id: guildId, user_id: userId, username, status, checked_in_at: new Date().toISOString() },
       { onConflict: 'session_id,user_id' }
     );
+  throwIfError(error, 'upsertAttendance');
 }
 
 async function removeAttendance(sessionId, userId) {
-  await supabase
+  const { error } = await supabase
     .from('attendances')
     .delete()
     .eq('session_id', sessionId)
     .eq('user_id', userId);
+  throwIfError(error, 'removeAttendance');
 }
 
-// ─── Thống Kê Thành Viên ──────────────────────────────────────
+// ─── Thống Kê Thành Viên ──────────────────────────────────────────
 async function getMemberStats(guildId, userId) {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('member_stats')
     .select('*')
     .eq('guild_id', guildId)
     .eq('user_id', userId)
     .maybeSingle();
+  throwIfError(error, 'getMemberStats');
   return data ?? { guild_id: guildId, user_id: userId, total_sessions: 0, total_joined: 0, current_streak: 0, best_streak: 0 };
 }
 
+// Fix: streak chỉ tăng liên tiếp nếu phiên liền trước cũng đã tham gia
 async function updateMemberStats(guildId, userId, joined, sessionId) {
   const existing = await getMemberStats(guildId, userId);
   const newTotal  = existing.total_sessions + 1;
   const newJoined = existing.total_joined + (joined ? 1 : 0);
-  const newStreak = joined ? existing.current_streak + 1 : 0;
-  const newBest   = Math.max(existing.best_streak, newStreak);
 
-  await supabase
+  // Streak: nếu tham gia và phiên trước cũng tham gia (last_session_id có streak > 0)
+  // thì tăng tiếp, ngược lại reset về 1 (không kế thừa streak cũ nếu vắng giữa chừng)
+  let newStreak;
+  if (!joined) {
+    newStreak = 0;
+  } else if (existing.current_streak > 0) {
+    // Phên trước có streak — tiếp tục chuỗi
+    newStreak = existing.current_streak + 1;
+  } else {
+    // Phên trước vắng (streak = 0) — bắt đầu chuỗi mới
+    newStreak = 1;
+  }
+
+  const newBest = Math.max(existing.best_streak, newStreak);
+
+  const { error } = await supabase
     .from('member_stats')
     .upsert({
       guild_id: guildId,
@@ -138,28 +172,32 @@ async function updateMemberStats(guildId, userId, joined, sessionId) {
       last_session_id: sessionId,
       updated_at: new Date().toISOString(),
     });
+  throwIfError(error, 'updateMemberStats');
 
   return { ...existing, total_sessions: newTotal, total_joined: newJoined, current_streak: newStreak, best_streak: newBest };
 }
 
 async function getAllMemberStats(guildId) {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('member_stats')
     .select('*')
     .eq('guild_id', guildId)
     .order('total_joined', { ascending: false });
+  throwIfError(error, 'getAllMemberStats');
   return data ?? [];
 }
 
-// ─── Lịch Sử Phiên ────────────────────────────────────────────
+// ─── Lịch Sử Phiên ───────────────────────────────────────────────
 async function getSessionHistory(guildId, limit = 20) {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('sessions')
     .select('*')
     .eq('guild_id', guildId)
     .eq('is_active', false)
+    .eq('cancelled', false)       // Loại bỏ phiên bị hủy
     .order('ended_at', { ascending: false })
     .limit(limit);
+  throwIfError(error, 'getSessionHistory');
   return data ?? [];
 }
 
