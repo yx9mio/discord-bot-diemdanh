@@ -25,6 +25,24 @@ async function handleButton(interaction) {
     return handleSetupUi(interaction);
   }
 
+  // ── Phân trang /lich_su ────────────────────────────────────────────────────
+  if (customId?.startsWith('lichsu:')) {
+    const parts = customId.split(':');  // ['lichsu', 'prev'|'next', currentPage]
+    const action = parts[1];
+    const curPage = parseInt(parts[2], 10);
+    const newPage = action === 'next' ? curPage + 1 : curPage - 1;
+
+    await interaction.deferUpdate();
+    const { buildHistoryPageEmbed, buildNavRow, PAGE_SIZE } = require('../commands/lichsu.js');
+    const history = await db.getSessionHistory(guild.id, 50);
+    const totalPages = Math.max(1, Math.ceil(history.length / PAGE_SIZE));
+    const clampedPage = Math.max(0, Math.min(newPage, totalPages - 1));
+
+    const embed = buildHistoryPageEmbed(history, clampedPage, totalPages);
+    const row   = buildNavRow(clampedPage, totalPages);
+    return interaction.editReply({ embeds: [embed], components: totalPages > 1 ? [row] : [] });
+  }
+
   // ── Setup shortcuts cũ (giữ backward compat) ───────────────────────────────
   if (customId === 'setup_help') {
     const { execute } = require('../commands/help.js');
