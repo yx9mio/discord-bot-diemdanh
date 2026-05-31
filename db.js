@@ -44,9 +44,14 @@ async function setConfig(guildId, updates) {
 // ─── Phiên Điểm Danh ────────────────────────────────────────────────────────────────
 function getDefaultSession() { return null; }
 
+// BUG-5 FIX: thêm filter cancelled=false để tránh trả về session đã cancel nhưng is_active chưa update
 async function getActiveSession(guildId) {
   const { data, error } = await supabase
-    .from('sessions').select('*').eq('guild_id', guildId).eq('is_active', true).maybeSingle();
+    .from('sessions').select('*')
+    .eq('guild_id', guildId)
+    .eq('is_active', true)
+    .eq('cancelled', false)
+    .maybeSingle();
   throwIfError(error, 'getActiveSession');
   return data;
 }
@@ -58,7 +63,7 @@ async function getSessionById(sessionId, guildId) {
   return data;
 }
 
-// BUG FIX #6: Hàm riêng không filter cancelled — dùng cho debug/admin
+// Hàm riêng không filter cancelled — dùng cho debug/admin
 async function getSessionByIdRaw(sessionId, guildId) {
   const { data, error } = await supabase
     .from('sessions').select('*').eq('id', sessionId).eq('guild_id', guildId).maybeSingle();
@@ -104,21 +109,23 @@ async function getAttendances(sessionId) {
   return data ?? [];
 }
 
+// BUG-2 FIX: đổi display_name → username để khớp với schema bảng attendances
 async function upsertAttendance(sessionId, guildId, userId, displayName, status) {
   const { error } = await supabase.from('attendances').upsert({
     session_id: sessionId, guild_id: guildId, user_id: userId,
-    display_name: displayName, status, checked_in_at: new Date().toISOString(),
+    username: displayName, status, checked_in_at: new Date().toISOString(),
   }, { onConflict: 'session_id,user_id' });
   throwIfError(error, 'upsertAttendance');
 }
 
+// BUG-2 FIX: đổi display_name → username
 async function upsertAttendanceNoTime(sessionId, guildId, userId, displayName, status) {
   const existing = await supabase.from('attendances').select('checked_in_at')
     .eq('session_id', sessionId).eq('user_id', userId).maybeSingle();
   const checkedInAt = existing.data?.checked_in_at ?? new Date().toISOString();
   const { error } = await supabase.from('attendances').upsert({
     session_id: sessionId, guild_id: guildId, user_id: userId,
-    display_name: displayName, status, checked_in_at: checkedInAt,
+    username: displayName, status, checked_in_at: checkedInAt,
   }, { onConflict: 'session_id,user_id' });
   throwIfError(error, 'upsertAttendanceNoTime');
 }
@@ -152,7 +159,7 @@ async function updateMemberStats(guildId, userId, joined, sessionId) {
   return { ...existing, total_sessions: newTotal, total_joined: newJoined, current_streak: newStreak, best_streak: newBest };
 }
 
-// BUG FIX #4: recalculateMemberStats — tránh N+1 query bằng 1 lần fetch attendances
+// recalculateMemberStats — tránh N+1 query bằng 1 lần fetch attendances
 async function recalculateMemberStats(guildId, userId) {
   const { data: sessions, error: sErr } = await supabase
     .from('sessions').select('id, ended_at, eligible_member_ids')
