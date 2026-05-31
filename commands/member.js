@@ -1,28 +1,36 @@
 // commands/member.js
 const { SlashCommandBuilder } = require('discord.js');
 const db = require('../db.js');
-const { buildMemberEmbed } = require('../utils/embeds.js');
-const { layHuyHieu } = require('../utils/helpers.js');
-const { buildProgressBar } = require('../utils/progress.js');
+const { laAdmin } = require('../utils/helpers.js');
 
-const data = new SlashCommandBuilder()
-  .setName('xem_thanh_vien')
-  .setDescription('Xem thống kê của một thành viên')
-  .addUserOption(o => o.setName('thanh_vien').setDescription('Thành viên (bỏ trống = bản thân)'));
+module.exports = {
+  data: new SlashCommandBuilder()
+    .setName('member')
+    .setDescription('[Admin] Xem thông tin điểm danh của một thành viên')
+    .setDefaultMemberPermissions(0n)
+    .addUserOption(o =>
+      o.setName('thanh_vien').setDescription('Thành viên cần xem').setRequired(true)
+    ),
 
-async function execute(interaction) {
-  await interaction.deferReply({ ephemeral: true });
-  const target = interaction.options.getUser('thanh_vien') ?? interaction.user;
-  const member = await interaction.guild.members.fetch(target.id).catch(() => null);
+  async execute(interaction) {
+    await interaction.deferReply({ ephemeral: true });
+    const { guild, member } = interaction;
+    const cfg = await db.getConfig(guild.id);
+    if (!laAdmin(member, cfg)) {
+      return interaction.editReply({ content: '🔒 Bạn không có quyền dùng lệnh này.' });
+    }
 
-  if (!member) return interaction.editReply({ content: '⚠️ Không tìm thấy thành viên.' });
+    const target = interaction.options.getUser('thanh_vien');
+    const stats  = await db.getMemberStats(guild.id, target.id);
+    const pct    = stats.total_sessions > 0
+      ? Math.round((stats.total_joined / stats.total_sessions) * 100) : 0;
 
-  const stats = await db.getMemberStats(interaction.guild.id, target.id);
-  const pct   = stats.total_sessions > 0 ? Math.round((stats.total_joined / stats.total_sessions) * 100) : 0;
-  const bar   = buildProgressBar(pct);
-  const badge = layHuyHieu(stats.total_joined);
-
-  await interaction.editReply({ embeds: [buildMemberEmbed(member, stats, badge, pct, bar)] });
-}
-
-module.exports = { data, execute };
+    return interaction.editReply({
+      content: [
+        `📊 **Thống kê của <@${target.id}>**`,
+        `> Tham gia: **${stats.total_joined}** / **${stats.total_sessions}** phiên (${pct}%)`,
+        `> Streak hiện tại: **${stats.current_streak}**  |  Best: **${stats.best_streak}**`,
+      ].join('\n'),
+    });
+  },
+};

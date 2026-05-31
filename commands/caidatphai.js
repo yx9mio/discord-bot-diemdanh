@@ -1,46 +1,52 @@
 // commands/caidatphai.js
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder } = require('discord.js');
 const db = require('../db.js');
 const { laAdmin } = require('../utils/helpers.js');
-const { FOOTER_DEFAULT, AUTHOR_DEFAULT } = require('../utils/embeds.js');
 
-const data = new SlashCommandBuilder()
-  .setName('cai_dat_phai')
-  .setDescription('Cài danh sách role phái cho server (dùng 1 lần)')
-  .addRoleOption(o => o.setName('phai_1').setDescription('Phái 1').setRequired(true))
-  .addRoleOption(o => o.setName('phai_2').setDescription('Phái 2'))
-  .addRoleOption(o => o.setName('phai_3').setDescription('Phái 3'))
-  .addRoleOption(o => o.setName('phai_4').setDescription('Phái 4'))
-  .addRoleOption(o => o.setName('phai_5').setDescription('Phái 5'))
-  .addRoleOption(o => o.setName('phai_6').setDescription('Phái 6'))
-  .addRoleOption(o => o.setName('phai_7').setDescription('Phái 7'))
-  .addRoleOption(o => o.setName('phai_8').setDescription('Phái 8'))
-  .addRoleOption(o => o.setName('phai_9').setDescription('Phái 9'))
-  .addRoleOption(o => o.setName('phai_10').setDescription('Phái 10'))
-  .addRoleOption(o => o.setName('phai_11').setDescription('Phái 11'));
+module.exports = {
+  data: new SlashCommandBuilder()
+    .setName('cai_dat_phai')
+    .setDescription('[Admin] Cấu hình các role phái tham gia điểm danh')
+    .setDefaultMemberPermissions(0n)
+    .addRoleOption(o =>
+      o.setName('phai1').setDescription('Phái 1').setRequired(false)
+    )
+    .addRoleOption(o =>
+      o.setName('phai2').setDescription('Phái 2').setRequired(false)
+    )
+    .addRoleOption(o =>
+      o.setName('phai3').setDescription('Phái 3').setRequired(false)
+    )
+    .addRoleOption(o =>
+      o.setName('phai4').setDescription('Phái 4').setRequired(false)
+    ),
 
-async function execute(interaction) {
-  await interaction.deferReply({ ephemeral: true });
-  if (!laAdmin(interaction.member, await db.getConfig(interaction.guild.id)))
-    return interaction.editReply({ content: '🔒 Bạn không có quyền.' });
+  async execute(interaction) {
+    await interaction.deferReply({ ephemeral: true });
+    const { guild, member } = interaction;
 
-  const phaiRoleIds = [];
-  for (let i = 1; i <= 11; i++) {
-    const r = interaction.options.getRole(`phai_${i}`);
-    if (r) phaiRoleIds.push(r.id);
-  }
+    const cfg = await db.getConfig(guild.id);
+    if (!laAdmin(member, cfg)) {
+      return interaction.editReply({ content: '🔒 Bạn không có quyền dùng lệnh này.' });
+    }
 
-  await db.setConfig(interaction.guild.id, { phai_role_ids: phaiRoleIds });
+    const roles = ['phai1','phai2','phai3','phai4']
+      .map(n => interaction.options.getRole(n))
+      .filter(Boolean)
+      .map(r => r.id);
 
-  const list = phaiRoleIds.map((id, i) => `${i + 1}. <@&${id}>`).join('\n');
-  const embed = new EmbedBuilder()
-    .setAuthor(AUTHOR_DEFAULT)
-    .setTitle('✅ Đã lưu danh sách phái')
-    .setDescription(list)
-    .setColor(0x57F287)
-    .setFooter({ text: FOOTER_DEFAULT })
-    .setTimestamp();
-  return interaction.editReply({ embeds: [embed] });
-}
+    if (roles.length === 0) {
+      const current = cfg.phai_role_ids ?? [];
+      return interaction.editReply({
+        content: current.length
+          ? `ℹ️ Các phái hiện tại: ${current.map(id => `<@&${id}>`).join(', ')}`
+          : 'ℹ️ Chưa có phái nào được cấu hình.',
+      });
+    }
 
-module.exports = { data, execute };
+    await db.setConfig(guild.id, { phai_role_ids: roles });
+    return interaction.editReply({
+      content: `✅ Đã cập nhật ${roles.length} phái: ${roles.map(id => `<@&${id}>`).join(', ')}`,
+    });
+  },
+};
