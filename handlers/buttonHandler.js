@@ -2,17 +2,16 @@
 const db = require('../db.js');
 const { buildSessionEmbed, buildAttendanceButtons } = require('../utils/embeds.js');
 
-// Map status -> label để reply
 const STATUS_LABEL = {
-  tham_gia:        '✅ Tham Gia',
-  tre:             '⏰ Đến Trễ',
-  khong_tham_gia:  '❌ Vắng Mặt',
+  tham_gia:       '✅ Tham Gia',
+  tre:            '⏰ Đến Trễ',
+  khong_tham_gia: '❌ Vắng Mặt',
 };
 
 async function handleButton(interaction) {
   const { customId, guild, member, user, channel } = interaction;
 
-  // ── Xem danh sách (luôn cho phép, không cần phiên mở) ───
+  // ── Xem danh sách ─────────────────────────────────────
   if (customId === 'attend_view') {
     const session = await db.getActiveSession(guild.id);
     if (!session) {
@@ -40,12 +39,9 @@ async function handleButton(interaction) {
 
   const cfg = await db.getConfig(guild.id);
 
-  // Kiểm tra eligible
   if (!session.eligible_member_ids.includes(user.id)) {
     return interaction.editReply({ content: '🔒 Bạn không nằm trong danh sách điểm danh của phiên này.' });
   }
-
-  // Kiểm tra role (nếu có cấu hình)
   if (cfg.allowed_role_id && !member.roles.cache.has(cfg.allowed_role_id)) {
     return interaction.editReply({ content: '🔒 Bạn không có quyền điểm danh trong phiên này.' });
   }
@@ -58,16 +54,21 @@ async function handleButton(interaction) {
     content: `✅ Đã ghi nhận: **${displayName}** — ${STATUS_LABEL[status]}.`,
   });
 
-  // Cập nhật embed gốc
+  // Cập nhật embed gốc — Fix: luôn dùng session.channel_id thay vì channel của interaction
   try {
-    if (session.message_id) {
-      const msg = await channel.messages.fetch(session.message_id).catch(() => null);
-      if (msg) {
-        const attended = await db.getAttendances(session.id);
-        const embed    = await buildSessionEmbed(guild, session, attended);
-        await msg.edit({ embeds: [embed], components: [buildAttendanceButtons(false)] });
-      }
-    }
+    if (!session.message_id) return;
+
+    // Lấy đúng channel nơi phiên được mở, không phải channel user bấm nút
+    const targetChannel = session.channel_id
+      ? await guild.channels.fetch(session.channel_id).catch(() => channel)
+      : channel;
+
+    const msg = await targetChannel.messages.fetch(session.message_id).catch(() => null);
+    if (!msg) return;
+
+    const attended = await db.getAttendances(session.id);
+    const embed    = await buildSessionEmbed(guild, session, attended);
+    await msg.edit({ embeds: [embed], components: [buildAttendanceButtons(false)] });
   } catch (_) {}
 }
 
