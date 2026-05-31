@@ -9,6 +9,10 @@ const { requireAdmin } = require('../utils/permissions.js');
 const PASS = '✅';
 const FAIL = '❌';
 
+// Status hợp lệ theo DB constraint (attendances_status_check)
+const VALID_STATUS = 'tham_gia';
+const VALID_STATUS_2 = 'tre';
+
 function ms(start) { return `${Date.now() - start}ms`; }
 
 async function runTest(name, fn) {
@@ -104,7 +108,6 @@ async function suiteSession_CRUD(guildId, botUserId) {
   const TEST_NAME = `__TEST_SESSION_${Date.now()}__`;
   let sessionId = null;
 
-  // FIX: eligible_member_ids phải là [] chứ không phải null (NOT NULL constraint)
   const create = await runTest('Session: createSession', async () => {
     const s = await db.createSession(guildId, TEST_NAME, botUserId, null, null, []);
     sessionId = s.id;
@@ -143,16 +146,16 @@ async function suiteAttendance(guildId, botUserId) {
   const TEST_NAME = `__TEST_ATT_${Date.now()}__`;
   let sessionId = null;
 
-  // FIX: eligible_member_ids = [] để tránh NOT NULL
   const setup = await runTest('Attendance: setup session', async () => {
     const s = await db.createSession(guildId, TEST_NAME, botUserId, null, null, []);
     sessionId = s.id;
     return `session ${s.id}`;
   });
 
+  // FIX: dùng 'tham_gia' thay vì 'present' (DB check constraint chỉ chấp nhận tham_gia/tre/vang_mat/...)
   const upsert = await runTest('Attendance: upsertAttendance', async () => {
     if (!sessionId) throw new Error('skip');
-    await db.upsertAttendance(sessionId, guildId, botUserId, 'test_bot', 'present', botUserId);
+    await db.upsertAttendance(sessionId, guildId, botUserId, 'test_bot', VALID_STATUS, botUserId);
     return 'upsert OK';
   });
 
@@ -169,9 +172,10 @@ async function suiteAttendance(guildId, botUserId) {
     return `${rows.length} record`;
   });
 
+  // FIX: dùng 'tre' thay vì 'absent'
   const noTime = await runTest('Attendance: upsertAttendanceNoTime (sua)', async () => {
     if (!sessionId) throw new Error('skip');
-    await db.upsertAttendanceNoTime(sessionId, guildId, botUserId, 'test_bot', 'absent', botUserId);
+    await db.upsertAttendanceNoTime(sessionId, guildId, botUserId, 'test_bot', VALID_STATUS_2, botUserId);
     return 'noTime upsert OK';
   });
 
@@ -226,7 +230,6 @@ async function suiteMemberStats(guildId, botUserId) {
 async function suiteScheduledSessions(guildId) {
   let schedId = null;
   const TEST_NAME = `__TEST_SCHED_${Date.now()}__`;
-  // FIX: channel_id NOT NULL — dùng ID giả hợp lệ (Discord snowflake format)
   const FAKE_CHANNEL_ID = '000000000000000001';
 
   const create = await runTest('Scheduler: themLichCoDinh', async () => {
@@ -292,8 +295,6 @@ async function suiteBadges(guildId) {
 }
 
 async function suiteConfig(guildId) {
-  // FIX: không dùng _test_field (không tồn tại trong schema)
-  // Upsert với patch rỗng {} — chỉ verify không throw + record tồn tại
   return [
     await runTest('Config: upsertConfig (no-op patch)', async () => {
       await db.upsertConfig(guildId, {});
