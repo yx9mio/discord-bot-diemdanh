@@ -192,6 +192,15 @@ async function getLichCoDinhById(guildId, id) {
   return data;
 }
 
+// Tìm bằng 8 ký tự đầu của UUID (tiện cho user)
+async function getLichCoDinhByShortId(guildId, shortId) {
+  const { data, error } = await supabase.from('scheduled_sessions').select('*')
+    .eq('guild_id', guildId).eq('is_active', true)
+    .ilike('id', `${shortId}%`).maybeSingle();
+  throwIfError(error, 'getLichCoDinhByShortId');
+  return data;
+}
+
 async function themLichCoDinh(guildId, { dayOfWeek, hour, minute, sessionName, closeDayOfWeek, closeHour, closeMinute, phaiRoleIds, channelId }) {
   const { data, error } = await supabase.from('scheduled_sessions').insert({
     guild_id: guildId,
@@ -203,7 +212,6 @@ async function themLichCoDinh(guildId, { dayOfWeek, hour, minute, sessionName, c
     phai_role_ids: phaiRoleIds ?? [],
     channel_id: channelId,
     is_active: true,
-    // duration_minutes không dùng nữa cho loại 2-giai-đoạn
   }).select().single();
   throwIfError(error, 'themLichCoDinh');
   return data;
@@ -216,6 +224,13 @@ async function xoaLichCoDinh(guildId, id) {
   return !!data;
 }
 
+async function capNhatPhaiRoles(lichId, phaiRoleIds) {
+  const { error } = await supabase.from('scheduled_sessions')
+    .update({ phai_role_ids: phaiRoleIds })
+    .eq('id', lichId);
+  throwIfError(error, 'capNhatPhaiRoles');
+}
+
 module.exports = {
   supabase,
   getConfig, setConfig,
@@ -223,5 +238,5 @@ module.exports = {
   getAttendances, upsertAttendance, upsertAttendanceNoTime, removeAttendance,
   getMemberStats, updateMemberStats, recalculateMemberStats, getAllMemberStats,
   getSessionHistory,
-  getLichCoDinh, getLichCoDinhById, themLichCoDinh, xoaLichCoDinh,
+  getLichCoDinh, getLichCoDinhById, getLichCoDinhByShortId, themLichCoDinh, xoaLichCoDinh, capNhatPhaiRoles,
 };
