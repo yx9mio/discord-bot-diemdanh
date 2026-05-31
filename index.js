@@ -4,6 +4,7 @@ const { Client, GatewayIntentBits, Partials } = require('discord.js');
 const { loadCommands, handleCommand }   = require('./handlers/commandHandler.js');
 const { handleButton }                  = require('./handlers/buttonHandler.js');
 const { onReady }                       = require('./events/ready.js');
+const { onGuildCreate }                 = require('./events/guildCreate.js');
 const { onMessageDelete }               = require('./events/messageDelete.js');
 const { handleSelectMenu }              = require('./commands/help.js');
 const { handleSetupUi }                 = require('./handlers/setupUiHandler.js');
@@ -29,6 +30,7 @@ const client = new Client({
 const commands = loadCommands();
 
 client.once('ready', () => onReady(client));
+client.on('guildCreate', guild => onGuildCreate(guild));
 
 client.on('interactionCreate', async interaction => {
   try {
