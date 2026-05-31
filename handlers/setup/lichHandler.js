@@ -9,6 +9,38 @@ const { FOOTER_DEFAULT, AUTHOR_DEFAULT } = require('../../utils/embeds.js');
 const { TEN_THU, TEN_THU_FULL, pad, ngayThucTe, formatDongStr, parseThuGio } = require('./helpers.js');
 const { buildDashboard } = require('./dashboardHandler.js');
 
+// ─── Helper: tạo placeholder gợi ý ngày thực tế ─────────────────────────────
+function makePlaceholder(thuStr, gioStr) {
+  // thuStr = 'T7', gioStr = '21:00'
+  try {
+    const thuMap = { CN: 0, T2: 1, T3: 2, T4: 3, T5: 4, T6: 5, T7: 6 };
+    const thu = thuMap[thuStr.toUpperCase()];
+    if (thu === undefined) return `${thuStr} ${gioStr}`;
+    const [h, m] = gioStr.split(':').map(Number);
+    const { label } = ngayThucTe(thu, h, m);
+    // label = "Thứ Bảy, 06/06/2026 21:00" → chỉ lấy dd/MM/yyyy
+    const dateMatch = label.match(/(\d{2}\/\d{2}\/\d{4})/);
+    if (!dateMatch) return `${thuStr} ${gioStr}`;
+    return `${thuStr} ${gioStr}  →  ${dateMatch[1]}`;
+  } catch (_) {
+    return `${thuStr} ${gioStr}`;
+  }
+}
+
+// Tính placeholder từ day_of_week + hour + minute (số)
+function makePlaceholderFromNums(dayOfWeek, hour, minute) {
+  try {
+    const { label } = ngayThucTe(dayOfWeek, hour, minute);
+    const dateMatch = label.match(/(\d{2}\/\d{2}\/\d{4})/);
+    const thuStr = TEN_THU[dayOfWeek];
+    const timeStr = `${pad(hour)}:${pad(minute)}`;
+    if (!dateMatch) return `${thuStr} ${timeStr}`;
+    return `${thuStr} ${timeStr}  →  ${dateMatch[1]}`;
+  } catch (_) {
+    return `${TEN_THU[dayOfWeek]} ${pad(hour)}:${pad(minute)}`;
+  }
+}
+
 // ─── lichMenuComponents ───────────────────────────────────────────────────────
 function lichMenuComponents(lichList) {
   const embed = new EmbedBuilder()
@@ -84,6 +116,10 @@ function lichActionComponents(lich, lichList, activeSession = null) {
 
 // ─── handleShowAddModal — 4 field (tạo mới cần đủ thông tin) ─────────────────
 async function handleShowAddModal(interaction) {
+  // Tính ngày thực tế gần nhất cho placeholder gợi ý
+  const phMo   = makePlaceholderFromNums(6, 21, 0);   // T7 21:00
+  const phDong = makePlaceholderFromNums(6, 23, 30);  // T7 23:30
+
   const modal = new ModalBuilder()
     .setCustomId('setup:lich:modal')
     .setTitle('➕ Thêm Lịch Cố Định');
@@ -92,12 +128,12 @@ async function handleShowAddModal(interaction) {
       new TextInputBuilder().setCustomId('ten').setLabel('Tên phiên').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(50),
     ),
     new ActionRowBuilder().addComponents(
-      new TextInputBuilder().setCustomId('gio_mo').setLabel('Thứ & Giờ MỞ — VD: T7 21:00').setStyle(TextInputStyle.Short)
-        .setPlaceholder('T7 21:00').setRequired(true).setMaxLength(10),
+      new TextInputBuilder().setCustomId('gio_mo').setLabel('Thứ & Giờ MỞ — format: T7 21:00').setStyle(TextInputStyle.Short)
+        .setPlaceholder(phMo).setRequired(true).setMaxLength(10),
     ),
     new ActionRowBuilder().addComponents(
       new TextInputBuilder().setCustomId('gio_dong').setLabel('Thứ & Giờ ĐÓNG — để trống = không tự đóng').setStyle(TextInputStyle.Short)
-        .setPlaceholder('T7 23:30').setRequired(false).setMaxLength(10),
+        .setPlaceholder(phDong).setRequired(false).setMaxLength(10),
     ),
     new ActionRowBuilder().addComponents(
       new TextInputBuilder().setCustomId('kenh_id').setLabel('Channel ID (để trống = kênh hiện tại)').setStyle(TextInputStyle.Short)
@@ -161,8 +197,7 @@ async function handleLich(interaction) {
     return true;
   }
 
-  // ─── Edit modal SHOW — chỉ 2 field: Giờ MỞ & Giờ ĐÓNG ─────────────────────
-  // Tên phiên và Channel ID được giữ nguyên từ DB, không hiển thị trong modal.
+  // ─── Edit modal SHOW — 2 field: Giờ MỞ & Giờ ĐÓNG, placeholder có ngày thực tế ──
   if (customId.startsWith('setup:lich:edit:') && !customId.includes(':modal:')) {
     const lichId = customId.replace('setup:lich:edit:', '');
     const lichList = await db.getLichCoDinh(guild.id);
@@ -174,17 +209,29 @@ async function handleLich(interaction) {
       ? `${TEN_THU[lich.close_day_of_week]} ${pad(lich.close_hour)}:${pad(lich.close_minute)}`
       : '';
 
+    // Placeholder hiện ngày thực tế gần nhất
+    const phMo   = makePlaceholderFromNums(lich.day_of_week, lich.hour, lich.minute);
+    const phDong = lich.close_day_of_week != null
+      ? makePlaceholderFromNums(lich.close_day_of_week, lich.close_hour, lich.close_minute)
+      : 'T7 23:30  →  ' + (() => {
+          try {
+            const { label } = ngayThucTe(6, 23, 30);
+            const d = label.match(/(\d{2}\/\d{2}\/\d{4})/);
+            return d ? d[1] : '06/06/2026';
+          } catch (_) { return ''; }
+        })();
+
     const modal = new ModalBuilder()
       .setCustomId(`setup:lich:edit:modal:${lichId}`)
-      .setTitle(`✏️ Sửa Giờ — ${lich.session_name.slice(0, 35)}`);
+      .setTitle(`✏️ Sửa Lịch — ${lich.session_name.slice(0, 35)}`);
     modal.addComponents(
       new ActionRowBuilder().addComponents(
         new TextInputBuilder()
           .setCustomId('gio_mo')
-          .setLabel('Thứ & Giờ MỞ — VD: T7 21:00')
+          .setLabel('Thứ & Giờ MỞ — format: T7 21:00')
           .setStyle(TextInputStyle.Short)
           .setValue(moStr)
-          .setPlaceholder('T7 21:00')
+          .setPlaceholder(phMo)
           .setRequired(true)
           .setMaxLength(10),
       ),
@@ -194,7 +241,7 @@ async function handleLich(interaction) {
           .setLabel('Thứ & Giờ ĐÓNG — để trống = không tự đóng')
           .setStyle(TextInputStyle.Short)
           .setValue(dongStr)
-          .setPlaceholder('T7 23:30')
+          .setPlaceholder(phDong)
           .setRequired(false)
           .setMaxLength(10),
       ),
@@ -203,7 +250,7 @@ async function handleLich(interaction) {
     return true;
   }
 
-  // ─── Edit modal SUBMIT — lấy ten & channel_id từ DB, chỉ cập nhật giờ ──────
+  // ─── Edit modal SUBMIT ────────────────────────────────────────────────────────
   if (customId.startsWith('setup:lich:edit:modal:')) {
     const lichId = customId.replace('setup:lich:edit:modal:', '');
     await interaction.deferReply({ ephemeral: true });
@@ -223,7 +270,6 @@ async function handleLich(interaction) {
       if (!parsedDong) return interaction.editReply({ content: '❌ Định dạng giờ đóng không hợp lệ.' });
     }
 
-    // Giữ nguyên tên phiên và kênh từ DB
     const ten       = lich.session_name;
     const channelId = lich.channel_id;
 
