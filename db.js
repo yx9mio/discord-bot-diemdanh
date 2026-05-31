@@ -242,7 +242,6 @@ async function getTopMembers(guildId, limit = 10) {
 async function getSessionHistory(guildId, limitOrOpts = 10) {
   const { limit = 10, offset = 0 } =
     typeof limitOrOpts === 'number' ? { limit: limitOrOpts } : limitOrOpts;
-  // sessions table không có created_at — dùng ended_at làm fallback trong handler
   const { data, error } = await supabase
     .from('sessions')
     .select('id, session_name, ended_at, eligible_member_ids')
@@ -255,9 +254,6 @@ async function getSessionHistory(guildId, limitOrOpts = 10) {
 
 /**
  * getSessionHistoryWithRange — lấy lịch sử phiên trong khoảng thời gian.
- * @param {string} guildId
- * @param {string|null} since  — ISO timestamp, null = tất cả
- * @param {number} limit
  */
 async function getSessionHistoryWithRange(guildId, since = null, limit = 100) {
   let query = supabase
@@ -390,7 +386,6 @@ const getLichCoDinh = getScheduledSessions;
 
 /**
  * themLichCoDinh — alias của createScheduledSession với tham số đặt tên tiếng Việt.
- * Dùng bởi presetHandler.js và lichHandler.js.
  */
 async function themLichCoDinh(guildId, {
   dayOfWeek, hour, minute,
@@ -413,6 +408,49 @@ async function themLichCoDinh(guildId, {
   });
 }
 
+/**
+ * suaLichCoDinh — Bug 3 fix: update lịch cố định với tham số đặt tên tiếng Việt.
+ * Trả về row đã cập nhật.
+ */
+async function suaLichCoDinh(guildId, lichId, {
+  dayOfWeek, hour, minute,
+  sessionName,
+  closeDayOfWeek = null, closeHour = null, closeMinute = null,
+  channelId = null,
+} = {}) {
+  const patch = {
+    day_of_week:       dayOfWeek,
+    hour,
+    minute,
+    session_name:      sessionName,
+    close_day_of_week: closeDayOfWeek,
+    close_hour:        closeHour,
+    close_minute:      closeMinute,
+  };
+  if (channelId != null) patch.channel_id = channelId;
+  const { data, error } = await supabase
+    .from('scheduled_sessions')
+    .update(patch)
+    .eq('id', lichId)
+    .eq('guild_id', guildId)
+    .select()
+    .single();
+  throwIfError(error, 'suaLichCoDinh');
+  return data;
+}
+
+/**
+ * xoaLichCoDinh — Bug 3 fix: alias deleteScheduledSession theo tên tiếng Việt.
+ */
+async function xoaLichCoDinh(guildId, lichId) {
+  const { error } = await supabase
+    .from('scheduled_sessions')
+    .delete()
+    .eq('id', lichId)
+    .eq('guild_id', guildId);
+  throwIfError(error, 'xoaLichCoDinh');
+}
+
 // ─── Exports ──────────────────────────────────────────────────────────────────
 const closeSession = endSession;
 
@@ -431,5 +469,5 @@ module.exports = {
   getBadgesForSession, getBadges, upsertBadge, deleteBadge, getMemberBadges, upsertMemberBadge,
   getScheduledSessions, getAllScheduledSessions, getScheduledSessionById,
   createScheduledSession, updateScheduledSession, deleteScheduledSession,
-  getLichCoDinh, themLichCoDinh,
+  getLichCoDinh, themLichCoDinh, suaLichCoDinh, xoaLichCoDinh,
 };

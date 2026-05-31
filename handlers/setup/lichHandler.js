@@ -62,9 +62,8 @@ function lichMenuComponents(lichList) {
         .setCustomId('setup:lich:select')
         .setPlaceholder('Chọn lịch để quản lý...')
         .addOptions(lichList.slice(0,25).map(l => {
-          // description hiển thị ngày thực tế mở thay vì chỉ T7 21:00
           const { label: moLabel } = ngayThucTe(l.day_of_week, l.hour, l.minute);
-          const moShort = moLabel.replace(/^[^,]+,\s*/, ''); // "07/06/2026 21:00"
+          const moShort = moLabel.replace(/^[^,]+,\s*/, '');
           return {
             label: l.session_name.slice(0, 100),
             description: `${moShort} | ${l.id.slice(0, 8)}`.slice(0, 100),
@@ -149,14 +148,16 @@ async function handleLich(interaction) {
   const { customId, guild } = interaction;
 
   if (customId === 'setup:lich:menu') {
-    await interaction.deferUpdate();
+    // Bug 1 fix: deferUpdate có thể fail nếu interaction đã hết token (>3s)
+    try { await interaction.deferUpdate(); } catch (_) { return true; }
     const lichList = await db.getLichCoDinh(guild.id);
     await interaction.editReply(lichMenuComponents(lichList));
     return true;
   }
 
   if (customId === 'setup:lich:select') {
-    await interaction.deferUpdate();
+    // Bug 1 fix: same guard
+    try { await interaction.deferUpdate(); } catch (_) { return true; }
     const lichId = interaction.values[0];
     const lichList = await db.getLichCoDinh(guild.id);
     const lich = lichList.find(l => l.id === lichId);
@@ -177,8 +178,9 @@ async function handleLich(interaction) {
     if (!lich) { await interaction.editReply({ content: '❌ Không tìm thấy lịch.' }); return true; }
     const activeSession = await db.getActiveSession(guild.id);
     if (activeSession) { await interaction.editReply({ content: '⚠️ Đang có phiên mở, không thể mở thêm.' }); return true; }
-    const { morPhienTheoLich } = require('../../utils/scheduler.js');
-    await morPhienTheoLich(interaction.client, guild, lich);
+    // Bug 4 fix: đúng tên export là runLichNgay (không phải morPhienTheoLich)
+    const { runLichNgay } = require('../../utils/scheduler.js');
+    await runLichNgay(interaction.client, guild.id, lich);
     await interaction.editReply({ content: `✅ Đã mở phiên **${lich.session_name}** ngay lập tức.` });
     return true;
   }
@@ -190,14 +192,17 @@ async function handleLich(interaction) {
     const lich = lichList.find(l => l.id === lichId);
     if (!lich) { await interaction.editReply({ content: '❌ Không tìm thấy lịch.' }); return true; }
     if (lich.close_day_of_week == null) { await interaction.editReply({ content: '⚠️ Lịch này không có giờ đóng tự động.' }); return true; }
-    const { dongPhienTheoLich } = require('../../utils/scheduler.js');
-    await dongPhienTheoLich(interaction.client, guild, lich);
+    // Bug 4 fix: đúng tên export là runDongLichNgay (không phải dongPhienTheoLich)
+    const { runDongLichNgay } = require('../../utils/scheduler.js');
+    await runDongLichNgay(interaction.client, guild.id, lich);
     await interaction.editReply({ content: `✅ Đã đóng phiên **${lich.session_name}** ngay lập tức.` });
     return true;
   }
 
   if (customId.startsWith('setup:lich:edit:') && !customId.includes(':modal:')) {
     const lichId = customId.replace('setup:lich:edit:', '');
+    // Bug 2 fix: guard double-trigger — nếu đã acknowledged thì bỏ qua
+    if (interaction.replied || interaction.deferred) return true;
     const lichList = await db.getLichCoDinh(guild.id);
     const lich = lichList.find(l => l.id === lichId);
     if (!lich) { await interaction.reply({ content: '❌ Không tìm thấy lịch.', ephemeral: true }); return true; }
@@ -243,7 +248,12 @@ async function handleLich(interaction) {
           .setMaxLength(10),
       ),
     );
-    await interaction.showModal(modal);
+    // Bug 2 fix: wrap showModal để không crash nếu interaction đã expire
+    try {
+      await interaction.showModal(modal);
+    } catch (e) {
+      console.warn('[lichHandler] showModal failed (interaction expired?):', e.message);
+    }
     return true;
   }
 
@@ -269,6 +279,7 @@ async function handleLich(interaction) {
     const ten       = lich.session_name;
     const channelId = lich.channel_id;
 
+    // Bug 3 fix: dùng db.suaLichCoDinh (alias mới trong db.js)
     const updated = await db.suaLichCoDinh(guild.id, lichId, {
       dayOfWeek: parsed.thu, hour: parsed.gio, minute: parsed.phut,
       sessionName: ten,
@@ -278,7 +289,7 @@ async function handleLich(interaction) {
     try {
       const { cancelLichCoDinh, scheduleLichCoDinh } = require('../../utils/scheduler.js');
       cancelLichCoDinh(guild.id, lichId);
-      await scheduleLichCoDinh(interaction.client, guild, updated);
+      await scheduleLichCoDinh(interaction.client, guild.id, updated);
     } catch (e) { console.warn('[lichHandler] reschedule sau edit:', e.message); }
 
     const { label: moLabel } = ngayThucTe(parsed.thu, parsed.gio, parsed.phut);
@@ -318,6 +329,7 @@ async function handleLich(interaction) {
 
   if (customId.startsWith('setup:lich:delete:')) {
     const lichId = customId.replace('setup:lich:delete:', '');
+    // Bug 3 fix: dùng db.xoaLichCoDinh (alias mới trong db.js)
     await db.xoaLichCoDinh(guild.id, lichId);
     try { const { cancelLichCoDinh } = require('../../utils/scheduler.js'); cancelLichCoDinh(guild.id, lichId); } catch (_) {}
     const lichList = await db.getLichCoDinh(guild.id);
@@ -358,7 +370,7 @@ async function handleLich(interaction) {
     });
     try {
       const { scheduleLichCoDinh } = require('../../utils/scheduler.js');
-      await scheduleLichCoDinh(interaction.client, guild, lich);
+      await scheduleLichCoDinh(interaction.client, guild.id, lich);
     } catch (e) { console.warn('[lichHandler] scheduleLichCoDinh sau add:', e.message); }
     const { label: moLabel } = ngayThucTe(parsed.thu, parsed.gio, parsed.phut);
     const dongDisplay = parsedDong
