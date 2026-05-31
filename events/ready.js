@@ -6,15 +6,14 @@ const db   = require('../db.js');
 const { datHenGioDong }    = require('../utils/timers.js');
 const { ketThucPhien, thongBaoHuyHieu, voHieuHoaNutDiemDanh } = require('../utils/session.js');
 const { buildSummaryEmbed, FOOTER_DEFAULT } = require('../utils/embeds.js');
+const { khoiPhucScheduler } = require('../utils/scheduler.js');
 
-// Fix: khai báo ngoài function để giữ state giữa các lần gọi
 let dangKhoiPhuc = false;
 
 async function dangKyCommands(client) {
   const dir = path.join(__dirname, '..', 'commands');
   const files = fs.readdirSync(dir).filter(f => f.endsWith('.js'));
   const commandData = files.map(f => require(path.join(dir, f)).data.toJSON());
-
   const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
   try {
     await rest.put(Routes.applicationCommands(client.user.id), { body: commandData });
@@ -32,28 +31,24 @@ async function khoiPhucHenGio(client) {
       try {
         const session = await db.getActiveSession(guild.id);
         if (!session || !session.auto_close_at) continue;
-
         const channelId = session.channel_id;
         if (!channelId) continue;
-
         const ms = new Date(session.auto_close_at).getTime() - Date.now();
-
         if (ms > 0) {
           await datHenGioDong(client, guild, session, channelId, ms);
           console.log(`[Quản Gia] Khôi phục hẹn giờ: ${guild.name} — ${session.session_name}`);
         } else {
-          // Hết giờ trong lúc bot offline — tự đóng ngay
           const ch = await guild.channels.fetch(channelId).catch(() => null);
           if (!ch) continue;
           const attended = await db.getAttendances(session.id);
-          await ketThucPhien(guild, session, attended);
+          const statsMap = await ketThucPhien(guild, session, attended);
           await voHieuHoaNutDiemDanh(client, ch, session);
           const thongBao = new EmbedBuilder()
             .setColor(0x99AAB5)
             .setDescription('🔒 Phiên điểm danh đã tự động kết thúc trong lúc bot offline.')
             .setFooter({ text: FOOTER_DEFAULT });
           await ch.send({ embeds: [thongBao, buildSummaryEmbed(session, attended)] });
-          await thongBaoHuyHieu(guild, ch, guild.id, session.id, attended);
+          await thongBaoHuyHieu(guild, ch, guild.id, session.id, attended, statsMap);
           console.log(`[Quản Gia] Đóng phiên offline: ${guild.name} — ${session.session_name}`);
         }
       } catch (e) {
@@ -69,6 +64,7 @@ async function onReady(client) {
   console.log(`[Quản Gia] Đã sẵn sàng: ${client.user.tag}`);
   await dangKyCommands(client);
   await khoiPhucHenGio(client);
+  await khoiPhucScheduler(client);  // Khôi phục lịch cố định
 }
 
 module.exports = { onReady };
