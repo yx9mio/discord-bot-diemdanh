@@ -6,7 +6,7 @@ const {
 } = require('discord.js');
 const db = require('../../db.js');
 const { FOOTER_DEFAULT, AUTHOR_DEFAULT } = require('../../utils/embeds.js');
-const { PRESETS, pad, ngayThucTe } = require('./helpers.js');
+const { PRESETS, pad, ngayThucTe, buildPresetDescription } = require('./helpers.js');
 const { buildDashboard } = require('./dashboardHandler.js');
 
 async function createPresetLich(interaction, guild, preset, channelId) {
@@ -54,7 +54,12 @@ async function handlePreset(interaction) {
       new StringSelectMenuBuilder()
         .setCustomId('setup:preset:select')
         .setPlaceholder('Chọn preset...')
-        .addOptions(PRESETS.map(p => ({ label: p.label, value: p.value, description: p.description }))),
+        // description được tính động tại runtime — hiển thị ngày thực tế
+        .addOptions(PRESETS.map(p => ({
+          label: p.label,
+          value: p.value,
+          description: buildPresetDescription(p.data),
+        }))),
     );
     await interaction.editReply({ embeds: [embed], components: [row], ephemeral: true });
     return true;
@@ -66,9 +71,6 @@ async function handlePreset(interaction) {
     const preset = PRESETS.find(p => p.value === value);
     if (!preset) { await interaction.editReply({ content: '❌ Preset không tồn tại.' }); return true; }
     if (!preset.data) {
-      // Tùy chỉnh → show lịch menu add
-      const { handleShowAddModal } = require('./lichHandler.js');
-      // Cannot showModal after deferUpdate — send prompt instead
       await interaction.editReply({
         content: '✏️ Chọn **➕ Thêm mới** trong màn hình Quản lý Lịch để nhập tay.',
         components: [new ActionRowBuilder().addComponents(
@@ -78,11 +80,12 @@ async function handlePreset(interaction) {
       });
       return true;
     }
-    // Preset có channel riêng → hỏi kênh
+    // Preset có data → hỏi kênh, description hiện ngày thực tế
+    const dynamicDesc = buildPresetDescription(preset.data);
     const embed = new EmbedBuilder()
       .setAuthor(AUTHOR_DEFAULT)
       .setTitle(`⚡ Preset: ${preset.label}`)
-      .setDescription(`${preset.description}\n\nChọn kênh để bot gửi thông báo cho lịch này.`)
+      .setDescription(`**Lịch:** ${dynamicDesc}\n\nChọn kênh để bot gửi thông báo cho lịch này.`)
       .setColor(0x57F287).setFooter({ text: FOOTER_DEFAULT });
     const row = new ActionRowBuilder().addComponents(
       new ChannelSelectMenuBuilder()
@@ -100,10 +103,10 @@ async function handlePreset(interaction) {
     const channelId = interaction.values[0];
     const preset    = PRESETS.find(p => p.value === presetValue);
     if (!preset?.data) { await interaction.editReply({ content: '❌ Preset không hợp lệ.' }); return true; }
-    // Save button
+    const dynamicDesc = buildPresetDescription(preset.data);
     const embed = new EmbedBuilder()
       .setTitle(`⚡ Xác nhận tạo: ${preset.label}`)
-      .setDescription(`Kênh: <#${channelId}>\n${preset.description}`)
+      .setDescription(`**Kênh:** <#${channelId}>\n**Lịch:** ${dynamicDesc}`)
       .setColor(0x57F287).setFooter({ text: FOOTER_DEFAULT });
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId(`setup:preset_bc:save:${presetValue}:${channelId}`)

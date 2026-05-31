@@ -11,14 +11,12 @@ const { buildDashboard } = require('./dashboardHandler.js');
 
 // ─── Helper: tạo placeholder gợi ý ngày thực tế ─────────────────────────────
 function makePlaceholder(thuStr, gioStr) {
-  // thuStr = 'T7', gioStr = '21:00'
   try {
     const thuMap = { CN: 0, T2: 1, T3: 2, T4: 3, T5: 4, T6: 5, T7: 6 };
     const thu = thuMap[thuStr.toUpperCase()];
     if (thu === undefined) return `${thuStr} ${gioStr}`;
     const [h, m] = gioStr.split(':').map(Number);
     const { label } = ngayThucTe(thu, h, m);
-    // label = "Thứ Bảy, 06/06/2026 21:00" → chỉ lấy dd/MM/yyyy
     const dateMatch = label.match(/(\d{2}\/\d{2}\/\d{4})/);
     if (!dateMatch) return `${thuStr} ${gioStr}`;
     return `${thuStr} ${gioStr}  →  ${dateMatch[1]}`;
@@ -27,7 +25,6 @@ function makePlaceholder(thuStr, gioStr) {
   }
 }
 
-// Tính placeholder từ day_of_week + hour + minute (số)
 function makePlaceholderFromNums(dayOfWeek, hour, minute) {
   try {
     const { label } = ngayThucTe(dayOfWeek, hour, minute);
@@ -48,9 +45,9 @@ function lichMenuComponents(lichList) {
     .setDescription(
       lichList.length
         ? lichList.map((l, i) => {
-            const mo   = `${TEN_THU_FULL[l.day_of_week]} ${pad(l.hour)}:${pad(l.minute)}`;
+            const { label: moLabel } = ngayThucTe(l.day_of_week, l.hour, l.minute);
             const dong = formatDongStr(l);
-            return `**${i+1}.** \`${l.id.slice(0,8)}\` **${l.session_name}**\n> Mở: ${mo} | Đóng: ${dong} | <#${l.channel_id}>`;
+            return `**${i+1}.** \`${l.id.slice(0,8)}\` **${l.session_name}**\n> Mở: ${moLabel} | Đóng: ${dong} | <#${l.channel_id}>`;
           }).join('\n\n')
         : '⚠️ Chưa có lịch nào. Nhấn **Thêm mới** để tạo.',
     )
@@ -64,11 +61,16 @@ function lichMenuComponents(lichList) {
       new StringSelectMenuBuilder()
         .setCustomId('setup:lich:select')
         .setPlaceholder('Chọn lịch để quản lý...')
-        .addOptions(lichList.slice(0,25).map(l => ({
-          label: l.session_name.slice(0,100),
-          description: `${TEN_THU[l.day_of_week]} ${pad(l.hour)}:${pad(l.minute)} | ${l.id.slice(0,8)}`,
-          value: l.id,
-        }))),
+        .addOptions(lichList.slice(0,25).map(l => {
+          // description hiển thị ngày thực tế mở thay vì chỉ T7 21:00
+          const { label: moLabel } = ngayThucTe(l.day_of_week, l.hour, l.minute);
+          const moShort = moLabel.replace(/^[^,]+,\s*/, ''); // "07/06/2026 21:00"
+          return {
+            label: l.session_name.slice(0, 100),
+            description: `${moShort} | ${l.id.slice(0, 8)}`.slice(0, 100),
+            value: l.id,
+          };
+        })),
     ));
   }
   rows.push(new ActionRowBuilder().addComponents(
@@ -80,12 +82,12 @@ function lichMenuComponents(lichList) {
 
 // ─── lichActionComponents ─────────────────────────────────────────────────────
 function lichActionComponents(lich, lichList, activeSession = null) {
-  const mo   = `${TEN_THU_FULL[lich.day_of_week]} ${pad(lich.hour)}:${pad(lich.minute)}`;
+  const { label: moLabel } = ngayThucTe(lich.day_of_week, lich.hour, lich.minute);
   const dong = formatDongStr(lich);
   const embed = new EmbedBuilder()
     .setTitle(`⚙️ Quản lý: ${lich.session_name}`)
     .setDescription([
-      `**Mở:** ${mo}`,
+      `**Mở:** ${moLabel}`,
       `**Đóng:** ${dong}`,
       `**Kênh:** <#${lich.channel_id}>`,
       `**ID:** \`${lich.id}\``,
@@ -114,11 +116,10 @@ function lichActionComponents(lich, lichList, activeSession = null) {
   return { embeds: [embed], components: [row1, row2], ephemeral: true };
 }
 
-// ─── handleShowAddModal — 4 field (tạo mới cần đủ thông tin) ─────────────────
+// ─── handleShowAddModal ───────────────────────────────────────────────────────
 async function handleShowAddModal(interaction) {
-  // Tính ngày thực tế gần nhất cho placeholder gợi ý
-  const phMo   = makePlaceholderFromNums(6, 21, 0);   // T7 21:00
-  const phDong = makePlaceholderFromNums(6, 23, 30);  // T7 23:30
+  const phMo   = makePlaceholderFromNums(6, 21, 0);
+  const phDong = makePlaceholderFromNums(6, 23, 30);
 
   const modal = new ModalBuilder()
     .setCustomId('setup:lich:modal')
@@ -168,7 +169,6 @@ async function handleLich(interaction) {
     return true;
   }
 
-  // Early open
   if (customId.startsWith('setup:lich:early_open:')) {
     const lichId = customId.replace('setup:lich:early_open:', '');
     await interaction.deferReply({ ephemeral: true });
@@ -183,7 +183,6 @@ async function handleLich(interaction) {
     return true;
   }
 
-  // Early close
   if (customId.startsWith('setup:lich:early_close:')) {
     const lichId = customId.replace('setup:lich:early_close:', '');
     await interaction.deferReply({ ephemeral: true });
@@ -197,7 +196,6 @@ async function handleLich(interaction) {
     return true;
   }
 
-  // ─── Edit modal SHOW — 2 field: Giờ MỞ & Giờ ĐÓNG, placeholder có ngày thực tế ──
   if (customId.startsWith('setup:lich:edit:') && !customId.includes(':modal:')) {
     const lichId = customId.replace('setup:lich:edit:', '');
     const lichList = await db.getLichCoDinh(guild.id);
@@ -209,7 +207,6 @@ async function handleLich(interaction) {
       ? `${TEN_THU[lich.close_day_of_week]} ${pad(lich.close_hour)}:${pad(lich.close_minute)}`
       : '';
 
-    // Placeholder hiện ngày thực tế gần nhất
     const phMo   = makePlaceholderFromNums(lich.day_of_week, lich.hour, lich.minute);
     const phDong = lich.close_day_of_week != null
       ? makePlaceholderFromNums(lich.close_day_of_week, lich.close_hour, lich.close_minute)
@@ -250,7 +247,6 @@ async function handleLich(interaction) {
     return true;
   }
 
-  // ─── Edit modal SUBMIT ────────────────────────────────────────────────────────
   if (customId.startsWith('setup:lich:edit:modal:')) {
     const lichId = customId.replace('setup:lich:edit:modal:', '');
     await interaction.deferReply({ ephemeral: true });
@@ -293,7 +289,6 @@ async function handleLich(interaction) {
     return true;
   }
 
-  // Confirm delete
   if (customId.startsWith('setup:lich:confirm_delete:')) {
     const lichId = customId.replace('setup:lich:confirm_delete:', '');
     const lichList = await db.getLichCoDinh(guild.id);
@@ -311,7 +306,6 @@ async function handleLich(interaction) {
     return true;
   }
 
-  // Back from delete confirm
   if (customId.startsWith('setup:lich:back:')) {
     const lichId = customId.replace('setup:lich:back:', '');
     const lichList = await db.getLichCoDinh(guild.id);
@@ -322,7 +316,6 @@ async function handleLich(interaction) {
     return true;
   }
 
-  // Delete
   if (customId.startsWith('setup:lich:delete:')) {
     const lichId = customId.replace('setup:lich:delete:', '');
     await db.xoaLichCoDinh(guild.id, lichId);
@@ -334,10 +327,8 @@ async function handleLich(interaction) {
     return true;
   }
 
-  // Add modal
   if (customId === 'setup:lich:add') return handleShowAddModal(interaction);
 
-  // Add modal submit
   if (customId === 'setup:lich:modal') {
     await interaction.deferReply({ ephemeral: true });
     const ten     = interaction.fields.getTextInputValue('ten').trim();

@@ -9,25 +9,21 @@ const PRESETS = [
   {
     value: 'bang_chien',
     label: '⚔️ Bang Chiến',
-    description: 'T7 21:00 → T7 23:30 (2h30p)',
     data: { day_of_week:6, hour:21, minute:0, close_day_of_week:6, close_hour:23, close_minute:30 },
   },
   {
     value: 'hoi_dong',
     label: '🏛️ Hội Đồng Môn Phái',
-    description: 'CN 20:00 → CN 22:00 (2h)',
     data: { day_of_week:0, hour:20, minute:0, close_day_of_week:0, close_hour:22, close_minute:0 },
   },
   {
     value: 'luyen_tap',
     label: '🥋 Luyện Tập Thường',
-    description: 'T3 20:00 → T3 21:30 (1h30p)',
     data: { day_of_week:2, hour:20, minute:0, close_day_of_week:2, close_hour:21, close_minute:30 },
   },
   {
     value: 'tuy_chinh',
     label: '✏️ Tùy chỉnh',
-    description: 'Nhập tay qua form',
     data: null,
   },
 ];
@@ -73,6 +69,38 @@ function formatDongStr(lich) {
   return note ? `${label} ${note}` : label;
 }
 
+/**
+ * buildPresetDescription(data)
+ * Tính description động cho preset tại runtime.
+ * Discord option description giới hạn 100 ký tự.
+ * VD: "T7 07/06/2026 21:00 → 07/06/2026 23:30 (2h30p)"
+ */
+function buildPresetDescription(data) {
+  if (!data) return 'Nhập tay qua form';
+  try {
+    const { label: moLabel } = ngayThucTe(data.day_of_week, data.hour, data.minute);
+    const { label: dongLabel, note: dongNote } = ngayThucTe(
+      data.close_day_of_week, data.close_hour, data.close_minute,
+      data.day_of_week, data.hour, data.minute,
+    );
+    // Lấy phần dd/MM/yyyy HH:mm từ label dài
+    const moShort   = moLabel.replace(/^[^,]+,\s*/, '');   // "07/06/2026 21:00"
+    const dongShort = dongLabel.replace(/^[^,]+,\s*/, ''); // "07/06/2026 23:30"
+    // Duration
+    const durMin = (data.close_day_of_week - data.day_of_week) * 1440
+      + (data.close_hour - data.hour) * 60
+      + (data.close_minute - data.minute);
+    const durNorm = ((durMin % (7 * 1440)) + 7 * 1440) % (7 * 1440);
+    const durStr  = durNorm >= 60
+      ? `${Math.floor(durNorm / 60)}h${durNorm % 60 ? (durNorm % 60) + 'p' : ''}`
+      : `${durNorm}p`;
+    const suffix = dongNote ? ` ${dongNote}` : '';
+    return `${moShort} → ${dongShort} (${durStr})${suffix}`.slice(0, 100);
+  } catch (_) {
+    return `${TEN_THU[data.day_of_week]} ${pad(data.hour)}:${pad(data.minute)}`;
+  }
+}
+
 function parseThuGio(raw) {
   const m = raw.trim().toUpperCase().match(/^(CN|T[2-7])\s+(\d{1,2}):(\d{2})$/);
   if (!m) return null;
@@ -84,4 +112,4 @@ function parseThuGio(raw) {
   return { thu, gio, phut };
 }
 
-module.exports = { TEN_THU, TEN_THU_FULL, pad, PRESETS, ngayThucTe, formatDongStr, parseThuGio };
+module.exports = { TEN_THU, TEN_THU_FULL, pad, PRESETS, ngayThucTe, formatDongStr, buildPresetDescription, parseThuGio };
