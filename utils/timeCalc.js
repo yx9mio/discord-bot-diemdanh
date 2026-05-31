@@ -64,13 +64,15 @@ function msFromOpenToClose(openDay, openH, openM, closeDay, closeH, closeM) {
 /**
  * ms còn lại cho đến giờ đóng, tính từ thời điểm hiện tại
  * Căn cứ vào createdAt của session để biết khi nào phiên đã mở
- * @param {string} sessionCreatedAt  ISO string (UTC)
- * @returns {number} ms (có thể âm nếu đã qua giờ đóng)
+ * @param {string|Date|null} sessionCreatedAt  ISO string (UTC) hoặc null
+ * @returns {number|null} ms (có thể âm nếu đã qua giờ đóng), null nếu createdAt không hợp lệ
  */
 function msToCloseFromNow(openDay, openH, openM, closeDay, closeH, closeM, sessionCreatedAt) {
   const msOpenToClose = msFromOpenToClose(openDay, openH, openM, closeDay, closeH, closeM);
-  const openedAt  = new Date(sessionCreatedAt).getTime();
-  const closeAt   = openedAt + msOpenToClose;
+  const openedAt = sessionCreatedAt ? new Date(sessionCreatedAt).getTime() : NaN;
+  // Guard: nếu openedAt không hợp lệ trả về null để caller tự xử lý
+  if (isNaN(openedAt)) return null;
+  const closeAt = openedAt + msOpenToClose;
   return closeAt - Date.now();
 }
 
