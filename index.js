@@ -8,9 +8,10 @@ const { onMessageDelete } = require('./events/messageDelete.js');
 const { handleSelectMenu } = require('./commands/help.js');
 const { handleSetupUi } = require('./handlers/setupUiHandler.js');
 const { handleUserPanelButton } = require('./handlers/userPanelHandler.js');
+const log = require('./utils/logger.js');
 
 if (!process.env.DISCORD_TOKEN) {
-  console.error('[LỖI] Thiếu DISCORD_TOKEN trong .env!');
+  log.error('SYSTEM', null, 'Thiếu DISCORD_TOKEN trong .env!');
   process.exit(1);
 }
 
@@ -57,7 +58,7 @@ client.on('interactionCreate', async interaction => {
 
     if (interaction.isChatInputCommand()) return handleCommand(interaction, commands);
   } catch (err) {
-    console.error('[interactionCreate]', err);
+    log.error('SYSTEM', interaction.guildId ?? null, 'interactionCreate lỗi: %s', err.stack ?? err.message);
     const reply = { content: '❌ Có lỗi xảy ra. Vui lòng thử lại.', ephemeral: true };
     if (interaction.deferred || interaction.replied) {
       interaction.editReply(reply).catch(() => {});

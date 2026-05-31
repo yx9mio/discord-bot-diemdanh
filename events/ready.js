@@ -3,6 +3,7 @@ const { REST, Routes, EmbedBuilder } = require('discord.js');
 const path = require('path');
 const fs   = require('fs');
 const db   = require('../db.js');
+const log  = require('../utils/logger.js');
 const { datHenGioDong }    = require('../utils/timers.js');
 const { ketThucPhien, thongBaoHuyHieu, voHieuHoaNutDiemDanh } = require('../utils/session.js');
 const { buildSummaryEmbed, FOOTER_DEFAULT } = require('../utils/embeds.js');
@@ -19,9 +20,9 @@ async function dangKyCommands(client) {
   // ── Xóa global commands (nếu còn tồn tại từ trước) để tránh trùng lặp ──
   try {
     await rest.put(Routes.applicationCommands(client.user.id), { body: [] });
-    console.log('[Quản Gia] Đã xóa global commands cũ.');
+    log.info('SYSTEM', null, 'Đã xóa global commands cũ.');
   } catch (err) {
-    console.warn('[Quản Gia] Không xóa được global commands:', err.message);
+    log.warn('SYSTEM', null, 'Không xóa được global commands: %s', err.message);
   }
 
   // ── Guild-specific: hiện ngay lập tức cho mọi guild bot đang ở ──────────
@@ -35,10 +36,10 @@ async function dangKyCommands(client) {
       );
       guildOk++;
     } catch (err) {
-      console.error(`[Quản Gia] Lỗi đăng ký guild ${guild.id}:`, err.message);
+      log.error('SYSTEM', guild.id, 'Lỗi đăng ký commands: %s', err.message);
     }
   }
-  console.log(`[Quản Gia] Đã đăng ký ${commandData.length} lệnh cho ${guildOk} guild(s) — guild-only, hiện ngay lập tức.`);
+  log.info('SYSTEM', null, 'Đã đăng ký %s lệnh cho %s guild(s) — guild-only, hiện ngay lập tức.', commandData.length, guildOk);
 }
 
 async function khoiPhucHenGio(client) {
@@ -54,7 +55,7 @@ async function khoiPhucHenGio(client) {
         const ms = new Date(session.auto_close_at).getTime() - Date.now();
         if (ms > 0) {
           await datHenGioDong(client, guild, session, channelId, ms);
-          console.log(`[Quản Gia] Khôi phục hẹn giờ: ${guild.name} — ${session.session_name}`);
+          log.info('SYSTEM', guild.id, 'Khôi phục hẹn giờ: %s — %s', guild.name, session.session_name);
         } else {
           const ch = await guild.channels.fetch(channelId).catch(() => null);
           if (!ch) continue;
@@ -67,10 +68,10 @@ async function khoiPhucHenGio(client) {
             .setFooter({ text: FOOTER_DEFAULT });
           await ch.send({ embeds: [thongBao, buildSummaryEmbed(session, attended)] });
           await thongBaoHuyHieu(guild, ch, guild.id, session.id, attended, statsMap);
-          console.log(`[Quản Gia] Đóng phiên offline: ${guild.name} — ${session.session_name}`);
+          log.info('SYSTEM', guild.id, 'Đóng phiên offline: %s — %s', guild.name, session.session_name);
         }
       } catch (e) {
-        console.error(`[Quản Gia] Lỗi khôi phục guild ${guild.id}:`, e.message);
+        log.error('SYSTEM', guild.id, 'Lỗi khôi phục guild: %s', e.message);
       }
     }
   } finally {
@@ -79,7 +80,7 @@ async function khoiPhucHenGio(client) {
 }
 
 async function onReady(client) {
-  console.log(`[Quản Gia] Đã sẵn sàng: ${client.user.tag}`);
+  log.info('SYSTEM', null, 'Đã sẵn sàng: %s', client.user.tag);
   await dangKyCommands(client);
   await khoiPhucHenGio(client);
   await khoiPhucScheduler(client);  // Khôi phục lịch cố định

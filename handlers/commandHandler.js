@@ -1,18 +1,14 @@
 // handlers/commandHandler.js
-const { Collection } = require('discord.js');
 const path = require('path');
 const fs   = require('fs');
+const log  = require('../utils/logger.js');
 
-// Load tất cả command từ thư mục commands/
 function loadCommands() {
-  const commands = new Collection();
   const dir = path.join(__dirname, '..', 'commands');
-  const files = fs.readdirSync(dir).filter(f => f.endsWith('.js'));
-  for (const file of files) {
+  const commands = new Map();
+  for (const file of fs.readdirSync(dir).filter(f => f.endsWith('.js'))) {
     const cmd = require(path.join(dir, file));
-    if (cmd.data && cmd.execute) {
-      commands.set(cmd.data.name, cmd);
-    }
+    if (cmd.data && cmd.execute) commands.set(cmd.data.name, cmd);
   }
   return commands;
 }
@@ -23,12 +19,12 @@ async function handleCommand(interaction, commands) {
   try {
     await cmd.execute(interaction);
   } catch (err) {
-    console.error(`[Quản Gia] Lỗi lệnh /${interaction.commandName}:`, err);
-    const msg = { content: '⚠️ Đã xảy ra lỗi khi thực hiện lệnh này.', ephemeral: true };
+    log.error('CMD', interaction.guildId, 'Lỗi lệnh /%s: %s', interaction.commandName, err.stack ?? err.message);
+    const reply = { content: '❌ Có lỗi xảy ra. Vui lòng thử lại.', ephemeral: true };
     if (interaction.deferred || interaction.replied) {
-      await interaction.editReply(msg).catch(() => null);
+      interaction.editReply(reply).catch(() => {});
     } else {
-      await interaction.reply(msg).catch(() => null);
+      interaction.reply(reply).catch(() => {});
     }
   }
 }
