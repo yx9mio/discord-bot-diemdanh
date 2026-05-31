@@ -3,6 +3,10 @@
 // Phase 3: buildSessionEmbed & buildSummaryEmbed nâng cấp visual
 // Phase 5: Feedback states — replyLoading, replyOkEdit, replyErrEdit, replyConfirm
 // Phase 6: buildServerStatsEmbed — topLimit param, periodLabel
+// Phase UX-A: nút 🔄 Làm Mới trong buildAttendanceButtons
+// Phase UX-B: display name từ guild.members.cache
+// Phase UX-C: buildSummaryEmbed hiện tên người vắng
+// Phase UX-D: buildLichEmbed — dashboard lịch cố định dùng Discord timestamp
 'use strict';
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { buildProgressBar } = require('./progress.js');
@@ -58,6 +62,7 @@ const ICONS = {
   LOADING:         '⏳',
   PIN:             '📌',
   CHART_UP:        '📈',
+  REFRESH:         '🔄',
 };
 
 // ─── Design System: Semantic Embed Factories ──────────────────────────────────
@@ -78,19 +83,16 @@ function embedGray(title, description) {
 }
 
 // ─── Phase 5: Reply Helpers (ephemeral feedback) ──────────────────────────────
-// Dạng cơ bản — dùng cho reply() / followUp()
 const replyOk  = (msg) => ({ embeds: [embedSuccess('✅ Thành công', msg)],   ephemeral: true });
 const replyErr = (msg) => ({ embeds: [embedDanger ('❌ Lỗi',        msg)],   ephemeral: true });
 const replyWarn= (msg) => ({ embeds: [embedWarning('⚠️ Chú ý',      msg)],   ephemeral: true });
 const replyInfo= (msg) => ({ embeds: [embedInfo   ('ℹ️ Thông tin',  msg)],   ephemeral: true });
 
-// Phase 5: dạng edit — dùng cho interaction.editReply() sau deferReply()
 const replyOkEdit  = (msg) => ({ embeds: [embedSuccess('✅ Thành công', msg)],  components: [] });
 const replyErrEdit = (msg) => ({ embeds: [embedDanger ('❌ Lỗi',        msg)],  components: [] });
 const replyWarnEdit= (msg) => ({ embeds: [embedWarning('⚠️ Chú ý',      msg)],  components: [] });
 const replyInfoEdit= (msg) => ({ embeds: [embedInfo   ('ℹ️ Thông tin',  msg)],  components: [] });
 
-// Phase 5: Loading state — dùng ngay sau deferUpdate() hoặc trước await nặng
 const replyLoading = (msg = 'Đang xử lý...') => ({
   embeds: [new EmbedBuilder()
     .setTitle(`${ICONS.LOADING} Đang xử lý`)
@@ -99,8 +101,6 @@ const replyLoading = (msg = 'Đang xử lý...') => ({
   components: [],
 });
 
-// Phase 5: Confirm prompt — embed cảnh báo + 2 button Xác nhận / Hủy
-// customIdConfirm / customIdCancel: string customId cho 2 nút
 function replyConfirm(msg, customIdConfirm, customIdCancel = 'confirm:cancel') {
   const embed = embedWarning('⚠️ Xác nhận hành động', msg);
   const row = new ActionRowBuilder().addComponents(
@@ -174,6 +174,13 @@ function buildRichProgressBar(pct, len = 12) {
   return `${bar} **${clamped}%**`;
 }
 
+// Phase UX-B: resolve display name từ guild cache
+function resolveDisplayName(guild, userId, fallback) {
+  if (!guild) return fallback ?? `<@${userId}>`;
+  const member = guild.members.cache.get(userId);
+  return member?.displayName ?? fallback ?? `<@${userId}>`;
+}
+
 // ─── Thống kê phái helper ──────────────────────────────────────────────────────
 function buildPhaiStatsText(guild, phaiRoleIds, attended, eligible) {
   if (!guild || !phaiRoleIds?.length) return null;
@@ -198,7 +205,7 @@ function buildPhaiStatsText(guild, phaiRoleIds, attended, eligible) {
   return lines.length > 0 ? lines.join('\n') : null;
 }
 
-// ─── Buttons ───────────────────────────────────────────────────────────────────
+// ─── Phase UX-A: Buttons (thêm nút Làm Mới) ──────────────────────────────────
 function buildAttendanceButtons(disabled = false) {
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
@@ -221,14 +228,20 @@ function buildAttendanceButtons(disabled = false) {
       .setDisabled(disabled),
     new ButtonBuilder()
       .setCustomId('attend_view')
-      .setLabel('Xem Danh Sách')
+      .setLabel('Xem DS')
       .setEmoji('📋')
       .setStyle(ButtonStyle.Secondary)
       .setDisabled(false),
+    new ButtonBuilder()
+      .setCustomId('attend_refresh')
+      .setLabel('Làm Mới')
+      .setEmoji(ICONS.REFRESH)
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(disabled),
   );
 }
 
-// ─── Phase 3: Session Embed ────────────────────────────────────────────────────
+// ─── Phase 3 + UX-B: Session Embed ───────────────────────────────────────────
 async function buildSessionEmbed(guild, session, attended, phaiRoleIds = null) {
   const joined       = attended.filter(a => a.status === 'tham_gia');
   const late         = attended.filter(a => a.status === 'tre');
@@ -275,22 +288,23 @@ async function buildSessionEmbed(guild, session, attended, phaiRoleIds = null) {
     if (iconURL) embed.setThumbnail(iconURL);
   }
 
+  // Phase UX-B: dùng displayName thay username
   if (joined.length > 0)
-    chunkLines(joined.map((a, i) => `\`${String(i + 1).padStart(2)}.\` **${a.username}**`))
+    chunkLines(joined.map((a, i) => `\`${String(i + 1).padStart(2)}.\` **${resolveDisplayName(guild, a.user_id, a.username)}**`))
       .forEach((chunk, i) => embed.addFields({
         name: i === 0 ? `${ICONS.ATTEND_YES} Tham Gia — ${joined.length}` : '\u200b',
         value: chunk, inline: true,
       }));
 
   if (late.length > 0)
-    chunkLines(late.map((a, i) => `\`${String(i + 1).padStart(2)}.\` ${a.username}`))
+    chunkLines(late.map((a, i) => `\`${String(i + 1).padStart(2)}.\` ${resolveDisplayName(guild, a.user_id, a.username)}`))
       .forEach((chunk, i) => embed.addFields({
         name: i === 0 ? `${ICONS.ATTEND_LATE} Đến Trễ — ${late.length}` : '\u200b',
         value: chunk, inline: true,
       }));
 
   if (declined.length > 0)
-    chunkLines(declined.map((a, i) => `\`${String(i + 1).padStart(2)}.\` ~~${a.username}~~`))
+    chunkLines(declined.map((a, i) => `\`${String(i + 1).padStart(2)}.\` ~~${resolveDisplayName(guild, a.user_id, a.username)}~~`))
       .forEach((chunk, i) => embed.addFields({
         name: i === 0 ? `${ICONS.ATTEND_NO} Vắng Mặt — ${declined.length}` : '\u200b',
         value: chunk, inline: true,
@@ -310,11 +324,11 @@ async function buildSessionEmbed(guild, session, attended, phaiRoleIds = null) {
   if (phaiText)
     embed.addFields({ name: `${ICONS.SWORD} Thống Kê Phái`, value: phaiText, inline: false });
 
-  embed.setFooter({ text: `${FOOTER_DEFAULT} · Bấm nút bên dưới để điểm danh` });
+  embed.setFooter({ text: `${FOOTER_DEFAULT} · Bấm nút bên dưới để điểm danh · 🔄 Làm Mới để cập nhật` });
   return embed;
 }
 
-// ─── Phase 3: Summary Embed ────────────────────────────────────────────────────
+// ─── Phase 3 + UX-B + UX-C: Summary Embed ────────────────────────────────────
 function buildSummaryEmbed(session, attended, guild = null, phaiRoleIds = null) {
   const joined       = attended.filter(a => a.status === 'tham_gia');
   const late         = attended.filter(a => a.status === 'tre');
@@ -347,9 +361,10 @@ function buildSummaryEmbed(session, attended, guild = null, phaiRoleIds = null) 
     .setDescription(descLines.join('\n'))
     .setTimestamp();
 
-  const joinedLines = joined.map((a, i) => `\`${String(i + 1).padStart(2)}.\` **${a.username}**`);
-  const lateLines   = late.map((a, i)   => `\`${String(i + 1).padStart(2)}.\` ${a.username}`);
-  const decLines    = declined.map((a, i) => `\`${String(i + 1).padStart(2)}.\` ~~${a.username}~~`);
+  // Phase UX-B: dùng displayName
+  const joinedLines = joined.map((a, i) => `\`${String(i + 1).padStart(2)}.\` **${resolveDisplayName(guild, a.user_id, a.username)}**`);
+  const lateLines   = late.map((a, i)   => `\`${String(i + 1).padStart(2)}.\` ${resolveDisplayName(guild, a.user_id, a.username)}`);
+  const decLines    = declined.map((a, i) => `\`${String(i + 1).padStart(2)}.\` ~~${resolveDisplayName(guild, a.user_id, a.username)}~~`);
 
   if (joinedLines.length > 0)
     chunkLines(joinedLines).forEach((chunk, i) =>
@@ -366,6 +381,24 @@ function buildSummaryEmbed(session, attended, guild = null, phaiRoleIds = null) 
       embed.addFields({ name: i === 0 ? `${ICONS.ATTEND_NO} Vắng Mặt — ${declined.length}` : '\u200b', value: chunk, inline: true }));
   else
     embed.addFields({ name: `${ICONS.ATTEND_NO} Vắng Mặt — 0`, value: '—', inline: true });
+
+  // Phase UX-C: Danh sách vắng mặt có tên (không bấm nút)
+  const presentIds = new Set(
+    attended.filter(a => ['tham_gia', 'tre', 'co_phep'].includes(a.status)).map(a => a.user_id)
+  );
+  const absentIds = (session.eligible_member_ids ?? []).filter(id => !presentIds.has(id));
+  if (absentIds.length > 0) {
+    const MAX = 30;
+    const names = absentIds.slice(0, MAX)
+      .map(id => resolveDisplayName(guild, id, `<@${id}>`));
+    const extra = absentIds.length > MAX ? `\n*(+${absentIds.length - MAX} nữa)*` : '';
+    chunkLines(names.map((n, i) => `\`${String(i + 1).padStart(2)}.\` ${n}`))
+      .forEach((chunk, i) => embed.addFields({
+        name: i === 0 ? `${ICONS.ATTEND_ABSENT} Vắng (không điểm danh) — ${absentIds.length}` : '\u200b',
+        value: chunk + (i === 0 ? extra : ''),
+        inline: false,
+      }));
+  }
 
   const phaiText = buildPhaiStatsText(guild, phaiRoleIds, attended, session.eligible_member_ids);
   if (phaiText)
@@ -448,8 +481,6 @@ function buildConfigEmbed(cfg) {
 }
 
 // ─── Phase 6: Server Stats Embed ──────────────────────────────────────────────
-// Dùng bởi /thongke_server
-// @param topLimit  — số thành viên top hiển thị (truyền từ command, default 10)
 function buildServerStatsEmbed(guild, stats, topMembers, topLimit = 10) {
   const {
     totalSessions, totalMembers, avgAttendance,
@@ -459,7 +490,6 @@ function buildServerStatsEmbed(guild, stats, topMembers, topLimit = 10) {
   const richBar  = buildRichProgressBar(overallPct);
   const badge    = overallPct >= 90 ? '🏆 Xuất sắc' : overallPct >= 75 ? '🥇 Tốt' : overallPct >= 55 ? '🥈 Khá' : overallPct >= 35 ? '🥉 Trung bình' : '📉 Thấp';
 
-  // Trạng thái phiên hiện tại
   let phienLine;
   if (activeSession) {
     const ts = Math.floor(new Date(activeSession.created_at).getTime() / 1000);
@@ -468,7 +498,6 @@ function buildServerStatsEmbed(guild, stats, topMembers, topLimit = 10) {
     phienLine = `⚫ Không có phiên đang mở`;
   }
 
-  // Phiên gần nhất
   let lastLine = '_Chưa có phiên nào_';
   if (lastSession) {
     const startedAt = lastSession.created_at ?? lastSession.started_at;
@@ -479,7 +508,6 @@ function buildServerStatsEmbed(guild, stats, topMembers, topLimit = 10) {
     lastLine = `**${lastSession.session_name}** — <t:${ts}:d>  ·  ${lPct}% (${attended}/${eligible})`;
   }
 
-  // Top thành viên — dùng topLimit thực tế từ command option
   const topLines = topMembers.length > 0
     ? topMembers.slice(0, topLimit).map((m, i) => {
         const medals = ['🥇','🥈','🥉'];
@@ -525,22 +553,122 @@ function buildServerStatsEmbed(guild, stats, topMembers, topLimit = 10) {
   return embed;
 }
 
+// ─── Phase UX-D: Lịch Cố Định Embed ─────────────────────────────────────────
+/**
+ * buildLichEmbed(danhSach, guild)
+ * Render lịch cố định dùng Discord Unix timestamp <t:...:F>
+ * để mỗi user thấy đúng timezone của họ.
+ *
+ * @param {Array}  danhSach  — mảng lich từ db.getLichCoDinh()
+ * @param {object} guild     — Discord Guild object
+ */
+function buildLichEmbed(danhSach, guild) {
+  const TZ = 7 * 60 * 60; // UTC+7 offset in seconds
+
+  if (!danhSach || danhSach.length === 0) {
+    return new EmbedBuilder()
+      .setAuthor(AUTHOR_DEFAULT)
+      .setTitle(`${ICONS.CALENDAR} Lịch Cố Định`)
+      .setColor(COLORS.INACTIVE)
+      .setDescription('> Chưa có lịch nào được thiết lập.\n> Dùng `/setup_lich` để thêm lịch mới.')
+      .setFooter({ text: FOOTER_DEFAULT });
+  }
+
+  // Tính Unix timestamp VN cho (dayOfWeek, hour, minute) gần nhất
+  function nextWeekdayUnix(dayOfWeek, hour, minute, afterUnix = null) {
+    const nowSec = Math.floor(Date.now() / 1000) + TZ; // now in VN seconds
+    const nowDay = Math.floor(nowSec / 86400) % 7;     // roughly, but use Date for accuracy
+    const nowDate = new Date(Date.now());
+    const vnNow   = new Date(nowDate.getTime() + TZ * 1000);
+    const curDay  = vnNow.getUTCDay();
+    const curH    = vnNow.getUTCHours();
+    const curM    = vnNow.getUTCMinutes();
+
+    let daysUntil = (dayOfWeek - curDay + 7) % 7;
+    if (afterUnix) {
+      // Đây là giờ đóng — tính từ sau giờ mở
+      const afterDate = new Date(afterUnix * 1000);
+      const afterVn   = new Date(afterDate.getTime() + TZ * 1000);
+      let baseDays    = (dayOfWeek - afterVn.getUTCDay() + 7) % 7;
+      const afterH    = afterVn.getUTCHours();
+      const afterM    = afterVn.getUTCMinutes();
+      // Nếu cùng ngày nhưng giờ đóng <= giờ mở → tuần sau
+      if (baseDays === 0 && (hour * 60 + minute) <= (afterH * 60 + afterM)) baseDays = 7;
+      const base = new Date(afterDate);
+      base.setUTCHours(0, 0, 0, 0);
+      const closeDate = new Date(base.getTime() + (baseDays * 86400 + hour * 3600 + minute * 60) * 1000 - TZ * 1000);
+      return Math.floor(closeDate.getTime() / 1000);
+    }
+
+    if (daysUntil === 0) {
+      const passed = curH > hour || (curH === hour && curM >= minute);
+      if (passed) daysUntil = 7;
+    }
+    const vnTarget = new Date(vnNow);
+    vnTarget.setUTCHours(0, 0, 0, 0);
+    const openDate = new Date(vnTarget.getTime() + (daysUntil * 86400 + hour * 3600 + minute * 60) * 1000 - TZ * 1000);
+    return Math.floor(openDate.getTime() / 1000);
+  }
+
+  const TEN_THU_SHORT = ['CN','T2','T3','T4','T5','T6','T7'];
+
+  const fields = danhSach.map(lich => {
+    const openUnix  = nextWeekdayUnix(lich.day_of_week, lich.hour, lich.minute);
+    const closeUnix = lich.close_day_of_week != null
+      ? nextWeekdayUnix(lich.close_day_of_week, lich.close_hour, lich.close_minute, openUnix)
+      : null;
+
+    const openLine  = `${ICONS.SESSION_OPEN} Mở: <t:${openUnix}:F> (<t:${openUnix}:R>)`;
+    const closeLine = closeUnix
+      ? `${ICONS.SESSION_CLOSED} Đóng: <t:${closeUnix}:F> (<t:${closeUnix}:R>)`
+      : `${ICONS.SESSION_CLOSED} Đóng: *(thủ công)*`;
+
+    const phaiLine = (lich.phai_role_ids ?? []).length > 0
+      ? `${ICONS.SWORD} Phái: ${lich.phai_role_ids.map(id => `<@&${id}>`).join(' ')}`
+      : null;
+
+    const channelLine = lich.channel_id ? `${ICONS.BELL} Kênh: <#${lich.channel_id}>` : null;
+
+    const valueParts = [openLine, closeLine];
+    if (channelLine) valueParts.push(channelLine);
+    if (phaiLine)    valueParts.push(phaiLine);
+
+    return {
+      name:   `${ICONS.CALENDAR} ${lich.session_name}`,
+      value:  valueParts.join('\n'),
+      inline: false,
+    };
+  });
+
+  const embed = new EmbedBuilder()
+    .setAuthor(AUTHOR_DEFAULT)
+    .setTitle(`${ICONS.CALENDAR} Lịch Cố Định · ${guild?.name ?? 'Server'}`)
+    .setColor(COLORS.INFO)
+    .setDescription(`Tổng **${danhSach.length}** lịch đang hoạt động. Thời gian hiển thị theo múi giờ của bạn.`)
+    .addFields(...fields)
+    .setFooter({ text: `${FOOTER_DEFAULT} · Cập nhật lúc` })
+    .setTimestamp();
+
+  if (guild?.iconURL) {
+    const url = guild.iconURL({ dynamic: true });
+    if (url) embed.setThumbnail(url);
+  }
+
+  return embed;
+}
+
 // ─── Exports ───────────────────────────────────────────────────────────────────
 module.exports = {
-  // Design system
   COLORS, ICONS,
   embedSuccess, embedDanger, embedWarning, embedInfo, embedGray,
-  // Reply helpers
   replyOk, replyErr, replyWarn, replyInfo,
-  // Phase 5: edit & confirm variants
   replyOkEdit, replyErrEdit, replyWarnEdit, replyInfoEdit,
   replyLoading,
   replyConfirm,
-  // Helpers
   pctColor, pctEmoji, pctLabel, chunkLines, formatDuration,
   buildRichProgressBar,
+  resolveDisplayName,
   FOOTER_DEFAULT, AUTHOR_DEFAULT,
-  // Builders
   buildPhaiStatsText,
   buildAttendanceButtons,
   buildSessionEmbed,
@@ -548,6 +676,6 @@ module.exports = {
   buildHistoryEmbed,
   buildMemberEmbed,
   buildConfigEmbed,
-  // Phase 6
   buildServerStatsEmbed,
+  buildLichEmbed,
 };

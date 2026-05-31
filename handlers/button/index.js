@@ -6,6 +6,7 @@ const { handleView, handleClose,
         handleConfirmClose, handleCancelClose }           = require('./closeHandler.js');
 const { handleSetupShortcut }                            = require('./setupShortcutHandler.js');
 const { handleSetupUi }                                  = require('../setupUiHandler.js');
+const { handleRefresh }                                  = require('./refreshHandler.js');
 
 async function handleButton(interaction) {
   const { customId } = interaction;
@@ -24,10 +25,13 @@ async function handleButton(interaction) {
   if (customId === 'session:cancel_close')  return handleCancelClose(interaction);
 
   // Xem danh sách
-  if (customId === 'attend_view')  return handleView(interaction);
+  if (customId === 'attend_view')    return handleView(interaction);
 
   // Đóng phiên (hiện confirm prompt)
-  if (customId === 'attend_close') return handleClose(interaction);
+  if (customId === 'attend_close')   return handleClose(interaction);
+
+  // Phase UX-A: Làm Mới embed
+  if (customId === 'attend_refresh') return handleRefresh(interaction);
 
   // Nút điểm danh
   return handleAttend(interaction);
