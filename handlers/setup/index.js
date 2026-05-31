@@ -3,6 +3,7 @@
 const { handleChannelRole } = require('./channelRoleHandler.js');
 const { handleLich }        = require('./lichHandler.js');
 const { handlePreset }      = require('./presetHandler.js');
+const { handlePhien }       = require('./phienHandler.js');
 const { buildDashboard }    = require('./dashboardHandler.js');
 const db                    = require('../../db.js');
 const { laAdmin }           = require('../../utils/helpers.js');
@@ -37,6 +38,9 @@ async function handleSetupUi(interaction) {
 
   // ── Lịch cố định ──
   if (await handleLich(interaction)) return;
+
+  // ── Quản lý Phiên ──
+  if (await handlePhien(interaction)) return;
 
   // ── Preset ──
   if (await handlePreset(interaction)) return;

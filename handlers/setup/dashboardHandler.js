@@ -121,6 +121,7 @@ async function buildDashboard(guild, cfg, viewMode = 'admin') {
   );
   const row2 = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId('setup:lich:menu').setLabel('📅 Quản lý Lịch').setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId('setup:phien:menu').setLabel('📋 Quản lý Phiên').setStyle(ButtonStyle.Primary),
     new ButtonBuilder().setCustomId('setup:preset_menu').setLabel('⚡ Tạo Preset').setStyle(ButtonStyle.Success),
     new ButtonBuilder().setCustomId('setup:dashboard').setLabel('🔄 Làm mới').setStyle(ButtonStyle.Secondary),
   );
