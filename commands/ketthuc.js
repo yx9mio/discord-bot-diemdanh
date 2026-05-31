@@ -1,50 +1,37 @@
 // commands/ketthuc.js
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
 const db = require('../db.js');
-const { buildSummaryEmbed, FOOTER_DEFAULT } = require('../utils/embeds.js');
-const { laAdmin } = require('../utils/helpers.js');
-const { xoaHenGio } = require('../utils/timers.js');
 const { ketThucPhien, thongBaoHuyHieu, voHieuHoaNutDiemDanh } = require('../utils/session.js');
+const { xoaHenGio } = require('../utils/timers.js');
+const { buildSummaryEmbed } = require('../utils/embeds.js');
+const { laAdmin } = require('../utils/helpers.js');
 
-const data = new SlashCommandBuilder()
-  .setName('ket_thuc')
-  .setDescription('Kết thúc phiên điểm danh đang mở');
+module.exports = {
+  data: new SlashCommandBuilder()
+    .setName('ket_thuc')
+    .setDescription('Kết thúc phiên điểm danh hiện tại')
+    .setDefaultMemberPermissions(0n),
 
-async function execute(interaction) {
-  await interaction.deferReply();
-  const guild = interaction.guild;
-  const cfg   = await db.getConfig(guild.id);
+  async execute(interaction) {
+    await interaction.deferReply({ ephemeral: true });
+    const { guild, member, channel } = interaction;
 
-  if (!laAdmin(interaction.member, cfg)) {
-    return interaction.editReply({ content: '🔒 Bạn không có quyền thực hiện lệnh này.' });
-  }
+    const cfg = await db.getConfig(guild.id);
+    if (!laAdmin(member, cfg)) {
+      return interaction.editReply({ content: '🔒 Bạn không có quyền dùng lệnh này.' });
+    }
 
-  const session = await db.getActiveSession(guild.id);
-  if (!session) {
-    return interaction.editReply({ content: '📭 Không có phiên điểm danh nào đang mở.' });
-  }
+    const session = await db.getActiveSession(guild.id);
+    if (!session) return interaction.editReply({ content: '📭 Không có phiên nào đang mở.' });
 
-  const attended = await db.getAttendances(session.id);
+    const attended = await db.getAttendances(session.id);
+    xoaHenGio(guild.id);
+    const statsMap = await ketThucPhien(guild, session, attended);
+    await voHieuHoaNutDiemDanh(interaction.client, channel, session);
 
-  // ketThucPhien trả về statsMap (snapshot trước update) để dùng cho huy hiệu
-  const statsMap = await ketThucPhien(guild, session, attended);
-  xoaHenGio(guild.id);
+    await channel.send({ embeds: [buildSummaryEmbed(session, attended)] });
+    await thongBaoHuyHieu(guild, channel, guild.id, session.id, attended, statsMap);
 
-  const sessionChannel = session.channel_id
-    ? await guild.channels.fetch(session.channel_id).catch(() => interaction.channel)
-    : interaction.channel;
-  await voHieuHoaNutDiemDanh(interaction.client, sessionChannel, session);
-
-  const summaryEmbed = buildSummaryEmbed(session, attended);
-  const thongBao = new EmbedBuilder()
-    .setColor(0x99AAB5)
-    .setDescription('🔒 Phiên điểm danh đã kết thúc.')
-    .setFooter({ text: FOOTER_DEFAULT });
-
-  await interaction.editReply({ embeds: [thongBao, summaryEmbed] });
-
-  // Pass statsMap để tính huy hiệu đúng
-  await thongBaoHuyHieu(guild, interaction.channel, guild.id, session.id, attended, statsMap);
-}
-
-module.exports = { data, execute };
+    return interaction.editReply({ content: '✅ Đã kết thúc phiên điểm danh.' });
+  },
+};

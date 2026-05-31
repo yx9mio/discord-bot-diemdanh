@@ -7,6 +7,7 @@ const { onReady }       = require('./events/ready.js');
 const { onMessageDelete } = require('./events/messageDelete.js');
 const { handleSelectMenu } = require('./commands/help.js');
 const { handleSetupUi } = require('./handlers/setupUiHandler.js');
+const { handleUserPanelButton } = require('./handlers/userPanelHandler.js');
 
 if (!process.env.DISCORD_TOKEN) {
   console.error('[LỖI] Thiếu DISCORD_TOKEN trong .env!');
@@ -29,9 +30,13 @@ client.once('ready', () => onReady(client));
 
 client.on('interactionCreate', async interaction => {
   try {
-    if (interaction.isButton()) return handleButton(interaction);
+    if (interaction.isButton()) {
+      if (interaction.customId?.startsWith('toi:'))   return handleUserPanelButton(interaction);
+      if (interaction.customId?.startsWith('setup:')) return handleSetupUi(interaction);
+      return handleButton(interaction);
+    }
 
-    // ── Setup UI: RoleSelect / ChannelSelect / ModalSubmit ──────────────────
+    // ── Setup UI: RoleSelect / ChannelSelect / ModalSubmit ────────────────────────────
     if (
       interaction.isRoleSelectMenu()    ||
       interaction.isChannelSelectMenu() ||
@@ -42,7 +47,7 @@ client.on('interactionCreate', async interaction => {
       }
     }
 
-    // ── StringSelectMenu: setup: trước, help sau ───────────────────────────
+    // ── StringSelectMenu: setup: trước, help sau ──────────────────────────────
     if (interaction.isStringSelectMenu()) {
       if (interaction.customId?.startsWith('setup:')) {
         return handleSetupUi(interaction);

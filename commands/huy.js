@@ -1,40 +1,32 @@
 // commands/huy.js
-const { SlashCommandBuilder } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
 const db = require('../db.js');
-const { laAdmin } = require('../utils/helpers.js');
-const { xoaHenGio } = require('../utils/timers.js');
 const { voHieuHoaNutDiemDanh } = require('../utils/session.js');
+const { xoaHenGio } = require('../utils/timers.js');
+const { laAdmin } = require('../utils/helpers.js');
 
-const data = new SlashCommandBuilder()
-  .setName('huy_diemdanh')
-  .setDescription('Hủy phiên điểm danh đang mở (không lưu vào lịch sử)');
+module.exports = {
+  data: new SlashCommandBuilder()
+    .setName('huy_diemdanh')
+    .setDescription('Hủy phiên điểm danh đang mở (không lưu kết quả)')
+    .setDefaultMemberPermissions(0n),
 
-async function execute(interaction) {
-  await interaction.deferReply({ ephemeral: true });
-  const guild = interaction.guild;
-  const cfg   = await db.getConfig(guild.id);
+  async execute(interaction) {
+    await interaction.deferReply({ ephemeral: true });
+    const { guild, member, channel } = interaction;
 
-  if (!laAdmin(interaction.member, cfg)) {
-    return interaction.editReply({ content: '🔒 Bạn không có quyền thực hiện lệnh này.' });
-  }
+    const cfg = await db.getConfig(guild.id);
+    if (!laAdmin(member, cfg)) {
+      return interaction.editReply({ content: '🔒 Bạn không có quyền dùng lệnh này.' });
+    }
 
-  const session = await db.getActiveSession(guild.id);
-  if (!session) {
-    return interaction.editReply({ content: '📭 Không có phiên điểm danh nào đang mở.' });
-  }
+    const session = await db.getActiveSession(guild.id);
+    if (!session) return interaction.editReply({ content: '📭 Không có phiên nào đang mở.' });
 
-  await db.cancelSession(session.id);
-  xoaHenGio(guild.id);
+    xoaHenGio(guild.id);
+    await db.cancelSession(session.id);
+    await voHieuHoaNutDiemDanh(interaction.client, channel, session);
 
-  // Fix: dùng session.channel_id thay vì interaction.channel
-  const sessionChannel = session.channel_id
-    ? await guild.channels.fetch(session.channel_id).catch(() => interaction.channel)
-    : interaction.channel;
-  await voHieuHoaNutDiemDanh(interaction.client, sessionChannel, session);
-
-  await interaction.editReply({
-    content: `🗑️ Phiên **${session.session_name}** đã bị hủy. Phiên này sẽ không hiện trong lịch sử.`,
-  });
-}
-
-module.exports = { data, execute };
+    return interaction.editReply({ content: '✅ Đã hủy phiên điểm danh.' });
+  },
+};
