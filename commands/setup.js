@@ -10,6 +10,25 @@ const { timKenhThongBao } = require('../utils/helpers.js');
 
 // ── Dữ liệu dùng chung ──────────────────────────────────────────────────────
 const TEN_THU = ['Chủ nhật','Thứ hai','Thứ ba','Thứ tư','Thứ năm','Thứ sáu','Thứ bảy'];
+const THU_MAP = {
+  'cn': 0, 'chu_nhat': 0,
+  't2': 1, 'thu_hai': 1,
+  't3': 2, 'thu_ba': 2,
+  't4': 3, 'thu_tu': 3,
+  't5': 4, 'thu_nam': 4,
+  't6': 5, 'thu_sau': 5,
+  't7': 6, 'thu_bay': 6,
+};
+const THU_CHOICES = [
+  { name: 'Chủ nhật (CN)', value: '0' },
+  { name: 'Thứ hai (T2)',   value: '1' },
+  { name: 'Thứ ba (T3)',    value: '2' },
+  { name: 'Thứ tư (T4)',    value: '3' },
+  { name: 'Thứ năm (T5)',   value: '4' },
+  { name: 'Thứ sáu (T6)',   value: '5' },
+  { name: 'Thứ bảy (T7)',   value: '6' },
+];
+
 const pad = n => String(n ?? 0).padStart(2, '0');
 
 // Lịch mặc định: mở T7 21:00, đóng T7 19:30 tuần sau
@@ -39,17 +58,21 @@ const data = new SlashCommandBuilder()
     s.setName('lich')
       .setDescription('Thêm lịch điểm danh cố định hằng tuần')
       .addStringOption(o => o.setName('ten').setDescription('Tên phiên (vd: Bang Chiến)').setRequired(true))
-      .addIntegerOption(o => o.setName('thu_mo').setDescription('Thứ Mở (0=CN,1=T2…6=T7)').setRequired(true).setMinValue(0).setMaxValue(6))
+      .addStringOption(o => o.setName('thu_mo')
+        .setDescription('Thứ Mở').setRequired(true)
+        .addChoices(...THU_CHOICES))
       .addIntegerOption(o => o.setName('gio_mo').setDescription('Giờ Mở (giờ VN, 0-23)').setRequired(true).setMinValue(0).setMaxValue(23))
       .addIntegerOption(o => o.setName('phut_mo').setDescription('Phút Mở (0-59)').setRequired(true).setMinValue(0).setMaxValue(59))
-      .addIntegerOption(o => o.setName('thu_dong').setDescription('Thứ Đóng (0=CN…6=T7)').setMinValue(0).setMaxValue(6))
+      .addStringOption(o => o.setName('thu_dong')
+        .setDescription('Thứ Đóng (tuần sau nếu trùng/trước giờ mở)')
+        .addChoices(...THU_CHOICES))
       .addIntegerOption(o => o.setName('gio_dong').setDescription('Giờ Đóng (0-23)').setMinValue(0).setMaxValue(23))
       .addIntegerOption(o => o.setName('phut_dong').setDescription('Phút Đóng (0-59)').setMinValue(0).setMaxValue(59))
       .addChannelOption(o => o.setName('kenh').setDescription('Kênh gửi thông báo (mặc định kênh hiện tại)')))
   // ⚡ Preset: mở T7 21:00 → đóng T7 19:30 tuần sau
   .addSubcommand(s =>
     s.setName('preset_bang_chien')
-      .setDescription('⚡ Tạo nhanh lịch Bang Chiến: mở T7 21:00 → đóng T7 19:30 tuần sau')
+      .setDescription('⚡ Tạo nhanh lịch Bang Chiến: mở Thứ bảy 21:00 → đóng Thứ bảy 19:30 tuần sau')
       .addChannelOption(o => o.setName('kenh').setDescription('Kênh gửi thông báo (mặc định kênh hiện tại)')));
 
 // ── Hàm phụ: build embed tổng quan ──────────────────────────────────────────
@@ -107,7 +130,7 @@ function buildGuideEmbed(cfg) {
     steps.push(`✅ Phái đã cài (${cfg.phai_role_ids.length} phái)`);
 
   steps.push('📅 `/setup lich` — thêm lịch tự động bất kỳ');
-  steps.push('⚡ `/setup preset_bang_chien` — tạo ngay lịch **Bang Chiến** T7 21:00 → T7 19:30 tuần sau');
+  steps.push('⚡ `/setup preset_bang_chien` — tạo ngay lịch **Bang Chiến** Thứ bảy 21:00 → Thứ bảy 19:30 tuần sau');
   steps.push('📖 `/help` — xem tất cả lệnh');
 
   return new EmbedBuilder()
@@ -175,11 +198,12 @@ async function execute(interaction) {
   // ── /setup lich ────────────────────────────────────────────────────────────
   if (sub === 'lich') {
     const ten      = interaction.options.getString('ten');
-    const thuMo    = interaction.options.getInteger('thu_mo');
+    const thuMo    = parseInt(interaction.options.getString('thu_mo'), 10);
     const gioMo    = interaction.options.getInteger('gio_mo');
     const phutMo   = interaction.options.getInteger('phut_mo');
     const kenh     = interaction.options.getChannel('kenh') ?? interaction.channel;
-    const thuDong  = interaction.options.getInteger('thu_dong')  ?? null;
+    const thuDongRaw = interaction.options.getString('thu_dong');
+    const thuDong  = thuDongRaw != null ? parseInt(thuDongRaw, 10) : null;
     const gioDong  = interaction.options.getInteger('gio_dong')  ?? null;
     const phutDong = interaction.options.getInteger('phut_dong') ?? null;
     const phaiRoleIds = cfg.phai_role_ids ?? [];
@@ -242,7 +266,7 @@ async function execute(interaction) {
     return interaction.editReply({
       content: [
         `⚡ Đã tạo preset **Bang Chiến**:`,
-        `Mở: **T7 21:00** → Đóng: **T7 19:30 tuần sau** | Kênh: <#${kenh.id}>`,
+        `Mở: **Thứ bảy 21:00** → Đóng: **Thứ bảy 19:30 tuần sau** | Kênh: <#${kenh.id}>`,
         phaiRoleIds.length
           ? `Phái (${phaiRoleIds.length}): ${phaiRoleIds.map(id => `<@&${id}>`).join(', ')}`
           : '⚠️ Chưa cài phái — chạy `/setup phai` trước',
