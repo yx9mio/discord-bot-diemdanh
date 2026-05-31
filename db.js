@@ -23,7 +23,7 @@ async function getConfig(guildId) {
   const { data, error } = await supabase
     .from('guild_configs').select('*').eq('guild_id', guildId).maybeSingle();
   throwIfError(error, 'getConfig');
-  return data ?? { guild_id: guildId, allowed_role_id: null, admin_role_id: null };
+  return data ?? { guild_id: guildId, allowed_role_id: null, admin_role_id: null, phai_role_ids: [] };
 }
 
 async function setConfig(guildId, updates) {
@@ -192,7 +192,6 @@ async function getLichCoDinhById(guildId, id) {
   return data;
 }
 
-// Tìm bằng 8 ký tự đầu của UUID (tiện cho user)
 async function getLichCoDinhByShortId(guildId, shortId) {
   const { data, error } = await supabase.from('scheduled_sessions').select('*')
     .eq('guild_id', guildId).eq('is_active', true)
@@ -220,7 +219,7 @@ async function themLichCoDinh(guildId, { dayOfWeek, hour, minute, sessionName, c
 async function xoaLichCoDinh(guildId, id) {
   const { data, error } = await supabase.from('scheduled_sessions').update({ is_active: false })
     .eq('guild_id', guildId).eq('id', id).select().maybeSingle();
-  throwIfError(error, 'xoaLichCoDinh');
+  throwIfError(error,, 'xoaLichCoDinh');
   return !!data;
 }
 

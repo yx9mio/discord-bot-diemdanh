@@ -19,25 +19,13 @@ const data = new SlashCommandBuilder()
   .addSubcommand(s =>
     s.setName('them')
       .setDescription('Thêm lịch điểm danh cố định')
-      .addIntegerOption(o => o.setName('thu_mo').setDescription('Thứ MỞ phiên').setRequired(true).addChoices(...THU_CHOICES))
-      .addIntegerOption(o => o.setName('gio_mo').setDescription('Giờ MỞ (0-23, giờ VN)').setRequired(true).setMinValue(0).setMaxValue(23))
-      .addIntegerOption(o => o.setName('phut_mo').setDescription('Phút MỞ (0-59)').setRequired(true).setMinValue(0).setMaxValue(59))
       .addStringOption(o => o.setName('ten').setDescription('Tên phiên (vd: Bang Chiến)').setRequired(true))
+      .addIntegerOption(o => o.setName('thu_mo').setDescription('Thứ Mở phiên').setRequired(true).addChoices(...THU_CHOICES))
+      .addIntegerOption(o => o.setName('gio_mo').setDescription('Giờ Mở (0-23, giờ VN)').setRequired(true).setMinValue(0).setMaxValue(23))
+      .addIntegerOption(o => o.setName('phut_mo').setDescription('Phút Mở (0-59)').setRequired(true).setMinValue(0).setMaxValue(59))
       .addIntegerOption(o => o.setName('thu_dong').setDescription('Thứ ĐÓNG phiên').addChoices(...THU_CHOICES))
       .addIntegerOption(o => o.setName('gio_dong').setDescription('Giờ ĐÓNG (0-23)').setMinValue(0).setMaxValue(23))
       .addIntegerOption(o => o.setName('phut_dong').setDescription('Phút ĐÓNG (0-59)').setMinValue(0).setMaxValue(59))
-      // 11 phái
-      .addRoleOption(o => o.setName('phai_1').setDescription('Phái 1 (vd: Thiết Y)'))
-      .addRoleOption(o => o.setName('phai_2').setDescription('Phái 2 (vd: Huyết Hà)'))
-      .addRoleOption(o => o.setName('phai_3').setDescription('Phái 3 (vd: Tố Vấn)'))
-      .addRoleOption(o => o.setName('phai_4').setDescription('Phái 4 (vd: Cửu Linh)'))
-      .addRoleOption(o => o.setName('phai_5').setDescription('Phái 5 (vd: Toái Mộng)'))
-      .addRoleOption(o => o.setName('phai_6').setDescription('Phái 6 (vd: Long Ngâm)'))
-      .addRoleOption(o => o.setName('phai_7').setDescription('Phái 7 (vd: Thần Tương)'))
-      .addRoleOption(o => o.setName('phai_8').setDescription('Phái 8 (vd: Thương Lan)'))
-      .addRoleOption(o => o.setName('phai_9').setDescription('Phái 9 (vd: Triều Quang)'))
-      .addRoleOption(o => o.setName('phai_10').setDescription('Phái 10 (vd: Huyền Cơ)'))
-      .addRoleOption(o => o.setName('phai_11').setDescription('Phái 11 (vd: Hồng Âm)'))
       .addChannelOption(o => o.setName('kenh').setDescription('Kênh gửi thông báo (mặc định kênh hiện tại)'))
   )
   .addSubcommand(s =>
@@ -53,20 +41,20 @@ async function execute(interaction) {
   const cfg   = await db.getConfig(guild.id);
   const sub   = interaction.options.getSubcommand();
 
-  // ── Xem ─────────────────────────────────────────────────────────────────
+  // ── Xem ──────────────────────────────────────────────────────────────────
   if (sub === 'xem') {
     const list = await db.getLichCoDinh(guild.id);
     if (!list.length) return interaction.editReply({ content: '📭 Chưa có lịch cố định nào.' });
+    const phaiServer = cfg.phai_role_ids ?? [];
     const desc = list.map((l, i) => {
       const mo   = `${TEN_THU[l.day_of_week]} **${pad(l.hour)}:${pad(l.minute)}**`;
       const dong = l.close_day_of_week != null
         ? `→ đóng ${TEN_THU[l.close_day_of_week]} **${pad(l.close_hour)}:${pad(l.close_minute)}**`
         : '→ _không tự đóng_';
-      const phai = l.phai_role_ids?.length
-        ? l.phai_role_ids.map(id => `<@&${id}>`).join(', ')
-        : '_theo role cao nhất_';
+      const phaiIds = phaiServer.length ? phaiServer : (l.phai_role_ids ?? []);
+      const phai = phaiIds.length ? phaiIds.map(id => `<@&${id}>`).join(', ') : '_theo role cao nhất_';
       const kenh = l.channel_id ? `<#${l.channel_id}>` : 'không rõ';
-      return `**${i+1}.** \`${l.id.slice(0,8)}\` — **${l.session_name}**\n└ ${mo} ${dong} | Kênh: ${kenh}\n└ Phái (${l.phai_role_ids?.length ?? 0}): ${phai}`;
+      return `**${i+1}.** \`${l.id.slice(0,8)}\` — **${l.session_name}**\n└ ${mo} ${dong} | Kênh: ${kenh}\n└ Phái: ${phai}`;
     }).join('\n\n');
     const embed = new EmbedBuilder()
       .setAuthor(AUTHOR_DEFAULT)
@@ -81,22 +69,19 @@ async function execute(interaction) {
   if (!laAdmin(interaction.member, cfg))
     return interaction.editReply({ content: '🔒 Bạn không có quyền.' });
 
-  // ── Thêm ──────────────────────────────────────────────────────────────────
+  // ── Thêm ─────────────────────────────────────────────────────────────────
   if (sub === 'them') {
+    const ten      = interaction.options.getString('ten');
     const thuMo    = interaction.options.getInteger('thu_mo');
     const gioMo    = interaction.options.getInteger('gio_mo');
     const phutMo   = interaction.options.getInteger('phut_mo');
-    const ten      = interaction.options.getString('ten');
     const kenh     = interaction.options.getChannel('kenh') ?? interaction.channel;
     const thuDong  = interaction.options.getInteger('thu_dong')  ?? null;
     const gioDong  = interaction.options.getInteger('gio_dong')  ?? null;
     const phutDong = interaction.options.getInteger('phut_dong') ?? null;
 
-    const phaiRoleIds = [];
-    for (let i = 1; i <= 11; i++) {
-      const r = interaction.options.getRole(`phai_${i}`);
-      if (r) phaiRoleIds.push(r.id);
-    }
+    // Dùng phai từ guild_config (đã cài qua /cai_dat_phai)
+    const phaiRoleIds = cfg.phai_role_ids ?? [];
 
     const lich = await db.themLichCoDinh(guild.id, {
       dayOfWeek: thuMo, hour: gioMo, minute: phutMo,
@@ -108,7 +93,9 @@ async function execute(interaction) {
 
     const moStr   = `${TEN_THU[thuMo]} ${pad(gioMo)}:${pad(phutMo)}`;
     const dongStr = thuDong != null ? `${TEN_THU[thuDong]} ${pad(gioDong)}:${pad(phutDong)}` : '_không tự đóng_';
-    const phaiStr = phaiRoleIds.length ? phaiRoleIds.map(id => `<@&${id}>`).join(', ') : '_theo role cao nhất_';
+    const phaiStr = phaiRoleIds.length
+      ? phaiRoleIds.map(id => `<@&${id}>`).join(', ')
+      : '_chưa cài phái — dùng /cai_dat_phai_';
 
     return interaction.editReply({
       content: [
@@ -119,7 +106,7 @@ async function execute(interaction) {
       ].join('\n'),
     });
 
-  // ── Xóa ───────────────────────────────────────────────────────────────────
+  // ── Xóa ──────────────────────────────────────────────────────────────────
   } else if (sub === 'xoa') {
     const id = interaction.options.getString('id');
     const ok = await db.xoaLichCoDinh(guild.id, id);
