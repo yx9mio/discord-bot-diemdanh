@@ -91,15 +91,21 @@ async function execute(interaction) {
       channelId: kenh.id,
     });
 
+    // ✅ MERGE từ lichcodinhh.js: lên lịch ngay sau khi thêm (không cần restart bot)
+    const { scheduleLichCoDinh } = require('../utils/scheduler.js');
+    await scheduleLichCoDinh(interaction.client, guild, lich);
+
     const moStr   = `${TEN_THU[thuMo]} ${pad(gioMo)}:${pad(phutMo)}`;
-    const dongStr = thuDong != null ? `${TEN_THU[thuDong]} ${pad(gioDong)}:${pad(phutDong)}` : '_không tự đóng_';
+    const dongStr = thuDong != null
+      ? `${TEN_THU[thuDong]} ${pad(gioDong)}:${pad(phutDong)}`
+      : '_không tự đóng_';
     const phaiStr = phaiRoleIds.length
       ? phaiRoleIds.map(id => `<@&${id}>`).join(', ')
       : '_chưa cài phái — dùng /cai_dat_phai_';
 
     return interaction.editReply({
       content: [
-        `✅ Đã thêm lịch cố định:`,
+        `✅ Đã thêm & lên lịch cố định:`,
         `**${ten}** | Mở: **${moStr}** → Đóng: **${dongStr}**`,
         `Kênh: <#${kenh.id}> | Phái (${phaiRoleIds.length}): ${phaiStr}`,
         `ID: \`${lich.id}\``,
@@ -113,7 +119,7 @@ async function execute(interaction) {
     if (!ok) return interaction.editReply({ content: `⚠️ Không tìm thấy lịch \`${id}\`.` });
     const { cancelLichCoDinh } = require('../utils/scheduler.js');
     cancelLichCoDinh(guild.id, id);
-    return interaction.editReply({ content: `🗑️ Đã xóa lịch \`${id.slice(0,8)}\`.` });
+    return interaction.editReply({ content: `🗑️ Đã xóa & hủy lịch \`${id.slice(0,8)}\`.` });
   }
 }
 
