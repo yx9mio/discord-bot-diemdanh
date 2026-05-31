@@ -61,7 +61,8 @@ npm start
 
 ```
 index.js          # Entry point, tất cả command handlers
-storage.js        # JSON file storage (sessions, history, config, members)
+db.js             # JSON file storage (sessions, history, config, members)
+streak.js         # Streak & badge logic
 utils/
 ├── embeds.js     # Embed builders
 └── progress.js   # Progress bar utility
@@ -78,7 +79,7 @@ data/             # Auto-created, gitignored
 
 1. Đăng nhập [wispbyte.com](https://wispbyte.com)
 2. Tạo server mới → chọn **Node.js**
-3. Upload các file: `index.js`, `storage.js`, `utils/`, `package.json`
+3. Upload toàn bộ file: `index.js`, `db.js`, `streak.js`, `utils/`, `package.json`
 4. Trong dashboard → **Environment Variables**: thêm `DISCORD_TOKEN` và `CLIENT_ID`
 5. Startup file: `index.js`
 6. **Start** server
