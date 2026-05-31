@@ -8,13 +8,9 @@ const { requireAdmin } = require('../utils/permissions.js');
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const PASS = '✅';
 const FAIL = '❌';
-const SKIP = '⚠️';
 
 function ms(start) { return `${Date.now() - start}ms`; }
 
-/**
- * Chạy một test case, bắt lỗi và trả về { ok, name, detail, dur }
- */
 async function runTest(name, fn) {
   const t = Date.now();
   try {
@@ -25,9 +21,6 @@ async function runTest(name, fn) {
   }
 }
 
-/**
- * Build embed kết quả
- */
 function buildResultEmbed(results, guildName, totalMs) {
   const passed  = results.filter(r => r.ok).length;
   const failed  = results.filter(r => !r.ok).length;
@@ -40,7 +33,6 @@ function buildResultEmbed(results, guildName, totalMs) {
     return `${icon} **${r.name}** (${r.dur})${det}`;
   });
 
-  // Nhóm kết quả nếu dài: chunk 12 dòng / field
   const CHUNK = 12;
   const fields = [];
   for (let i = 0; i < lines.length; i += CHUNK) {
@@ -72,43 +64,35 @@ async function suiteDB_Connectivity(guildId) {
       if (!db.supabase) throw new Error('db.supabase là undefined');
       return 'client OK';
     }),
-
     await runTest('DB: getConfig (guild_configs read)', async () => {
       const cfg = await db.getConfig(guildId);
       return cfg ? `channel=${cfg.channel_id ?? 'null'}` : 'no config (OK)';
     }),
-
     await runTest('DB: getAllMemberStats (member_stats read)', async () => {
       const rows = await db.getAllMemberStats(guildId);
       return `${rows.length} thành viên`;
     }),
-
     await runTest('DB: getTopMembers (limit 5)', async () => {
       const rows = await db.getTopMembers(guildId, 5);
       return `${rows.length} rows`;
     }),
-
     await runTest('DB: getLichCoDinh (scheduled_sessions read)', async () => {
       const rows = await db.getLichCoDinh(guildId);
       return `${rows.length} lịch`;
     }),
-
     await runTest('DB: getSessionHistory (sessions read)', async () => {
       const rows = await db.getSessionHistory(guildId, 5);
       return `${rows.length} phiên gần nhất`;
     }),
-
     await runTest('DB: getSessionHistoryWithRange (since 30 ngày)', async () => {
       const since = new Date(Date.now() - 30 * 864e5).toISOString();
       const rows  = await db.getSessionHistoryWithRange(guildId, since, 20);
       return `${rows.length} phiên`;
     }),
-
     await runTest('DB: getActiveSession', async () => {
       const s = await db.getActiveSession(guildId);
       return s ? `active: ${s.session_name}` : 'không có phiên active (OK)';
     }),
-
     await runTest('DB: getBadges', async () => {
       const rows = await db.getBadges(guildId);
       return `${rows.length} badge`;
@@ -120,8 +104,9 @@ async function suiteSession_CRUD(guildId, botUserId) {
   const TEST_NAME = `__TEST_SESSION_${Date.now()}__`;
   let sessionId = null;
 
+  // FIX: eligible_member_ids phải là [] chứ không phải null (NOT NULL constraint)
   const create = await runTest('Session: createSession', async () => {
-    const s = await db.createSession(guildId, TEST_NAME, botUserId, null, null, null);
+    const s = await db.createSession(guildId, TEST_NAME, botUserId, null, null, []);
     sessionId = s.id;
     return `id=${s.id}`;
   });
@@ -142,7 +127,6 @@ async function suiteSession_CRUD(guildId, botUserId) {
   const active = await runTest('Session: getActiveSession thấy session test', async () => {
     if (!sessionId) throw new Error('skip');
     const s = await db.getActiveSession(guildId);
-    // chấp nhận null nếu guild có session active khác, chỉ cần không throw
     return s ? `active=${s.session_name}` : 'no active (có thể có session khác đang chạy)';
   });
 
@@ -159,8 +143,9 @@ async function suiteAttendance(guildId, botUserId) {
   const TEST_NAME = `__TEST_ATT_${Date.now()}__`;
   let sessionId = null;
 
+  // FIX: eligible_member_ids = [] để tránh NOT NULL
   const setup = await runTest('Attendance: setup session', async () => {
-    const s = await db.createSession(guildId, TEST_NAME, botUserId);
+    const s = await db.createSession(guildId, TEST_NAME, botUserId, null, null, []);
     sessionId = s.id;
     return `session ${s.id}`;
   });
@@ -241,12 +226,15 @@ async function suiteMemberStats(guildId, botUserId) {
 async function suiteScheduledSessions(guildId) {
   let schedId = null;
   const TEST_NAME = `__TEST_SCHED_${Date.now()}__`;
+  // FIX: channel_id NOT NULL — dùng ID giả hợp lệ (Discord snowflake format)
+  const FAKE_CHANNEL_ID = '000000000000000001';
 
   const create = await runTest('Scheduler: themLichCoDinh', async () => {
     const s = await db.themLichCoDinh(guildId, {
       dayOfWeek: 6, hour: 23, minute: 59,
       sessionName: TEST_NAME,
       closeDayOfWeek: 6, closeHour: 23, closeMinute: 59,
+      channelId: FAKE_CHANNEL_ID,
     });
     schedId = s.id;
     return `id=${s.id}`;
@@ -304,9 +292,11 @@ async function suiteBadges(guildId) {
 }
 
 async function suiteConfig(guildId) {
+  // FIX: không dùng _test_field (không tồn tại trong schema)
+  // Upsert với patch rỗng {} — chỉ verify không throw + record tồn tại
   return [
-    await runTest('Config: upsertConfig (test field)', async () => {
-      await db.upsertConfig(guildId, { _test_field: null });
+    await runTest('Config: upsertConfig (no-op patch)', async () => {
+      await db.upsertConfig(guildId, {});
       return 'upsert OK';
     }),
     await runTest('Config: getConfig after upsert', async () => {
@@ -325,7 +315,7 @@ module.exports = {
     .setDefaultMemberPermissions(0n),
 
   async execute(interaction) {
-    await interaction.deferReply({ flags: 64 }); // ephemeral
+    await interaction.deferReply({ flags: 64 });
     const { guild } = interaction;
 
     const { ok } = await requireAdmin(interaction, { context: '/test_bot' });
@@ -335,7 +325,6 @@ module.exports = {
     const guildId  = guild.id;
     const tStart   = Date.now();
 
-    // Thông báo đang chạy
     await interaction.editReply({
       embeds: [
         new EmbedBuilder()
