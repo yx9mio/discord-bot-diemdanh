@@ -4,6 +4,7 @@
 // Fix #3: _dongPhienVaThongKe gọi thongBaoHuyHieu + guiCsvDinhKem
 // Fix #4: loại bỏ ephemeral deprecated warning khỏi handler setup
 // Fix #5: ketThucPhien(guild, session, attended) — sửa TypeError
+// Fix #6: buildSummaryEmbed(session, attended, guild) — sửa thứ tự params
 // Phase H: ping role điểm danh khi mở phiên tự động
 'use strict';
 const { EmbedBuilder, MessageFlags } = require('discord.js');
@@ -138,7 +139,8 @@ async function _dongPhienVaThongKe(guild, session, ch, lich, client, silent = fa
         `📋 Có phép: ${attended.filter(a => a.status === 'co_phep').length}`
       );
 
-    const summaryEmbed = await buildSummaryEmbed(guild, session, attended, lich);
+    // FIX #6: đúng thứ tự (session, attended, guild) theo signature của embeds.js
+    const summaryEmbed = await buildSummaryEmbed(session, attended, guild);
     await ch.send({ embeds: [closedEmbed, summaryEmbed] });
 
     // CSV đính kèm
