@@ -62,9 +62,11 @@ async function buildSessionEmbed(guild, session, attended) {
   const checkedIds = new Set(attended.map(a => a.user_id));
   const absentIds  = session.eligible_member_ids.filter(id => !checkedIds.has(id));
 
+  // [B2 FIX] dùng created_at thay vì started_at (không tồn tại trong schema)
+  const startedAt = session.created_at ?? session.started_at;
   let desc = `${pctEmoji(pct)} \`${bar}\` **${pct}%** (${presentCount}/${eligible})\n`;
   desc += `👥 Role: **${session.role_name}** · ${eligible} thành viên\n`;
-  desc += `🕐 Bắt đầu: <t:${Math.floor(new Date(session.started_at).getTime() / 1000)}:f>`;
+  desc += `🕐 Bắt đầu: <t:${Math.floor(new Date(startedAt).getTime() / 1000)}:f>`;
   if (session.auto_close_at) {
     const ts = Math.floor(new Date(session.auto_close_at).getTime() / 1000);
     desc += `\n🔒 Tự đóng: <t:${ts}:R> (<t:${ts}:T>)`;
@@ -82,14 +84,15 @@ async function buildSessionEmbed(guild, session, attended) {
     if (iconURL) embed.setThumbnail(iconURL);
   }
 
+  // [B1 FIX] dùng display_name thay vì username (username không tồn tại trong bảng attendances)
   if (joined.length > 0)
-    chunkLines(joined.map((a, i) => `\`${String(i + 1).padStart(2)}.\` **${a.username}**`))
+    chunkLines(joined.map((a, i) => `\`${String(i + 1).padStart(2)}.\` **${a.display_name}**`))
       .forEach((chunk, i) => embed.addFields({ name: i === 0 ? `✅ Tham Gia (${joined.length})` : '\u200b', value: chunk, inline: true }));
   if (late.length > 0)
-    chunkLines(late.map((a, i) => `\`${String(i + 1).padStart(2)}.\` ${a.username}`))
+    chunkLines(late.map((a, i) => `\`${String(i + 1).padStart(2)}.\` ${a.display_name}`))
       .forEach((chunk, i) => embed.addFields({ name: i === 0 ? `⏰ Đến Trễ (${late.length})` : '\u200b', value: chunk, inline: true }));
   if (declined.length > 0)
-    chunkLines(declined.map((a, i) => `\`${String(i + 1).padStart(2)}.\` ${a.username}`))
+    chunkLines(declined.map((a, i) => `\`${String(i + 1).padStart(2)}.\` ${a.display_name}`))
       .forEach((chunk, i) => embed.addFields({ name: i === 0 ? `❌ Vắng Mặt (${declined.length})` : '\u200b', value: chunk, inline: true }));
   if (absentIds.length > 0) {
     const MAX = 25;
@@ -111,7 +114,9 @@ function buildSummaryEmbed(session, attended) {
   const pct = eligible > 0 ? Math.round((presentCount / eligible) * 100) : 0;
   const bar = buildProgressBar(pct);
 
-  const startTs = Math.floor(new Date(session.started_at).getTime() / 1000);
+  // [B2 FIX] dùng created_at thay vì started_at
+  const startedAt = session.created_at ?? session.started_at;
+  const startTs = Math.floor(new Date(startedAt).getTime() / 1000);
   const endTs   = session.ended_at ? Math.floor(new Date(session.ended_at).getTime() / 1000) : null;
 
   let desc = `${pctEmoji(pct)} \`${bar}\` **${pct}%** (${presentCount}/${eligible})\n`;
@@ -125,9 +130,10 @@ function buildSummaryEmbed(session, attended) {
     .setDescription(desc)
     .setTimestamp();
 
-  const joinedLines = joined.map((a, i) => `\`${String(i + 1).padStart(2)}.\` **${a.username}**`);
-  const lateLines   = late.map((a, i)   => `\`${String(i + 1).padStart(2)}.\` ${a.username}`);
-  const decLines    = declined.map((a, i) => `\`${String(i + 1).padStart(2)}.\` ${a.username}`);
+  // [B1 FIX] dùng display_name
+  const joinedLines = joined.map((a, i) => `\`${String(i + 1).padStart(2)}.\` **${a.display_name}**`);
+  const lateLines   = late.map((a, i)   => `\`${String(i + 1).padStart(2)}.\` ${a.display_name}`);
+  const decLines    = declined.map((a, i) => `\`${String(i + 1).padStart(2)}.\` ${a.display_name}`);
 
   if (joinedLines.length > 0)
     chunkLines(joinedLines).forEach((chunk, i) =>
@@ -147,6 +153,30 @@ function buildSummaryEmbed(session, attended) {
 
   embed.setFooter({ text: `${FOOTER_DEFAULT} · Role: ${session.role_name}` });
   return embed;
+}
+
+function buildHistoryEmbed(history) {
+  if (history.length === 0) {
+    return new EmbedBuilder()
+      .setAuthor(AUTHOR_DEFAULT)
+      .setTitle('📚 Lịch Sử Điểm Danh')
+      .setColor(COLOR_GREY)
+      .setDescription('*(Chưa có phiên nào kết thúc)*')
+      .setFooter({ text: FOOTER_DEFAULT });
+  }
+  const lines = history.map((s, i) => {
+    // [B2 FIX] dùng created_at thay vì started_at
+    const startedAt = s.created_at ?? s.started_at;
+    const ts = Math.floor(new Date(startedAt).getTime() / 1000);
+    return `\`${String(i + 1).padStart(2)}.\` **${s.session_name}** — <t:${ts}:d>\n    \`ID: ${s.id}\``;
+  });
+  return new EmbedBuilder()
+    .setAuthor(AUTHOR_DEFAULT)
+    .setTitle(`📚 Lịch Sử Điểm Danh (${history.length} phiên gần nhất)`)
+    .setColor(COLOR_GOLD)
+    .setDescription(lines.join('\n'))
+    .setFooter({ text: `${FOOTER_DEFAULT} · Dùng ID với /thong_ke_phien và /sua_diemdanh` })
+    .setTimestamp();
 }
 
 function buildMemberEmbed(member, stats, badge, pct, bar) {
@@ -175,28 +205,6 @@ function buildStatsEmbed(lines) {
     .setTimestamp();
 }
 
-function buildHistoryEmbed(history) {
-  if (history.length === 0) {
-    return new EmbedBuilder()
-      .setAuthor(AUTHOR_DEFAULT)
-      .setTitle('📚 Lịch Sử Điểm Danh')
-      .setColor(COLOR_GREY)
-      .setDescription('*(Chưa có phiên nào kết thúc)*')
-      .setFooter({ text: FOOTER_DEFAULT });
-  }
-  const lines = history.map((s, i) => {
-    const ts = Math.floor(new Date(s.started_at).getTime() / 1000);
-    return `\`${String(i + 1).padStart(2)}.\` **${s.session_name}** — <t:${ts}:d>\n    \`ID: ${s.id}\``;
-  });
-  return new EmbedBuilder()
-    .setAuthor(AUTHOR_DEFAULT)
-    .setTitle(`📚 Lịch Sử Điểm Danh (${history.length} phiên gần nhất)`)
-    .setColor(COLOR_GOLD)
-    .setDescription(lines.join('\n'))
-    .setFooter({ text: `${FOOTER_DEFAULT} · Dùng ID với /thong_ke_phien và /sua_diemdanh` })
-    .setTimestamp();
-}
-
 function buildConfigEmbed(cfg) {
   return new EmbedBuilder()
     .setAuthor(AUTHOR_DEFAULT)
@@ -218,7 +226,7 @@ module.exports = {
   buildStatsEmbed,
   buildHistoryEmbed,
   buildConfigEmbed,
-  buildProgressBar, // re-export để các file khác không cần import thẳng từ progress.js
+  buildProgressBar,
   pctColor,
   pctEmoji,
   COLOR_GOLD,

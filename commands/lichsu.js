@@ -5,14 +5,15 @@ const { buildHistoryEmbed } = require('../utils/embeds.js');
 
 const data = new SlashCommandBuilder()
   .setName('lich_su')
-  .setDescription('Xem lịch sử các phiên điểm danh gần nhất')
-  .addIntegerOption(o => o.setName('so_luong').setDescription('Số phiên cần xem (mặc định 10)').setMinValue(1).setMaxValue(25));
+  .setDescription('Xem 10 phiên điểm danh gần nhất');
 
 async function execute(interaction) {
   await interaction.deferReply({ ephemeral: true });
-  const limit   = interaction.options.getInteger('so_luong') ?? 10;
-  const history = await db.getSessionHistory(interaction.guild.id, limit);
-  await interaction.editReply({ embeds: [buildHistoryEmbed(history)] });
+  const guild = interaction.guild;
+  // [B13 FIX] pass limit=10 để tránh fetch 20 rồi chỉ hiển thị 10
+  const history = await db.getSessionHistory(guild.id, 10);
+  const embed   = buildHistoryEmbed(history);
+  return interaction.editReply({ embeds: [embed] });
 }
 
 module.exports = { data, execute };

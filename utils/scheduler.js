@@ -8,6 +8,7 @@ const { EmbedBuilder } = require('discord.js');
 const schedulerMap = new Map();
 
 // ── Tính ms đến lần chạy tiếp theo (giờ VN) ──────────────────────────────────
+// dayOfWeek: 0=CN, 1=T2...6=T7 | hour/minute: giờ VN (UTC+7)
 function msToNextOccurrence(dayOfWeek, hour, minute) {
   const VN_OFFSET = 7 * 60 * 60 * 1000;
   const nowUtc    = Date.now();
@@ -113,7 +114,6 @@ async function runDongLich(client, guild, lich) {
   try {
     const g = client.guilds.cache.get(lich.guild_id);
     if (!g) {
-      // Guild offline nhưng vẫn phải reschedule tuần sau
       _rescheduleClose(client, guild, lich);
       return;
     }
@@ -121,7 +121,6 @@ async function runDongLich(client, guild, lich) {
     const session = await db.getActiveSession(lich.guild_id);
     if (!session || session.session_name !== lich.session_name) {
       console.log(`[Scheduler] ${g.name} — không có phiên "${lich.session_name}" để đóng`);
-      // BUG FIX #2+#3: vẫn reschedule cho tuần sau dù không có phiên
       _rescheduleClose(client, g, lich);
       return;
     }
@@ -167,7 +166,8 @@ async function runDongLich(client, guild, lich) {
     }
 
     const tongThamGia = daThamGia.length;
-    const tongVang    = attended.filter(a => a.status === 'vang').length;
+    // [B8 FIX] status DB là 'khong_tham_gia', KHÔNG phải 'vang'
+    const tongVang    = attended.filter(a => a.status === 'khong_tham_gia').length;
     const tongPhep    = attended.filter(a => a.status === 'co_phep').length;
 
     const phaiLines = [...phaiBattleMap.entries()]
@@ -196,7 +196,6 @@ async function runDongLich(client, guild, lich) {
   } catch (e) {
     console.error(`[Scheduler] Lỗi runDongLich ${lich.id}:`, e.message);
   }
-  // BUG FIX #3: luôn reschedule close cho tuần sau (dù có lỗi hay không)
   _rescheduleClose(client, guild, lich);
 }
 

@@ -4,6 +4,13 @@ const { buildSessionEmbed, buildAttendanceButtons, buildConfigEmbed } = require(
 const { ketThucPhien, thongBaoHuyHieu, voHieuHoaNutDiemDanh } = require('../utils/session.js');
 const { xoaHenGio } = require('../utils/timers.js');
 
+// [B6 FIX] Map từ customId của button → status DB thực tế
+const BUTTON_TO_STATUS = {
+  attend_yes:  'tham_gia',
+  attend_late: 'tre',
+  attend_no:   'khong_tham_gia',
+};
+
 const STATUS_LABEL = {
   tham_gia:       '✅ Tham Gia',
   tre:            '⏰ Đến Trễ',
@@ -47,7 +54,8 @@ async function handleButton(interaction) {
     const session = await db.getActiveSession(guild.id);
     if (!session) return interaction.editReply({ content: '📭 Không có phiên nào đang mở.' });
     const attended = await db.getAttendances(session.id);
-    xoaHenGio(session.id);
+    // [B3 FIX] xoaHenGio nhận guildId, KHÔNG phải session.id
+    xoaHenGio(guild.id);
     const statsMap = await ketThucPhien(guild, session, attended);
     await voHieuHoaNutDiemDanh(interaction.client, channel, session);
     const { buildSummaryEmbed } = require('../utils/embeds.js');
@@ -57,8 +65,9 @@ async function handleButton(interaction) {
   }
 
   // ── Nút điểm danh chính ───────────────────────────────────────────
-  const validStatuses = ['tham_gia', 'tre', 'khong_tham_gia'];
-  if (!validStatuses.includes(customId)) return;
+  // [B6 FIX] map customId → status thực tế (attend_yes → tham_gia, v.v.)
+  const status = BUTTON_TO_STATUS[customId];
+  if (!status) return; // customId không phải nút điểm danh → bỏ qua
 
   await interaction.deferReply({ ephemeral: true });
   const session = await db.getActiveSession(guild.id);
@@ -66,7 +75,7 @@ async function handleButton(interaction) {
     return interaction.editReply({ content: '📭 Không có phiên điểm danh nào đang mở.' });
   }
 
-  // BUG FIX #5: Check eligible_member_ids trước khi cho điểm danh
+  // Check eligible_member_ids trước khi cho điểm danh
   if (session.eligible_member_ids && !session.eligible_member_ids.includes(user.id)) {
     return interaction.editReply({ content: '⚠️ Bạn không nằm trong danh sách điểm danh của phiên này.' });
   }
@@ -81,7 +90,8 @@ async function handleButton(interaction) {
   }
 
   const displayName = member.nickname ?? user.globalName ?? user.username;
-  await db.upsertAttendance(session.id, guild.id, user.id, displayName, customId);
+  // [B6 FIX] truyền status (tham_gia / tre / khong_tham_gia) thay vì customId
+  await db.upsertAttendance(session.id, guild.id, user.id, displayName, status);
 
   // Cập nhật embed chính
   try {
@@ -97,7 +107,7 @@ async function handleButton(interaction) {
   } catch (_) { /* silent */ }
 
   return interaction.editReply({
-    content: `${STATUS_LABEL[customId] ?? '✅'} Đã ghi nhận **${STATUS_LABEL[customId]}** cho bạn.`,
+    content: `${STATUS_LABEL[status] ?? '✅'} Đã ghi nhận **${STATUS_LABEL[status]}** cho bạn.`,
   });
 }
 
