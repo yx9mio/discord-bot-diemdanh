@@ -56,7 +56,9 @@ async function handleAttend(interaction) {
       }
     }
 
-    await db.markAttendance(session.id, user.id, status, user.id);
+    // Fix: dùng upsertAttendance để include guild_id (NOT NULL constraint)
+    const username = member.nickname ?? user.displayName ?? user.username;
+    await db.upsertAttendance(session.id, guild.id, user.id, username, status, user.id);
 
     // best-effort update session embed
     try {
