@@ -20,7 +20,7 @@ const pad = n => String(n ?? 0).padStart(2, '0');
 
 // ─── Build UI helpers ────────────────────────────────────────────────────────
 
-async function buildDashboard(guild, cfg) {
+async function buildDashboard(guild, cfg, viewMode = 'admin') {
   const notifCh = await timKenhThongBao(guild);
   const lichList = await db.getLichCoDinh(guild.id);
 
@@ -34,6 +34,28 @@ async function buildDashboard(guild, cfg) {
       }).join('\n')
     : '⚠️ Chưa có lịch cố định';
 
+  // ── User view (chế độ xem thành viên) ──────────────────────────────────────
+  if (viewMode === 'user') {
+    const embed = new EmbedBuilder()
+      .setAuthor(AUTHOR_DEFAULT)
+      .setTitle('📋  Thông tin Bot')
+      .setDescription('> Chế độ xem thành viên — chỉ hiển thị thông tin cơ bản.')
+      .addFields(
+        { name: '🔔 Kênh thông báo', value: notifCh ? `<#${notifCh}>` : '_Chưa rõ_', inline: true },
+        { name: '🎫 Role điểm danh', value: cfg.allowed_role_id ? `<@&${cfg.allowed_role_id}>` : '⚠️ Chưa cài', inline: true },
+        { name: `📅 Lịch cố định (${lichList.length})`, value: lichLines },
+      )
+      .setColor(0x5865F2)
+      .setFooter({ text: `${FOOTER_DEFAULT} • Chế độ xem: Thành viên` })
+      .setTimestamp();
+
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId('setup:view:admin').setLabel('🛡️ Chuyển sang Admin View').setStyle(ButtonStyle.Secondary),
+    );
+    return { embeds: [embed], components: [row], ephemeral: true };
+  }
+
+  // ── Admin view (mặc định) ───────────────────────────────────────────────────
   const missing = [];
   if (!cfg.allowed_role_id || !cfg.admin_role_id) missing.push('• Role điểm danh & admin chưa cài');
   if (!cfg.phai_role_ids?.length) missing.push('• Phái chưa cài');
@@ -59,7 +81,7 @@ async function buildDashboard(guild, cfg) {
       { name: `📅 Lịch cố định (${lichList.length})`, value: lichLines },
     )
     .setColor(missing.length ? 0xFEE75C : 0x57F287)
-    .setFooter({ text: `${FOOTER_DEFAULT} • Dùng các nút bên dưới để cấu hình` })
+    .setFooter({ text: `${FOOTER_DEFAULT} • Chế độ xem: Admin` })
     .setTimestamp();
 
   const row1 = new ActionRowBuilder().addComponents(
@@ -70,6 +92,7 @@ async function buildDashboard(guild, cfg) {
   const row2 = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId('setup:preset_bc').setLabel('⚡ Preset Bang Chiến').setStyle(ButtonStyle.Success),
     new ButtonBuilder().setCustomId('setup:refresh').setLabel('🔄 Làm mới').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('setup:view:user').setLabel('👁️ User View').setStyle(ButtonStyle.Secondary),
   );
 
   return { embeds: [embed], components: [row1, row2], ephemeral: true };
@@ -118,8 +141,11 @@ function lichMenuComponents(lichList) {
 }
 
 // ─── Guard quyền admin ───────────────────────────────────────────────────────
-function isAdmin(member) {
-  return member.permissions.has(PermissionFlagsBits.Administrator);
+// FIX BUG #2: kiểm tra cả Discord Administrator VÀ admin_role_id từ config
+async function isAdmin(member, cfg) {
+  if (member.permissions.has(PermissionFlagsBits.Administrator)) return true;
+  if (cfg?.admin_role_id && member.roles.cache.has(cfg.admin_role_id)) return true;
+  return false;
 }
 
 // ─── Main handler ─────────────────────────────────────────────────────────────
@@ -129,18 +155,30 @@ async function handleSetupUi(interaction) {
   // Chỉ xử lý customId bắt đầu bằng 'setup:'
   if (!customId?.startsWith('setup:')) return false;
 
-  // Guard quyền
-  if (!isAdmin(member)) {
-    await interaction.reply({ content: '🔒 Chỉ **Quản trị viên** mới được dùng setup.', ephemeral: true });
+  // Guard quyền — FIX BUG #2: load cfg trước để check admin_role_id
+  const cfg = await db.getConfig(guild.id);
+  if (!(await isAdmin(member, cfg))) {
+    await interaction.reply({ content: '🔒 Bạn cần có **quyền Quản trị viên** hoặc **Role Admin Bot** để dùng setup.', ephemeral: true });
     return true;
   }
 
-  const cfg = await db.getConfig(guild.id);
+  // ── setup:view:user / setup:view:admin — toggle chế độ xem ─────────────────
+  if (customId === 'setup:view:user') {
+    const payload = await buildDashboard(guild, cfg, 'user');
+    await interaction.update(payload);
+    return true;
+  }
+
+  if (customId === 'setup:view:admin') {
+    const payload = await buildDashboard(guild, cfg, 'admin');
+    await interaction.update(payload);
+    return true;
+  }
 
   // ── setup:home / setup:refresh ──────────────────────────────────────────────
   if (customId === 'setup:home' || customId === 'setup:refresh') {
     const cfgFresh = await db.getConfig(guild.id);
-    const payload = await buildDashboard(guild, cfgFresh);
+    const payload = await buildDashboard(guild, cfgFresh, 'admin');
     if (interaction.deferred || interaction.replied) {
       await interaction.editReply(payload);
     } else {
@@ -188,7 +226,6 @@ async function handleSetupUi(interaction) {
   }
 
   // ── setup:role:select_allowed / select_admin — ghi vào cfg tạm ────────────
-  // Dùng message.components để đọc state hiện tại rồi cập nhật placeholder
   if (customId === 'setup:role:select_allowed') {
     const roleId = interaction.values[0];
     await db.setConfig(guild.id, { allowed_role_id: roleId });
@@ -207,7 +244,7 @@ async function handleSetupUi(interaction) {
   if (customId === 'setup:role:save') {
     const cfgFresh = await db.getConfig(guild.id);
     const ok = cfgFresh.allowed_role_id && cfgFresh.admin_role_id;
-    const payload = await buildDashboard(guild, cfgFresh);
+    const payload = await buildDashboard(guild, cfgFresh, 'admin');
     payload.content = ok
       ? `✅ Đã lưu role!  Role điểm danh: <@&${cfgFresh.allowed_role_id}> | Admin: <@&${cfgFresh.admin_role_id}>`
       : '⚠️ Chưa chọn đủ cả 2 role — vui lòng chọn lại.';
@@ -252,7 +289,7 @@ async function handleSetupUi(interaction) {
     const phaiRoleIds = interaction.values;
     await db.setConfig(guild.id, { phai_role_ids: phaiRoleIds });
     const cfgFresh = await db.getConfig(guild.id);
-    const payload = await buildDashboard(guild, cfgFresh);
+    const payload = await buildDashboard(guild, cfgFresh, 'admin');
     payload.content = `✅ Đã lưu **${phaiRoleIds.length}** phái: ${phaiRoleIds.map(id => `<@&${id}>`).join(' ')}`;
     await interaction.update(payload);
     return true;
@@ -366,9 +403,10 @@ async function handleSetupUi(interaction) {
   }
 
   // ── setup:lich:delete — xóa lịch đã chọn ───────────────────────────────────
+  // FIX BUG #1: truyền cả guild.id vào xoaLichCoDinh (trước đây thiếu guildId)
   if (customId === 'setup:lich:delete') {
     const lichId = interaction.values[0];
-    await db.xoaLichCoDinh(lichId);
+    await db.xoaLichCoDinh(guild.id, lichId);
     const lichList = await db.getLichCoDinh(guild.id);
     const payload = lichMenuComponents(lichList);
     payload.content = `🗑️ Đã xóa lịch \`${lichId.slice(0,8)}...\``;
@@ -378,7 +416,6 @@ async function handleSetupUi(interaction) {
 
   // ── setup:preset_bc — preset Bang Chiến ─────────────────────────────────────
   if (customId === 'setup:preset_bc') {
-    // Mở channel select để chọn kênh, sau đó lưu
     const embed = new EmbedBuilder()
       .setTitle('⚡ Preset Bang Chiến')
       .setDescription(
@@ -445,7 +482,7 @@ async function createPresetBangChien(interaction, guild, channelId) {
   await scheduleLichCoDinh(interaction.client, guild, lich);
 
   const cfgFresh = await db.getConfig(guild.id);
-  const payload = await buildDashboard(guild, cfgFresh);
+  const payload = await buildDashboard(guild, cfgFresh, 'admin');
   payload.content = [
     `⚡ Preset **Bang Chiến** đã được tạo!`,
     `Mở: Thứ bảy 21:00 → Đóng: Thứ bảy 19:30 (tuần sau) | Kênh: <#${channelId}>`,
@@ -472,7 +509,6 @@ const THU_PARSE = {
 
 function parseThuGio(raw) {
   if (!raw) return null;
-  // Chuẩn hoá: lowercase, dấu cách → tách thứ và giờ
   const parts = raw.trim().toLowerCase().split(/\s+/);
   if (parts.length < 2) return null;
   const thuKey = parts[0].replace(/[^a-z0-9]/g, '_');
