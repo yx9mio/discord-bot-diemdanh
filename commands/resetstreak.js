@@ -1,7 +1,9 @@
 // commands/resetstreak.js
+'use strict';
 const { SlashCommandBuilder } = require('discord.js');
 const db = require('../db.js');
-const { laAdmin } = require('../utils/helpers.js');
+const { replyOkEdit, replyErrEdit } = require('../utils/embeds.js');
+const { requireAdmin } = require('../utils/permissions.js');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -14,18 +16,15 @@ module.exports = {
 
   async execute(interaction) {
     await interaction.deferReply({ ephemeral: true });
-    const { guild, member } = interaction;
 
-    const cfg = await db.getConfig(guild.id);
-    if (!laAdmin(member, cfg)) {
-      return interaction.editReply({ content: '🔒 Bạn không có quyền dùng lệnh này.' });
-    }
+    const { ok } = await requireAdmin(interaction, { context: '/reset_streak' });
+    if (!ok) return;
 
     const target = interaction.options.getUser('thanh_vien');
-    await db.resetMemberStreak(guild.id, target.id);
+    await db.resetMemberStreak(interaction.guild.id, target.id);
 
-    return interaction.editReply({
-      content: `✅ Đã reset streak của <@${target.id}> về 0.`,
-    });
+    return interaction.editReply(
+      replyOkEdit(`Đã reset streak của <@${target.id}> về 0.`)
+    );
   },
 };

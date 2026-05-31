@@ -1,9 +1,12 @@
 // handlers/buttonHandler.js
+'use strict';
 const db = require('../db.js');
-const { buildSessionEmbed, buildAttendanceButtons, buildConfigEmbed } = require('../utils/embeds.js');
+const { buildSessionEmbed, buildAttendanceButtons, buildConfigEmbed,
+        buildSummaryEmbed, replyOkEdit, replyErrEdit } = require('../utils/embeds.js');
 const { ketThucPhien, thongBaoHuyHieu, voHieuHoaNutDiemDanh } = require('../utils/session.js');
 const { xoaHenGio } = require('../utils/timers.js');
 const { handleSetupUi } = require('./setupUiHandler.js');
+const { requireAdmin } = require('../utils/permissions.js');
 
 const BUTTON_TO_STATUS = {
   attend_yes:  'tham_gia',
@@ -28,13 +31,13 @@ async function handleButton(interaction) {
   // ── Phân trang /lich_su ────────────────────────────────────────────────────
   if (customId?.startsWith('lichsu:')) {
     const parts = customId.split(':');  // ['lichsu', 'prev'|'next', currentPage]
-    const action = parts[1];
+    const action  = parts[1];
     const curPage = parseInt(parts[2], 10);
     const newPage = action === 'next' ? curPage + 1 : curPage - 1;
 
     await interaction.deferUpdate();
     const { buildHistoryPageEmbed, buildNavRow, PAGE_SIZE } = require('../commands/lichsu.js');
-    const history = await db.getSessionHistory(guild.id, 50);
+    const history    = await db.getSessionHistory(guild.id, 50);
     const totalPages = Math.max(1, Math.ceil(history.length / PAGE_SIZE));
     const clampedPage = Math.max(0, Math.min(newPage, totalPages - 1));
 
@@ -69,21 +72,28 @@ async function handleButton(interaction) {
   // ── Đóng phiên bằng nút ────────────────────────────────────────────────────
   if (customId === 'attend_close') {
     await interaction.deferReply({ ephemeral: true });
-    const cfg = await db.getConfig(guild.id);
-    const { laAdmin } = require('../utils/helpers.js');
-    if (!laAdmin(member, cfg)) {
-      return interaction.editReply({ content: '🔒 Bạn không có quyền đóng phiên.' });
-    }
+
+    // [Phase 7] dùng requireAdmin thay vì laAdmin thủ công
+    // truyền cfg sẵn để tránh query 2 lần (requireAdmin load 1 lần)
+    const { ok, cfg } = await requireAdmin(interaction, { context: 'đóng phiên' });
+    if (!ok) return;
+
     const session = await db.getActiveSession(guild.id);
-    if (!session) return interaction.editReply({ content: '📭 Không có phiên nào đang mở.' });
+    if (!session) {
+      return interaction.editReply(replyErrEdit('📭 Không có phiên nào đang mở.'));
+    }
+
     const attended = await db.getAttendances(session.id);
     xoaHenGio(guild.id);
     const statsMap = await ketThucPhien(guild, session, attended);
     await voHieuHoaNutDiemDanh(interaction.client, channel, session);
-    const { buildSummaryEmbed } = require('../utils/embeds.js');
-    await channel.send({ embeds: [buildSummaryEmbed(session, attended)] });
+
+    // [Phase 7] fix param order: buildSummaryEmbed(session, attended, guild)
+    await channel.send({ embeds: [buildSummaryEmbed(session, attended, guild)] });
     await thongBaoHuyHieu(guild, channel, guild.id, session.id, attended, statsMap);
-    return interaction.editReply({ content: '✅ Đã đóng phiên.' });
+
+    // [Phase 7] embed reply thay vì raw content string
+    return interaction.editReply(replyOkEdit('Phiên điểm danh đã được đóng thành công.'));
   }
 
   // ── Nút điểm danh chính ────────────────────────────────────────────────────

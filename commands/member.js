@@ -1,7 +1,9 @@
 // commands/member.js
+'use strict';
 const { SlashCommandBuilder } = require('discord.js');
 const db = require('../db.js');
-const { laAdmin } = require('../utils/helpers.js');
+const { replyErrEdit, buildMemberEmbed } = require('../utils/embeds.js');
+const { requireAdmin } = require('../utils/permissions.js');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -14,23 +16,23 @@ module.exports = {
 
   async execute(interaction) {
     await interaction.deferReply({ ephemeral: true });
-    const { guild, member } = interaction;
-    const cfg = await db.getConfig(guild.id);
-    if (!laAdmin(member, cfg)) {
-      return interaction.editReply({ content: '🔒 Bạn không có quyền dùng lệnh này.' });
-    }
+    const { guild } = interaction;
+
+    const { ok } = await requireAdmin(interaction, { context: '/member' });
+    if (!ok) return;
 
     const target = interaction.options.getUser('thanh_vien');
     const stats  = await db.getMemberStats(guild.id, target.id);
-    const pct    = stats.total_sessions > 0
-      ? Math.round((stats.total_joined / stats.total_sessions) * 100) : 0;
+
+    if (!stats) {
+      return interaction.editReply(replyErrEdit(`Không tìm thấy dữ liệu cho <@${target.id}>.`));
+    }
+
+    const guildMember = await guild.members.fetch(target.id).catch(() => null);
+    const displayName = guildMember?.nickname ?? target.globalName ?? target.username;
 
     return interaction.editReply({
-      content: [
-        `📊 **Thống kê của <@${target.id}>**`,
-        `> Tham gia: **${stats.total_joined}** / **${stats.total_sessions}** phiên (${pct}%)`,
-        `> Streak hiện tại: **${stats.current_streak}**  |  Best: **${stats.best_streak}**`,
-      ].join('\n'),
+      embeds: [buildMemberEmbed(target, displayName, stats)],
     });
   },
 };

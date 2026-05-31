@@ -1,36 +1,39 @@
-// commands/xuat.js — L5: xuất CSV
+// commands/xuat.js — Phase 7: migrate laAdmin → requireAdmin
+'use strict';
 const { SlashCommandBuilder, AttachmentBuilder, EmbedBuilder } = require('discord.js');
 const db = require('../db.js');
-const { laAdmin } = require('../utils/helpers.js');
-const { FOOTER_DEFAULT, AUTHOR_DEFAULT } = require('../utils/embeds.js');
+const { replyErrEdit, FOOTER_DEFAULT, AUTHOR_DEFAULT } = require('../utils/embeds.js');
+const { requireAdmin } = require('../utils/permissions.js');
 
 const data = new SlashCommandBuilder()
   .setName('xuat_diemdanh')
   .setDescription('Xuất dữ liệu điểm danh ra file CSV')
-  .addStringOption(o => o.setName('session_id').setDescription('ID phiên cụ thể (bỏ trống = phiên gần nhất)'));
+  .addStringOption(o =>
+    o.setName('session_id').setDescription('ID phiên cụ thể (bỏ trống = phiên gần nhất)')
+  );
 
 async function execute(interaction) {
   await interaction.deferReply({ ephemeral: true });
-  const guild = interaction.guild;
-  const cfg   = await db.getConfig(guild.id);
+  const { guild } = interaction;
 
-  if (!laAdmin(interaction.member, cfg)) {
-    return interaction.editReply({ content: '🔒 Bạn không có quyền thực hiện lệnh này.' });
-  }
+  const { ok } = await requireAdmin(interaction, { context: '/xuat_diemdanh' });
+  if (!ok) return;
 
   let session;
   const sessionId = interaction.options.getString('session_id');
 
   if (sessionId) {
     session = await db.getSessionById(sessionId, guild.id);
-    if (!session) return interaction.editReply({ content: '⚠️ Không tìm thấy phiên này.' });
+    if (!session) return interaction.editReply(replyErrEdit('⚠️ Không tìm thấy phiên này.'));
   } else {
     const history = await db.getSessionHistory(guild.id, 1);
-    if (history.length === 0) return interaction.editReply({ content: '⚠️ Chưa có phiên nào kết thúc.' });
+    if (history.length === 0) {
+      return interaction.editReply(replyErrEdit('⚠️ Chưa có phiên nào kết thúc.'));
+    }
     session = history[0];
   }
 
-  const attended = await db.getAttendances(session.id);
+  const attended    = await db.getAttendances(session.id);
   const attendedMap = new Map(attended.map(a => [a.user_id, a]));
 
   const rows = ['User ID,Username,Trạng Thái,Thời Gian'];
@@ -44,9 +47,9 @@ async function execute(interaction) {
     }
   }
 
-  const csvBuffer = Buffer.from('\uFEFF' + rows.join('\n'), 'utf-8');
-  const safeName  = session.session_name.replace(/[^a-z0-9à-ỹ]/gi, '_');
-  const fileName  = `diemdanh_${safeName}_${session.id.slice(0, 8)}.csv`;
+  const csvBuffer  = Buffer.from('\uFEFF' + rows.join('\n'), 'utf-8');
+  const safeName   = session.session_name.replace(/[^a-z0-9à-ỹ]/gi, '_');
+  const fileName   = `diemdanh_${safeName}_${session.id.slice(0, 8)}.csv`;
   const attachment = new AttachmentBuilder(csvBuffer, { name: fileName });
 
   const embed = new EmbedBuilder()
@@ -57,7 +60,7 @@ async function execute(interaction) {
     .setFooter({ text: FOOTER_DEFAULT })
     .setTimestamp();
 
-  await interaction.editReply({ embeds: [embed], files: [attachment] });
+  return interaction.editReply({ embeds: [embed], files: [attachment] });
 }
 
 module.exports = { data, execute };
