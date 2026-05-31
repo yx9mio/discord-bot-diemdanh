@@ -1,20 +1,18 @@
 // utils/session.js — Xử lý kết thúc phiên, huy hiệu, vô hiệu hóa nút
-// FEAT 3.1: Export CSV sau khi đóng phiên
+// PERF H-4: batch member stats — O(2N) queries → O(2) queries khi đóng phiên
+'use strict';
 const db = require('../db.js');
 const { buildAttendanceButtons } = require('./embeds.js');
 const { MOC_HUY_HIEU } = require('./helpers.js');
 const { AttachmentBuilder } = require('discord.js');
 
 // ─── FEAT 3.1: Build CSV buffer từ danh sách điểm danh ───────────────────────
-// Trả về Buffer UTF-8 BOM để Excel mở đúng tiếng Việt
 function buildCsvBuffer(session, attended, eligibleMemberIds) {
   const header = 'STT,User ID,Tên,Trạng thái,Thời gian điểm danh';
   const attMap = new Map(attended.map(a => [a.user_id, a]));
-
   const rows = [];
   let stt = 1;
 
-  // Thành viên có điểm danh
   for (const a of attended) {
     const trangThai =
       a.status === 'tham_gia' ? 'Tham gia' :
@@ -26,8 +24,6 @@ function buildCsvBuffer(session, attended, eligibleMemberIds) {
     const ten = (a.username ?? a.user_id).replace(/,/g, ' ');
     rows.push(`${stt++},${a.user_id},${ten},${trangThai},${thoiGian}`);
   }
-
-  // Thành viên vắng (eligible nhưng không có record)
   for (const uid of eligibleMemberIds) {
     if (!attMap.has(uid)) {
       rows.push(`${stt++},${uid},(chưa điểm danh),Vắng mặt,`);
@@ -35,34 +31,68 @@ function buildCsvBuffer(session, attended, eligibleMemberIds) {
   }
 
   const csv = [header, ...rows].join('\n');
-  // BOM UTF-8 để Excel nhận dạng đúng
   return Buffer.concat([Buffer.from('\xEF\xBB\xBF'), Buffer.from(csv, 'utf8')]);
 }
 
-// ─── Kết thúc phiên & cập nhật stats ─────────────────────────────────────────
+// ─── Kết thúc phiên & cập nhật stats (PERF H-4: batch) ───────────────────────
 async function ketThucPhien(guild, session, attended) {
+  const eligibleIds = session.eligible_member_ids ?? [];
+
+  // 1 query: lấy toàn bộ stats hiện tại cho guild
+  const allStats = await db.getAllMemberStats(guild.id);
   const statsMap = {};
-  for (const uid of session.eligible_member_ids) {
-    const s = await db.getMemberStats(guild.id, uid).catch(() => null);
-    if (s) statsMap[uid] = { total_joined: s.total_joined, current_streak: s.current_streak };
+  for (const s of allStats) {
+    if (eligibleIds.includes(s.user_id)) {
+      statsMap[s.user_id] = {
+        total_joined:   s.total_joined   ?? 0,
+        current_streak: s.current_streak ?? 0,
+      };
+    }
   }
 
-  for (const uid of session.eligible_member_ids) {
-    const thamGia = attended.some(a => a.user_id === uid && ['tham_gia', 'tre'].includes(a.status));
-    await db.updateMemberStats(guild.id, uid, thamGia, session.id);
-  }
+  // Tính patch cho mọi eligible member trong memory
+  const attSet = new Set(
+    attended
+      .filter(a => ['tham_gia', 'tre'].includes(a.status))
+      .map(a => a.user_id)
+  );
 
+  const patches = eligibleIds.map(uid => {
+    const prev          = statsMap[uid] ?? { total_joined: 0, current_streak: 0 };
+    const thamGia       = attSet.has(uid);
+    const total_joined  = prev.total_joined + (thamGia ? 1 : 0);
+    const current_streak = thamGia
+      ? prev.current_streak + 1
+      : 0;
+    const max_streak    = Math.max(prev.max_streak ?? 0, current_streak);
+    return {
+      user_id:        uid,
+      total_joined,
+      current_streak,
+      max_streak,
+      last_session_id: session.id,
+    };
+  });
+
+  // 1 query: bulk upsert tất cả
+  await db.batchUpsertMemberStats(guild.id, patches);
   await db.endSession(session.id);
-  return statsMap;
+
+  return statsMap; // trả về snapshot TRƯỚC khi update (dùng cho badge check)
 }
 
 // ─── Thông báo huy hiệu mới ───────────────────────────────────────────────────
 async function thongBaoHuyHieu(guild, channel, guildId, sessionId, attended, statsMap) {
   const msgs = [];
+  // Lấy stats sau update trong 1 query
+  const allStatsSau = await db.getAllMemberStats(guildId);
+  const statsSauMap = new Map(allStatsSau.map(s => [s.user_id, s]));
+
   for (const a of attended) {
     if (!['tham_gia', 'tre'].includes(a.status)) continue;
     const statsTruoc = statsMap?.[a.user_id];
-    const statsSau   = await db.getMemberStats(guildId, a.user_id);
+    const statsSau   = statsSauMap.get(a.user_id);
+    if (!statsSau) continue;
     const truocKhi = statsTruoc != null ? statsTruoc.total_joined : Math.max(0, statsSau.total_joined - 1);
     const sauKhi   = statsSau.total_joined;
     for (const m of MOC_HUY_HIEU) {
@@ -103,7 +133,6 @@ async function voHieuHoaNutDiemDanh(client, channel, session) {
 }
 
 // ─── FEAT 3.1: Gửi CSV đính kèm sau khi đóng phiên ──────────────────────────
-// Gọi sau buildSummaryEmbed / gửi embed tổng kết
 async function guiCsvDiemDanh(channel, session, attended) {
   try {
     const csvBuf  = buildCsvBuffer(session, attended, session.eligible_member_ids ?? []);

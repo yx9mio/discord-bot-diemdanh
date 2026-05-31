@@ -1,5 +1,5 @@
 // db.js — Supabase client + data access layer
-// Phase 11.2: thêm getAllActiveSessions() — batch query thay vì N lần getActiveSession()
+// PERF H-4: thêm batchUpsertMemberStats() — bulk upsert 1 query thay vì N queries
 'use strict';
 const { createClient } = require('@supabase/supabase-js');
 const log = require('./utils/logger.js');
@@ -33,8 +33,6 @@ async function getActiveSession(guildId) {
 
 /**
  * Phase 11.2 — Lấy tất cả phiên đang mở trên mọi guild trong 1 query.
- * Dùng trong ready.js thay vì loop N lần getActiveSession().
- * @returns {Promise<Array>} mảng session objects
  */
 async function getAllActiveSessions() {
   const { data, error } = await supabase
@@ -65,7 +63,8 @@ async function createSession(guildId, sessionName, startedBy, autoCloseAt = null
     .insert({
       guild_id: guildId,
       session_name: sessionName,
-      started_by: startedBy, auto_close_at: autoCloseAt ?? null,
+      started_by: startedBy,
+      auto_close_at: autoCloseAt ?? null,
       channel_id: channelId ?? null,
       eligible_member_ids: eligibleMemberIds ?? null,
     })
@@ -126,6 +125,20 @@ async function upsertMemberStats(guildId, userId, patch) {
     .from('member_stats')
     .upsert({ guild_id: guildId, user_id: userId, ...patch }, { onConflict: 'guild_id,user_id' });
   throwIfError(error, 'upsertMemberStats');
+}
+
+/**
+ * PERF H-4: Bulk upsert member stats trong 1 Supabase query.
+ * @param {string} guildId
+ * @param {Array<{user_id, total_joined, current_streak, max_streak, last_session_id}>} patches
+ */
+async function batchUpsertMemberStats(guildId, patches) {
+  if (!patches.length) return;
+  const rows = patches.map(p => ({ guild_id: guildId, ...p }));
+  const { error } = await supabase
+    .from('member_stats')
+    .upsert(rows, { onConflict: 'guild_id,user_id' });
+  throwIfError(error, 'batchUpsertMemberStats');
 }
 
 async function resetMemberStreak(guildId, userId) {
@@ -264,8 +277,11 @@ async function deleteScheduledSession(id) {
   throwIfError(error, 'deleteScheduledSession');
 }
 
+// ─── getLichCoDinh alias (scheduler.js dùng tên này) ─────────────────────────
+const getLichCoDinh = getScheduledSessions;
+
 // ─── Exports ──────────────────────────────────────────────────────────────────
-const closeSession = endSession;    // commands/dong.js và một số command dùng closeSession
+const closeSession = endSession;
 
 module.exports = {
   supabase,
@@ -275,7 +291,8 @@ module.exports = {
   closeSession, getAttendance, markAttendance,
   getAttendances, getSessionHistory, getSessionsWithAttendance,
   // Member
-  getMemberStats, upsertMemberStats, resetMemberStreak, getAllMemberStats,
+  getMemberStats, upsertMemberStats, batchUpsertMemberStats,
+  resetMemberStreak, getAllMemberStats,
   // Config
   getConfig, upsertConfig,
   // Badges
@@ -283,4 +300,5 @@ module.exports = {
   // Scheduled
   getScheduledSessions, getAllScheduledSessions, getScheduledSessionById,
   createScheduledSession, updateScheduledSession, deleteScheduledSession,
+  getLichCoDinh,
 };

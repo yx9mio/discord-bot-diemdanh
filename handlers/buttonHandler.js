@@ -1,4 +1,5 @@
 // handlers/buttonHandler.js
+// PERF H-5: _pendingLock window tăng lên 5s + guard trước deferReply
 'use strict';
 const db = require('../db.js');
 const { buildSessionEmbed, buildAttendanceButtons, buildConfigEmbed,
@@ -20,20 +21,22 @@ const STATUS_LABEL = {
   khong_tham_gia: '❌ Vắng Mặt',
 };
 
-// ── In-memory lock để tránh double-submit (B-5 / H-5) ────────────────────────
+// H-5: 5s lock window — đủ cover Supabase p95 latency (~800ms) với safety margin
 const _pendingLock = new Set(); // key = `${sessionId}:${userId}`
+
+const LOCK_MS = 5_000;
 
 async function handleButton(interaction) {
   const { customId, guild, member, user, channel } = interaction;
 
-  // ── Setup UI Wizard (prefix 'setup:') ──────────────────────────────────────
+  // ── Setup UI Wizard ────────────────────────────────────────────────────────
   if (customId?.startsWith('setup:')) {
     return handleSetupUi(interaction);
   }
 
   // ── Phân trang /lich_su ────────────────────────────────────────────────────
   if (customId?.startsWith('lichsu:')) {
-    const parts = customId.split(':');  // ['lichsu', 'prev'|'next', currentPage]
+    const parts   = customId.split(':');
     const action  = parts[1];
     const curPage = parseInt(parts[2], 10);
     const newPage = action === 'next' ? curPage + 1 : curPage - 1;
@@ -43,13 +46,12 @@ async function handleButton(interaction) {
     const history    = await db.getSessionHistory(guild.id, 50);
     const totalPages = Math.max(1, Math.ceil(history.length / PAGE_SIZE));
     const clampedPage = Math.max(0, Math.min(newPage, totalPages - 1));
-
     const embed = buildHistoryPageEmbed(history, clampedPage, totalPages);
     const row   = buildNavRow(clampedPage, totalPages);
     return interaction.editReply({ embeds: [embed], components: totalPages > 1 ? [row] : [] });
   }
 
-  // ── Setup shortcuts cũ (giữ backward compat) ───────────────────────────────
+  // ── Setup shortcuts ────────────────────────────────────────────────────────
   if (customId === 'setup_help') {
     const { execute } = require('../commands/help.js');
     return execute(interaction);
@@ -61,7 +63,7 @@ async function handleButton(interaction) {
     return interaction.editReply({ embeds: [buildConfigEmbed(cfg)] });
   }
 
-  // ── Xem danh sách ───────────────────────────────────────────────────────────
+  // ── Xem danh sách ─────────────────────────────────────────────────────────
   if (customId === 'attend_view') {
     const session = await db.getActiveSession(guild.id);
     if (!session) {
@@ -72,11 +74,10 @@ async function handleButton(interaction) {
     return interaction.reply({ embeds: [embed], ephemeral: true });
   }
 
-  // ── Đóng phiên bằng nút ────────────────────────────────────────────────────
+  // ── Đóng phiên bằng nút ───────────────────────────────────────────────────
   if (customId === 'attend_close') {
     await interaction.deferReply({ ephemeral: true });
-
-    const { ok, cfg } = await requireAdmin(interaction, { context: 'đóng phiên' });
+    const { ok } = await requireAdmin(interaction, { context: 'đóng phiên' });
     if (!ok) return;
 
     const session = await db.getActiveSession(guild.id);
@@ -95,56 +96,67 @@ async function handleButton(interaction) {
     return interaction.editReply(replyOkEdit('Phiên điểm danh đã được đóng thành công.'));
   }
 
-  // ── Nút điểm danh chính ────────────────────────────────────────────────────
+  // ── Nút điểm danh chính ───────────────────────────────────────────────────
   const status = BUTTON_TO_STATUS[customId];
   if (!status) return;
 
-  await interaction.deferReply({ ephemeral: true });
-  const session = await db.getActiveSession(guild.id);
-  if (!session) {
-    return interaction.editReply({ content: '📭 Không có phiên điểm danh nào đang mở.' });
+  // H-5: CHECK LOCK TRƯỚC khi deferReply — tránh lãng phí interaction token
+  // Cần session.id để build lock key, nên query nhanh trước
+  const sessionQuick = await db.getActiveSession(guild.id);
+  if (!sessionQuick) {
+    return interaction.reply({ content: '📭 Không có phiên điểm danh nào đang mở.', ephemeral: true });
   }
 
-  if (session.eligible_member_ids && !session.eligible_member_ids.includes(user.id)) {
-    return interaction.editReply({ content: '⚠️ Bạn không nằm trong danh sách điểm danh của phiên này.' });
-  }
-
-  if (session.allowed_role_id) {
-    const hasRole = member.roles.cache.has(session.allowed_role_id);
-    if (!hasRole) {
-      const roleName = guild.roles.cache.get(session.allowed_role_id)?.name ?? 'role cần thiết';
-      return interaction.editReply({ content: `🔒 Bạn cần có role **${roleName}** để điểm danh.` });
-    }
-  }
-
-  // ── Rate-limit lock (H-5): ngăn double-submit trong 3s ───────────────────
-  const lockKey = `${session.id}:${user.id}`;
+  const lockKey = `${sessionQuick.id}:${user.id}`;
   if (_pendingLock.has(lockKey)) {
-    return interaction.editReply({ content: '⏳ Đang xử lý, vui lòng chờ...' });
+    // reply non-deferred để không consume interaction token không cần thiết
+    return interaction.reply({ content: '⏳ Đang xử lý yêu cầu của bạn, vui lòng chờ...', ephemeral: true });
   }
+
+  // Đặt lock trước khi defer
   _pendingLock.add(lockKey);
-  setTimeout(() => _pendingLock.delete(lockKey), 3_000);
+  const lockTimer = setTimeout(() => _pendingLock.delete(lockKey), LOCK_MS);
 
-  // FIX B-1: đổi db.upsertAttendance → db.markAttendance (đúng tên + signature)
-  await db.markAttendance(session.id, user.id, status, user.id);
-
-  // Cập nhật embed session message
   try {
-    const ch = guild.channels.cache.get(session.channel_id);
-    if (ch && session.message_id) {
-      const msg = await ch.messages.fetch(session.message_id).catch(() => null);
-      if (msg) {
-        const attended = await db.getAttendances(session.id);
-        const embed    = await buildSessionEmbed(guild, session, attended);
-        const buttons  = buildAttendanceButtons(false);
-        await msg.edit({ embeds: [embed], components: [buttons] }).catch(() => null);
+    await interaction.deferReply({ ephemeral: true });
+    const session = sessionQuick; // đã có từ query trên
+
+    if (session.eligible_member_ids && !session.eligible_member_ids.includes(user.id)) {
+      return interaction.editReply({ content: '⚠️ Bạn không nằm trong danh sách điểm danh của phiên này.' });
+    }
+
+    if (session.allowed_role_id) {
+      const hasRole = member.roles.cache.has(session.allowed_role_id);
+      if (!hasRole) {
+        const roleName = guild.roles.cache.get(session.allowed_role_id)?.name ?? 'role cần thiết';
+        return interaction.editReply({ content: `🔒 Bạn cần có role **${roleName}** để điểm danh.` });
       }
     }
-  } catch (_) { /* silent — không làm crash flow chính */ }
 
-  return interaction.editReply({
-    content: `${STATUS_LABEL[status] ?? '✅'} Đã ghi nhận **${STATUS_LABEL[status]}** cho bạn.`,
-  });
+    await db.markAttendance(session.id, user.id, status, user.id);
+
+    // Cập nhật embed session message (best-effort)
+    try {
+      const ch = guild.channels.cache.get(session.channel_id);
+      if (ch && session.message_id) {
+        const msg = await ch.messages.fetch(session.message_id).catch(() => null);
+        if (msg) {
+          const attended = await db.getAttendances(session.id);
+          const embed    = await buildSessionEmbed(guild, session, attended);
+          const buttons  = buildAttendanceButtons(false);
+          await msg.edit({ embeds: [embed], components: [buttons] }).catch(() => null);
+        }
+      }
+    } catch (_) {}
+
+    return interaction.editReply({
+      content: `${STATUS_LABEL[status]} Đã ghi nhận cho bạn.`,
+    });
+  } finally {
+    // Xoá lock ngay sau khi xử lý xong (thay vì chờ hết 5s nếu thành công)
+    clearTimeout(lockTimer);
+    _pendingLock.delete(lockKey);
+  }
 }
 
 module.exports = { handleButton };
