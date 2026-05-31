@@ -96,21 +96,21 @@ async function cancelSession(sessionId) {
 // ─── Attendance ───────────────────────────────────────────────────────────────
 async function getAttendance(sessionId, userId) {
   const { data, error } = await supabase
-    .from('attendance').select('*').eq('session_id', sessionId).eq('user_id', userId).maybeSingle();
+    .from('attendances').select('*').eq('session_id', sessionId).eq('user_id', userId).maybeSingle();
   throwIfError(error, 'getAttendance');
   return data;
 }
 
 async function getAttendances(sessionId) {
   const { data, error } = await supabase
-    .from('attendance').select('*').eq('session_id', sessionId);
+    .from('attendances').select('*').eq('session_id', sessionId);
   throwIfError(error, 'getAttendances');
   return data ?? [];
 }
 
 async function markAttendance(sessionId, userId, status, markedBy = null) {
   const { error } = await supabase
-    .from('attendance')
+    .from('attendances')
     .upsert({ session_id: sessionId, user_id: userId, status, marked_by: markedBy }, { onConflict: 'session_id,user_id' });
   throwIfError(error, 'markAttendance');
 }
