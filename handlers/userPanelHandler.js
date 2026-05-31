@@ -4,6 +4,7 @@ const {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
+  MessageFlags,
 } = require('discord.js');
 const db = require('../db.js');
 
@@ -35,19 +36,22 @@ async function buildUserPanel(guild, member, userId) {
   const history  = await db.getSessionHistory(guild.id, 10);
   const active   = await db.getActiveSession(guild.id);
 
+  // Guard: member belum ada data
+  const safeStats = stats ?? { total_joined: 0, total_sessions: 0, current_streak: 0, best_streak: 0, max_streak: 0 };
+
   // Tính rank
   const rankIndex = topList.findIndex(m => m.user_id === userId);
   const rank      = rankIndex >= 0 ? rankIndex + 1 : null;
   const totalMembers = topList.length;
 
   // Tỉ lệ tham gia
-  const pct = stats.total_sessions > 0
-    ? Math.round((stats.total_joined / stats.total_sessions) * 100)
+  const pct = safeStats.total_sessions > 0
+    ? Math.round((safeStats.total_joined / safeStats.total_sessions) * 100)
     : 0;
 
   // Lịch sử 5 phiên gần nhất mà user là eligible
   const recentSessions = history
-    .filter(s => s.eligible_member_ids?.includes(userId))
+    .filter(s => !s.eligible_member_ids || s.eligible_member_ids.includes(userId))
     .slice(0, 5);
 
   // Lấy attendance của các phiên đó (song song)
@@ -68,6 +72,8 @@ async function buildUserPanel(guild, member, userId) {
   const displayName = member.nickname ?? member.user.globalName ?? member.user.username;
   const avatarUrl   = member.user.displayAvatarURL({ size: 64 });
 
+  const bestStreak = safeStats.best_streak ?? safeStats.max_streak ?? 0;
+
   const embed = new EmbedBuilder()
     .setColor(0x5865F2)
     .setAuthor({ name: `Thống kê của ${displayName}`, iconURL: avatarUrl })
@@ -76,8 +82,8 @@ async function buildUserPanel(guild, member, userId) {
       {
         name: '📊 Tổng quan',
         value: [
-          `> Tham gia: **${stats.total_joined}** / **${stats.total_sessions}** phiên  (${pct}%)`,
-          `> 🔥 Streak hiện tại: **${stats.current_streak}**  |  🏆 Best: **${stats.best_streak}**`,
+          `> Tham gia: **${safeStats.total_joined}** / **${safeStats.total_sessions}** phiên  (${pct}%)`,
+          `> 🔥 Streak hiện tại: **${safeStats.current_streak}**  |  🏆 Best: **${bestStreak}**`,
           rank
             ? `> ${rankEmoji(rank)} Xếp hạng: **${rank}** / ${totalMembers} thành viên`
             : '> 📭 Chưa có dữ liệu xếp hạng',
@@ -87,10 +93,7 @@ async function buildUserPanel(guild, member, userId) {
       {
         name: active ? `📋 Phiên đang mở — ${active.session_name ?? 'Điểm danh'}` : '📋 Phiên hiện tại',
         value: active
-          ? (() => {
-              const myAtt = null; // active session — chưa kết thúc, không query history
-              return '> ✅ Có phiên đang mở. Hãy điểm danh nếu chưa!';
-            })()
+          ? '> ✅ Có phiên đang mở. Hãy điểm danh nếu chưa!'
           : '> Không có phiên nào đang mở.',
         inline: false,
       },
@@ -158,7 +161,8 @@ async function handleUserPanelButton(interaction) {
   }
 
   if (customId === 'toi:rank') {
-    await interaction.deferReply({ ephemeral: true });
+    // Dùng flags thay vì ephemeral (tránh deprecation warning)
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const panel = await buildRankPanel(guild);
     return interaction.editReply(panel);
   }

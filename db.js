@@ -162,10 +162,30 @@ async function getAllMemberStats(guildId) {
   return data ?? [];
 }
 
-// ─── Server / history helpers ─────────────────────────────────────────────────
-async function getSessionHistory(guildId, { limit = 10, offset = 0, since = null } = {}) {
+/**
+ * Lấy top N thành viên tích cực nhất của guild, sắp xếp theo total_joined DESC.
+ * @param {string} guildId
+ * @param {number} [limit=10]
+ * @returns {Promise<Array>}
+ */
+async function getTopMembers(guildId, limit = 10) {
   const { data, error } = await supabase
-    .from('sessions').select('id, ended_at, eligible_member_ids')
+    .from('member_stats')
+    .select('user_id, total_joined, total_sessions, current_streak, max_streak')
+    .eq('guild_id', guildId)
+    .order('total_joined', { ascending: false })
+    .limit(limit);
+  throwIfError(error, 'getTopMembers');
+  return data ?? [];
+}
+
+// ─── Server / history helpers ─────────────────────────────────────────────────
+async function getSessionHistory(guildId, limitOrOpts = 10) {
+  // Accept both legacy getSessionHistory(guildId, 10) and object form
+  const { limit = 10, offset = 0 } =
+    typeof limitOrOpts === 'number' ? { limit: limitOrOpts } : limitOrOpts;
+  const { data, error } = await supabase
+    .from('sessions').select('id, session_name, ended_at, created_at, eligible_member_ids')
     .eq('guild_id', guildId).eq('is_active', false).eq('cancelled', false)
     .order('ended_at', { ascending: false })
     .range(offset, offset + limit - 1);
@@ -301,7 +321,7 @@ module.exports = {
   getAttendances, getSessionHistory, getSessionsWithAttendance,
   // Member
   getMemberStats, upsertMemberStats, batchUpsertMemberStats,
-  resetMemberStreak, getAllMemberStats,
+  resetMemberStreak, getAllMemberStats, getTopMembers,
   // Config
   getConfig, upsertConfig, updateConfig,
   // Badges
