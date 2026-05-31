@@ -1,4 +1,4 @@
-// commands/help.js
+// commands/help.js — Hướng dẫn bot với select menu phân danh mục
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder } = require('discord.js');
 const { FOOTER_DEFAULT, AUTHOR_DEFAULT } = require('../utils/embeds.js');
 
@@ -31,7 +31,7 @@ const CATEGORIES = {
         usage: '/huy_diemdanh',
         desc: 'Hủy phiên hiện tại. Phiên bị hủy sẽ không hiện trong lịch sử.',
         note: 'Admin only. Khác /ket_thuc — không tính vào thống kê.',
-        examples: ['`/huy_diemdanh` → hủy phiên, dữ liệu bị ẩn'],
+        examples: ['`/huy_diemdanh` → hủy phiên, dữ liệu bị ẩn khỏi lịch sử'],
       },
       {
         name: '/xem',
@@ -88,11 +88,11 @@ const CATEGORIES = {
       {
         name: '/lich_co_dinh them',
         usage: '/lich_co_dinh them ten:[tên] thu_mo:[thứ] gio_mo:[H] phut_mo:[P] ...',
-        desc: 'Tạo lịch điểm danh tự động mở mỗi tuần theo thứ/giờ cài đặt.',
+        desc: 'Tạo lịch điểm danh tự động mở mỗi tuần theo thứ/giờ đã cài.',
         note: 'Admin only. Phái lấy từ /cai_dat_phai (không cần nhập lại).',
         examples: [
           '`/lich_co_dinh them ten:Bang Chiến thu_mo:Thứ 6 gio_mo:20 phut_mo:0`',
-          'Thêm thu_dong/gio_dong/phut_dong để tự đóng',
+          'Thêm thu_dong/gio_dong/phut_dong để cài giờ tự đóng',
         ],
       },
       {
@@ -105,7 +105,7 @@ const CATEGORIES = {
       {
         name: '/lich_co_dinh xoa',
         usage: '/lich_co_dinh xoa id:[ID]',
-        desc: 'Xoá lịch cố định. Lấy ID từ `/lich_co_dinh xem`.',
+        desc: 'Xoá lịch cố định theo ID. Lấy ID từ `/lich_co_dinh xem`.',
         note: 'Admin only.',
         examples: ['`/lich_co_dinh xoa id:ab12cd34`'],
       },
@@ -138,8 +138,8 @@ const CATEGORIES = {
       {
         name: '/nhac_nho',
         usage: '/nhac_nho [phut:X]',
-        desc: 'Bật/tắt nhắc nhở trước khi phiên mở (từ lịch cố định).',
-        note: 'Admin only. Mặc định 15 phút trước.',
+        desc: 'Bật/tắt nhắc nhở trước khi phiên mở (từ lịch cố định). Mặc định 15 phút.',
+        note: 'Admin only.',
         examples: ['`/nhac_nho phut:10` → nhắc 10 phút trước khi mở'],
       },
     ],
@@ -151,20 +151,19 @@ const CATEGORIES = {
     commands: [
       {
         name: '/thong_ke',
-        usage: '/thong_ke [thanh_vien:@user]',
-        desc: 'Xem thống kê điểm danh cá nhân (streak, tỉ lệ tham gia).',
-        note: 'Không truyền @user → xem của bản thân.',
+        usage: '/thong_ke',
+        desc: 'Xem bảng xếp hạng top 10 thành viên chuyên cần nhất server.',
+        note: 'Ai cũng dùng được.',
         examples: [
-          '`/thong_ke` → xem thống kê của mình',
-          '`/thong_ke thanh_vien:@Mio` → xem của người khác',
+          '`/thong_ke` → hiển thị top 10 leaderboard',
         ],
       },
       {
         name: '/thong_ke_phien',
-        usage: '/thong_ke_phien [so_luong:N]',
-        desc: 'Xem bảng xếp hạng điểm danh toàn server.',
+        usage: '/thong_ke_phien session_id:[ID]',
+        desc: 'Xem chi tiết một phiên đã kết thúc. Lấy ID từ `/lich_su`.',
         note: 'Ai cũng dùng được.',
-        examples: ['`/thong_ke_phien` → top thành viên tham gia nhiều nhất'],
+        examples: ['`/thong_ke_phien session_id:abc123` → xem chi tiết phiên đó'],
       },
       {
         name: '/lich_su',
@@ -206,7 +205,7 @@ function buildOverviewEmbed() {
       '**Chọn danh mục bên dưới để xem chi tiết lệnh.**\n\n' + desc
     )
     .addFields(
-      { name: '🔑 Phân quyền', value: '**Admin**: owner server hoặc role admin được cài trong `/cai_dat`\n**Thành viên**: mọi người đều dùng được', inline: false },
+      { name: '🔑 Phân quyền', value: '**Admin**: owner server hoặc role admin cài trong `/cai_dat`\n**Thành viên**: mọi người đều dùng được', inline: false },
       { name: '🚀 Bắt đầu nhanh', value: '1. `/cai_dat` — cài role\n2. `/cai_dat_phai` — cài role phái (1 lần)\n3. `/lich_co_dinh them` — tạo lịch tự động\nhoặc `/bat_dau` — mở phiên thủ công', inline: false },
     )
     .setColor(0x5865F2)
@@ -245,7 +244,7 @@ function buildSelectMenu() {
       .addOptions(
         { label: 'Tổng quan', description: 'Xem tất cả danh mục', value: 'overview', emoji: '📖' },
         ...Object.entries(CATEGORIES).map(([key, cat]) => ({
-          label: cat.label.replace(/^[^ ]+ /, ''),
+          label: cat.label.replace(/^\S+ /, ''),
           description: cat.description,
           value: key,
           emoji: cat.label.split(' ')[0],
@@ -261,15 +260,14 @@ async function execute(interaction) {
   await interaction.editReply({ embeds: [embed], components: [menu] });
 }
 
-// Xử lý select menu — gọi từ interactionCreate
+// Xử lý select menu — được gọi từ index.js (isStringSelectMenu)
 async function handleSelectMenu(interaction) {
-  if (interaction.customId !== 'help_category') return false;
+  if (interaction.customId !== 'help_category') return;
   await interaction.deferUpdate();
   const val = interaction.values[0];
   const embed = val === 'overview' ? buildOverviewEmbed() : buildCategoryEmbed(val);
-  if (!embed) return false;
+  if (!embed) return;
   await interaction.editReply({ embeds: [embed], components: [buildSelectMenu()] });
-  return true;
 }
 
 module.exports = { data, execute, handleSelectMenu };

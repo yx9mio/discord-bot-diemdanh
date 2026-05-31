@@ -1,4 +1,4 @@
-// commands/thongke.js
+// commands/thongke.js — Bảng xếp hạng top 10 chuyên cần
 const { SlashCommandBuilder } = require('discord.js');
 const db = require('../db.js');
 const { buildStatsEmbed, buildProgressBar } = require('../utils/embeds.js');
@@ -6,7 +6,7 @@ const { layHuyHieu } = require('../utils/helpers.js');
 
 const data = new SlashCommandBuilder()
   .setName('thong_ke')
-  .setDescription('Xem top 10 thành viên chuyên cần');
+  .setDescription('Xem bảng xếp hạng top 10 thành viên chuyên cần nhất server');
 
 async function execute(interaction) {
   await interaction.deferReply({ ephemeral: true });
