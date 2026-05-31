@@ -1,152 +1,116 @@
-// utils/session.js — Xử lý kết thúc phiên, huy hiệu, vô hiệu hóa nút
-// PERF H-4: batch member stats — O(2N) queries → O(2) queries khi đóng phiên
+// utils/session.js
+// M-1: thongBaoHuyHieu dùng db.getBadges() thay vì hardcode
 'use strict';
-const db = require('../db.js');
-const { buildAttendanceButtons } = require('./embeds.js');
-const { MOC_HUY_HIEU } = require('./helpers.js');
-const { AttachmentBuilder } = require('discord.js');
+const { EmbedBuilder }     = require('discord.js');
+const db                   = require('../db.js');
+const log                  = require('./logger.js');
+const { FOOTER_DEFAULT, buildSummaryEmbed } = require('./embeds.js');
 
-// ─── FEAT 3.1: Build CSV buffer từ danh sách điểm danh ───────────────────────
-function buildCsvBuffer(session, attended, eligibleMemberIds) {
-  const header = 'STT,User ID,Tên,Trạng thái,Thời gian điểm danh';
-  const attMap = new Map(attended.map(a => [a.user_id, a]));
-  const rows = [];
-  let stt = 1;
+// ── Huy hiệu mặc định nếu DB chưa có row nào ─────────────────────────────────
+const DEFAULT_BADGES = [
+  { threshold:   5, emoji: '🌱', label: 'Lính Mới'       },
+  { threshold:  10, emoji: '⭐', label: 'Cần Cù'          },
+  { threshold:  20, emoji: '🌟', label: 'Chuyên Cần'      },
+  { threshold:  30, emoji: '💪', label: 'Kiên Trì'        },
+  { threshold:  50, emoji: '🏆', label: 'Huyền Thoại'     },
+  { threshold: 100, emoji: '👑', label: 'Vua Điểm Danh'   },
+];
 
-  for (const a of attended) {
-    const trangThai =
-      a.status === 'tham_gia' ? 'Tham gia' :
-      a.status === 'tre'      ? 'Đến muộn' :
-      a.status === 'vang_mat' ? 'Vắng mặt' : a.status;
-    const thoiGian = a.checked_in_at
-      ? new Date(a.checked_in_at).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })
-      : '';
-    const ten = (a.username ?? a.user_id).replace(/,/g, ' ');
-    rows.push(`${stt++},${a.user_id},${ten},${trangThai},${thoiGian}`);
+/**
+ * Lấy danh sách badge cho guild (từ DB, fallback DEFAULT_BADGES).
+ * @param {string} guildId
+ * @returns {Promise<Array<{threshold, emoji, label}>>}
+ */
+async function getBadgeList(guildId) {
+  try {
+    const rows = await db.getBadges(guildId);
+    return rows.length ? rows : DEFAULT_BADGES;
+  } catch {
+    return DEFAULT_BADGES;
   }
-  for (const uid of eligibleMemberIds) {
-    if (!attMap.has(uid)) {
-      rows.push(`${stt++},${uid},(chưa điểm danh),Vắng mặt,`);
-    }
-  }
-
-  const csv = [header, ...rows].join('\n');
-  return Buffer.concat([Buffer.from('\xEF\xBB\xBF'), Buffer.from(csv, 'utf8')]);
 }
 
-// ─── Kết thúc phiên & cập nhật stats (PERF H-4: batch) ───────────────────────
+/**
+ * Kết thúc phiên: cập nhật member_stats và trả về statsMap.
+ * @returns {Promise<Map<userId, {total, streak, max}>>}
+ */
 async function ketThucPhien(guild, session, attended) {
-  const eligibleIds = session.eligible_member_ids ?? [];
+  const statsMap = new Map();
+  const patches  = [];
 
-  // 1 query: lấy toàn bộ stats hiện tại cho guild
-  const allStats = await db.getAllMemberStats(guild.id);
-  const statsMap = {};
-  for (const s of allStats) {
-    if (eligibleIds.includes(s.user_id)) {
-      statsMap[s.user_id] = {
-        total_joined:   s.total_joined   ?? 0,
-        current_streak: s.current_streak ?? 0,
-      };
-    }
+  for (const record of attended) {
+    if (record.status !== 'present') continue;
+    const uid   = record.user_id;
+    const gid   = guild.id;
+    const stats = await db.getMemberStats(gid, uid) ?? { total_joined: 0, current_streak: 0, max_streak: 0 };
+
+    const total  = (stats.total_joined   ?? 0) + 1;
+    const streak = (stats.current_streak ?? 0) + 1;
+    const maxS   = Math.max(stats.max_streak ?? 0, streak);
+
+    statsMap.set(uid, { total, streak, max: maxS });
+    patches.push({ user_id: uid, total_joined: total, current_streak: streak, max_streak: maxS, last_session_id: session.id });
   }
 
-  // Tính patch cho mọi eligible member trong memory
-  const attSet = new Set(
-    attended
-      .filter(a => ['tham_gia', 'tre'].includes(a.status))
-      .map(a => a.user_id)
-  );
-
-  const patches = eligibleIds.map(uid => {
-    const prev          = statsMap[uid] ?? { total_joined: 0, current_streak: 0 };
-    const thamGia       = attSet.has(uid);
-    const total_joined  = prev.total_joined + (thamGia ? 1 : 0);
-    const current_streak = thamGia
-      ? prev.current_streak + 1
-      : 0;
-    const max_streak    = Math.max(prev.max_streak ?? 0, current_streak);
-    return {
-      user_id:        uid,
-      total_joined,
-      current_streak,
-      max_streak,
-      last_session_id: session.id,
-    };
-  });
-
-  // 1 query: bulk upsert tất cả
-  await db.batchUpsertMemberStats(guild.id, patches);
-  await db.endSession(session.id);
-
-  return statsMap; // trả về snapshot TRƯỚC khi update (dùng cho badge check)
+  if (patches.length) await db.batchUpsertMemberStats(guild.id, patches);
+  return statsMap;
 }
 
-// ─── Thông báo huy hiệu mới ───────────────────────────────────────────────────
+/**
+ * Thông báo huy hiệu mới cho thành viên đạt mốc.
+ * M-1: dùng db.getBadges() thay vì hardcode BADGE_THRESHOLDS.
+ */
 async function thongBaoHuyHieu(guild, channel, guildId, sessionId, attended, statsMap) {
-  const msgs = [];
-  // Lấy stats sau update trong 1 query
-  const allStatsSau = await db.getAllMemberStats(guildId);
-  const statsSauMap = new Map(allStatsSau.map(s => [s.user_id, s]));
+  const badges = await getBadgeList(guildId);
+  if (!badges.length) return;
 
-  for (const a of attended) {
-    if (!['tham_gia', 'tre'].includes(a.status)) continue;
-    const statsTruoc = statsMap?.[a.user_id];
-    const statsSau   = statsSauMap.get(a.user_id);
-    if (!statsSau) continue;
-    const truocKhi = statsTruoc != null ? statsTruoc.total_joined : Math.max(0, statsSau.total_joined - 1);
-    const sauKhi   = statsSau.total_joined;
-    for (const m of MOC_HUY_HIEU) {
-      if (truocKhi < m.count && sauKhi >= m.count) {
-        msgs.push(`🎉 <@${a.user_id}> đạt huy hiệu **${m.badge} ${m.label}** (${m.count} lần tham gia)!`);
+  const newBadges = [];
+
+  for (const [userId, stats] of statsMap.entries()) {
+    const existing = await db.getMemberBadges(guildId, userId);
+    const earnedSet = new Set(existing.map(b => b.threshold));
+
+    for (const badge of badges) {
+      if (stats.total >= badge.threshold && !earnedSet.has(badge.threshold)) {
+        await db.upsertMemberBadge(guildId, userId, badge.threshold);
+        newBadges.push({ userId, badge });
       }
     }
   }
-  if (msgs.length > 0) await channel.send(msgs.join('\n')).catch(() => null);
+
+  if (!newBadges.length) return;
+
+  const lines = newBadges.map(({ userId, badge }) =>
+    `${badge.emoji} <@${userId}> đạt **${badge.label}** (${badge.threshold} lần điểm danh)`
+  ).join('\n');
+
+  const embed = new EmbedBuilder()
+    .setTitle('🎖️ Huy Hiệu Mới!')
+    .setColor(0xd19900)
+    .setDescription(lines)
+    .setFooter({ text: FOOTER_DEFAULT })
+    .setTimestamp();
+
+  await channel.send({ embeds: [embed] });
 }
 
-// ─── Vô hiệu hóa nút điểm danh trên tin nhắn gốc ────────────────────────────
+/**
+ * Vô hiệu hoá nút điểm danh trên message cũ.
+ */
 async function voHieuHoaNutDiemDanh(client, channel, session) {
+  if (!session.message_id) return;
   try {
-    if (session.message_id) {
-      const targetCh = session.channel_id
-        ? await channel.guild.channels.fetch(session.channel_id).catch(() => channel)
-        : channel;
-      const msg = await targetCh.messages.fetch(session.message_id).catch(() => null);
-      if (msg) {
-        await msg.edit({ components: [buildAttendanceButtons(true)] }).catch(() => null);
-        return;
-      }
-    }
-    const targetChannel = session.channel_id
-      ? await channel.guild.channels.fetch(session.channel_id).catch(() => channel)
-      : channel;
-    const msgs = await targetChannel.messages.fetch({ limit: 100 }).catch(() => null);
-    if (!msgs) return;
-    const sessionMsg = msgs.find(m =>
-      m.author.id === client.user.id &&
-      m.components.length > 0 &&
-      m.components[0]?.components[0]?.disabled !== true &&
-      m.embeds.some(e => e.title?.includes(session.session_name))
-    );
-    if (sessionMsg) await sessionMsg.edit({ components: [buildAttendanceButtons(true)] }).catch(() => null);
-  } catch (_) {}
-}
-
-// ─── FEAT 3.1: Gửi CSV đính kèm sau khi đóng phiên ──────────────────────────
-async function guiCsvDiemDanh(channel, session, attended) {
-  try {
-    const csvBuf  = buildCsvBuffer(session, attended, session.eligible_member_ids ?? []);
-    const now     = new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })
-      .replace(/[/:, ]/g, '-').slice(0, 16);
-    const fileName = `diemdanh-${session.session_name.replace(/\s+/g, '_')}-${now}.csv`;
-    const attachment = new AttachmentBuilder(csvBuf, { name: fileName });
-    await channel.send({
-      content: `📎 **Xuất danh sách điểm danh** — \`${fileName}\``,
-      files: [attachment],
+    const msg = await channel.messages.fetch(session.message_id);
+    if (!msg) return;
+    const rows = msg.components.map(row => {
+      const newRow = row.toJSON();
+      newRow.components = newRow.components.map(c => ({ ...c, disabled: true }));
+      return newRow;
     });
+    await msg.edit({ components: rows });
   } catch (e) {
-    console.warn('[session] guiCsvDiemDanh lỗi:', e.message);
+    log.warn('SESSION', session.guild_id, 'Không vô hiệu hoá được nút: %s', e.message);
   }
 }
 
-module.exports = { ketThucPhien, thongBaoHuyHieu, voHieuHoaNutDiemDanh, guiCsvDiemDanh, buildCsvBuffer };
+module.exports = { ketThucPhien, thongBaoHuyHieu, voHieuHoaNutDiemDanh, getBadgeList };

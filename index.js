@@ -1,16 +1,13 @@
 // index.js — Entry point Quản Gia
+// M-5: interactionCreate logic tách sang events/interactionCreate.js
 require('dotenv').config();
 const { Client, GatewayIntentBits, Partials } = require('discord.js');
-const { loadCommands, handleCommand }   = require('./handlers/commandHandler.js');
-const { handleButton }                  = require('./handlers/buttonHandler.js');
-const { onReady }                       = require('./events/ready.js');
-const { onGuildCreate }                 = require('./events/guildCreate.js');
-const { onMessageDelete }               = require('./events/messageDelete.js');
-const { handleSelectMenu }              = require('./commands/help.js');
-const { handleSetupUi }                 = require('./handlers/setupUiHandler.js');
-const { handleUserPanelButton }         = require('./handlers/userPanelHandler.js');
-const log                               = require('./utils/logger.js');
-const { handleInteractionError }        = require('./utils/errorHandler.js');
+const { loadCommands }          = require('./handlers/commandHandler.js');
+const { onReady }               = require('./events/ready.js');
+const { onGuildCreate }         = require('./events/guildCreate.js');
+const { onMessageDelete }       = require('./events/messageDelete.js');
+const { execute: onInteractionCreate } = require('./events/interactionCreate.js');
+const log                       = require('./utils/logger.js');
 
 if (!process.env.DISCORD_TOKEN) {
   log.error('SYSTEM', null, 'Thiếu DISCORD_TOKEN trong .env!');
@@ -29,42 +26,9 @@ const client = new Client({
 
 const commands = loadCommands();
 
-client.once('ready', () => onReady(client));
-client.on('guildCreate', guild => onGuildCreate(guild));
-
-client.on('interactionCreate', async interaction => {
-  try {
-    if (interaction.isButton()) {
-      if (interaction.customId?.startsWith('toi:'))   return handleUserPanelButton(interaction);
-      if (interaction.customId?.startsWith('setup:')) return handleSetupUi(interaction);
-      return handleButton(interaction);
-    }
-
-    // ── Setup UI: RoleSelect / ChannelSelect / ModalSubmit ────────────────────────────
-    if (
-      interaction.isRoleSelectMenu()    ||
-      interaction.isChannelSelectMenu() ||
-      interaction.isModalSubmit()
-    ) {
-      if (interaction.customId?.startsWith('setup:')) {
-        return handleSetupUi(interaction);
-      }
-    }
-
-    // ── StringSelectMenu: setup: trước, help sau ──────────────────────────────
-    if (interaction.isStringSelectMenu()) {
-      if (interaction.customId?.startsWith('setup:')) {
-        return handleSetupUi(interaction);
-      }
-      return handleSelectMenu(interaction);
-    }
-
-    if (interaction.isChatInputCommand()) return handleCommand(interaction, commands);
-  } catch (err) {
-    await handleInteractionError(interaction, err, 'interactionCreate');
-  }
-});
-
-client.on('messageDelete', message => onMessageDelete(client, message));
+client.once('ready',           ()      => onReady(client));
+client.on('guildCreate',       guild   => onGuildCreate(guild));
+client.on('messageDelete',     message => onMessageDelete(client, message));
+client.on('interactionCreate', i       => onInteractionCreate(i, commands));
 
 client.login(process.env.DISCORD_TOKEN);

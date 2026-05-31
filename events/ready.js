@@ -1,5 +1,6 @@
 // events/ready.js
 // Phase 11.2: khoiPhucHenGio dùng getAllActiveSessions() — 1 query thay vì N
+// L-3: startHealthServer() — HTTP health endpoint cho Railway/UptimeRobot
 const { REST, Routes, EmbedBuilder } = require('discord.js');
 const path = require('path');
 const fs   = require('fs');
@@ -9,6 +10,7 @@ const { datHenGioDong }    = require('../utils/timers.js');
 const { ketThucPhien, thongBaoHuyHieu, voHieuHoaNutDiemDanh } = require('../utils/session.js');
 const { buildSummaryEmbed, FOOTER_DEFAULT } = require('../utils/embeds.js');
 const { khoiPhucScheduler } = require('../utils/scheduler.js');
+const { startHealthServer } = require('./healthServer.js');
 
 let dangKhoiPhuc = false;
 
@@ -18,7 +20,6 @@ async function dangKyCommands(client) {
   const commandData = files.map(f => require(path.join(dir, f)).data.toJSON());
   const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
 
-  // Xóa global commands (nếu còn tồn tại từ trước) để tránh trùng lặp
   try {
     await rest.put(Routes.applicationCommands(client.user.id), { body: [] });
     log.info('SYSTEM', null, 'Đã xóa global commands cũ.');
@@ -26,7 +27,6 @@ async function dangKyCommands(client) {
     log.warn('SYSTEM', null, 'Không xóa được global commands: %s', err.message);
   }
 
-  // Guild-specific: hiện ngay lập tức cho mọi guild bot đang ở
   const guilds = client.guilds.cache.values();
   let guildOk = 0;
   for (const guild of guilds) {
@@ -40,14 +40,13 @@ async function dangKyCommands(client) {
       log.error('SYSTEM', guild.id, 'Lỗi đăng ký commands: %s', err.message);
     }
   }
-  log.info('SYSTEM', null, 'Đã đăng ký %s lệnh cho %s guild(s) — guild-only, hiện ngay lập tức.', commandData.length, guildOk);
+  log.info('SYSTEM', null, 'Đã đăng ký %s lệnh cho %s guild(s)', commandData.length, guildOk);
 }
 
 async function khoiPhucHenGio(client) {
   if (dangKhoiPhuc) return;
   dangKhoiPhuc = true;
   try {
-    // Phase 11.2: 1 query lấy toàn bộ active sessions thay vì loop guild
     const sessions = await db.getAllActiveSessions();
     if (sessions.length === 0) {
       log.info('SYSTEM', null, 'Không có phiên nào cần khôi phục hẹn giờ.');
@@ -65,7 +64,7 @@ async function khoiPhucHenGio(client) {
           log.warn('SYSTEM', guildId, 'Guild không có trong cache — bỏ qua phiên %s', session.id);
           continue;
         }
-        if (!session.auto_close_at) continue;   // phiên mở tay, không có timer
+        if (!session.auto_close_at) continue;
         if (!channelId) continue;
 
         const ms = new Date(session.auto_close_at).getTime() - Date.now();
@@ -73,7 +72,6 @@ async function khoiPhucHenGio(client) {
           await datHenGioDong(client, guild, session, channelId, ms);
           log.info('SYSTEM', guildId, 'Khôi phục hẹn giờ: %s — %s (còn %ss)', guild.name, session.session_name, Math.round(ms / 1000));
         } else {
-          // Quá hạn trong lúc offline → đóng ngay
           const ch = await guild.channels.fetch(channelId).catch(() => null);
           if (!ch) {
             log.warn('SYSTEM', guildId, 'Channel %s không tìm thấy — endSession thầm lặng', channelId);
@@ -102,9 +100,10 @@ async function khoiPhucHenGio(client) {
 
 async function onReady(client) {
   log.info('SYSTEM', null, 'Đã sẵn sàng: %s', client.user.tag);
+  startHealthServer(client);   // L-3: HTTP health :PORT
   await dangKyCommands(client);
   await khoiPhucHenGio(client);
-  await khoiPhucScheduler(client);  // Khôi phục lịch cố định
+  await khoiPhucScheduler(client);
 }
 
 module.exports = { onReady };
