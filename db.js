@@ -2,11 +2,17 @@
 // PERF H-4: thêm batchUpsertMemberStats() — bulk upsert 1 query thay vì N queries
 'use strict';
 const { createClient } = require('@supabase/supabase-js');
+const ws  = require('ws');
 const log = require('./utils/logger.js');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_KEY,
+  {
+    realtime: {
+      transport: ws,   // Node.js 20 không có native WebSocket — dùng 'ws' package
+    },
+  },
 );
 
 // ─── Error helper ─────────────────────────────────────────────────────────────
