@@ -165,6 +165,25 @@ async function upsertAttendanceNoTime(sessionId, guildId, userId, username, stat
   throwIfError(error, 'upsertAttendanceNoTime');
 }
 
+/**
+ * getAttendanceSummaryForSessions — lấy tất cả attendance rows cho list sessionIds.
+ * Trả về Map<sessionId, rows[]> để tra cứu nhanh.
+ */
+async function getAttendanceSummaryForSessions(sessionIds) {
+  if (!sessionIds || sessionIds.length === 0) return new Map();
+  const { data, error } = await supabase
+    .from('attendances')
+    .select('session_id, user_id, status')
+    .in('session_id', sessionIds);
+  throwIfError(error, 'getAttendanceSummaryForSessions');
+  const map = new Map();
+  for (const row of (data ?? [])) {
+    if (!map.has(row.session_id)) map.set(row.session_id, []);
+    map.get(row.session_id).push(row);
+  }
+  return map;
+}
+
 // ─── Member stats ─────────────────────────────────────────────────────────────
 async function getMemberStats(guildId, userId) {
   const { data, error } = await supabase
@@ -231,6 +250,27 @@ async function getSessionHistory(guildId, limitOrOpts = 10) {
     .order('ended_at', { ascending: false })
     .range(offset, offset + limit - 1);
   throwIfError(error, 'getSessionHistory');
+  return data ?? [];
+}
+
+/**
+ * getSessionHistoryWithRange — lấy lịch sử phiên trong khoảng thời gian.
+ * @param {string} guildId
+ * @param {string|null} since  — ISO timestamp, null = tất cả
+ * @param {number} limit
+ */
+async function getSessionHistoryWithRange(guildId, since = null, limit = 100) {
+  let query = supabase
+    .from('sessions')
+    .select('id, session_name, ended_at, eligible_member_ids')
+    .eq('guild_id', guildId)
+    .eq('is_active', false)
+    .eq('cancelled', false)
+    .order('ended_at', { ascending: false })
+    .limit(limit);
+  if (since) query = query.gte('ended_at', since);
+  const { data, error } = await query;
+  throwIfError(error, 'getSessionHistoryWithRange');
   return data ?? [];
 }
 
@@ -348,6 +388,31 @@ async function deleteScheduledSession(id) {
 
 const getLichCoDinh = getScheduledSessions;
 
+/**
+ * themLichCoDinh — alias của createScheduledSession với tham số đặt tên tiếng Việt.
+ * Dùng bởi presetHandler.js và lichHandler.js.
+ */
+async function themLichCoDinh(guildId, {
+  dayOfWeek, hour, minute,
+  sessionName,
+  closeDayOfWeek = null, closeHour = null, closeMinute = null,
+  phaiRoleIds = [],
+  channelId = null,
+} = {}) {
+  return createScheduledSession(guildId, {
+    day_of_week:       dayOfWeek,
+    hour,
+    minute,
+    session_name:      sessionName,
+    close_day_of_week: closeDayOfWeek,
+    close_hour:        closeHour,
+    close_minute:      closeMinute,
+    phai_role_ids:     phaiRoleIds,
+    channel_id:        channelId,
+    is_active:         true,
+  });
+}
+
 // ─── Exports ──────────────────────────────────────────────────────────────────
 const closeSession = endSession;
 
@@ -358,12 +423,13 @@ module.exports = {
   closeSession,
   getAttendance, getAttendances,
   markAttendance, upsertAttendance, upsertAttendanceNoTime,
-  getSessionHistory, getSessionsWithAttendance,
+  getAttendanceSummaryForSessions,
+  getSessionHistory, getSessionHistoryWithRange, getSessionsWithAttendance,
   getMemberStats, upsertMemberStats, batchUpsertMemberStats,
   resetMemberStreak, getAllMemberStats, getTopMembers,
   getConfig, upsertConfig, updateConfig,
   getBadgesForSession, getBadges, upsertBadge, deleteBadge, getMemberBadges, upsertMemberBadge,
   getScheduledSessions, getAllScheduledSessions, getScheduledSessionById,
   createScheduledSession, updateScheduledSession, deleteScheduledSession,
-  getLichCoDinh,
+  getLichCoDinh, themLichCoDinh,
 };
