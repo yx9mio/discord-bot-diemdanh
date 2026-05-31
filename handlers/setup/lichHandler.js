@@ -38,6 +38,13 @@ function makePlaceholderFromNums(dayOfWeek, hour, minute) {
   }
 }
 
+// ─── Bảng lý do thất bại → message người dùng ────────────────────────────────
+const MO_PHIEN_ERROR_MSG = {
+  already_open:    '⚠️ Đang có phiên khác đang mở. Đóng phiên hiện tại trước khi mở mới.',
+  channel_not_found: '❌ Không tìm thấy kênh của lịch này. Kiểm tra lại Channel ID hoặc quyền của bot.',
+  db_error:        '❌ Lỗi cơ sở dữ liệu khi tạo phiên. Vui lòng thử lại sau.',
+};
+
 // ─── lichMenuComponents ───────────────────────────────────────────────────────
 function lichMenuComponents(lichList) {
   const embed = new EmbedBuilder()
@@ -176,12 +183,31 @@ async function handleLich(interaction) {
     const lichList = await db.getLichCoDinh(guild.id);
     const lich = lichList.find(l => l.id === lichId);
     if (!lich) { await interaction.editReply({ content: '❌ Không tìm thấy lịch.' }); return true; }
+
+    // Double-check phiên đang mở trước khi gọi scheduler (UI có thể stale)
     const activeSession = await db.getActiveSession(guild.id);
-    if (activeSession) { await interaction.editReply({ content: '⚠️ Đang có phiên mở, không thể mở thêm.' }); return true; }
-    // Bug 4 fix: đúng tên export là runLichNgay (không phải morPhienTheoLich)
+    if (activeSession) {
+      await interaction.editReply({ content: MO_PHIEN_ERROR_MSG.already_open });
+      return true;
+    }
+
     const { runLichNgay } = require('../../utils/scheduler.js');
-    await runLichNgay(interaction.client, guild.id, lich);
-    await interaction.editReply({ content: `✅ Đã mở phiên **${lich.session_name}** ngay lập tức.` });
+    // FIX #8: runLichNgay trả về { ok, reason } — đọc để hiển thị đúng message
+    let result;
+    try {
+      result = await runLichNgay(interaction.client, guild.id, lich);
+    } catch (e) {
+      await interaction.editReply({ content: `❌ Lỗi không xác định: ${e.message}` });
+      return true;
+    }
+
+    if (!result.ok) {
+      const msg = MO_PHIEN_ERROR_MSG[result.reason] ?? `❌ Không thể mở phiên (${result.reason}).`;
+      await interaction.editReply({ content: msg });
+      return true;
+    }
+
+    await interaction.editReply({ content: `✅ Đã mở phiên **${lich.session_name}** trong <#${lich.channel_id}>.` });
     return true;
   }
 
