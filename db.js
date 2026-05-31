@@ -44,7 +44,7 @@ async function getActiveSession(guildId) {
   return data;
 }
 
-async function createSession(guildId, { sessionName, roleName, allowedRoleId, eligibleMemberIds, startedBy, autoCloseAt }) {
+async function createSession(guildId, { sessionName, roleName, allowedRoleId, eligibleMemberIds, startedBy, autoCloseAt, channelId }) {
   const { data, error } = await supabase
     .from('sessions')
     .insert({
@@ -55,6 +55,7 @@ async function createSession(guildId, { sessionName, roleName, allowedRoleId, el
       eligible_member_ids: eligibleMemberIds,
       started_by: startedBy,
       auto_close_at: autoCloseAt ?? null,
+      channel_id: channelId ?? null,
       is_active: true,
     })
     .select()
