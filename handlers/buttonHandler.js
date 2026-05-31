@@ -3,8 +3,8 @@ const db = require('../db.js');
 const { buildSessionEmbed, buildAttendanceButtons, buildConfigEmbed } = require('../utils/embeds.js');
 const { ketThucPhien, thongBaoHuyHieu, voHieuHoaNutDiemDanh } = require('../utils/session.js');
 const { xoaHenGio } = require('../utils/timers.js');
+const { handleSetupUi } = require('./setupUiHandler.js');
 
-// [B6 FIX] Map từ customId của button → status DB thực tế
 const BUTTON_TO_STATUS = {
   attend_yes:  'tham_gia',
   attend_late: 'tre',
@@ -20,7 +20,12 @@ const STATUS_LABEL = {
 async function handleButton(interaction) {
   const { customId, guild, member, user, channel } = interaction;
 
-  // ── Setup shortcuts ─────────────────────────────────────────────
+  // ── Setup UI Wizard (prefix 'setup:') ──────────────────────────────────────
+  if (customId?.startsWith('setup:')) {
+    return handleSetupUi(interaction);
+  }
+
+  // ── Setup shortcuts cũ (giữ backward compat) ───────────────────────────────
   if (customId === 'setup_help') {
     const { execute } = require('../commands/help.js');
     return execute(interaction);
@@ -32,7 +37,7 @@ async function handleButton(interaction) {
     return interaction.editReply({ embeds: [buildConfigEmbed(cfg)] });
   }
 
-  // ── Xem danh sách ───────────────────────────────────────────────
+  // ── Xem danh sách ───────────────────────────────────────────────────────────
   if (customId === 'attend_view') {
     const session = await db.getActiveSession(guild.id);
     if (!session) {
@@ -43,7 +48,7 @@ async function handleButton(interaction) {
     return interaction.reply({ embeds: [embed], ephemeral: true });
   }
 
-  // ── Đóng phiên bằng nút ────────────────────────────────────────
+  // ── Đóng phiên bằng nút ────────────────────────────────────────────────────
   if (customId === 'attend_close') {
     await interaction.deferReply({ ephemeral: true });
     const cfg = await db.getConfig(guild.id);
@@ -54,7 +59,6 @@ async function handleButton(interaction) {
     const session = await db.getActiveSession(guild.id);
     if (!session) return interaction.editReply({ content: '📭 Không có phiên nào đang mở.' });
     const attended = await db.getAttendances(session.id);
-    // [B3 FIX] xoaHenGio nhận guildId, KHÔNG phải session.id
     xoaHenGio(guild.id);
     const statsMap = await ketThucPhien(guild, session, attended);
     await voHieuHoaNutDiemDanh(interaction.client, channel, session);
@@ -64,10 +68,9 @@ async function handleButton(interaction) {
     return interaction.editReply({ content: '✅ Đã đóng phiên.' });
   }
 
-  // ── Nút điểm danh chính ───────────────────────────────────────────
-  // [B6 FIX] map customId → status thực tế (attend_yes → tham_gia, v.v.)
+  // ── Nút điểm danh chính ────────────────────────────────────────────────────
   const status = BUTTON_TO_STATUS[customId];
-  if (!status) return; // customId không phải nút điểm danh → bỏ qua
+  if (!status) return;
 
   await interaction.deferReply({ ephemeral: true });
   const session = await db.getActiveSession(guild.id);
@@ -75,12 +78,10 @@ async function handleButton(interaction) {
     return interaction.editReply({ content: '📭 Không có phiên điểm danh nào đang mở.' });
   }
 
-  // Check eligible_member_ids trước khi cho điểm danh
   if (session.eligible_member_ids && !session.eligible_member_ids.includes(user.id)) {
     return interaction.editReply({ content: '⚠️ Bạn không nằm trong danh sách điểm danh của phiên này.' });
   }
 
-  // Check role nếu có
   if (session.allowed_role_id) {
     const hasRole = member.roles.cache.has(session.allowed_role_id);
     if (!hasRole) {
@@ -90,10 +91,8 @@ async function handleButton(interaction) {
   }
 
   const displayName = member.nickname ?? user.globalName ?? user.username;
-  // [B6 FIX] truyền status (tham_gia / tre / khong_tham_gia) thay vì customId
   await db.upsertAttendance(session.id, guild.id, user.id, displayName, status);
 
-  // Cập nhật embed chính
   try {
     const ch = guild.channels.cache.get(session.channel_id);
     if (ch && session.message_id) {
