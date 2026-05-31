@@ -1,9 +1,8 @@
 // commands/thongke.js
 const { SlashCommandBuilder } = require('discord.js');
 const db = require('../db.js');
-const { buildStatsEmbed } = require('../utils/embeds.js');
+const { buildStatsEmbed, buildProgressBar } = require('../utils/embeds.js');
 const { layHuyHieu } = require('../utils/helpers.js');
-const { buildProgressBar } = require('../utils/progress.js');
 
 const data = new SlashCommandBuilder()
   .setName('thong_ke')
