@@ -1,23 +1,23 @@
 // utils/embeds.js — Tất cả embed builders & button builders
 // Phase 1: Design system thống nhất — COLORS, ICONS, helpers
 // Phase 3: buildSessionEmbed & buildSummaryEmbed nâng cấp visual
+// Phase 5: Feedback states — replyLoading, replyOkEdit, replyErrEdit, replyConfirm
 'use strict';
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { buildProgressBar } = require('./progress.js');
 
 // ─── Design System: Color Palette ────────────────────────────────────────────
-// Dùng COLORS.X thay vì hardcode hex ở mọi nơi
 const COLORS = {
-  PRIMARY:  0x5865F2,  // Discord Blurple — dashboard, neutral info
-  SUCCESS:  0x57F287,  // Discord Green   — mở phiên, thêm thành công
-  DANGER:   0xED4245,  // Discord Red     — đóng phiên, xóa, lỗi
-  WARNING:  0xFEE75C,  // Discord Yellow  — confirm, action cần chú ý
-  INACTIVE: 0xB9BBBE,  // Discord Gray    — phiên đóng, idle, history
-  GOLD:     0xF0B132,  // Amber           — stats, tổng kết, top
-  INFO:     0x4F8EF7,  // Blue            — thông tin phụ
+  PRIMARY:  0x5865F2,
+  SUCCESS:  0x57F287,
+  DANGER:   0xED4245,
+  WARNING:  0xFEE75C,
+  INACTIVE: 0xB9BBBE,
+  GOLD:     0xF0B132,
+  INFO:     0x4F8EF7,
 };
 
-// Legacy aliases — giữ backward compat với code cũ
+// Legacy aliases
 const COLOR_HIGH   = COLORS.SUCCESS;
 const COLOR_MID    = COLORS.WARNING;
 const COLOR_LOW    = COLORS.DANGER;
@@ -25,19 +25,15 @@ const COLOR_ACTIVE = COLORS.PRIMARY;
 const COLOR_GREY   = COLORS.INACTIVE;
 const COLOR_GOLD   = COLORS.GOLD;
 
-// ─── Design System: Icon Set ─────────────────────────────────────────────────
-// Nhất quán emoji/icon toàn bot — sửa 1 chỗ là đổi tất cả
+// ─── Design System: Icon Set ──────────────────────────────────────────────────
 const ICONS = {
-  // Trạng thái phiên
   SESSION_OPEN:    '🟢',
   SESSION_CLOSED:  '🔴',
   SESSION_WARN:    '🟡',
-  // Điểm danh
   ATTEND_YES:      '✅',
   ATTEND_LATE:     '⏰',
   ATTEND_NO:       '❌',
   ATTEND_ABSENT:   '⏳',
-  // Navigation & actions
   OPEN_SESSION:    '▶️',
   CLOSE_SESSION:   '⏹️',
   STATS:           '📊',
@@ -51,7 +47,6 @@ const ICONS = {
   EDIT:            '✏️',
   ADD:             '➕',
   BACK:            '←',
-  // Misc
   FIRE:            '🔥',
   TROPHY:          '🏆',
   MEDAL:           '🏅',
@@ -59,10 +54,12 @@ const ICONS = {
   PERSON:          '👥',
   STREAK_ACTIVE:   '🔥',
   STREAK_NONE:     '💤',
+  LOADING:         '⏳',
+  PIN:             '📌',
+  CHART_UP:        '📈',
 };
 
-// ─── Design System: Semantic Embed Factories ─────────────────────────────────
-// Dùng các factory này thay vì new EmbedBuilder() trực tiếp
+// ─── Design System: Semantic Embed Factories ──────────────────────────────────
 function embedSuccess(title, description) {
   return new EmbedBuilder().setTitle(title).setColor(COLORS.SUCCESS).setDescription(description ?? null);
 }
@@ -79,18 +76,50 @@ function embedGray(title, description) {
   return new EmbedBuilder().setTitle(title).setColor(COLORS.INACTIVE).setDescription(description ?? null);
 }
 
-// ─── Design System: Reply Helpers (ephemeral feedback) ───────────────────────
-// Dùng cho mọi reply feedback trong handlers thay vì text thuần
-const replyOk  = (msg) => ({ embeds: [embedSuccess('✅ Thành công', msg)],  ephemeral: true });
-const replyErr = (msg) => ({ embeds: [embedDanger ('❌ Lỗi',        msg)],  ephemeral: true });
-const replyWarn= (msg) => ({ embeds: [embedWarning('⚠️ Chú ý',      msg)],  ephemeral: true });
-const replyInfo= (msg) => ({ embeds: [embedInfo   ('ℹ️ Thông tin',  msg)],  ephemeral: true });
+// ─── Phase 5: Reply Helpers (ephemeral feedback) ──────────────────────────────
+// Dạng cơ bản — dùng cho reply() / followUp()
+const replyOk  = (msg) => ({ embeds: [embedSuccess('✅ Thành công', msg)],   ephemeral: true });
+const replyErr = (msg) => ({ embeds: [embedDanger ('❌ Lỗi',        msg)],   ephemeral: true });
+const replyWarn= (msg) => ({ embeds: [embedWarning('⚠️ Chú ý',      msg)],   ephemeral: true });
+const replyInfo= (msg) => ({ embeds: [embedInfo   ('ℹ️ Thông tin',  msg)],   ephemeral: true });
 
-// ─── Constants ───────────────────────────────────────────────────────────────
+// Phase 5: dạng edit — dùng cho interaction.editReply() sau deferReply()
+const replyOkEdit  = (msg) => ({ embeds: [embedSuccess('✅ Thành công', msg)],  components: [] });
+const replyErrEdit = (msg) => ({ embeds: [embedDanger ('❌ Lỗi',        msg)],  components: [] });
+const replyWarnEdit= (msg) => ({ embeds: [embedWarning('⚠️ Chú ý',      msg)],  components: [] });
+const replyInfoEdit= (msg) => ({ embeds: [embedInfo   ('ℹ️ Thông tin',  msg)],  components: [] });
+
+// Phase 5: Loading state — dùng ngay sau deferUpdate() hoặc trước await nặng
+const replyLoading = (msg = 'Đang xử lý...') => ({
+  embeds: [new EmbedBuilder()
+    .setTitle(`${ICONS.LOADING} Đang xử lý`)
+    .setDescription(`> ${msg}`)
+    .setColor(COLORS.INACTIVE)],
+  components: [],
+});
+
+// Phase 5: Confirm prompt — embed cảnh báo + 2 button Xác nhận / Hủy
+// customIdConfirm / customIdCancel: string customId cho 2 nút
+function replyConfirm(msg, customIdConfirm, customIdCancel = 'confirm:cancel') {
+  const embed = embedWarning('⚠️ Xác nhận hành động', msg);
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(customIdConfirm)
+      .setLabel('✅ Xác nhận')
+      .setStyle(ButtonStyle.Danger),
+    new ButtonBuilder()
+      .setCustomId(customIdCancel)
+      .setLabel('✖️ Hủy')
+      .setStyle(ButtonStyle.Secondary),
+  );
+  return { embeds: [embed], components: [row], ephemeral: true };
+}
+
+// ─── Constants ─────────────────────────────────────────────────────────────────
 const FOOTER_DEFAULT = 'Quản Gia';
 const AUTHOR_DEFAULT = { name: '📋 Quản Gia · Điểm Danh' };
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// ─── Helpers ───────────────────────────────────────────────────────────────────
 function pctColor(pct) {
   if (pct >= 80) return COLORS.SUCCESS;
   if (pct >= 50) return COLORS.WARNING;
@@ -137,8 +166,6 @@ function formatDuration(seconds) {
   return `${seconds % 60} giây`;
 }
 
-// ─── Phase 3: Progress bar nâng cấp ─────────────────────────────────────────
-// Trả về string bar + label phần trăm (dùng block chars phong phú hơn)
 function buildRichProgressBar(pct, len = 12) {
   const clamped = Math.min(100, Math.max(0, pct));
   const filled  = Math.round((clamped / 100) * len);
@@ -146,7 +173,7 @@ function buildRichProgressBar(pct, len = 12) {
   return `${bar} **${clamped}%**`;
 }
 
-// ─── Thống kê phái helper ─────────────────────────────────────────────────────
+// ─── Thống kê phái helper ──────────────────────────────────────────────────────
 function buildPhaiStatsText(guild, phaiRoleIds, attended, eligible) {
   if (!guild || !phaiRoleIds?.length) return null;
 
@@ -170,7 +197,7 @@ function buildPhaiStatsText(guild, phaiRoleIds, attended, eligible) {
   return lines.length > 0 ? lines.join('\n') : null;
 }
 
-// ─── Buttons ──────────────────────────────────────────────────────────────────
+// ─── Buttons ───────────────────────────────────────────────────────────────────
 function buildAttendanceButtons(disabled = false) {
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
@@ -200,7 +227,7 @@ function buildAttendanceButtons(disabled = false) {
   );
 }
 
-// ─── Phase 3: Session Embed (phiên đang mở) — nâng cấp visual ────────────────
+// ─── Phase 3: Session Embed ────────────────────────────────────────────────────
 async function buildSessionEmbed(guild, session, attended, phaiRoleIds = null) {
   const joined       = attended.filter(a => a.status === 'tham_gia');
   const late         = attended.filter(a => a.status === 'tre');
@@ -219,14 +246,10 @@ async function buildSessionEmbed(guild, session, attended, phaiRoleIds = null) {
     ? `<@&${session.allowed_role_id}>`
     : (session.role_name ?? 'Tất cả');
 
-  // ── Status header line
   const statusLine = `${ICONS.SESSION_OPEN} **Đang mở** · ${roleDisplay} · ${eligible} thành viên`;
-
-  // ── Progress bar nâng cấp
   const richBar    = buildRichProgressBar(pct);
   const statsLine  = `${richBar} · ${ICONS.ATTEND_YES}\`${joined.length}\` ${ICONS.ATTEND_LATE}\`${late.length}\` ${ICONS.ATTEND_NO}\`${declined.length}\``;
 
-  // ── Time block
   const timeLines = [`${ICONS.CLOCK} Bắt đầu: <t:${startTs}:f> (<t:${startTs}:R>)`];
   if (session.auto_close_at) {
     const ts = Math.floor(new Date(session.auto_close_at).getTime() / 1000);
@@ -251,44 +274,37 @@ async function buildSessionEmbed(guild, session, attended, phaiRoleIds = null) {
     if (iconURL) embed.setThumbnail(iconURL);
   }
 
-  // ── Danh sách tham gia
   if (joined.length > 0)
     chunkLines(joined.map((a, i) => `\`${String(i + 1).padStart(2)}.\` **${a.username}**`))
       .forEach((chunk, i) => embed.addFields({
         name: i === 0 ? `${ICONS.ATTEND_YES} Tham Gia — ${joined.length}` : '\u200b',
-        value: chunk,
-        inline: true,
+        value: chunk, inline: true,
       }));
 
   if (late.length > 0)
     chunkLines(late.map((a, i) => `\`${String(i + 1).padStart(2)}.\` ${a.username}`))
       .forEach((chunk, i) => embed.addFields({
         name: i === 0 ? `${ICONS.ATTEND_LATE} Đến Trễ — ${late.length}` : '\u200b',
-        value: chunk,
-        inline: true,
+        value: chunk, inline: true,
       }));
 
   if (declined.length > 0)
     chunkLines(declined.map((a, i) => `\`${String(i + 1).padStart(2)}.\` ~~${a.username}~~`))
       .forEach((chunk, i) => embed.addFields({
         name: i === 0 ? `${ICONS.ATTEND_NO} Vắng Mặt — ${declined.length}` : '\u200b',
-        value: chunk,
-        inline: true,
+        value: chunk, inline: true,
       }));
 
-  // ── Chưa điểm danh
   if (absentIds.length > 0) {
     const MAX      = 25;
     const mentions = absentIds.slice(0, MAX).map(id => `<@${id}>`);
     const extra    = absentIds.length > MAX ? ` *(+${absentIds.length - MAX} nữa)*` : '';
     embed.addFields({
-      name:   `${ICONS.ATTEND_ABSENT} Chưa Điểm Danh (${absentIds.length})`,
-      value:  mentions.join(' ') + extra,
-      inline: false,
+      name:  `${ICONS.ATTEND_ABSENT} Chưa Điểm Danh (${absentIds.length})`,
+      value: mentions.join(' ') + extra, inline: false,
     });
   }
 
-  // ── Thống kê phái
   const phaiText = buildPhaiStatsText(guild, phaiRoleIds, attended, session.eligible_member_ids);
   if (phaiText)
     embed.addFields({ name: `${ICONS.SWORD} Thống Kê Phái`, value: phaiText, inline: false });
@@ -297,7 +313,7 @@ async function buildSessionEmbed(guild, session, attended, phaiRoleIds = null) {
   return embed;
 }
 
-// ─── Phase 3: Summary Embed (phiên đã đóng) — nâng cấp visual ───────────────
+// ─── Phase 3: Summary Embed ────────────────────────────────────────────────────
 function buildSummaryEmbed(session, attended, guild = null, phaiRoleIds = null) {
   const joined       = attended.filter(a => a.status === 'tham_gia');
   const late         = attended.filter(a => a.status === 'tre');
@@ -309,16 +325,11 @@ function buildSummaryEmbed(session, attended, guild = null, phaiRoleIds = null) 
   const startedAt = session.created_at ?? session.started_at;
   const startTs   = Math.floor(new Date(startedAt).getTime() / 1000);
   const endTs     = session.ended_at ? Math.floor(new Date(session.ended_at).getTime() / 1000) : null;
+  const dur       = endTs ? formatDuration(endTs - startTs) : null;
 
-  const dur = endTs ? formatDuration(endTs - startTs) : null;
-
-  // ── Score badge
   const badge = pct >= 90 ? '🏆 Xuất sắc' : pct >= 80 ? '🥇 Tốt' : pct >= 60 ? '🥈 Khá' : pct >= 40 ? '🥉 TB' : '📉 Thấp';
-
-  // ── Progress bar nâng cấp
   const richBar  = buildRichProgressBar(pct);
 
-  // ── Description block
   const descLines = [
     `${pctEmoji(pct)} **${pct}%** — ${badge}`,
     `${richBar}`,
@@ -335,7 +346,6 @@ function buildSummaryEmbed(session, attended, guild = null, phaiRoleIds = null) 
     .setDescription(descLines.join('\n'))
     .setTimestamp();
 
-  // ── Danh sách chi tiết
   const joinedLines = joined.map((a, i) => `\`${String(i + 1).padStart(2)}.\` **${a.username}**`);
   const lateLines   = late.map((a, i)   => `\`${String(i + 1).padStart(2)}.\` ${a.username}`);
   const decLines    = declined.map((a, i) => `\`${String(i + 1).padStart(2)}.\` ~~${a.username}~~`);
@@ -356,7 +366,6 @@ function buildSummaryEmbed(session, attended, guild = null, phaiRoleIds = null) 
   else
     embed.addFields({ name: `${ICONS.ATTEND_NO} Vắng Mặt — 0`, value: '—', inline: true });
 
-  // ── Thống kê phái
   const phaiText = buildPhaiStatsText(guild, phaiRoleIds, attended, session.eligible_member_ids);
   if (phaiText)
     embed.addFields({ name: `${ICONS.SWORD} Thống Kê Phái`, value: phaiText, inline: false });
@@ -365,7 +374,7 @@ function buildSummaryEmbed(session, attended, guild = null, phaiRoleIds = null) 
   return embed;
 }
 
-// ─── History Embed ────────────────────────────────────────────────────────────
+// ─── History Embed ─────────────────────────────────────────────────────────────
 function buildHistoryEmbed(history) {
   if (history.length === 0) {
     return new EmbedBuilder()
@@ -395,7 +404,7 @@ function buildHistoryEmbed(history) {
     .setTimestamp();
 }
 
-// ─── Member Embed ─────────────────────────────────────────────────────────────
+// ─── Member Embed ──────────────────────────────────────────────────────────────
 function buildMemberEmbed(member, stats, badge, pct, bar) {
   const streakBar = stats.current_streak > 0
     ? ICONS.STREAK_ACTIVE.repeat(Math.min(stats.current_streak, 10)) + (stats.current_streak > 10 ? ` x${stats.current_streak}` : '')
@@ -420,7 +429,7 @@ function buildMemberEmbed(member, stats, badge, pct, bar) {
     .setTimestamp();
 }
 
-// ─── Config Embed ─────────────────────────────────────────────────────────────
+// ─── Config Embed ──────────────────────────────────────────────────────────────
 function buildConfigEmbed(cfg) {
   return new EmbedBuilder()
     .setAuthor(AUTHOR_DEFAULT)
@@ -437,12 +446,93 @@ function buildConfigEmbed(cfg) {
     .setTimestamp();
 }
 
-// ─── Exports ─────────────────────────────────────────────────────────────────
+// ─── Phase 6: Server Stats Embed ──────────────────────────────────────────────
+// Dùng bởi /thongke_server
+function buildServerStatsEmbed(guild, stats, topMembers) {
+  const {
+    totalSessions, totalMembers, avgAttendance,
+    overallPct, lastSession, activeSession,
+  } = stats;
+
+  const richBar  = buildRichProgressBar(overallPct);
+  const badge    = overallPct >= 90 ? '🏆 Xuất sắc' : overallPct >= 75 ? '🥇 Tốt' : overallPct >= 55 ? '🥈 Khá' : overallPct >= 35 ? '🥉 Trung bình' : '📉 Thấp';
+
+  // Trạng thái phiên hiện tại
+  let phienLine;
+  if (activeSession) {
+    const ts = Math.floor(new Date(activeSession.created_at).getTime() / 1000);
+    phienLine = `${ICONS.SESSION_OPEN} **${activeSession.session_name}** đang mở — <t:${ts}:R>`;
+  } else {
+    phienLine = `⚫ Không có phiên đang mở`;
+  }
+
+  // Phiên gần nhất
+  let lastLine = '_Chưa có phiên nào_';
+  if (lastSession) {
+    const startedAt = lastSession.created_at ?? lastSession.started_at;
+    const ts = Math.floor(new Date(startedAt).getTime() / 1000);
+    const attended = (lastSession.attended_count ?? 0);
+    const eligible = (lastSession.eligible_member_ids ?? []).length;
+    const lPct     = eligible > 0 ? Math.round((attended / eligible) * 100) : 0;
+    lastLine = `**${lastSession.session_name}** — <t:${ts}:d>  ·  ${lPct}% (${attended}/${eligible})`;
+  }
+
+  // Top thành viên
+  const topLines = topMembers.length > 0
+    ? topMembers.slice(0, 10).map((m, i) => {
+        const medals = ['🥇','🥈','🥉'];
+        const medal  = medals[i] ?? `\`${i + 1}.\``;
+        const mPct   = m.total_sessions > 0 ? Math.round((m.total_joined / m.total_sessions) * 100) : 0;
+        return `${medal} <@${m.user_id}> — **${m.total_joined}** phiên *(${mPct}%)*`;
+      }).join('\n')
+    : '_Chưa có dữ liệu_';
+
+  const embed = new EmbedBuilder()
+    .setAuthor({ name: `${ICONS.STATS} Quản Gia · Thống Kê Server` })
+    .setTitle(`📊 Thống Kê: ${guild.name}`)
+    .setColor(pctColor(overallPct))
+    .setDescription([
+      `${pctEmoji(overallPct)} Tỷ lệ điểm danh tổng: **${overallPct}%** — ${badge}`,
+      richBar,
+    ].join('\n'))
+    .addFields(
+      {
+        name: `${ICONS.CHART_UP} Tổng quan`,
+        value: [
+          `▸ Tổng phiên: **${totalSessions}**`,
+          `▸ Thành viên theo dõi: **${totalMembers}**`,
+          `▸ Trung bình mỗi người: **${avgAttendance}** phiên`,
+        ].join('\n'),
+        inline: false,
+      },
+      { name: `${ICONS.PIN} Phiên hiện tại`, value: phienLine,  inline: false },
+      { name: `${ICONS.CLOCK} Phiên gần nhất`, value: lastLine, inline: false },
+      { name: `${ICONS.TROPHY} Top điểm danh`, value: topLines,  inline: false },
+    );
+
+  if (guild.iconURL) {
+    const url = guild.iconURL({ dynamic: true });
+    if (url) embed.setThumbnail(url);
+  }
+
+  embed
+    .setFooter({ text: `${FOOTER_DEFAULT} · ${totalSessions} phiên · ${totalMembers} thành viên` })
+    .setTimestamp();
+
+  return embed;
+}
+
+// ─── Exports ───────────────────────────────────────────────────────────────────
 module.exports = {
   // Design system
   COLORS, ICONS,
   embedSuccess, embedDanger, embedWarning, embedInfo, embedGray,
+  // Reply helpers
   replyOk, replyErr, replyWarn, replyInfo,
+  // Phase 5: edit & confirm variants
+  replyOkEdit, replyErrEdit, replyWarnEdit, replyInfoEdit,
+  replyLoading,
+  replyConfirm,
   // Helpers
   pctColor, pctEmoji, pctLabel, chunkLines, formatDuration,
   buildRichProgressBar,
@@ -455,4 +545,6 @@ module.exports = {
   buildHistoryEmbed,
   buildMemberEmbed,
   buildConfigEmbed,
+  // Phase 6
+  buildServerStatsEmbed,
 };
