@@ -1,4 +1,5 @@
 // events/ready.js
+// Phase 11.2: khoiPhucHenGio dùng getAllActiveSessions() — 1 query thay vì N
 const { REST, Routes, EmbedBuilder } = require('discord.js');
 const path = require('path');
 const fs   = require('fs');
@@ -17,7 +18,7 @@ async function dangKyCommands(client) {
   const commandData = files.map(f => require(path.join(dir, f)).data.toJSON());
   const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
 
-  // ── Xóa global commands (nếu còn tồn tại từ trước) để tránh trùng lặp ──
+  // Xóa global commands (nếu còn tồn tại từ trước) để tránh trùng lặp
   try {
     await rest.put(Routes.applicationCommands(client.user.id), { body: [] });
     log.info('SYSTEM', null, 'Đã xóa global commands cũ.');
@@ -25,7 +26,7 @@ async function dangKyCommands(client) {
     log.warn('SYSTEM', null, 'Không xóa được global commands: %s', err.message);
   }
 
-  // ── Guild-specific: hiện ngay lập tức cho mọi guild bot đang ở ──────────
+  // Guild-specific: hiện ngay lập tức cho mọi guild bot đang ở
   const guilds = client.guilds.cache.values();
   let guildOk = 0;
   for (const guild of guilds) {
@@ -46,19 +47,39 @@ async function khoiPhucHenGio(client) {
   if (dangKhoiPhuc) return;
   dangKhoiPhuc = true;
   try {
-    for (const guild of client.guilds.cache.values()) {
+    // Phase 11.2: 1 query lấy toàn bộ active sessions thay vì loop guild
+    const sessions = await db.getAllActiveSessions();
+    if (sessions.length === 0) {
+      log.info('SYSTEM', null, 'Không có phiên nào cần khôi phục hẹn giờ.');
+      return;
+    }
+
+    log.info('SYSTEM', null, 'Khôi phục hẹn giờ cho %s phiên đang mở...', sessions.length);
+
+    for (const session of sessions) {
+      const guildId   = session.guild_id;
+      const channelId = session.channel_id;
       try {
-        const session = await db.getActiveSession(guild.id);
-        if (!session || !session.auto_close_at) continue;
-        const channelId = session.channel_id;
+        const guild = client.guilds.cache.get(guildId);
+        if (!guild) {
+          log.warn('SYSTEM', guildId, 'Guild không có trong cache — bỏ qua phiên %s', session.id);
+          continue;
+        }
+        if (!session.auto_close_at) continue;   // phiên mở tay, không có timer
         if (!channelId) continue;
+
         const ms = new Date(session.auto_close_at).getTime() - Date.now();
         if (ms > 0) {
           await datHenGioDong(client, guild, session, channelId, ms);
-          log.info('SYSTEM', guild.id, 'Khôi phục hẹn giờ: %s — %s', guild.name, session.session_name);
+          log.info('SYSTEM', guildId, 'Khôi phục hẹn giờ: %s — %s (còn %ss)', guild.name, session.session_name, Math.round(ms / 1000));
         } else {
+          // Quá hạn trong lúc offline → đóng ngay
           const ch = await guild.channels.fetch(channelId).catch(() => null);
-          if (!ch) continue;
+          if (!ch) {
+            log.warn('SYSTEM', guildId, 'Channel %s không tìm thấy — endSession thầm lặng', channelId);
+            await db.endSession(session.id);
+            continue;
+          }
           const attended = await db.getAttendances(session.id);
           const statsMap = await ketThucPhien(guild, session, attended);
           await voHieuHoaNutDiemDanh(client, ch, session);
@@ -67,11 +88,11 @@ async function khoiPhucHenGio(client) {
             .setDescription('🔒 Phiên điểm danh đã tự động kết thúc trong lúc bot offline.')
             .setFooter({ text: FOOTER_DEFAULT });
           await ch.send({ embeds: [thongBao, buildSummaryEmbed(session, attended)] });
-          await thongBaoHuyHieu(guild, ch, guild.id, session.id, attended, statsMap);
-          log.info('SYSTEM', guild.id, 'Đóng phiên offline: %s — %s', guild.name, session.session_name);
+          await thongBaoHuyHieu(guild, ch, guildId, session.id, attended, statsMap);
+          log.info('SYSTEM', guildId, 'Đóng phiên offline: %s — %s', guild.name, session.session_name);
         }
       } catch (e) {
-        log.error('SYSTEM', guild.id, 'Lỗi khôi phục guild: %s', e.message);
+        log.error('SYSTEM', guildId, 'Lỗi khôi phục phiên %s: %s', session.id, e.message);
       }
     }
   } finally {
