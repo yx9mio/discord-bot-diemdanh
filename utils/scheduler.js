@@ -5,6 +5,7 @@
 // Fix #4: loại bỏ ephemeral deprecated warning khỏi handler setup
 // Fix #5: ketThucPhien(guild, session, attended) — sửa TypeError
 // Fix #6: buildSummaryEmbed(session, attended, guild) — sửa thứ tự params
+// Fix #7: guard createSession null trong _moPhien → reschedule mở tuần sau thay vì crash
 // Phase H: ping role điểm danh khi mở phiên tự động
 'use strict';
 const { EmbedBuilder, MessageFlags } = require('discord.js');
@@ -64,13 +65,13 @@ async function _moPhien(guild, lich) {
   const existing = await db.getActiveSession(guild.id);
   if (existing) {
     log.info('SCHEDULER', guild.id, '%s — bỏ qua mở "%s": đã có phiên đang mở', guild.name, lich.session_name);
-    return;
+    return null;
   }
 
   const ch = await guild.channels.fetch(lich.channel_id).catch(() => null);
   if (!ch) {
     log.warn('SCHEDULER', guild.id, '%s — không tìm thấy kênh %s', guild.name, lich.channel_id);
-    return;
+    return null;
   }
 
   const session = await db.createSession({
@@ -81,6 +82,12 @@ async function _moPhien(guild, lich) {
     allowed_role_id: lich.allowed_role_id ?? null,
     eligible_member_ids: null,
   });
+
+  // FIX #7: guard createSession null → không crash, reschedule tuần sau từ caller
+  if (!session?.id) {
+    log.error('SCHEDULER', guild.id, '%s — createSession trả về null/undefined cho "%s", bỏ qua phiên này', guild.name, lich.session_name);
+    return null;
+  }
 
   const embed   = await buildSessionEmbed(guild, session, []);
   const buttons = buildAttendanceButtons(false);
@@ -98,6 +105,7 @@ async function _moPhien(guild, lich) {
 
   await db.updateSessionMessage(session.id, msg.id);
   log.info('SCHEDULER', guild.id, '%s — ĐÃ MỮ phiên: %s (ping %s)', guild.name, lich.session_name, pingContent ?? 'không có');
+  return session;
 }
 
 // ── GIAI ĐOẠN 3: Đóng phiên + thống kê ──────────────────────────────────────────
@@ -251,7 +259,9 @@ async function khoiPhucScheduler(client) {
 async function runLichNgay(client, guildId, lich) {
   const g = client.guilds.cache.get(guildId);
   if (!g) throw new Error('Guild không tìm thấy');
-  await _moPhien(g, lich);
+  const session = await _moPhien(g, lich);
+  // FIX #7: nếu _moPhien trả về null (createSession lỗi hoặc đã có phiên) → không đặt close timer
+  if (!session) return;
   if (lich.close_day_of_week != null) {
     const msClose = msFromOpenToClose(
       lich.day_of_week, lich.hour, lich.minute,
