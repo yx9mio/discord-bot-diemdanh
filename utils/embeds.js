@@ -8,7 +8,7 @@
 // UX-C: buildSummaryEmbed cột phái
 // Phase G: buildSummaryEmbed thêm cột đến trễ
 // M-1: eligible_member_ids null guard — fix crash lịch cố định
-// Fix: export AUTHOR_DEFAULT
+// Fix: export AUTHOR_DEFAULT + replyErr + replyErrEdit
 'use strict';
 const { EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder, StringSelectMenuBuilder } = require('discord.js');
 
@@ -47,6 +47,31 @@ const FOOTER_DEFAULT = 'Quản Gia · Bot Điểm Danh';
 
 // AUTHOR_DEFAULT dùng trong setAuthor() — phải là object { name, iconURL? }
 const AUTHOR_DEFAULT = { name: 'Quản Gia · Bot Điểm Danh' };
+
+// ─── Error reply helpers (dùng bởi errorHandler.js) ──────────────────────────
+// replyErr   — dùng cho interaction.reply / followUp (chưa deferred)
+function replyErr(msg = 'Có lỗi xảy ra. Vui lòng thử lại.') {
+  return {
+    embeds: [
+      new EmbedBuilder()
+        .setColor(COLORS.RED)
+        .setDescription(`❌ ${msg}`),
+    ],
+    ephemeral: true,
+  };
+}
+
+// replyErrEdit — dùng cho interaction.editReply (đã deferred), xóa components
+function replyErrEdit(msg = 'Có lỗi xảy ra. Vui lòng thử lại.') {
+  return {
+    embeds: [
+      new EmbedBuilder()
+        .setColor(COLORS.RED)
+        .setDescription(`❌ ${msg}`),
+    ],
+    components: [],
+  };
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function pctEmoji(pct) {
@@ -419,6 +444,8 @@ module.exports = {
   ICONS,
   FOOTER_DEFAULT,
   AUTHOR_DEFAULT,
+  replyErr,
+  replyErrEdit,
   buildSessionEmbed,
   buildSummaryEmbed,
   buildAttendanceButtons,
