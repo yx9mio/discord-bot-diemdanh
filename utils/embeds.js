@@ -10,6 +10,7 @@
 // Phase E: buildHistoryEmbed + tỷ lệ điểm danh mini bar mỗi dòng
 // Phase F: buildServerStatsEmbed + trend sparkline 5 phiên gần nhất
 // Phase G: buildAttendanceAdminRow — row thứ 2 chỉ dành admin
+// Phase J: fix attend_view disabled=true khi session đóng
 'use strict';
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { buildProgressBar } = require('./progress.js');
@@ -211,7 +212,10 @@ function buildPhaiStatsText(guild, phaiRoleIds, attended, eligible) {
   return lines.length > 0 ? lines.join('\n') : null;
 }
 
-// ─── Phase UX-A: Buttons (thêm nút Làm Mới) ──────────────────────────────────
+// ─── Phase UX-A + J: Buttons ──────────────────────────────────────────────────
+// Phase J fix: attend_view bây giờ nhận disabled thay vì hardcode false.
+// Khi session mở (disabled=false): tất cả nút đều enabled.
+// Khi session đóng (disabled=true): tất cả nút đều disabled, kể cả Xem DS.
 function buildAttendanceButtons(disabled = false) {
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
@@ -237,7 +241,7 @@ function buildAttendanceButtons(disabled = false) {
       .setLabel('Xem DS')
       .setEmoji('📋')
       .setStyle(ButtonStyle.Secondary)
-      .setDisabled(false),
+      .setDisabled(disabled),  // Phase J: was hardcoded false — now follows session state
     new ButtonBuilder()
       .setCustomId('attend_refresh')
       .setLabel('Làm Mới')
