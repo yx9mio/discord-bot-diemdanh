@@ -192,6 +192,9 @@ async function upsertConfig(guildId, patch) {
   throwIfError(error, 'upsertConfig');
 }
 
+// alias — một số handler cũ gọi updateConfig thay vì upsertConfig
+const updateConfig = upsertConfig;
+
 // ─── Badges ───────────────────────────────────────────────────────────────────
 async function getBadgesForSession(guildId, sessionId) {
   const { data: s } = await supabase.from('sessions').select('guild_id').eq('id', sessionId).maybeSingle();
@@ -294,7 +297,7 @@ module.exports = {
   getMemberStats, upsertMemberStats, batchUpsertMemberStats,
   resetMemberStreak, getAllMemberStats,
   // Config
-  getConfig, upsertConfig,
+  getConfig, upsertConfig, updateConfig,
   // Badges
   getBadgesForSession, getBadges, upsertBadge, deleteBadge, getMemberBadges, upsertMemberBadge,
   // Scheduled
