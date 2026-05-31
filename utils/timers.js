@@ -60,7 +60,9 @@ async function datHenGioDong(client, guild, session, channelId, ms) {
 
       const attended = await db.getAttendances(session.id);
       const statsMap = await ketThucPhien(guild, session, attended);
-      await voHieuHoaNutDiemDanh(client, ch, session);
+
+      // Phase I: edit message gốc → 🔴 Đã Đóng + buttons disabled
+      await voHieuHoaNutDiemDanh(client, ch, session, attended);
 
       const thongBao = new EmbedBuilder()
         .setColor(0x99AAB5)

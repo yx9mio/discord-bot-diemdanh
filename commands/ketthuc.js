@@ -27,8 +27,8 @@ module.exports = {
     // 1. Cập nhật member stats + endSession + lấy statsMap cho badge check
     const statsMap = await ketThucPhien(guild, session, attended);
 
-    // 2. Disable nút điểm danh trên message gốc
-    await voHieuHoaNutDiemDanh(interaction.client, channel, session);
+    // 2. Disable nút điểm danh + cập nhật embed → 🔴 Đã Đóng trên message gốc
+    await voHieuHoaNutDiemDanh(interaction.client, channel, session, attended);
 
     // 3. Gửi embed tổng kết ra channel (public)
     const phaiRoleIds = cfg?.phai_role_ids?.length ? cfg.phai_role_ids : null;
