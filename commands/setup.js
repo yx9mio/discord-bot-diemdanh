@@ -12,9 +12,9 @@ const { timKenhThongBao } = require('../utils/helpers.js');
 const TEN_THU = ['Chủ nhật','Thứ hai','Thứ ba','Thứ tư','Thứ năm','Thứ sáu','Thứ bảy'];
 const pad = n => String(n ?? 0).padStart(2, '0');
 
-// Lịch mặc định gợi ý cho Bang Chiến
+// Lịch mặc định: mở T7 21:00, đóng T7 19:30 tuần sau
 const LICH_MAC_DINH = [
-  { ten: 'Bang Chiến', thuMo: 6, gioMo: 21, phutMo: 0, thuDong: 0, gioDong: 0, phutDong: 30 },
+  { ten: 'Bang Chiến', thuMo: 6, gioMo: 21, phutMo: 0, thuDong: 6, gioDong: 19, phutDong: 30 },
 ];
 
 // ── Slash command ─────────────────────────────────────────────────────────────
@@ -22,23 +22,19 @@ const data = new SlashCommandBuilder()
   .setName('setup')
   .setDescription('Wizard thiết lập đầy đủ: role, phái và lịch cố định mặc định')
   .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
-  // Sub: tổng quan (mặc định)
   .addSubcommand(s =>
     s.setName('xem').setDescription('Xem tổng quan cấu hình hiện tại'))
-  // Sub: cài role + admin_role
   .addSubcommand(s =>
     s.setName('role')
       .setDescription('Cài role điểm danh và role admin bot')
       .addRoleOption(o => o.setName('role').setDescription('Role được điểm danh').setRequired(true))
       .addRoleOption(o => o.setName('admin_role').setDescription('Role quản lý bot').setRequired(true)))
-  // Sub: cài phái (11 slots)
   .addSubcommand(s => {
     s.setName('phai').setDescription('Cài danh sách role phái cho server');
     for (let i = 1; i <= 11; i++)
       s.addRoleOption(o => o.setName(`phai_${i}`).setDescription(`Phái ${i}`).setRequired(i === 1));
     return s;
   })
-  // Sub: thêm lịch cố định
   .addSubcommand(s =>
     s.setName('lich')
       .setDescription('Thêm lịch điểm danh cố định hằng tuần')
@@ -50,10 +46,10 @@ const data = new SlashCommandBuilder()
       .addIntegerOption(o => o.setName('gio_dong').setDescription('Giờ Đóng (0-23)').setMinValue(0).setMaxValue(23))
       .addIntegerOption(o => o.setName('phut_dong').setDescription('Phút Đóng (0-59)').setMinValue(0).setMaxValue(59))
       .addChannelOption(o => o.setName('kenh').setDescription('Kênh gửi thông báo (mặc định kênh hiện tại)')))
-  // Sub: one-click preset Bang Chien
+  // ⚡ Preset: mở T7 21:00 → đóng T7 19:30 tuần sau
   .addSubcommand(s =>
     s.setName('preset_bang_chien')
-      .setDescription('Tạo nhanh lịch Bang Chiến T7 21:00 → CN 0:30')
+      .setDescription('⚡ Tạo nhanh lịch Bang Chiến: mở T7 21:00 → đóng T7 19:30 tuần sau')
       .addChannelOption(o => o.setName('kenh').setDescription('Kênh gửi thông báo (mặc định kênh hiện tại)')));
 
 // ── Hàm phụ: build embed tổng quan ──────────────────────────────────────────
@@ -66,7 +62,7 @@ async function buildOverviewEmbed(guild, cfg) {
     ? lichList.map((l, i) => {
         const mo   = `${TEN_THU[l.day_of_week]} ${pad(l.hour)}:${pad(l.minute)}`;
         const dong = l.close_day_of_week != null
-          ? `→ ${TEN_THU[l.close_day_of_week]} ${pad(l.close_hour)}:${pad(l.close_minute)}`
+          ? `→ ${TEN_THU[l.close_day_of_week]} ${pad(l.close_hour)}:${pad(l.close_minute)} (tuần sau)`
           : '→ _ko tự đóng_';
         return `${i+1}. **${l.session_name}** | ${mo} ${dong} | <#${l.channel_id}>`;
       }).join('\n')
@@ -111,7 +107,7 @@ function buildGuideEmbed(cfg) {
     steps.push(`✅ Phái đã cài (${cfg.phai_role_ids.length} phái)`);
 
   steps.push('📅 `/setup lich` — thêm lịch tự động bất kỳ');
-  steps.push('⚡ `/setup preset_bang_chien` — tạo ngay lịch **Bang Chiến** T7 21:00 → CN 0:30');
+  steps.push('⚡ `/setup preset_bang_chien` — tạo ngay lịch **Bang Chiến** T7 21:00 → T7 19:30 tuần sau');
   steps.push('📖 `/help` — xem tất cả lệnh');
 
   return new EmbedBuilder()
@@ -224,7 +220,7 @@ async function execute(interaction) {
   if (sub === 'preset_bang_chien') {
     const kenh = interaction.options.getChannel('kenh') ?? interaction.channel;
     const phaiRoleIds = cfg.phai_role_ids ?? [];
-    const preset = LICH_MAC_DINH[0];
+    const preset = LICH_MAC_DINH[0]; // T7 21:00 → T7 19:30 tuần sau
 
     const lich = await db.themLichCoDinh(guild.id, {
       dayOfWeek:      preset.thuMo,
@@ -246,8 +242,10 @@ async function execute(interaction) {
     return interaction.editReply({
       content: [
         `⚡ Đã tạo preset **Bang Chiến**:`,
-        `Mở: **T7 21:00** → Đóng: **CN 0:30** | Kênh: <#${kenh.id}>`,
-        phaiRoleIds.length ? `Phái (${phaiRoleIds.length}): ${phaiRoleIds.map(id=>`<@&${id}>`).join(', ')}` : '⚠️ Chưa cài phái — chạy `/setup phai` trước',
+        `Mở: **T7 21:00** → Đóng: **T7 19:30 tuần sau** | Kênh: <#${kenh.id}>`,
+        phaiRoleIds.length
+          ? `Phái (${phaiRoleIds.length}): ${phaiRoleIds.map(id => `<@&${id}>`).join(', ')}`
+          : '⚠️ Chưa cài phái — chạy `/setup phai` trước',
         `ID: \`${lich.id}\``,
       ].join('\n'),
       embeds: [embed],
