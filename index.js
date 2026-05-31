@@ -26,7 +26,7 @@ const client = new Client({
 
 const commands = loadCommands();
 
-client.once('ready',           ()      => onReady(client));
+client.once('clientReady',     ()      => onReady(client));
 client.on('guildCreate',       guild   => onGuildCreate(guild));
 client.on('messageDelete',     message => onMessageDelete(client, message));
 client.on('interactionCreate', i       => onInteractionCreate(i, commands));
