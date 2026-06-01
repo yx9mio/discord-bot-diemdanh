@@ -37,13 +37,11 @@ async function buildDashboard(guild, cfg, viewMode = 'admin') {
 
   const lichLines = lichList.length
     ? lichList.map((l, i) => {
-        const { label: moLabel } = ngayThucTe(
-          l.day_of_week, l.hour, l.minute,
-        );
+        const { label: moLabel } = ngayThucTe(l.day_of_week, l.hour, l.minute);
         const dongLabel = formatDongStr(l);
         return `\`${i+1}\` **${l.session_name}** | ${moLabel} → ${dongLabel} | <#${l.channel_id}>`;
       }).join('\n')
-    : '⚠️ Chưa có lịch cố định';
+    : '⚠️ Chưa có lịch cố định *(bấm 📅 Quản lý Lịch để thêm)*';
 
   if (viewMode === 'user') {
     const embed = new EmbedBuilder()
@@ -66,24 +64,33 @@ async function buildDashboard(guild, cfg, viewMode = 'admin') {
 
   const stats = await buildDashboardStats(guild.id);
   const phaiRoleIds = cfg.phai_role_ids ?? [];
-  const phaiLines   = phaiRoleIds.length ? phaiRoleIds.map(id => `<@&${id}>`).join(', ') : '⚠️ Chưa cài';
+  const phaiLines   = phaiRoleIds.length ? phaiRoleIds.map(id => `<@&${id}>`).join(', ') : '⚠️ Chưa cài *(bấm ⚔️ Role Phái để cài)*';
+
+  // Trạng thái preset (Phase 3.3)
+  let presetStatus;
+  try {
+    const activePreset = await db.getActivePreset?.(guild.id);
+    presetStatus = activePreset
+      ? `⚡ **${activePreset.name}** đang active`
+      : '_(Không có preset nào đang bật)_';
+  } catch {
+    presetStatus = '_(Chưa có dữ liệu preset)_';
+  }
 
   let phienHienTai;
   if (stats.activeSession) {
-    const startedAt = stats.activeSession.created_at
-      ? `<t:${Math.floor(new Date(stats.activeSession.created_at).getTime() / 1000)}:R>`
-      : '';
-    phienHienTai = `🟢 **${stats.activeSession.session_name}** đang mở ${startedAt} | <#${stats.activeSession.channel_id ?? notifCh ?? '?'}>`;
+    const startedAt = stats.activeSession.created_at;
+    const startTs   = Math.floor(new Date(startedAt).getTime() / 1000);
+    phienHienTai = `🟢 **${stats.activeSession.session_name}** đang mở <t:${startTs}:R> | <#${stats.activeSession.channel_id ?? notifCh ?? '?'}>`;
   } else {
     phienHienTai = '⚫ Không có phiên đang mở';
   }
 
   let phienGanNhat;
   if (stats.lastSession) {
-    const endedAt = stats.lastSession.ended_at
-      ? `<t:${Math.floor(new Date(stats.lastSession.ended_at).getTime() / 1000)}:d>`
-      : '';
-    phienGanNhat = `**${stats.lastSession.session_name}** — ${endedAt}`;
+    const endedAt = stats.lastSession.ended_at;
+    const endTs   = endedAt ? `<t:${Math.floor(new Date(endedAt).getTime() / 1000)}:d>` : '';
+    phienGanNhat = `**${stats.lastSession.session_name}** — ${endTs}`;
   } else {
     phienGanNhat = '_Chưa có phiên nào_';
   }
@@ -96,28 +103,30 @@ async function buildDashboard(guild, cfg, viewMode = 'admin') {
     .setAuthor(AUTHOR_DEFAULT)
     .setTitle('⚙️  Bảng Điều Khiển — Quản Gia')
     .addFields(
-      { name: '🔔 Kênh thông báo', value: notifCh ? `<#${notifCh}>` : '⚠️ Chưa cài', inline: true },
-      { name: '🎫 Role điểm danh', value: cfg.allowed_role_id ? `<@&${cfg.allowed_role_id}>` : '⚠️ Chưa cài', inline: true },
-      { name: '⚔️ Role phái', value: phaiLines, inline: true },
+      { name: '🔔 Kênh thông báo', value: notifCh ? `<#${notifCh}>` : '⚠️ Chưa cài *(bấm 🔔 Kênh TB để cài)*', inline: true },
+      { name: '🎫 Role điểm danh', value: cfg.allowed_role_id ? `<@&${cfg.allowed_role_id}>` : '⚠️ Chưa cài *(bấm 🎫 Role DD để cài)*', inline: true },
+      { name: '⚔️ Role phái',      value: phaiLines, inline: true },
+      { name: '⚡ Preset',         value: presetStatus, inline: false },
       { name: '📊 Thống kê nhanh', value: [
           `▸ Phiên đã lưu: **${stats.totalSessions}**`,
           `▸ Thành viên theo dõi: **${stats.totalMembers}**`,
           `▸ Trung bình điểm danh: **${stats.avgAttendance}** phiên/người`,
         ].join('\n'), inline: false },
-      { name: '🟢 Phiên hiện tại', value: phienHienTai, inline: false },
-      { name: '🕐 Phiên gần nhất', value: phienGanNhat, inline: true },
-      { name: '🏆 Điểm danh nhiều nhất', value: topLine, inline: true },
+      { name: '🟢 Phiên hiện tại',        value: phienHienTai, inline: false },
+      { name: '🕐 Phiên gần nhất',         value: phienGanNhat, inline: true },
+      { name: '🏆 Điểm danh nhiều nhất',   value: topLine,      inline: true },
       { name: `📅 Lịch cố định (${lichList.length})`, value: lichLines },
     )
     .setColor(stats.activeSession ? 0x57F287 : 0x5865F2)
     .setFooter({ text: `${FOOTER_DEFAULT} • Chế độ xem: Admin` })
     .setTimestamp();
 
+  // row1: channel | role | phai | reminder | (bỏ user view — nhường slot cho reminder)
   const row1 = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId('setup:channel').setLabel('🔔 Kênh TB').setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId('setup:role').setLabel('🎫 Role DD').setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId('setup:phai').setLabel('⚔️ Role Phái').setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId('setup:view:user').setLabel('👁️ User View').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('setup:reminder').setLabel('⏰ Reminder').setStyle(ButtonStyle.Secondary),
   );
   const row2 = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId('setup:lich:menu').setLabel('📅 Quản lý Lịch').setStyle(ButtonStyle.Primary),
