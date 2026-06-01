@@ -42,7 +42,7 @@ function _validateAttendances(rows, ctx) {
 
 async function getGuildConfig(guildId) {
   const { data, error } = await supabase
-    .from('guild_config')
+    .from('guild_configs')
     .select('*')
     .eq('guild_id', guildId)
     .maybeSingle();
@@ -52,7 +52,7 @@ async function getGuildConfig(guildId) {
 
 async function upsertGuildConfig(config) {
   const { data, error } = await supabase
-    .from('guild_config')
+    .from('guild_configs')
     .upsert(config, { onConflict: 'guild_id' })
     .select()
     .single();
