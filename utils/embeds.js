@@ -23,6 +23,7 @@ const ICONS = {
   ATTEND_LATE:    '🕐',
   ATTEND_NO:      '❌',
   ATTEND_ABSENT:  '📭',
+  ATTEND_EXCUSE:  '📋',
   PERSON:         '👤',
   CLOCK:          '🕒',
   SWORD:          '⚔️',
@@ -33,13 +34,15 @@ const ICONS = {
   FIRE:           '🔥',
   SHIELD:         '🛡️',
   SPARKLE:        '✨',
+  BELL:           '🔔',
+  GEAR:           '⚙️',
 };
 
 const FOOTER_DEFAULT = 'Quản Gia · Bot Điểm Danh';
 const AUTHOR_DEFAULT = { name: 'Quản Gia · Bot Điểm Danh' };
 const COLOR_GOLD = COLORS.GOLD;
 
-// ─── Error / Success reply helpers ────────────────────────────────────────
+// ─── Error / Success / Confirm reply helpers ──────────────────────────────────
 function replyErr(msg = 'Có lỗi xảy ra. Vui lòng thử lại.') {
   return {
     embeds: [ new EmbedBuilder().setColor(COLORS.RED).setDescription(`❌ ${msg}`) ],
@@ -65,6 +68,25 @@ function replyOkEdit(msg = 'Thành công.') {
   return {
     embeds: [ new EmbedBuilder().setColor(COLORS.GREEN).setDescription(`✅ ${msg}`) ],
     components: [],
+  };
+}
+
+/**
+ * replyConfirm — Embed xác nhận hành động (Phase 1.2)
+ * @param {string} description  Câu hỏi xác nhận
+ * @param {string} yesId        customId nút xác nhận
+ * @param {string} noId         customId nút hủy
+ */
+function replyConfirm(description, yesId, noId) {
+  return {
+    embeds: [
+      new EmbedBuilder()
+        .setColor(COLORS.YELLOW)
+        .setDescription(`⚠️ ${description}`)
+        .setFooter({ text: FOOTER_DEFAULT }),
+    ],
+    components: [ buildConfirmRow(yesId, noId) ],
+    flags: MessageFlags.Ephemeral,
   };
 }
 
@@ -142,8 +164,19 @@ function buildPhaiStatsText(guild, phaiRoleIds, attended, eligibleArr) {
   return lines.length ? lines.join('\n') : null;
 }
 
-// ─── Session Embed (live + closed view) ─────────────────────────────────
-async function buildSessionEmbed(guild, session, attended, isClosed = false) {
+// ─── Session Embed (live + closed view) ─────────────────────────────────────
+/**
+ * buildSessionEmbed — Phase 3.1 nâng cấp:
+ *   + Thêm ⏱ deadline nếu session.ends_at
+ *   + Thêm 🎭 phái stats nếu phaiRoleIds.length > 0
+ *   + Thumbnail = guild icon
+ * @param {Guild}   guild
+ * @param {object}  session
+ * @param {Array}   attended
+ * @param {Array}   [phaiRoleIds=[]]  — Phase 1.5: truyền session.phai_role_ids ?? []
+ * @param {boolean} [isClosed=false]
+ */
+async function buildSessionEmbed(guild, session, attended, phaiRoleIds = [], isClosed = false) {
   const joined   = attended.filter(a => a.status === 'tham_gia');
   const late     = attended.filter(a => a.status === 'tre');
   const declined = attended.filter(a => a.status === 'khong_tham_gia');
@@ -163,41 +196,94 @@ async function buildSessionEmbed(guild, session, attended, isClosed = false) {
     ? `<@&${session.allowed_role_id}>`
     : (session.role_name ?? 'Tất cả');
 
-  const statusLine = `${ICONS.SESSION_OPEN} **Đang mở** · ${roleDisplay} · ${eligible} thành viên`;
+  // ⏱ Deadline line (Phase 3.1)
+  let deadlineLine = '';
+  if (!isClosed && session.ends_at) {
+    const endsTs  = Math.floor(new Date(session.ends_at).getTime() / 1000);
+    const nowSec  = Math.floor(Date.now() / 1000);
+    const diffMin = Math.round((endsTs - nowSec) / 60);
+    deadlineLine = diffMin > 0
+      ? `\n⏱ Kết thúc <t:${endsTs}:R> · còn **${diffMin} phút**`
+      : `\n⏱ Đã quá hạn`;
+  }
+
+  const statusLine = `${ICONS.SESSION_OPEN} **Đang mở** · ${roleDisplay} · ${eligible} thành viên${deadlineLine}`;
 
   const embed = new EmbedBuilder()
     .setColor(isClosed ? COLORS.RED : COLORS.GREEN)
     .setTitle(`${isClosed ? ICONS.SESSION_CLOSED : ICONS.SESSION_OPEN} ${session.session_name}`)
     .setDescription(isClosed ? `${ICONS.SESSION_CLOSED} **Phiên đã kết thúc**` : statusLine)
     .addFields(
-      { name: `${ICONS.ATTEND_YES} Tham gia (${joined.length})`, value: joined.length ? joined.slice(0, 10).map(a => `<@${a.user_id}>`).join(' ') + (joined.length > 10 ? ` *(+${joined.length - 10})*` : '') : '*Chưa có*', inline: true },
-      { name: `${ICONS.ATTEND_LATE} Đến trễ (${late.length})`, value: late.length ? late.slice(0, 10).map(a => `<@${a.user_id}>`).join(' ') + (late.length > 10 ? ` *(+${late.length - 10})*` : '') : '*Chưa có*', inline: true },
-      { name: `${ICONS.ATTEND_NO} Vắng (${declined.length + absentIds.length})`, value: (declined.length + absentIds.length) ? [...declined.slice(0, 5).map(a => `<@${a.user_id}>`), ...absentIds.slice(0, 5).map(id => `<@${id}>`)].join(' ') + ((declined.length + absentIds.length) > 10 ? ` *(+${declined.length + absentIds.length - 10})*` : '') : '*Không có*', inline: true },
+      {
+        name: `${ICONS.ATTEND_YES} Tham gia (${joined.length})`,
+        value: joined.length
+          ? joined.slice(0, 10).map(a => `<@${a.user_id}>`).join(' ') + (joined.length > 10 ? ` *(+${joined.length - 10})*` : '')
+          : '*Chưa có*',
+        inline: true,
+      },
+      {
+        name: `${ICONS.ATTEND_LATE} Đến trễ (${late.length})`,
+        value: late.length
+          ? late.slice(0, 10).map(a => `<@${a.user_id}>`).join(' ') + (late.length > 10 ? ` *(+${late.length - 10})*` : '')
+          : '*Chưa có*',
+        inline: true,
+      },
+      {
+        name: `${ICONS.ATTEND_NO} Vắng (${declined.length + absentIds.length})`,
+        value: (declined.length + absentIds.length)
+          ? [
+              ...declined.slice(0, 5).map(a => `<@${a.user_id}>`),
+              ...absentIds.slice(0, 5).map(id => `<@${id}>`),
+            ].join(' ') + ((declined.length + absentIds.length) > 10 ? ` *(+${declined.length + absentIds.length - 10})*` : '')
+          : '*Không có*',
+        inline: true,
+      },
     )
     .setFooter({ text: FOOTER_DEFAULT })
     .setTimestamp();
+
+  // Thumbnail guild icon (Phase 3.1)
+  if (guild?.iconURL()) embed.setThumbnail(guild.iconURL({ dynamic: true, size: 64 }));
 
   if (!isClosed && eligible > 0) {
     embed.addFields({ name: `${ICONS.CHART} Tiến độ`, value: `${buildRichProgressBar(pct)} **${pct}%**`, inline: false });
   }
 
   if (excused.length > 0) {
-    embed.addFields({ name: `📋 Có phép (${excused.length})`, value: excused.slice(0, 10).map(a => `<@${a.user_id}>`).join(' '), inline: false });
+    embed.addFields({ name: `${ICONS.ATTEND_EXCUSE} Có phép (${excused.length})`, value: excused.slice(0, 10).map(a => `<@${a.user_id}>`).join(' '), inline: false });
+  }
+
+  // Phái stats (Phase 1.5 + 3.1)
+  const phaiText = buildPhaiStatsText(
+    guild,
+    phaiRoleIds,
+    attended,
+    (session.eligible_member_ids ?? []).map(id => ({ id })),
+  );
+  if (phaiText) {
+    embed.addFields({ name: `${ICONS.SWORD} 🎭 Thống kê phái`, value: phaiText, inline: false });
   }
 
   return embed;
 }
 
-// buildClosedSessionEmbed — async wrapper (await bắt buộc ở caller)
+// buildClosedSessionEmbed — backward-compat wrapper
 async function buildClosedSessionEmbed(session, attended, guild = null) {
-  return buildSessionEmbed(guild, session, attended ?? [], true);
+  return buildSessionEmbed(guild, session, attended ?? [], [], true);
 }
 
-// ─── Summary Embed (khi đóng phiên) ─────────────────────────────────────────
+// ─── Summary Embed (khi đóng phiên) — Phase 3.2 nâng cấp ─────────────────────
+/**
+ * Phase 3.2:
+ *   + Top 3 điểm danh sớm nhất
+ *   + Tỉ lệ tham gia nổi bật hơn
+ *   + Stats phái nếu có phaiRoleIds
+ */
 function buildSummaryEmbed(session, attended, guild = null, phaiRoleIds = null) {
   const joined       = attended.filter(a => a.status === 'tham_gia');
   const late         = attended.filter(a => a.status === 'tre');
   const declined     = attended.filter(a => a.status === 'khong_tham_gia');
+  const excused      = attended.filter(a => a.status === 'co_phep');
   const eligible     = (session.eligible_member_ids ?? []).length;
   const presentCount = joined.length + late.length;
   const pct          = eligible > 0 ? Math.round((presentCount / eligible) * 100) : 0;
@@ -207,14 +293,14 @@ function buildSummaryEmbed(session, attended, guild = null, phaiRoleIds = null) 
   const endTs     = session.ended_at ? Math.floor(new Date(session.ended_at).getTime() / 1000) : null;
   const dur       = endTs ? formatDuration(endTs - startTs) : null;
 
-  const badge = pct >= 90 ? '🏆 Xuất sắc' : pct >= 80 ? '🥇 Tốt' : pct >= 60 ? '🥈 Khá' : pct >= 40 ? '🥉 TB' : '📉 Thấp';
-  const richBar  = buildRichProgressBar(pct);
+  const badge  = pct >= 90 ? '🏆 Xuất sắc' : pct >= 80 ? '🥇 Tốt' : pct >= 60 ? '🥈 Khá' : pct >= 40 ? '🥉 TB' : '📉 Thấp';
+  const richBar = buildRichProgressBar(pct);
 
   const descLines = [
-    `${pctEmoji(pct)} **${pct}%** — ${badge}`,
-    `${richBar}`,
+    `## ${pctEmoji(pct)} ${pct}% — ${badge}`,
+    `\`${richBar}\``,
     '',
-    `> ${ICONS.ATTEND_YES} \`${joined.length} tham gia\`  ${ICONS.ATTEND_LATE} \`${late.length} trễ\`  ${ICONS.ATTEND_NO} \`${declined.length} vắng\`  ${ICONS.PERSON} \`${eligible} thành viên\``,
+    `> ${ICONS.ATTEND_YES} \`${joined.length} tham gia\`  ${ICONS.ATTEND_LATE} \`${late.length} trễ\`  ${ICONS.ATTEND_EXCUSE} \`${excused.length} có phép\`  ${ICONS.ATTEND_NO} \`${declined.length} vắng\`  ${ICONS.PERSON} \`${eligible} thành viên\``,
     '',
     `${ICONS.CLOCK} <t:${startTs}:f>${endTs ? `  →  <t:${endTs}:f>` : ''}${dur ? `  ·  ⏱ **${dur}**` : ''}`,
   ];
@@ -225,6 +311,22 @@ function buildSummaryEmbed(session, attended, guild = null, phaiRoleIds = null) 
     .setDescription(descLines.join('\n'))
     .setFooter({ text: FOOTER_DEFAULT })
     .setTimestamp();
+
+  if (guild?.iconURL()) embed.setThumbnail(guild.iconURL({ dynamic: true, size: 64 }));
+
+  // Top 3 điểm danh sớm nhất (Phase 3.2)
+  const earliest = [...joined, ...late]
+    .filter(a => a.checked_in_at)
+    .sort((a, b) => new Date(a.checked_in_at) - new Date(b.checked_in_at))
+    .slice(0, 3);
+  if (earliest.length > 0) {
+    const medals = ['🥇', '🥈', '🥉'];
+    embed.addFields({
+      name: '⚡ Điểm danh sớm nhất',
+      value: earliest.map((a, i) => `${medals[i]} <@${a.user_id}> · <t:${Math.floor(new Date(a.checked_in_at).getTime() / 1000)}:t>`).join('\n'),
+      inline: false,
+    });
+  }
 
   if (joined.length > 0) {
     const MAX = 25;
@@ -242,7 +344,7 @@ function buildSummaryEmbed(session, attended, guild = null, phaiRoleIds = null) 
       .map((a, i) => `\`${String(i + 1).padStart(2)}.\` ${resolveDisplayName(guild, a.user_id, `<@${a.user_id}>`)}`);
     const extra = late.length > MAX ? `\n*(+${late.length - MAX} nữa)*` : '';
     chunkLines(names).slice(0, 1).forEach(chunk =>
-      embed.addFields({ name: `${ICONS.ATTEND_LATE} Đến Trễ — ${late.length}`, value: chunk + extra, inline: true })
+      embed.addFields({ name: `${ICONS.ATTEND_LATE} Đến Trễ (${late.length})`, value: chunk + extra, inline: true })
     );
   }
 
@@ -250,7 +352,7 @@ function buildSummaryEmbed(session, attended, guild = null, phaiRoleIds = null) 
     id => !new Set(attended.map(a => a.user_id)).has(id)
   );
   if (absentIds2.length > 0) {
-    const MAX2  = 25;
+    const MAX2   = 25;
     const names2 = absentIds2.slice(0, MAX2)
       .map((id, i) => `\`${String(i + 1).padStart(2)}.\` ${resolveDisplayName(guild, id, `<@${id}>`)}`);
     const extra2 = absentIds2.length > MAX2 ? `\n*(+${absentIds2.length - MAX2} nữa)*` : '';
@@ -259,18 +361,144 @@ function buildSummaryEmbed(session, attended, guild = null, phaiRoleIds = null) 
     );
   }
 
-  const phaiText2 = buildPhaiStatsText(guild, phaiRoleIds,
+  if (excused.length > 0) {
+    embed.addFields({
+      name: `${ICONS.ATTEND_EXCUSE} Có Phép (${excused.length})`,
+      value: excused.slice(0, 10).map(a => `<@${a.user_id}>`).join(' '),
+      inline: false,
+    });
+  }
+
+  const phaiText2 = buildPhaiStatsText(
+    guild,
+    phaiRoleIds,
     attended,
-    (session.eligible_member_ids ?? []).map(id => ({ id }))
+    (session.eligible_member_ids ?? []).map(id => ({ id })),
   );
   if (phaiText2)
     embed.addFields({ name: `${ICONS.SWORD} Thống Kê Phái`, value: phaiText2, inline: false });
 
-  embed.setFooter({ text: FOOTER_DEFAULT }).setTimestamp();
   return embed;
 }
 
-// ─── Attendance Buttons ───────────────────────────────────────────────────────
+// ─── Confirm Row (Phase 2.1) ───────────────────────────────────────────────────
+/**
+ * @param {string} yesId
+ * @param {string} noId
+ * @param {string} [yesLabel='✅ Xác nhận']
+ * @param {string} [noLabel='↩️ Hủy']
+ */
+function buildConfirmRow(yesId, noId, yesLabel = '✅ Xác nhận', noLabel = '↩️ Hủy') {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(yesId).setLabel(yesLabel).setStyle(ButtonStyle.Danger),
+    new ButtonBuilder().setCustomId(noId).setLabel(noLabel).setStyle(ButtonStyle.Secondary),
+  );
+}
+
+// ─── Attendance Confirm Embed (Phase 2.2) ─────────────────────────────────────
+/**
+ * buildAttendConfirmEmbed — Phản hồi ephemeral sau mỗi lần điểm danh
+ * @param {GuildMember} member
+ * @param {'tham_gia'|'tre'|'khong_tham_gia'|'co_phep'} status
+ * @param {string} sessionName
+ * @param {number} [streak]
+ */
+function buildAttendConfirmEmbed(member, status, sessionName, streak) {
+  const colorMap = {
+    tham_gia:         COLORS.GREEN,
+    tre:              COLORS.YELLOW,
+    khong_tham_gia:   COLORS.RED,
+    co_phep:          COLORS.BLUE,
+  };
+  const labelMap = {
+    tham_gia:         `${ICONS.ATTEND_YES} Đã điểm danh`,
+    tre:              `${ICONS.ATTEND_LATE} Điểm danh trễ`,
+    khong_tham_gia:   `${ICONS.ATTEND_NO} Đã đăng ký vắng`,
+    co_phep:          `${ICONS.ATTEND_EXCUSE} Nghỉ có phép`,
+  };
+
+  const nowTs = Math.floor(Date.now() / 1000);
+  const name  = member?.displayName ?? member?.user?.username ?? 'Thành viên';
+
+  const embed = new EmbedBuilder()
+    .setColor(colorMap[status] ?? COLORS.GREY)
+    .setTitle(labelMap[status] ?? status)
+    .setDescription(`👤 **${name}** · 📋 ${sessionName}`)
+    .addFields({ name: `${ICONS.CLOCK} Thời điểm`, value: `<t:${nowTs}:T>`, inline: true })
+    .setFooter({ text: FOOTER_DEFAULT })
+    .setTimestamp();
+
+  if (member?.displayAvatarURL()) embed.setThumbnail(member.displayAvatarURL({ dynamic: true, size: 64 }));
+
+  if (streak != null && streak > 0 && ['tham_gia', 'tre'].includes(status)) {
+    embed.addFields({ name: `${ICONS.FIRE} Streak`, value: `**${streak}** phiên liên tiếp`, inline: true });
+  }
+
+  return { embeds: [embed], flags: MessageFlags.Ephemeral };
+}
+
+// ─── Admin Override Success Embed (Phase 2.3) ─────────────────────────────────
+/**
+ * buildAdminOverrideSuccessEmbed
+ * @param {string} targetUserId
+ * @param {string} oldStatus
+ * @param {string} newStatus
+ * @param {string} adminUserId
+ */
+function buildAdminOverrideSuccessEmbed(targetUserId, oldStatus, newStatus, adminUserId) {
+  const statusLabel = s => ({
+    tham_gia:       `${ICONS.ATTEND_YES} Tham gia`,
+    tre:            `${ICONS.ATTEND_LATE} Đến trễ`,
+    khong_tham_gia: `${ICONS.ATTEND_NO} Vắng`,
+    co_phep:        `${ICONS.ATTEND_EXCUSE} Có phép`,
+  }[s] ?? s);
+
+  const nowTs = Math.floor(Date.now() / 1000);
+
+  return {
+    embeds: [
+      new EmbedBuilder()
+        .setColor(COLORS.ORANGE)
+        .setTitle('🛠️ Admin Override thành công')
+        .addFields(
+          { name: `${ICONS.PERSON} Thành viên`, value: `<@${targetUserId}>`, inline: true },
+          { name: 'Trạng thái cũ → mới', value: `${statusLabel(oldStatus)} → **${statusLabel(newStatus)}**`, inline: true },
+          { name: '👮 Admin', value: `<@${adminUserId}>`, inline: true },
+          { name: `${ICONS.CLOCK} Thời điểm`, value: `<t:${nowTs}:f>`, inline: false },
+        )
+        .setFooter({ text: FOOTER_DEFAULT })
+        .setTimestamp(),
+    ],
+    flags: MessageFlags.Ephemeral,
+  };
+}
+
+// ─── Session Action Rows (Phase 2.4) ──────────────────────────────────────────
+/**
+ * buildSessionActionRow — 2 ActionRowBuilder[]
+ *   Row 1: join | late | decline | excuse
+ *   Row 2: view | refresh | close
+ * @param {boolean} [disabled=false]
+ * @returns {ActionRowBuilder[]}
+ */
+function buildSessionActionRow(disabled = false) {
+  const d = disabled;
+  return [
+    new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId('attendance:join').setLabel('✅ Tham gia').setStyle(ButtonStyle.Success).setDisabled(d),
+      new ButtonBuilder().setCustomId('attendance:late').setLabel('🕐 Đến trễ').setStyle(ButtonStyle.Primary).setDisabled(d),
+      new ButtonBuilder().setCustomId('attendance:decline').setLabel('❌ Vắng').setStyle(ButtonStyle.Danger).setDisabled(d),
+      new ButtonBuilder().setCustomId('attendance:excuse').setLabel('📋 Có phép').setStyle(ButtonStyle.Secondary).setDisabled(d),
+    ),
+    new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId('session:view').setLabel('👁 Xem').setStyle(ButtonStyle.Secondary).setDisabled(d),
+      new ButtonBuilder().setCustomId('session:refresh').setLabel('🔄 Làm mới').setStyle(ButtonStyle.Secondary).setDisabled(d),
+      new ButtonBuilder().setCustomId('session:close').setLabel('🔴 Đóng phiên').setStyle(ButtonStyle.Danger).setDisabled(d),
+    ),
+  ];
+}
+
+// ─── Attendance Buttons (backward-compat, legacy) ────────────────────────────
 function buildAttendanceButtons(disabled = false) {
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId('attendance:join').setLabel('✅ Tham gia').setStyle(ButtonStyle.Success).setDisabled(disabled),
@@ -279,7 +507,64 @@ function buildAttendanceButtons(disabled = false) {
   );
 }
 
-// ─── Setup Menu ──────────────────────────────────────────────────────────────────
+// ─── History Nav Row (Phase 2.5) ──────────────────────────────────────────────
+/**
+ * buildHistoryNavRow
+ * @param {number} currentPage   (1-based)
+ * @param {number} totalPages
+ */
+function buildHistoryNavRow(currentPage, totalPages) {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId('history:prev')
+      .setLabel('← Trước')
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(currentPage <= 1),
+    new ButtonBuilder()
+      .setCustomId('history:page')
+      .setLabel(`Trang ${currentPage}/${totalPages}`)
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(true),
+    new ButtonBuilder()
+      .setCustomId('history:next')
+      .setLabel('Tiếp →')
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(currentPage >= totalPages),
+  );
+}
+
+// ─── Config Embed (Phase 1.3) ────────────────────────────────────────────────
+/**
+ * buildConfigEmbed — hiển thị cấu hình server hiện tại
+ * @param {object} cfg  Row từ bảng config / guild_config
+ */
+function buildConfigEmbed(cfg) {
+  const val = v => (v ? `<@&${v}>` : '*(chưa cài)*');
+  const ch  = v => (v ? `<#${v}>` : '*(chưa cài)*');
+  const num = v => (v != null ? `\`${v}\`` : '*(chưa cài)*');
+  const bool = v => (v ? '✅ Bật' : '⛔ Tắt');
+
+  return {
+    embeds: [
+      new EmbedBuilder()
+        .setColor(COLORS.BLUE)
+        .setTitle(`${ICONS.GEAR} Cấu hình Server`)
+        .addFields(
+          { name: '👮 Role Admin',       value: val(cfg?.admin_role_id),       inline: true },
+          { name: '📋 Role Điểm danh',   value: val(cfg?.attendance_role_id),  inline: true },
+          { name: `${ICONS.SWORD} Role Phái`, value: val(cfg?.phai_role_id),   inline: true },
+          { name: '📢 Channel thông báo', value: ch(cfg?.notify_channel_id),   inline: true },
+          { name: '📅 Lịch cố định',     value: num(cfg?.fixed_schedule_count ?? cfg?.schedule_count), inline: true },
+          { name: '🗂 Preset',           value: bool(cfg?.preset_active ?? cfg?.preset_enabled),       inline: true },
+        )
+        .setFooter({ text: FOOTER_DEFAULT })
+        .setTimestamp(),
+    ],
+    flags: MessageFlags.Ephemeral,
+  };
+}
+
+// ─── Setup Menu ──────────────────────────────────────────────────────────────
 function buildSetupMenu() {
   return {
     embeds: [
@@ -307,7 +592,7 @@ function buildSetupMenu() {
   };
 }
 
-// ─── History Embed ────────────────────────────────────────────────────────────────
+// ─── History Embed ────────────────────────────────────────────────────────────
 function buildHistoryEmbed(guild, sessions, page = 1, perPage = 10) {
   const total = sessions.length;
   const totalPages = Math.max(1, Math.ceil(total / perPage));
@@ -330,7 +615,7 @@ function buildHistoryEmbed(guild, sessions, page = 1, perPage = 10) {
     .setFooter({ text: `${FOOTER_DEFAULT} · Tổng: ${total} phiên` });
 }
 
-// ─── Member Embed ────────────────────────────────────────────────────────────────────
+// ─── Member Embed ─────────────────────────────────────────────────────────────
 function buildMemberEmbed(guild, userId, stats, badges) {
   const member = guild?.members.cache.get(userId);
   const name   = member ? (member.displayName || member.user.username) : `<@${userId}>`;
@@ -357,7 +642,7 @@ function buildMemberEmbed(guild, userId, stats, badges) {
   return embed;
 }
 
-// ─── Server Stats Embed ───────────────────────────────────────────────────────────────
+// ─── Server Stats Embed ───────────────────────────────────────────────────────
 function buildServerStatsEmbed(guild, stats) {
   const { totalSessions, totalPresent, topMembers, recentSessions } = stats;
 
@@ -382,9 +667,9 @@ function buildServerStatsEmbed(guild, stats) {
 
   if (recentSessions && recentSessions.length > 0) {
     const recentLines = recentSessions.slice(0, 5).map(s => {
-      const ts  = Math.floor(new Date(s.created_at ?? s.started_at).getTime() / 1000);
+      const ts       = Math.floor(new Date(s.created_at ?? s.started_at).getTime() / 1000);
       const eligible = (s.eligible_member_ids ?? []).length;
-      const pct  = eligible > 0 ? Math.round((s.present_count ?? 0) / eligible * 100) : 0;
+      const pct      = eligible > 0 ? Math.round((s.present_count ?? 0) / eligible * 100) : 0;
       return `• **${s.session_name}** · <t:${ts}:d> · ${pctEmoji(pct)} ${pct}%`;
     });
     embed.addFields({ name: `${ICONS.CALENDAR} Phiên gần đây`, value: recentLines.join('\n'), inline: false });
@@ -393,7 +678,7 @@ function buildServerStatsEmbed(guild, stats) {
   return embed;
 }
 
-// ─── Trend Sparkline ───────────────────────────────────────────────────────────────────
+// ─── Trend Sparkline ──────────────────────────────────────────────────────────
 function buildTrendSparkline(sessions) {
   if (!sessions || sessions.length === 0) return '*(chưa có dữ liệu)*';
   const values = sessions.map(s => {
@@ -405,7 +690,7 @@ function buildTrendSparkline(sessions) {
   return values.map(v => bars[Math.min(7, Math.floor(v / max * 7))]).join('');
 }
 
-// ─── Weekly Stats Embed ───────────────────────────────────────────────────────────────
+// ─── Weekly Stats Embed ───────────────────────────────────────────────────────
 function buildWeeklyStatsEmbed(guild, weekSessions, allSessions) {
   const thisWeek = weekSessions ?? [];
   const all      = allSessions ?? [];
@@ -417,9 +702,9 @@ function buildWeeklyStatsEmbed(guild, weekSessions, allSessions) {
   const sparkline = buildTrendSparkline(all.slice(-10));
 
   const lines = thisWeek.map(s => {
-    const ts  = Math.floor(new Date(s.created_at ?? s.started_at).getTime() / 1000);
+    const ts       = Math.floor(new Date(s.created_at ?? s.started_at).getTime() / 1000);
     const eligible = (s.eligible_member_ids ?? []).length;
-    const pct  = eligible > 0 ? Math.round((s.present_count ?? 0) / eligible * 100) : 0;
+    const pct      = eligible > 0 ? Math.round((s.present_count ?? 0) / eligible * 100) : 0;
     return `• **${s.session_name}** · <t:${ts}:d> · ${buildRichProgressBar(pct, 8)} ${pct}%`;
   });
 
@@ -435,14 +720,31 @@ function buildWeeklyStatsEmbed(guild, weekSessions, allSessions) {
     .setTimestamp();
 }
 
+// ─── Exports ──────────────────────────────────────────────────────────────────
 module.exports = {
+  // Constants
   COLORS, ICONS, FOOTER_DEFAULT, AUTHOR_DEFAULT, COLOR_GOLD,
-  replyErr, replyErrEdit, replyWarnEdit, replyOkEdit,
+
+  // Reply helpers
+  replyErr, replyErrEdit, replyWarnEdit, replyOkEdit, replyConfirm,
+
+  // Utility helpers
   pctColor, pctLabel, pctEmoji,
   buildProgressBar, buildRichProgressBar,
+  resolveDisplayName, chunkLines, formatDuration,
+  buildPhaiStatsText,
+
+  // Embed builders
   buildSessionEmbed, buildClosedSessionEmbed, buildSummaryEmbed,
-  buildAttendanceButtons, buildSetupMenu,
+  buildConfigEmbed,
+  buildAttendConfirmEmbed, buildAdminOverrideSuccessEmbed,
   buildHistoryEmbed, buildMemberEmbed,
   buildServerStatsEmbed, buildWeeklyStatsEmbed, buildTrendSparkline,
-  buildPhaiStatsText, resolveDisplayName, chunkLines, formatDuration,
+
+  // Component builders
+  buildAttendanceButtons,       // legacy row (3 nút)
+  buildSessionActionRow,        // Phase 2.4 — 2 rows đầy đủ
+  buildConfirmRow,              // Phase 2.1
+  buildHistoryNavRow,           // Phase 2.5
+  buildSetupMenu,
 };
