@@ -1,11 +1,12 @@
 'use strict';
 // listeners/ready.js
 // Phase 2 fix: restore active-session timers khi bot restart
-// Nếu không restore, phiên đang mở sẽ không tự đóng sau restart
+// + khởi động reminder scheduler
 const { Listener, Events } = require('@sapphire/framework');
 const db  = require('../db.js');
 const log = require('../utils/logger.js');
-const { datHenGioDong } = require('../utils/timers.js');
+const { datHenGioDong }          = require('../utils/timers.js');
+const { startReminderScheduler } = require('../services/reminderScheduler.js');
 
 class ReadyListener extends Listener {
   constructor(context) {
@@ -59,6 +60,9 @@ class ReadyListener extends Listener {
       }
     }
     if (restored) log.info('READY', null, 'Đã restore %d timer(s).', restored);
+
+    // Khởi động reminder scheduler
+    startReminderScheduler(client);
   }
 }
 
