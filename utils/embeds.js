@@ -616,18 +616,29 @@ function buildHistoryEmbed(guild, sessions, page = 1, perPage = 10) {
 }
 
 // ─── Member Embed ─────────────────────────────────────────────────────────────
+/**
+ * buildMemberEmbed
+ * @param {Guild}   guild
+ * @param {string}  userId
+ * @param {object}  stats   — row từ bảng member_stats
+ *                            hỗ trợ cả `max_streak` lẫn `best_streak` (DB dùng best_streak)
+ * @param {Array}   badges
+ */
 function buildMemberEmbed(guild, userId, stats, badges) {
   const member = guild?.members.cache.get(userId);
   const name   = member ? (member.displayName || member.user.username) : `<@${userId}>`;
+
+  // DB trả về best_streak, một số nơi gọi truyền max_streak — chấp nhận cả hai
+  const maxStreak = stats?.max_streak ?? stats?.best_streak ?? 0;
 
   const embed = new EmbedBuilder()
     .setColor(COLORS.PURPLE)
     .setTitle(`${ICONS.PERSON} Hồ sơ: ${name}`)
     .setThumbnail(member?.displayAvatarURL() ?? null)
     .addFields(
-      { name: '📅 Tổng tham gia', value: `\`${stats?.total_joined ?? 0}\``, inline: true },
+      { name: '📅 Tổng tham gia',          value: `\`${stats?.total_joined ?? 0}\``,    inline: true },
       { name: `${ICONS.FIRE} Streak hiện tại`, value: `\`${stats?.current_streak ?? 0}\``, inline: true },
-      { name: `${ICONS.TROPHY} Streak cao nhất`, value: `\`${stats?.max_streak ?? 0}\``, inline: true },
+      { name: `${ICONS.TROPHY} Streak cao nhất`, value: `\`${maxStreak}\``,              inline: true },
     )
     .setFooter({ text: FOOTER_DEFAULT });
 
