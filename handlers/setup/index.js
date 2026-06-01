@@ -4,6 +4,7 @@ const { handleChannelRole } = require('./channelRoleHandler.js');
 const { handleLich }        = require('./lichHandler.js');
 const { handlePreset }      = require('./presetHandler.js');
 const { handlePhien }       = require('./phienHandler.js');
+const { handleReminder }    = require('./reminderHandler.js');
 const { buildDashboard }    = require('./dashboardHandler.js');
 const db                    = require('../../db.js');
 const { laAdmin }           = require('../../utils/helpers.js');
@@ -32,6 +33,9 @@ async function handleSetupUi(interaction) {
     await interaction.editReply(payload);
     return;
   }
+
+  // ── Reminder ──
+  if (await handleReminder(interaction)) return;
 
   // ── Channel / Role ──
   if (await handleChannelRole(interaction)) return;
