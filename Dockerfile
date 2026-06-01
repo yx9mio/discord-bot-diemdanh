@@ -1,5 +1,5 @@
 # ─── Stage 1: deps ──────────────────────────────────────────────────────
-FROM node:20-alpine AS deps
+FROM node:22-alpine AS deps
 WORKDIR /app
 
 # Chỉ copy manifest trước — tận dụng Docker layer cache
@@ -8,7 +8,7 @@ COPY package.json ./
 RUN npm install --omit=dev --ignore-scripts
 
 # ─── Stage 2: runtime ────────────────────────────────────────────────────
-FROM node:20-alpine AS runtime
+FROM node:22-alpine AS runtime
 WORKDIR /app
 
 # Chạy với user non-root — best practice bảo mật container
