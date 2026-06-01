@@ -1,5 +1,6 @@
 'use strict';
 const db = require('../../db.js');
+const log = require('../../utils/logger.js');
 const {
   buildSessionEmbed,
   buildSummaryEmbed,
@@ -59,7 +60,7 @@ async function handleConfirmClose(interaction) {
   try {
     await db.closeSession(session.id);
   } catch (e) {
-    console.error('[closeHandler] closeSession error:', e.message);
+    log.error('closeHandler', guild.id, 'closeSession error: %s', e.message);
   }
 
   const attended = await db.getAttendances(session.id);

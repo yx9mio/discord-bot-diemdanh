@@ -1,5 +1,4 @@
 // src/commands/schedule/lichcodinh.js
-// Giữ nguyên toàn bộ logic từ commands/lichcodinh.js, chỉ fix import path
 'use strict';
 const { Command } = require('@sapphire/framework');
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
@@ -46,7 +45,7 @@ class LichCoDinhCommand extends Command {
     const sub  = interaction.options.getSubcommand();
     const { guild } = interaction;
     const cfg  = await db.getGuildConfig(guild.id);
-    let schedules = cfg.schedules ?? [];
+    const schedules = cfg.schedules ?? [];
 
     if (sub === 'xem') {
       const embed = new EmbedBuilder().setColor(0x01696f).setTitle('📅 Lịch điểm danh cố định');

@@ -10,7 +10,7 @@ const supabase = createClient(
   process.env.SUPABASE_KEY
 );
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────────────────────
 
 function _throwSupabase(error, ctx) {
   if (error) {
@@ -35,7 +35,7 @@ function _validateAttendances(rows, ctx) {
   });
 }
 
-// ─── Guild config ─────────────────────────────────────────────────────────────
+// ─── Guild config ───────────────────────────────────────────────────────────────────────────
 
 async function getGuildConfig(guildId) {
   const { data, error } = await supabase
@@ -57,10 +57,9 @@ async function upsertGuildConfig(config) {
   return data;
 }
 
-// BUG-5 fix: alias getConfig → getGuildConfig
 const getConfig = getGuildConfig;
 
-// ─── Sessions ─────────────────────────────────────────────────────────────────
+// ─── Sessions ───────────────────────────────────────────────────────────────────────────────────
 
 async function createSession(payload) {
   const { data, error } = await supabase
@@ -183,10 +182,9 @@ async function getAllSessions(guildId) {
   return data;
 }
 
-// BUG-4 fix: alias getSessionHistory → getRecentSessions
 const getSessionHistory = getRecentSessions;
 
-// ─── Attendances ──────────────────────────────────────────────────────────────
+// ─── Attendances ──────────────────────────────────────────────────────────────────────────────
 
 async function upsertAttendance(payload) {
   const { data, error } = await supabase
@@ -244,7 +242,7 @@ async function getAttendanceStats(guildId, userId) {
   return data ?? [];
 }
 
-// ─── Member stats ─────────────────────────────────────────────────────────────
+// ─── Member stats ────────────────────────────────────────────────────────────────────────────
 
 async function getMemberStats(guildId, userId) {
   const { data, error } = await supabase
@@ -297,7 +295,7 @@ async function batchUpsertMemberStats(guildId, patches) {
   _throwSupabase(error, 'batchUpsertMemberStats');
 }
 
-// ─── Badges ───────────────────────────────────────────────────────────────────
+// ─── Badges ─────────────────────────────────────────────────────────────────────────────────────
 
 async function getBadgeDefinitions(guildId) {
   const { data, error } = await supabase
@@ -338,21 +336,12 @@ async function getMemberBadges(guildId, userId) {
   }));
 }
 
-async function upsertMemberBadge(guildId, userId, threshold) {
+function upsertMemberBadge(guildId, userId, threshold) {
   return upsertUserBadge({ guild_id: guildId, user_id: userId, threshold });
 }
 
-// ─── Scheduled sessions (replaces lich_co_dinh) ───────────────────────────────
+// ─── Scheduled sessions ───────────────────────────────────────────────────────────────────
 
-/**
- * Lấy tất cả lịch active của guild.
- * Shape trả về tương thích với reminderScheduler:
- *   { id, guild_id, session_name, channel_id, allowed_role_id,
- *     day_of_week, hour, minute,
- *     close_day_of_week, close_hour, close_minute,
- *     is_active, phai_role_ids,
- *     reminder_enabled, reminder_1_min, reminder_2_min, skip_until }
- */
 async function getScheduledSessions(guildId) {
   const { data, error } = await supabase
     .from('scheduled_sessions')
@@ -402,10 +391,6 @@ async function deleteScheduledSession(id) {
   _throwSupabase(error, 'deleteScheduledSession');
 }
 
-/**
- * Bỏ qua phiên cho đến một thời điểm (skip_until).
- * Truyền null để bỏ skip.
- */
 async function skipScheduledSession(id, skipUntil) {
   const { data, error } = await supabase
     .from('scheduled_sessions')
@@ -417,14 +402,13 @@ async function skipScheduledSession(id, skipUntil) {
   return data;
 }
 
-// Aliases tương thích với lichcodinh.js handler
 const getLichCoDinh        = getScheduledSessions;
 const getLichCoDinhById    = getScheduledSessionById;
 const createLichCoDinh    = createScheduledSession;
 const updateLichCoDinh    = updateScheduledSession;
 const deleteLichCoDinh    = deleteScheduledSession;
 
-async function themLichCoDinh(guildId, { dayOfWeek, hour, minute, sessionName, closeDayOfWeek, closeHour, closeMinute, phaiRoleIds, channelId, allowedRoleId, reminder1Min, reminder2Min }) {
+function themLichCoDinh(guildId, { dayOfWeek, hour, minute, sessionName, closeDayOfWeek, closeHour, closeMinute, phaiRoleIds, channelId, allowedRoleId, reminder1Min, reminder2Min }) {
   return createScheduledSession({
     guild_id:           guildId,
     day_of_week:        dayOfWeek,
@@ -444,7 +428,7 @@ async function themLichCoDinh(guildId, { dayOfWeek, hour, minute, sessionName, c
   });
 }
 
-async function suaLichCoDinh(guildId, id, { dayOfWeek, hour, minute, sessionName, closeDayOfWeek, closeHour, closeMinute, channelId, allowedRoleId, reminder1Min, reminder2Min }) {
+function suaLichCoDinh(guildId, id, { dayOfWeek, hour, minute, sessionName, closeDayOfWeek, closeHour, closeMinute, channelId, allowedRoleId, reminder1Min, reminder2Min }) {
   return updateScheduledSession(id, {
     day_of_week:       dayOfWeek,
     hour,
@@ -460,11 +444,11 @@ async function suaLichCoDinh(guildId, id, { dayOfWeek, hour, minute, sessionName
   });
 }
 
-async function xoaLichCoDinh(guildId, id) {
+function xoaLichCoDinh(_guildId, id) {
   return deleteScheduledSession(id);
 }
 
-// ─── Exports ──────────────────────────────────────────────────────────────────
+// ─── Exports ───────────────────────────────────────────────────────────────────────────────────
 
 module.exports = {
   // Guild config
@@ -491,12 +475,12 @@ module.exports = {
   getBadges,
   getMemberBadges, upsertMemberBadge,
 
-  // Scheduled sessions (bảng chính)
+  // Scheduled sessions
   getScheduledSessions, getScheduledSessionById,
   createScheduledSession, updateScheduledSession,
   deleteScheduledSession, skipScheduledSession,
 
-  // Aliases tương thích (lichcodinh.js / reminderScheduler.js)
+  // Aliases
   getLichCoDinh, getLichCoDinhById,
   createLichCoDinh, updateLichCoDinh, deleteLichCoDinh,
   themLichCoDinh, suaLichCoDinh, xoaLichCoDinh,

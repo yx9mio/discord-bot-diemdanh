@@ -3,7 +3,7 @@
 const { Command } = require('@sapphire/framework');
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, codeBlock } = require('discord.js');
 
-let _logBuffer = [];
+const _logBuffer = [];
 const MAX_LOG = 200;
 
 function pushLog(level, msg) {

@@ -7,7 +7,7 @@ const {
 const db  = require('../../db.js');
 const log = require('../../utils/logger.js');
 const { requireAdmin }  = require('../../utils/permissions.js');
-const { replyErrEdit, replyOkEdit, replyWarn, replyErr } = require('../../utils/embeds.js');
+const { replyErrEdit, replyOkEdit, _replyWarn, replyErr } = require('../../utils/embeds.js');
 
 const VALID_STATUSES = ['tham_gia', 'tre', 'khong_tham_gia', 'co_phep', 'vang'];
 const STATUS_LABEL   = {
@@ -20,11 +20,9 @@ const STATUS_LABEL   = {
 
 // Bước 1: Admin bấm nút → mở modal
 async function handleAdminOverride(interaction) {
-  // Kiểm tra quyền admin
   const { ok } = await requireAdmin(interaction, { context: 'sửa điểm danh' });
   if (!ok) return true;
 
-  // Kiểm tra có phiên đang mở
   const session = await db.getActiveSession(interaction.guild.id);
   if (!session) {
     await interaction.reply(replyErr('📭 Không có phiên nào đang mở.'));
@@ -62,7 +60,6 @@ async function handleAdminOverride(interaction) {
 async function handleAdminOverrideModal(interaction) {
   await interaction.deferReply({ ephemeral: true });
 
-  // Double-check quyền
   const { ok } = await requireAdmin(interaction, { context: 'sửa điểm danh' });
   if (!ok) return true;
 
@@ -72,7 +69,6 @@ async function handleAdminOverrideModal(interaction) {
     return true;
   }
 
-  // Parse user ID (loại bỏ <@...> nếu user paste mention)
   const rawUser = interaction.fields.getTextInputValue('override_user').trim();
   const userId  = rawUser.replace(/^<@!?([\d]+)>$/, '$1').replace(/\D/g, '');
   if (!userId || userId.length < 15) {
@@ -88,7 +84,6 @@ async function handleAdminOverrideModal(interaction) {
     return true;
   }
 
-  // Kiểm tra member có trong eligible list không
   const eligible = session.eligible_member_ids ?? [];
   if (!eligible.includes(userId)) {
     await interaction.editReply(replyErrEdit(

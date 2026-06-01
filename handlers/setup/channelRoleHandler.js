@@ -1,7 +1,7 @@
 // handlers/setup/channelRoleHandler.js — setup:channel, setup:role, setup:phai
 'use strict';
 const {
-  EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle,
+  EmbedBuilder, ActionRowBuilder, _ButtonBuilder, ButtonStyle,
   StringSelectMenuBuilder, ChannelSelectMenuBuilder, PermissionFlagsBits,
 } = require('discord.js');
 const db = require('../../db.js');
@@ -11,7 +11,7 @@ const { buildDashboard } = require('./dashboardHandler.js');
 async function handleChannelRole(interaction) {
   const { customId, guild } = interaction;
 
-  // ── Kênh thông báo ──────────────────────────────────────────────────────────────
+  // ── Kênh thông báo ──────────────────────────────────────────────────────
   if (customId === 'setup:channel') {
     await interaction.deferUpdate();
     const embed = new EmbedBuilder()
@@ -25,7 +25,6 @@ async function handleChannelRole(interaction) {
         .setPlaceholder('Ch\u1ecdn k\u00eanh...')
         .setMinValues(1).setMaxValues(1),
     );
-    // NOTE: ephemeral được set trong deferReply trước, không truyền lại \u1edf editReply
     await interaction.editReply({ embeds: [embed], components: [row] });
     return true;
   }
@@ -41,7 +40,7 @@ async function handleChannelRole(interaction) {
     return true;
   }
 
-  // ── Role \u0111i\u1ec3m danh ────────────────────────────────────────────────────────────
+  // ── Role điểm danh ──────────────────────────────────────────────────
   if (customId === 'setup:role') {
     await interaction.deferUpdate();
     const embed = new EmbedBuilder()
@@ -80,7 +79,7 @@ async function handleChannelRole(interaction) {
     return true;
   }
 
-  // ── Role ph\u00e1i ───────────────────────────────────────────────────────────────
+  // ── Role phái ────────────────────────────────────────────────────
   if (customId === 'setup:phai') {
     await interaction.deferUpdate();
     const cfg = await db.getConfig(guild.id);
