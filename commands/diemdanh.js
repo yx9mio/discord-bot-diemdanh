@@ -1,104 +1,54 @@
-// commands/diemdanh.js — Lệnh điểm danh trực tiếp bằng slash command
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+// commands/diemdanh.js
+'use strict';
+const { Command } = require('@sapphire/framework');
 const db = require('../db.js');
-const { layHuyHieu } = require('../utils/helpers.js');
-const { pctColor, pctEmoji, pctLabel, FOOTER_DEFAULT, AUTHOR_DEFAULT, buildSessionEmbed } = require('../utils/embeds.js');
-const { buildProgressBar } = require('../utils/progress.js');
+const { buildSessionEmbed, replyErr } = require('../utils/embeds.js');
+const { MessageFlags } = require('discord.js');
 
-const STATUS_MAP = {
-  'tham_gia':       { label: '✅ Tham Gia',   color: 0x57F287, verb: 'đã ghi nhận tham gia' },
-  'tre':            { label: '⏰ Đến Trễ',    color: 0xFEE75C, verb: 'đã ghi nhận đến trễ' },
-  'khong_tham_gia': { label: '❌ Vắng Mặt',   color: 0xED4245, verb: 'đã ghi nhận vắng mặt' },
-};
+class DiemDanhCommand extends Command {
+  constructor(context) {
+    super(context, { name: 'diemdanh', description: 'Điểm danh tham gia phiên' });
+  }
 
-module.exports = {
-  data: new SlashCommandBuilder()
-    .setName('diemdanh')
-    .setDescription('Điểm danh phiên đang mở bằng slash command')
-    .addStringOption(o =>
-      o.setName('trang_thai')
-        .setDescription('Trạng thái tham gia của bạn')
-        .setRequired(true)
-        .addChoices(
-          { name: '✅ Tham Gia',  value: 'tham_gia' },
-          { name: '⏰ Đến Trễ',  value: 'tre' },
-          { name: '❌ Vắng Mặt', value: 'khong_tham_gia' },
-        )),
+  registerApplicationCommands(registry) {
+    registry.registerChatInputCommand(builder =>
+      builder.setName('diemdanh').setDescription('Điểm danh tham gia phiên')
+        .addStringOption(o => o.setName('trang_thai').setDescription('Trạng thái').setRequired(false)
+          .addChoices(
+            { name: '✅ Tham gia', value: 'tham_gia' },
+            { name: '⏰ Đến trễ', value: 'tre' },
+            { name: '❌ Vắng', value: 'khong_tham_gia' },
+          ))
+    );
+  }
 
-  async execute(interaction) {
-    await interaction.deferReply({ ephemeral: true });
-    const { guild, member, user } = interaction;
-    const status = interaction.options.getString('trang_thai');
-    const info   = STATUS_MAP[status];
+  async chatInputRun(interaction) {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    const { guild, user } = interaction;
+    const status = interaction.options.getString('trang_thai') ?? 'tham_gia';
 
     const session = await db.getActiveSession(guild.id);
-    if (!session) {
-      return interaction.editReply({ content: '🚫 Không có phiên điểm danh nào đang mở.' });
-    }
+    if (!session) return interaction.editReply(replyErr('Không có phiên nào đang mở.'));
 
-    // Kiểm tra eligible
-    if (session.eligible_member_ids?.length > 0 && !session.eligible_member_ids.includes(user.id)) {
-      return interaction.editReply({ content: '⚠️ Bạn không nằm trong danh sách điểm danh của phiên này.' });
-    }
+    const eligible = session.eligible_member_ids;
+    if (eligible?.length && !eligible.includes(user.id))
+      return interaction.editReply(replyErr('Bạn không thuộc danh sách điểm danh của phiên này.'));
 
-    // Kiểm tra role
-    if (session.allowed_role_id && !member.roles.cache.has(session.allowed_role_id)) {
-      const roleName = guild.roles.cache.get(session.allowed_role_id)?.name ?? 'role cần thiết';
-      return interaction.editReply({ content: `🔒 Bạn cần role **${roleName}** để điểm danh.` });
-    }
+    await db.upsertAttendance({ session_id: session.id, user_id: user.id, status });
+    const attended = await db.getAttendances(session.id);
+    const cfg      = await db.getGuildConfig(guild.id);
+    const embed    = await buildSessionEmbed(guild, session, attended, cfg.phai_role_ids ?? []);
 
-    // Kiểm tra đã điểm danh chưa
-    const existing = (await db.getAttendances(session.id)).find(a => a.user_id === user.id);
-    const isUpdate = !!existing;
-
-    const displayName = member.nickname ?? user.globalName ?? user.username;
-    await db.upsertAttendance(session.id, guild.id, user.id, displayName, status);
-
-    // [FIX BUG-7] Stats lấy từ phiên đã kết thúc — note rõ cho user
-    const stats = await db.getMemberStats(guild.id, user.id).catch(() => null);
-    const totalJoined   = stats?.total_joined   ?? 0;
-    const totalSessions = stats?.total_sessions ?? 0;
-    const pct   = totalSessions > 0 ? Math.round((totalJoined / totalSessions) * 100) : 0;
-    const bar   = buildProgressBar(pct);
-    const badge = layHuyHieu(totalJoined);
-
-    const statsNote = totalSessions > 0
-      ? `${pctEmoji(pct)} \`${bar}\` **${pct}%** — ${pctLabel(pct)} (${totalJoined}/${totalSessions} phiên đã kết thúc)`
-      : `*(Chưa có thống kê — tính sau khi phiên đóng)*`;
-
-    const embed = new EmbedBuilder()
-      .setAuthor(AUTHOR_DEFAULT)
-      .setTitle(`${info.label} — ${isUpdate ? 'Cập nhật điểm danh' : 'Điểm danh thành công'}`)
-      .setColor(info.color)
-      .setThumbnail(user.displayAvatarURL({ dynamic: true }))
-      .setDescription([
-        `**${displayName}** ${info.verb} phiên **${session.session_name}**.`,
-        '',
-        statsNote,
-        badge ? `🏅 Huy hiệu: ${badge}` : '',
-        `🔥 Streak: **${stats?.current_streak ?? 0}** phiên liên tiếp`,
-      ].filter(Boolean).join('\n'))
-      .addFields(
-        { name: '📅 Phiên', value: session.session_name, inline: true },
-        { name: '⏰ Trạng thái', value: info.label, inline: true },
-        { name: isUpdate ? '♻️ Hành động' : '✨ Hành động', value: isUpdate ? 'Đã cập nhật' : 'Ghi mới', inline: true },
-      )
-      .setFooter({ text: `${FOOTER_DEFAULT} · Dùng lại lệnh để đổi trạng thái` })
-      .setTimestamp();
-
-    // [FIX BUG-1] Sửa đường dẫn require — dùng import ở đầu file thay vì require động
-    try {
+    if (session.message_id) {
       const ch = guild.channels.cache.get(session.channel_id);
-      if (ch && session.message_id) {
+      if (ch) {
         const msg = await ch.messages.fetch(session.message_id).catch(() => null);
-        if (msg) {
-          const attended = await db.getAttendances(session.id);
-          const sessionEmbed = await buildSessionEmbed(guild, session, attended);
-          await msg.edit({ embeds: [sessionEmbed] }).catch(() => null);
-        }
+        if (msg) await msg.edit({ embeds: [embed] }).catch(() => null);
       }
-    } catch (_) { /* silent */ }
+    }
 
-    return interaction.editReply({ embeds: [embed] });
-  },
-};
+    const label = { tham_gia: '✅ Đã điểm danh tham gia!', tre: '⏰ Đã ghi nhận đến trễ.', khong_tham_gia: '❌ Đã ghi nhận vắng.' };
+    await interaction.editReply({ content: label[status] ?? '✅ Đã ghi nhận.' });
+  }
+}
+module.exports = { DiemDanhCommand };

@@ -1,17 +1,9 @@
-// commands/rank.js
-const { SlashCommandBuilder } = require('discord.js');
-const db = require('../db.js');
-const { buildRankPanel } = require('../handlers/userPanelHandler.js');
-
-module.exports = {
-  data: new SlashCommandBuilder()
-    .setName('rank')
-    .setDescription('Bảng xếp hạng điểm danh')
-    .setDefaultMemberPermissions(0n),
-
-  async execute(interaction) {
-    await interaction.deferReply({ ephemeral: true });
-    const panel = await buildRankPanel(interaction.guild);
-    return interaction.editReply(panel);
-  },
-};
+'use strict';
+const { Command } = require('@sapphire/framework');
+const _orig = require('./rank._orig.js');
+class RankCommand extends Command {
+  constructor(context) { super(context, { name: _orig.data.name, description: _orig.data.description }); this._data = _orig.data; }
+  registerApplicationCommands(registry) { registry.registerChatInputCommand(this._data); }
+  async chatInputRun(interaction) { return _orig.execute(interaction); }
+}
+module.exports = { RankCommand };

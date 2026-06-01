@@ -1,66 +1,9 @@
-// commands/xuat.js — Phase 7: migrate laAdmin → requireAdmin
 'use strict';
-const { SlashCommandBuilder, AttachmentBuilder, EmbedBuilder } = require('discord.js');
-const db = require('../db.js');
-const { replyErrEdit, FOOTER_DEFAULT, AUTHOR_DEFAULT } = require('../utils/embeds.js');
-const { requireAdmin } = require('../utils/permissions.js');
-
-const data = new SlashCommandBuilder()
-  .setName('xuat_diemdanh')
-  .setDescription('Xuất dữ liệu điểm danh ra file CSV')
-  .addStringOption(o =>
-    o.setName('session_id').setDescription('ID phiên cụ thể (bỏ trống = phiên gần nhất)')
-  );
-
-async function execute(interaction) {
-  await interaction.deferReply({ ephemeral: true });
-  const { guild } = interaction;
-
-  const { ok } = await requireAdmin(interaction, { context: '/xuat_diemdanh' });
-  if (!ok) return;
-
-  let session;
-  const sessionId = interaction.options.getString('session_id');
-
-  if (sessionId) {
-    session = await db.getSessionById(sessionId, guild.id);
-    if (!session) return interaction.editReply(replyErrEdit('⚠️ Không tìm thấy phiên này.'));
-  } else {
-    const history = await db.getSessionHistory(guild.id, 1);
-    if (history.length === 0) {
-      return interaction.editReply(replyErrEdit('⚠️ Chưa có phiên nào kết thúc.'));
-    }
-    session = history[0];
-  }
-
-  const attended    = await db.getAttendances(session.id);
-  const attendedMap = new Map(attended.map(a => [a.user_id, a]));
-
-  const rows = ['User ID,Username,Trạng Thái,Thời Gian'];
-  for (const uid of session.eligible_member_ids) {
-    const a = attendedMap.get(uid);
-    if (a) {
-      const time = new Date(a.checked_in_at).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
-      rows.push(`${a.user_id},"${a.username}",${a.status},"${time}"`);
-    } else {
-      rows.push(`${uid},,chua_diem_danh,`);
-    }
-  }
-
-  const csvBuffer  = Buffer.from('\uFEFF' + rows.join('\n'), 'utf-8');
-  const safeName   = session.session_name.replace(/[^a-z0-9à-ỹ]/gi, '_');
-  const fileName   = `diemdanh_${safeName}_${session.id.slice(0, 8)}.csv`;
-  const attachment = new AttachmentBuilder(csvBuffer, { name: fileName });
-
-  const embed = new EmbedBuilder()
-    .setAuthor(AUTHOR_DEFAULT)
-    .setTitle('📄 Xuất Điểm Danh')
-    .setColor(0xD4AF37)
-    .setDescription(`Phiên: **${session.session_name}**\n${attended.length} bản ghi được xuất.`)
-    .setFooter({ text: FOOTER_DEFAULT })
-    .setTimestamp();
-
-  return interaction.editReply({ embeds: [embed], files: [attachment] });
+const { Command } = require('@sapphire/framework');
+const _orig = require('./xuat._orig.js');
+class XuatCommand extends Command {
+  constructor(context) { super(context, { name: _orig.data.name, description: _orig.data.description, preconditions: ['AdminOnly'] }); this._data = _orig.data; }
+  registerApplicationCommands(registry) { registry.registerChatInputCommand(this._data); }
+  async chatInputRun(interaction) { return _orig.execute(interaction); }
 }
-
-module.exports = { data, execute };
+module.exports = { XuatCommand };
