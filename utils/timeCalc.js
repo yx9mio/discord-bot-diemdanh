@@ -1,15 +1,16 @@
 // utils/timeCalc.js — Tính thời gian cho scheduler lịch cố định
+// Dùng date-fns-tz thay vì tính tay UTC+7
 'use strict';
+const { toZonedTime } = require('date-fns-tz');
 
-// Timezone offset VN (UTC+7)
-const TZ_OFFSET_MS = 7 * 60 * 60 * 1000;
+const TZ = 'Asia/Ho_Chi_Minh';
 
 /**
- * Lấy thời điểm hiện tại theo giờ VN (Date object nhưng thời gian là VN local)
+ * Lấy Date object đã được map sang múi giờ VN.
+ * Các getter .getFullYear(), .getDay(), .getHours()... đều trả về giờ VN.
  */
 function nowVN() {
-  const now = new Date();
-  return new Date(now.getTime() + TZ_OFFSET_MS);
+  return toZonedTime(new Date(), TZ);
 }
 
 /**
@@ -17,20 +18,18 @@ function nowVN() {
  * @param {number} dayOfWeek  0=CN, 1=T2, ..., 6=T7
  * @param {number} hour       0–23
  * @param {number} minute     0–59
- * @returns {number} milliseconds
+ * @returns {number} milliseconds (luôn > 0)
  */
 function msToNextWeekday(dayOfWeek, hour, minute) {
-  const vn = nowVN();
-  const vnDay  = vn.getUTCDay();
-  const vnH    = vn.getUTCHours();
-  const vnM    = vn.getUTCMinutes();
-  const vnS    = vn.getUTCSeconds();
-  const vnMs   = vn.getUTCMilliseconds();
+  const vn  = nowVN();
+  const vnDay = vn.getDay();
+  const vnH   = vn.getHours();
+  const vnM   = vn.getMinutes();
+  const vnS   = vn.getSeconds();
+  const vnMs  = vn.getMilliseconds();
 
-  // Số ngày cho đến dayOfWeek tiếp theo
   let daysUntil = (dayOfWeek - vnDay + 7) % 7;
 
-  // Nếu cùng ngày nhưng giờ đã qua (hoặc đúng giờ) → tuần sau
   if (daysUntil === 0) {
     const pastOrEqual =
       vnH > hour ||
@@ -39,41 +38,36 @@ function msToNextWeekday(dayOfWeek, hour, minute) {
     if (pastOrEqual) daysUntil = 7;
   }
 
-  const msDay = daysUntil * 24 * 60 * 60 * 1000;
-  const msTimeOfDay = (hour * 60 + minute) * 60 * 1000;
-  const msCurrentTimeOfDay = ((vnH * 60 + vnM) * 60 + vnS) * 1000 + vnMs;
+  const MS_DAY         = 24 * 60 * 60 * 1000;
+  const msDay          = daysUntil * MS_DAY;
+  const msTimeOfDay    = (hour * 60 + minute) * 60 * 1000;
+  const msCurrentTime  = ((vnH * 60 + vnM) * 60 + vnS) * 1000 + vnMs;
 
-  return msDay + msTimeOfDay - msCurrentTimeOfDay;
+  return msDay + msTimeOfDay - msCurrentTime;
 }
 
 /**
- * ms từ thời điểm mở (open) đến thời điểm đóng (close) trong cùng chu kỳ tuần
- * Nếu close ≤ open (qua nửa đêm hoặc tuần sau) sẽ thêm 7 ngày vào close
+ * ms từ thời điểm mở (open) đến thời điểm đóng (close) trong cùng chu kỳ tuần.
+ * Nếu close ≤ open (qua nửa đêm hoặc tuần sau) sẽ thêm 7 ngày.
  */
 function msFromOpenToClose(openDay, openH, openM, closeDay, closeH, closeM) {
+  const MS_WEEK    = 7 * 24 * 60 * 60 * 1000;
   const openTotal  = (openDay  * 24 * 60 + openH  * 60 + openM)  * 60 * 1000;
   let   closeTotal = (closeDay * 24 * 60 + closeH * 60 + closeM) * 60 * 1000;
-
-  if (closeTotal <= openTotal) {
-    closeTotal += 7 * 24 * 60 * 60 * 1000; // close sang tuần sau
-  }
-
+  if (closeTotal <= openTotal) closeTotal += MS_WEEK;
   return closeTotal - openTotal;
 }
 
 /**
- * ms còn lại cho đến giờ đóng, tính từ thời điểm hiện tại
- * Căn cứ vào createdAt của session để biết khi nào phiên đã mở
- * @param {string|Date|null} sessionCreatedAt  ISO string (UTC) hoặc null
- * @returns {number|null} ms (có thể âm nếu đã qua giờ đóng), null nếu createdAt không hợp lệ
+ * ms còn lại cho đến giờ đóng tính từ hiện tại.
+ * @param {string|Date|null} sessionCreatedAt  ISO string UTC hoặc null
+ * @returns {number|null}  ms (có thể âm nếu đã qua), null nếu createdAt không hợp lệ
  */
 function msToCloseFromNow(openDay, openH, openM, closeDay, closeH, closeM, sessionCreatedAt) {
-  const msOpenToClose = msFromOpenToClose(openDay, openH, openM, closeDay, closeH, closeM);
   const openedAt = sessionCreatedAt ? new Date(sessionCreatedAt).getTime() : NaN;
-  // Guard: nếu openedAt không hợp lệ trả về null để caller tự xử lý
   if (isNaN(openedAt)) return null;
-  const closeAt = openedAt + msOpenToClose;
-  return closeAt - Date.now();
+  const duration = msFromOpenToClose(openDay, openH, openM, closeDay, closeH, closeM);
+  return openedAt + duration - Date.now();
 }
 
-module.exports = { msToNextWeekday, msFromOpenToClose, msToCloseFromNow };
+module.exports = { nowVN, msToNextWeekday, msFromOpenToClose, msToCloseFromNow };

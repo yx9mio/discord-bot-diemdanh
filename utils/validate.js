@@ -1,6 +1,7 @@
 // utils/validate.js — Zod schemas cho các object quan trọng
 'use strict';
-const { z } = require('zod');
+const { z }                       = require('zod');
+const { fromZodError }            = require('zod-validation-error');
 
 // ─── Scheduled session (lịch cố định) ────────────────────────────────────────
 const LichSchema = z.object({
@@ -43,7 +44,7 @@ const AttendanceSchema = z.object({
   guild_id:      z.string().optional(),
   user_id:       z.string().min(1),
   username:      z.string().nullable().optional(),
-  status:        z.enum(['tham_gia', 'tre', 'khong_tham_gia', 'co_phep']),
+  status:        z.enum(['tham_gia', 'tre', 'khong_tham_gia', 'co_phep']).optional(),
   marked_by:     z.string().nullable().optional(),
   checked_in_at: z.string().datetime().nullable().optional(),
 });
@@ -57,10 +58,9 @@ const ConfigSchema = z.object({
 });
 
 // ─── Slash command inputs ─────────────────────────────────────────────────────
-// P1: validate input từ người dùng trước khi ghi DB
 const BatDauInputSchema = z.object({
-  session_name:    z.string().min(1).max(100),
-  allowed_role_id: z.string().nullable().optional(),
+  session_name:        z.string().min(1).max(100),
+  allowed_role_id:     z.string().nullable().optional(),
   eligible_member_ids: z.array(z.string()).nullable().optional(),
 });
 
@@ -72,6 +72,7 @@ const CaiDatInputSchema = z.object({
 
 /**
  * Parse + validate an toàn — trả về { ok, data } thay vì throw.
+ * Error message được format bởi zod-validation-error: human-readable 1 dòng.
  * @template T
  * @param {import('zod').ZodSchema<T>} schema
  * @param {unknown} input
@@ -80,8 +81,7 @@ const CaiDatInputSchema = z.object({
 function safeParse(schema, input) {
   const result = schema.safeParse(input);
   if (result.success) return { ok: true, data: result.data };
-  const msg = result.error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ');
-  return { ok: false, error: msg };
+  return { ok: false, error: fromZodError(result.error).message };
 }
 
 module.exports = {

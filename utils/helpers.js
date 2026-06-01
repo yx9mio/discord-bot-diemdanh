@@ -1,5 +1,9 @@
 // utils/helpers.js — Hàm tiện ích dùng chung
+'use strict';
 const { PermissionFlagsBits } = require('discord.js');
+const { toZonedTime }         = require('date-fns-tz');
+
+const TZ = 'Asia/Ho_Chi_Minh';
 
 // ─── Huy Hiệu ─────────────────────────────────────────────────
 const MOC_HUY_HIEU = [
@@ -21,25 +25,34 @@ function layHuyHieu(count) {
 function laAdmin(member, cfg) {
   if (!member) return false;
   if (member.permissions.has(PermissionFlagsBits.Administrator)) return true;
-  if (cfg.admin_role_id && member.roles.cache.has(cfg.admin_role_id)) return true;
+  if (cfg?.admin_role_id && member.roles.cache.has(cfg.admin_role_id)) return true;
   return false;
 }
 
-// ─── Tính ms đến giờ/phút/ngày cố định (giờ VN UTC+7) ────────
+/**
+ * ms đến (ngày-trong-tháng, hour, minute) theo giờ VN.
+ * Dùng date-fns-tz thay vì tính tay UTC+7.
+ * @param {number|null} day     ngày trong tháng (null = hôm nay)
+ * @param {number}      hour    0–23
+ * @param {number}      minute  0–59
+ */
 function msDenGioVN(day, hour, minute) {
-  const VN_OFFSET_MS = 7 * 60 * 60 * 1000;
   const nowUtcMs = Date.now();
-  const nowVnDate = new Date(nowUtcMs + VN_OFFSET_MS);
-  const vnYear  = nowVnDate.getUTCFullYear();
-  const vnMonth = nowVnDate.getUTCMonth();
-  const vnDay   = nowVnDate.getUTCDate();
+  const vnNow    = toZonedTime(new Date(nowUtcMs), TZ);
+
+  const vnYear  = vnNow.getFullYear();
+  const vnMonth = vnNow.getMonth();       // 0-indexed
+  const vnDay   = vnNow.getDate();
   const targetDay = day ?? vnDay;
 
+  // Build target timestamp trong TZ VN bằng cách tạo Date UTC tương ứng
   function buildTarget(year, month, d) {
-    const maxDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+    const maxDay = new Date(year, month + 1, 0).getDate();
     if (d > maxDay) return null;
-    const targetVnMs  = Date.UTC(year, month, d, hour, minute, 0, 0);
-    const targetUtcMs = targetVnMs - VN_OFFSET_MS;
+    // Date constructor (local) không đáng tin — build bằng UTC rồi bù offset
+    const offsetMs = vnNow.getTimezoneOffset() * -60 * 1000; // date-fns-tz set tzOffset
+    const targetLocal = new Date(year, month, d, hour, minute, 0, 0);
+    const targetUtcMs = targetLocal.getTime() - offsetMs;
     return { ms: targetUtcMs - nowUtcMs, targetDate: new Date(targetUtcMs) };
   }
 
@@ -50,14 +63,16 @@ function msDenGioVN(day, hour, minute) {
     result = buildTarget(namSau, thangSau, targetDay);
   }
   if (!result || result.ms <= 0) {
-    return { ms: -1, targetDate: null,
-      errorMsg: `Ngày **${targetDay}** không tồn tại trong tháng hiện tại lẫn tháng sau. Hãy kiểm tra lại.` };
+    return {
+      ms: -1, targetDate: null,
+      errorMsg: `Ngày **${targetDay}** không tồn tại trong tháng hiện tại lẫn tháng sau. Hãy kiểm tra lại.`,
+    };
   }
   return { ...result, errorMsg: null };
 }
 
 function formatThoiGian(ms) {
-  const totalMin = Math.round(ms / 60000);
+  const totalMin = Math.round(ms / 60_000);
   if (totalMin < 60) return `${totalMin} phút`;
   const h = Math.floor(totalMin / 60);
   const m = totalMin % 60;
@@ -71,7 +86,7 @@ async function timKenhThongBao(guild) {
     if (ch && ch.permissionsFor(guild.members.me)?.has('SendMessages')) return guild.systemChannelId;
   }
   const textCh = guild.channels.cache.find(
-    c => c.isTextBased() && !c.isThread() && c.permissionsFor(guild.members.me)?.has('SendMessages')
+    c => c.isTextBased() && !c.isThread() && c.permissionsFor(guild.members.me)?.has('SendMessages'),
   );
   return textCh?.id ?? null;
 }
