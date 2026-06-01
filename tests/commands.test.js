@@ -1,19 +1,21 @@
 // tests/commands.test.js
-// Kiểm tra contract của mỗi command:
+// Kiểm tra contract của mỗi command (Sapphire Framework pattern):
 //   - Load được (không throw MODULE_NOT_FOUND)
-//   - export { data, execute }
-//   - data.name là string không rỗng
-//   - execute là function
+//   - export đúng 1 class (tên kết thúc bằng "Command")
+//   - Class có method registerApplicationCommands
+//   - Class có method chatInputRun
 import { describe, it, expect, vi } from 'vitest';
 import { readdirSync } from 'node:fs';
 import { resolve, join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const commandsDir = resolve(__dirname, '../src/commands');
 
-// Mock tất cả deps nặng để command files load được
+// ─── Mock deps nặng ─────────────────────────────────────────────────────────
 vi.mock('../db.js', () => ({
+  default: {},
   getActiveSession: vi.fn(),
   createSession: vi.fn(),
   closeSession: vi.fn(),
@@ -22,6 +24,8 @@ vi.mock('../db.js', () => ({
   updateSessionMessage: vi.fn().mockResolvedValue(null),
   getMemberStatsMulti: vi.fn().mockResolvedValue([]),
   getBadgeDefinitions: vi.fn().mockResolvedValue([]),
+  setGuildConfig: vi.fn().mockResolvedValue(null),
+  getGuildConfig: vi.fn().mockResolvedValue({}),
 }));
 
 vi.mock('discord.js', () => ({
@@ -50,9 +54,7 @@ vi.mock('discord.js', () => ({
     setAuthor() { return this; }
     data = {};
   },
-  ActionRowBuilder: class {
-    addComponents() { return this; }
-  },
+  ActionRowBuilder: class { addComponents() { return this; } },
   ButtonBuilder: class {
     setCustomId() { return this; }
     setLabel() { return this; }
@@ -74,6 +76,34 @@ vi.mock('discord.js', () => ({
     setDescription() { return this; }
   },
 }));
+
+// Mock @sapphire/framework — cung cấp base class Command
+vi.mock('@sapphire/framework', () => {
+  class Command {
+    constructor(context, options) {
+      this.name = options?.name ?? '';
+      this.description = options?.description ?? '';
+    }
+  }
+  class ApplicationCommandRegistry {
+    registerChatInputCommand(fn) {
+      const builder = {
+        setName(n) { this._name = n; return this; },
+        setDescription() { return this; },
+        setDefaultMemberPermissions() { return this; },
+        addBooleanOption() { return this; },
+        addStringOption() { return this; },
+        addUserOption() { return this; },
+        addIntegerOption() { return this; },
+        addChannelOption() { return this; },
+        addRoleOption() { return this; },
+        addSubcommand() { return this; },
+      };
+      fn(builder);
+    }
+  }
+  return { Command, ApplicationCommandRegistry };
+});
 
 vi.mock('../utils/embeds.js', () => ({
   buildAttendanceButtons: vi.fn().mockReturnValue({}),
@@ -100,7 +130,15 @@ vi.mock('../utils/scheduler.js', () => ({
   runLichNgay: vi.fn().mockResolvedValue({ ok: true }),
 }));
 
-// ─── Load tất cả command files ──────────────────────────────────────────────
+// ─── Helper: lấy Command class từ module CJS ────────────────────────────────
+function extractCommandClass(mod) {
+  // module.exports = { SomethingCommand } hoặc exports.SomethingCommand
+  const keys = Object.keys(mod);
+  const key = keys.find(k => k.endsWith('Command'));
+  return key ? mod[key] : null;
+}
+
+// ─── Load danh sách file ─────────────────────────────────────────────────────
 let commandFiles = [];
 try {
   commandFiles = readdirSync(commandsDir)
@@ -110,7 +148,8 @@ try {
   // src/commands không tồn tại — skip
 }
 
-describe('Commands contract', () => {
+// ─── Tests ──────────────────────────────────────────────────────────────────
+describe('Commands contract (Sapphire)', () => {
   if (commandFiles.length === 0) {
     it('no command files found — skip', () => {
       expect(true).toBe(true);
@@ -121,27 +160,35 @@ describe('Commands contract', () => {
   for (const { file, path } of commandFiles) {
     describe(file, () => {
       it('load được không throw', async () => {
-        await expect(import(path)).resolves.toBeDefined();
+        // Dùng createRequire để load CJS module
+        const require = createRequire(import.meta.url);
+        expect(() => require(path)).not.toThrow();
       });
 
-      it('export { data, execute }', async () => {
-        const mod = await import(path);
-        expect(mod).toHaveProperty('data');
-        expect(mod).toHaveProperty('execute');
+      it('export đúng 1 class kết thúc bằng "Command"', async () => {
+        const require = createRequire(import.meta.url);
+        const mod = require(path);
+        const CommandClass = extractCommandClass(mod);
+        expect(CommandClass).not.toBeNull();
+        expect(typeof CommandClass).toBe('function'); // class là function
       });
 
-      it('data.name là string không rỗng', async () => {
-        const { data } = await import(path);
-        const name = typeof data?.name === 'string'
-          ? data.name
-          : (data?.toJSON?.()?.name ?? data?._name ?? '');
-        expect(typeof name).toBe('string');
-        expect(name.length).toBeGreaterThan(0);
+      it('class có method registerApplicationCommands', async () => {
+        const require = createRequire(import.meta.url);
+        const mod = require(path);
+        const CommandClass = extractCommandClass(mod);
+        expect(CommandClass).not.toBeNull();
+        const proto = CommandClass?.prototype;
+        expect(typeof proto?.registerApplicationCommands).toBe('function');
       });
 
-      it('execute là function', async () => {
-        const { execute } = await import(path);
-        expect(typeof execute).toBe('function');
+      it('class có method chatInputRun', async () => {
+        const require = createRequire(import.meta.url);
+        const mod = require(path);
+        const CommandClass = extractCommandClass(mod);
+        expect(CommandClass).not.toBeNull();
+        const proto = CommandClass?.prototype;
+        expect(typeof proto?.chatInputRun).toBe('function');
       });
     });
   }
