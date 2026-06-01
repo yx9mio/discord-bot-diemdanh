@@ -1,6 +1,6 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// Mock discord.js trước khi import embeds
+// ─── Mock discord.js + db.js ───────────────────────────────────────────────────────────
 vi.mock('discord.js', () => ({
   EmbedBuilder: class {
     setColor() { return this; }
@@ -9,6 +9,8 @@ vi.mock('discord.js', () => ({
     addFields(f) { this._fields = f; return this; }
     setFooter() { return this; }
     setTimestamp() { return this; }
+    setThumbnail() { return this; }
+    setAuthor() { return this; }
     data = {};
   },
   ActionRowBuilder: class {
@@ -25,40 +27,85 @@ vi.mock('discord.js', () => ({
   MessageFlags: { Ephemeral: 64 },
 }));
 
-// Mock db.js
 vi.mock('../db.js', () => ({
-  getMemberStatsMulti: vi.fn().mockResolvedValue([]),
-  getBadgeDefinitions: vi.fn().mockResolvedValue([]),
+  getMemberStatsMulti:  vi.fn().mockResolvedValue([]),
+  getBadgeDefinitions:  vi.fn().mockResolvedValue([]),
 }));
 
-describe('buildSummaryEmbed — eligible_member_ids null safety', () => {
-  it('không crash khi eligible_member_ids = null', async () => {
-    const { buildSummaryEmbed } = await import('../utils/embeds.js');
-    const session = {
-      id: 'sess-1',
-      session_name: 'Test',
-      guild_id: 'g1',
-      eligible_member_ids: null, // edge case chính
-      created_at: new Date().toISOString(),
-    };
-    const attended = [
-      { user_id: 'u1', status: 'tham_gia', username: 'Alice' },
-      { user_id: 'u2', status: 'khong_tham_gia', username: 'Bob' },
-    ];
-    const guild = { name: 'Test Guild', memberCount: 10 };
-    // Không throw là pass
-    expect(() => buildSummaryEmbed(session, attended, guild)).not.toThrow();
-  });
+// ─── Fixtures ───────────────────────────────────────────────────────────────────────
+const makeSession = (overrides = {}) => ({
+  id: 'sess-1', session_name: 'Test', guild_id: 'g1',
+  eligible_member_ids: null, created_at: new Date().toISOString(),
+  is_active: true, cancelled: false, started_by: 'admin',
+  ...overrides,
+});
 
-  it('không crash khi eligible_member_ids = []', async () => {
+const makeAttended = () => [
+  { user_id: 'u1', status: 'tham_gia',       username: 'Alice' },
+  { user_id: 'u2', status: 'khong_tham_gia', username: 'Bob'   },
+  { user_id: 'u3', status: 'tre',            username: 'Carol' },
+  { user_id: 'u4', status: 'co_phep',        username: null    }, // username null
+];
+
+const guild = { id: 'g1', name: 'Test Guild', memberCount: 50 };
+
+// ─── buildSummaryEmbed ────────────────────────────────────────────────────────────
+describe('buildSummaryEmbed', () => {
+  it('eligible_member_ids=null không crash', async () => {
     const { buildSummaryEmbed } = await import('../utils/embeds.js');
-    const session = {
-      id: 'sess-2',
-      session_name: 'Test 2',
-      guild_id: 'g1',
-      eligible_member_ids: [],
-      created_at: new Date().toISOString(),
-    };
-    expect(() => buildSummaryEmbed(session, [], {})).not.toThrow();
+    expect(() => buildSummaryEmbed(makeSession({ eligible_member_ids: null }), makeAttended(), guild))
+      .not.toThrow();
+  });
+  it('eligible_member_ids=[] không crash', async () => {
+    const { buildSummaryEmbed } = await import('../utils/embeds.js');
+    expect(() => buildSummaryEmbed(makeSession({ eligible_member_ids: [] }), makeAttended(), guild))
+      .not.toThrow();
+  });
+  it('eligible_member_ids=[...] không crash', async () => {
+    const { buildSummaryEmbed } = await import('../utils/embeds.js');
+    expect(() => buildSummaryEmbed(makeSession({ eligible_member_ids: ['u1','u2'] }), makeAttended(), guild))
+      .not.toThrow();
+  });
+  it('attended=[] không crash', async () => {
+    const { buildSummaryEmbed } = await import('../utils/embeds.js');
+    expect(() => buildSummaryEmbed(makeSession(), [], guild)).not.toThrow();
+  });
+  it('guild=null không crash', async () => {
+    const { buildSummaryEmbed } = await import('../utils/embeds.js');
+    expect(() => buildSummaryEmbed(makeSession(), makeAttended(), null)).not.toThrow();
+  });
+  it('guild={} không crash', async () => {
+    const { buildSummaryEmbed } = await import('../utils/embeds.js');
+    expect(() => buildSummaryEmbed(makeSession(), makeAttended(), {})).not.toThrow();
+  });
+});
+
+// ─── buildAttendanceButtons ──────────────────────────────────────────────────────────
+describe('buildAttendanceButtons', () => {
+  it('trả về ActionRow khi disabled=false', async () => {
+    const { buildAttendanceButtons } = await import('../utils/embeds.js');
+    const row = buildAttendanceButtons(false);
+    expect(row).toBeDefined();
+  });
+  it('trả về ActionRow khi disabled=true', async () => {
+    const { buildAttendanceButtons } = await import('../utils/embeds.js');
+    const row = buildAttendanceButtons(true);
+    expect(row).toBeDefined();
+  });
+});
+
+// ─── replyErr helpers ─────────────────────────────────────────────────────────────────
+describe('replyErr + replyErrEdit', () => {
+  it('replyErr trả về object có flags', async () => {
+    const { replyErr } = await import('../utils/embeds.js');
+    const r = replyErr('test error');
+    expect(r).toHaveProperty('flags');
+    expect(r).toHaveProperty('embeds');
+  });
+  it('replyErrEdit trả về object có embeds + components', async () => {
+    const { replyErrEdit } = await import('../utils/embeds.js');
+    const r = replyErrEdit('test error');
+    expect(r).toHaveProperty('embeds');
+    expect(r).toHaveProperty('components');
   });
 });
