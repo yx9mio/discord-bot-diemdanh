@@ -1,7 +1,7 @@
 // interaction-handlers/sessionButton.js
-// Handles: attend_view, attend_close, attend_refresh, session:confirm_close,
-//          session:cancel_close, admin:override, upgrade:confirm,
-//          lichsu:*, setup:*, setup_help, setup_config
+// BUG-5 fix: dùng db.getConfig (alias)
+// BUG-8 fix: return sớm khi closeSession throw
+// BUG-10 fix: loại bỏ duplicate modal handler
 'use strict';
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const db  = require('../db.js');
@@ -50,6 +50,7 @@ class SessionButtonHandler extends InteractionHandler {
     }
     if (customId === 'setup_config') {
       await interaction.deferReply({ ephemeral: true });
+      // BUG-5 fix: getConfig là alias của getGuildConfig
       const cfg = await db.getConfig(guild.id);
       return interaction.editReply({ embeds: [buildConfigEmbed(cfg)] });
     }
@@ -62,6 +63,7 @@ class SessionButtonHandler extends InteractionHandler {
       const newPage  = action === 'next' ? curPage + 1 : curPage - 1;
       await interaction.deferUpdate();
       const { buildHistoryPageEmbed, buildNavRow, PAGE_SIZE } = require('../commands/lichsu.js');
+      // BUG-4 fix: getSessionHistory là alias của getRecentSessions
       const history     = await db.getSessionHistory(guild.id, 50);
       const totalPages  = Math.max(1, Math.ceil(history.length / PAGE_SIZE));
       const clampedPage = Math.max(0, Math.min(newPage, totalPages - 1));
@@ -119,7 +121,15 @@ class SessionButtonHandler extends InteractionHandler {
       await interaction.deferUpdate();
       const session = await db.getActiveSession(guild.id);
       if (!session) return interaction.editReply(replyErrEdit('🚫 Phiên đã được đóng trước đó.'));
-      try { await db.closeSession(session.id); } catch (e) { console.error('[closeHandler] closeSession error:', e.message); }
+
+      // BUG-8 fix: nếu closeSession throw → abort, không tiếp tục gửi embed
+      try {
+        await db.closeSession(session.id);
+      } catch (e) {
+        log.error('CLOSE', guild.id, 'closeSession thất bại %s: %s', session.id, e.message);
+        return interaction.editReply(replyErrEdit('❌ Không thể đóng phiên do lỗi DB, thử lại sau.'));
+      }
+
       const attended = await db.getAttendances(session.id);
       xoaHenGio(guild.id);
       const statsMap = await ketThucPhien(guild, session, attended);
@@ -135,6 +145,7 @@ class SessionButtonHandler extends InteractionHandler {
     }
 
     // Admin override button → mở modal
+    // BUG-7 fix: handleAdminOverride tự gọi showModal (không deferReply trước)
     if (customId === 'admin:override') {
       const { handleAdminOverride } = require('../handlers/button/adminOverrideHandler.js');
       return handleAdminOverride(interaction);

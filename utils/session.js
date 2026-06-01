@@ -15,6 +15,7 @@ const DEFAULT_BADGES = [
 
 async function getBadgeList(guildId) {
   try {
+    // BUG-2 fix: dùng getBadges (alias của getBadgeDefinitions)
     const rows = await db.getBadges(guildId);
     return rows.length ? rows : DEFAULT_BADGES;
   } catch {
@@ -37,11 +38,9 @@ async function ketThucPhien(guild, session, attended) {
     attended.filter(r => PRESENT_STATUSES.has(r.status)).map(r => r.user_id)
   );
 
-  // Load tất cả stats của guild 1 lần duy nhất
   const allStats   = await db.getAllMemberStats(guild.id);
   const statsCache = new Map(allStats.map(s => [s.user_id, s]));
 
-  // Cộng streak cho người có mặt
   for (const record of attended) {
     if (!PRESENT_STATUSES.has(record.status)) continue;
     const uid   = record.user_id;
@@ -53,7 +52,6 @@ async function ketThucPhien(guild, session, attended) {
     patches.push({ user_id: uid, total_joined: total, current_streak: streak, best_streak: maxS, last_session_id: session.id });
   }
 
-  // Reset streak = 0 cho thành viên eligible vắng mặt
   const eligibleIds = session.eligible_member_ids ?? [];
   for (const uid of eligibleIds.filter(id => !presentIds.has(id))) {
     const stats = statsCache.get(uid);
@@ -62,23 +60,25 @@ async function ketThucPhien(guild, session, attended) {
     log.info('SESSION', guild.id, 'Reset streak: %s (vắng %s)', uid, session.session_name);
   }
 
+  // BUG-3 fix: dùng batchUpsertMemberStats thay vì hàm không tồn tại
   if (patches.length) await db.batchUpsertMemberStats(guild.id, patches);
   return statsMap;
 }
 
 /**
  * Thông báo huy hiệu mới.
- * Signature: (guild, channel, guildId, sessionId, attended, statsMap)
  */
 async function thongBaoHuyHieu(guild, channel, guildId, sessionId, attended, statsMap) {
   const badges = await getBadgeList(guildId);
   if (!badges.length) return;
   const newBadges = [];
   for (const [userId, stats] of statsMap.entries()) {
+    // BUG-2 fix: dùng getMemberBadges (alias của getUserBadges + flatten)
     const existing  = await db.getMemberBadges(guildId, userId);
     const earnedSet = new Set(existing.map(b => b.threshold));
     for (const badge of badges) {
       if (stats.total >= badge.threshold && !earnedSet.has(badge.threshold)) {
+        // BUG-2 fix: dùng upsertMemberBadge (alias lookup def rồi upsert)
         await db.upsertMemberBadge(guildId, userId, badge.threshold);
         newBadges.push({ userId, badge });
       }
@@ -102,7 +102,6 @@ async function voHieuHoaNutDiemDanh(client, channel, session, attended = []) {
   try {
     const msg = await channel.messages.fetch(session.message_id);
     if (!msg) return;
-    // C-1 fix: await vì buildClosedSessionEmbed là async
     const closedEmbed     = await buildClosedSessionEmbed(session, attended, channel.guild ?? null);
     const disabledButtons = buildAttendanceButtons(true);
     await msg.edit({ embeds: [closedEmbed], components: [disabledButtons] });
@@ -116,7 +115,6 @@ async function guiCsvDinhKem(channel, session, attended) {
   try {
     const lines = [
       'user_id,username,status,time',
-      // H-3 fix: dùng a.username thay vì a.display_name (field không tồn tại)
       ...attended.map(a =>
         [a.user_id, (a.username ?? '').replace(/,/g, ' '), a.status, a.checked_in_at ?? a.created_at ?? ''].join(',')
       ),

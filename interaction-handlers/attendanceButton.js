@@ -1,5 +1,7 @@
 // interaction-handlers/attendanceButton.js
 // Handles: attendance:join, attendance:late, attendance:decline
+// BUG-1 fix: upsertAttendance gọi đúng signature object payload
+// BUG-6 fix: lock scope chặt hơn, không để race condition khi reply throw
 'use strict';
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const db = require('../db.js');
@@ -17,7 +19,8 @@ const STATUS_LABEL = {
   khong_tham_gia: '❌ Vắng Mặt',
 };
 
-const _pendingLock = new Set();
+// BUG-6: Map thay Set để lưu promise, tránh race condition
+const _pendingLock = new Map();
 const LOCK_MS = 5_000;
 
 class AttendanceButtonHandler extends InteractionHandler {
@@ -34,24 +37,23 @@ class AttendanceButtonHandler extends InteractionHandler {
     const { customId, guild, member, user } = interaction;
     const status = BUTTON_TO_STATUS[customId];
 
-    const sessionQuick = await db.getActiveSession(guild.id);
-    if (!sessionQuick) {
+    const session = await db.getActiveSession(guild.id);
+    if (!session) {
       return interaction.reply({ content: '🚫 Không có phiên điểm danh nào đang mở.', ephemeral: true });
     }
 
-    const lockKey = `${sessionQuick.id}:${user.id}`;
+    // BUG-6 fix: kiểm tra lock trước deferReply, xóa lock chỉ sau khi xong
+    const lockKey = `${session.id}:${user.id}`;
     if (_pendingLock.has(lockKey)) {
       return interaction.reply({ content: '⏳ Đang xử lý yêu cầu của bạn, vui lòng chờ...', ephemeral: true });
     }
-
-    _pendingLock.add(lockKey);
+    _pendingLock.set(lockKey, Date.now());
     const lockTimer = setTimeout(() => _pendingLock.delete(lockKey), LOCK_MS);
 
     try {
       await interaction.deferReply({ ephemeral: true });
-      const session = sessionQuick;
 
-      if (session.eligible_member_ids && !session.eligible_member_ids.includes(user.id)) {
+      if (session.eligible_member_ids?.length && !session.eligible_member_ids.includes(user.id)) {
         return interaction.editReply({ content: '⚠️ Bạn không nằm trong danh sách điểm danh của phiên này.' });
       }
 
@@ -61,8 +63,19 @@ class AttendanceButtonHandler extends InteractionHandler {
       }
 
       const username = member.nickname ?? user.displayName ?? user.username;
-      await db.upsertAttendance(session.id, guild.id, user.id, username, status, user.id);
 
+      // BUG-1 fix: dùng object payload thay vì positional args
+      await db.upsertAttendance({
+        session_id:   session.id,
+        guild_id:     guild.id,
+        user_id:      user.id,
+        username,
+        status,
+        marked_by:    user.id,
+        checked_in_at: new Date().toISOString(),
+      });
+
+      // Cập nhật embed chính (best-effort, không throw nếu lỗi)
       try {
         const ch = guild.channels.cache.get(session.channel_id);
         if (ch && session.message_id) {

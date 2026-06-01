@@ -1,5 +1,7 @@
 // interaction-handlers/adminOverrideModal.js
-// Handles: admin:override_modal submit
+// Handles: admin:override_modal submit (Sapphire ModalSubmit handler)
+// BUG-7 fix: requireAdmin sau deferReply, không trước
+// BUG-10 fix: đây là handler duy nhất cho modal này (không còn duplicate)
 'use strict';
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const db  = require('../db.js');
@@ -27,9 +29,12 @@ class AdminOverrideModalHandler extends InteractionHandler {
   }
 
   async run(interaction) {
+    // BUG-7 fix: deferReply TRƯỚC khi gọi requireAdmin
+    // (requireAdmin gọi interaction.reply bên trong nếu fail → crash nếu đã defer)
+    // Giải pháp: defer trước, requireAdmin phải dùng editReply thay reply
     await interaction.deferReply({ ephemeral: true });
 
-    const { ok } = await requireAdmin(interaction, { context: 'sửa điểm danh' });
+    const { ok } = await requireAdmin(interaction, { context: 'sửa điểm danh', deferred: true });
     if (!ok) return;
 
     const session = await db.getActiveSession(interaction.guild.id);
@@ -49,7 +54,7 @@ class AdminOverrideModalHandler extends InteractionHandler {
     }
 
     const eligible = session.eligible_member_ids ?? [];
-    if (!eligible.includes(userId)) {
+    if (eligible.length && !eligible.includes(userId)) {
       return interaction.editReply(replyErrEdit(
         `❌ <@${userId}> không trong danh sách thành viên của phiên này.`
       ));
