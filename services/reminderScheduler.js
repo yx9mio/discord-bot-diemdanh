@@ -1,11 +1,12 @@
 // services/reminderScheduler.js
-// Scan lich_co_dinh mỗi phút, gửi reminder vào kênh thông báo trước giờ mở phiên.
+// Scan scheduled_sessions mỗi phút, gửi reminder vào kênh thông báo trước giờ mở phiên.
 // Hỗ trợ timezone per-guild (lưu trong guild_configs.timezone, IANA string).
+// Hỗ trợ 2 mốc nhắc (reminder_1_min, reminder_2_min) và skip_until.
 'use strict';
 const db  = require('../db.js');
 const log = require('../utils/logger.js');
 
-// ── Constants ────────────────────────────────────────────────────────
+// ── Constants ──────────────────────────────────────────────────────────────
 
 const TICK_MS          = 60_000;  // 1 phút
 const WINDOW_TOLERANCE = 90_000;  // ±90s quanh đúng thời điểm nhắc
@@ -13,18 +14,12 @@ const DEFAULT_TZ       = 'Asia/Ho_Chi_Minh';
 
 const sentCache = new Set();
 
-// ── Helpers ────────────────────────────────────────────────────────
+// ── Helpers ────────────────────────────────────────────────────────────────
 
-/**
- * Tính ms đến lần mở tiếp theo của lịch, tính theo timezone của guild.
- * lich: { day_of_week (0=Sun…6=Sat), hour, minute }
- * timezone: IANA string, e.g. 'Asia/Ho_Chi_Minh'
- */
 function msUntilNextOpen(lich, timezone) {
   const tz  = timezone || DEFAULT_TZ;
   const now = new Date();
 
-  // Lấy ngày/giờ hiện tại theo timezone guild
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: tz,
     weekday: 'short', year: 'numeric', month: '2-digit',
@@ -34,20 +29,14 @@ function msUntilNextOpen(lich, timezone) {
 
   const todayDow = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].indexOf(get('weekday'));
   const year     = parseInt(get('year'),  10);
-  const month    = parseInt(get('month'), 10) - 1;  // 0-indexed
+  const month    = parseInt(get('month'), 10) - 1;
   const day      = parseInt(get('day'),   10);
 
-  // Tìm candidate: ngày tiếp theo có dow khớp trong timezone guild
   let daysAhead = lich.day_of_week - todayDow;
   if (daysAhead < 0) daysAhead += 7;
 
-  // Candidate trong local-guild time
-  // Dùng trick: tạo Date từ UTC timestamp tương đương local time
-  // bằng cách dùng Intl offset
   const localMidnight = new Date(`${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}T00:00:00`);
-  // Điều chỉnh để local midnight trong guild tz
   const tzOffset = getTzOffsetMs(tz, now);
-  // Candidate UTC
   const candidateUtc = new Date(
     localMidnight.getTime()
     + daysAhead * 86_400_000
@@ -56,7 +45,6 @@ function msUntilNextOpen(lich, timezone) {
     - tzOffset
   );
 
-  // Nếu đã qua (cùng dow nhưng đã qua giờ) → +7 ngày
   if (candidateUtc.getTime() <= now.getTime()) {
     candidateUtc.setDate(candidateUtc.getDate() + 7);
   }
@@ -64,63 +52,65 @@ function msUntilNextOpen(lich, timezone) {
   return candidateUtc.getTime() - now.getTime();
 }
 
-/**
- * Lấy UTC offset (ms) của timezone tại thời điểm `date`.
- * VD: Asia/Ho_Chi_Minh = +7h → return +25_200_000
- */
 function getTzOffsetMs(timezone, date) {
   const utcStr   = new Date(date).toLocaleString('en-US', { timeZone: 'UTC' });
   const localStr = new Date(date).toLocaleString('en-US', { timeZone: timezone });
   return new Date(localStr) - new Date(utcStr);
 }
 
-/** Key chống gửi 2 lần trong cùng ngày (theo guild tz) */
-function cacheKey(guildId, lichId, timezone) {
+function cacheKey(guildId, lichId, minutesBefore, timezone) {
   const tz = timezone || DEFAULT_TZ;
   const d  = new Date();
-  const dateStr = new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(d); // YYYY-MM-DD
-  return `${guildId}:${lichId}:${dateStr}`;
+  const dateStr = new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(d);
+  return `${guildId}:${lichId}:${minutesBefore}:${dateStr}`;
 }
 
-// ── Tick ───────────────────────────────────────────────────────────────
+// ── Tick ───────────────────────────────────────────────────────────────────
 
 async function tick(client) {
   for (const guild of client.guilds.cache.values()) {
     try {
-      const cfg  = await db.getConfig(guild.id);
-      const rcfg = cfg?.reminder_config;
-      if (!rcfg?.enabled) continue;
-
-      const tz            = cfg.timezone || DEFAULT_TZ;
-      const minutesBefore = rcfg.minutes_before ?? 15;
-      const message       = rcfg.message ?? '⏰ Sắp có phiên điểm danh!';
-      const notifChId     = cfg.notification_channel_id ?? cfg.channel_id;
+      const cfg       = await db.getConfig(guild.id);
+      const tz        = cfg?.timezone || DEFAULT_TZ;
+      const notifChId = cfg?.notification_channel_id ?? cfg?.channel_id;
       if (!notifChId) continue;
 
-      const lichList = await db.getLichCoDinh(guild.id);
+      const lichList = await db.getScheduledSessions(guild.id);
       if (!lichList.length) continue;
 
+      const now = Date.now();
+
       for (const lich of lichList) {
-        const key = cacheKey(guild.id, lich.id, tz);
-        if (sentCache.has(key)) continue;
+        if (!lich.reminder_enabled) continue;
+
+        // Bỏ qua nếu skip_until chưa qua
+        if (lich.skip_until && new Date(lich.skip_until).getTime() > now) continue;
 
         const msUntil = msUntilNextOpen(lich, tz);
-        const target  = minutesBefore * 60_000;
-        if (Math.abs(msUntil - target) > WINDOW_TOLERANCE) continue;
+        const openTs  = Math.floor((now + msUntil) / 1000);
 
-        const ch = guild.channels.cache.get(notifChId)
-          ?? await guild.channels.fetch(notifChId).catch(() => null);
-        if (!ch) continue;
+        // 2 mốc nhắc: reminder_1_min (xa hơn) và reminder_2_min (gần hơn)
+        for (const minutesBefore of [lich.reminder_1_min ?? 30, lich.reminder_2_min ?? 10]) {
+          if (!minutesBefore) continue;
+          const key = cacheKey(guild.id, lich.id, minutesBefore, tz);
+          if (sentCache.has(key)) continue;
 
-        const openTs = Math.floor((Date.now() + msUntil) / 1000);
-        await ch.send([
-          message,
-          `\n> **${lich.session_name}** mở lúc <t:${openTs}:t> (<t:${openTs}:R>)`,
-        ].join(''));
+          const target = minutesBefore * 60_000;
+          if (Math.abs(msUntil - target) > WINDOW_TOLERANCE) continue;
 
-        sentCache.add(key);
-        log.info('REMINDER', guild.id, 'Gửi reminder cho "%s" (%d ph trước, tz=%s)',
-          lich.session_name, minutesBefore, tz);
+          const ch = guild.channels.cache.get(notifChId)
+            ?? await guild.channels.fetch(notifChId).catch(() => null);
+          if (!ch) continue;
+
+          await ch.send([
+            `⏰ Còn **${minutesBefore} phút** nữa có phiên điểm danh!`,
+            `\n> **${lich.session_name}** mở lúc <t:${openTs}:t> (<t:${openTs}:R>)`,
+          ].join(''));
+
+          sentCache.add(key);
+          log.info('REMINDER', guild.id, 'Gửi reminder cho "%s" (%d ph trước, tz=%s)',
+            lich.session_name, minutesBefore, tz);
+        }
       }
     } catch (err) {
       log.error('REMINDER', guild.id, 'Tick lỗi: %s', err.message);
@@ -128,7 +118,7 @@ async function tick(client) {
   }
 }
 
-// ── Export ────────────────────────────────────────────────────────────────
+// ── Export ─────────────────────────────────────────────────────────────────
 
 function startReminderScheduler(client) {
   log.info('REMINDER', null, 'Scheduler khởi động (interval %ds)', TICK_MS / 1000);
