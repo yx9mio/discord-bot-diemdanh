@@ -4,7 +4,6 @@
 //   - export { data, execute }
 //   - data.name là string không rỗng
 //   - execute là function
-/* global process, __dirname */
 'use strict';
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');

@@ -55,7 +55,16 @@ module.exports = [
   // ── Override cho tests/ CJS (commands.test.js, v.v.) ──────────────────────────
   {
     files:   ['tests/*.js', 'tests/**/*.js'],
-    ignores: ['tests/unit/**', 'tests/validate.test.js'],
+    ignores: [
+      'tests/unit/**',
+      'tests/validate.test.js',
+      'tests/embeds.test.js',
+      'tests/scheduler.test.js',
+      'tests/session.test.js',
+      'tests/timeCalc.test.js',
+      'tests/integration/**',
+      'tests/smoke/**',
+    ],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType:  'commonjs',
@@ -89,9 +98,19 @@ module.exports = [
     },
   },
 
-  // ── Override cho tests/unit/ và tests/validate.test.js (ESM / Vitest) ─────────
+  // ── Override cho tests/unit/, tests/validate.test.js và ESM test files ─────────
   {
-    files: ['tests/unit/**/*.js', 'tests/unit/**/*.ts', 'tests/validate.test.js'],
+    files: [
+      'tests/unit/**/*.js',
+      'tests/unit/**/*.ts',
+      'tests/validate.test.js',
+      'tests/embeds.test.js',
+      'tests/scheduler.test.js',
+      'tests/session.test.js',
+      'tests/timeCalc.test.js',
+      'tests/integration/**/*.js',
+      'tests/smoke/**/*.js',
+    ],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType:  'module',
