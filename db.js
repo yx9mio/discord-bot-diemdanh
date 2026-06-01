@@ -204,7 +204,7 @@ async function upsertAttendanceNoTime(sessionId, guildId, userId, username, stat
 async function getAttendances(sessionId) {
   const { data, error } = await supabase
     .from('attendances')
-    .select('user_id, username, status, marked_by, checked_in_at, present_count')
+    .select('user_id, username, status, marked_by, checked_in_at')
     .eq('session_id', sessionId);
   _throwSupabase(error, 'getAttendances');
   return _validateAttendances(data ?? [], 'getAttendances');
@@ -251,7 +251,7 @@ async function getMemberStatsMulti(guildId, userIds) {
   if (!userIds?.length) return [];
   const { data, error } = await supabase
     .from('member_stats')
-    .select('user_id, current_streak, best_streak, total_present, total_sessions, last_present_at')
+    .select('user_id, current_streak, best_streak, total_joined, total_sessions, updated_at')
     .eq('guild_id', guildId)
     .in('user_id', userIds);
   _throwSupabase(error, 'getMemberStatsMulti');
@@ -263,7 +263,7 @@ async function getAllMemberStats(guildId) {
     .from('member_stats')
     .select('*')
     .eq('guild_id', guildId)
-    .order('total_present', { ascending: false });
+    .order('total_joined', { ascending: false });
   _throwSupabase(error, 'getAllMemberStats');
   return data ?? [];
 }
