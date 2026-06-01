@@ -1,5 +1,3 @@
-// handlers/button/closeHandler.js — nút đóng phiên + nút xem danh sách
-// Fix B-2: thêm db.closeSession() trong handleConfirmClose trước ketThucPhien
 'use strict';
 const db = require('../../db.js');
 const {
@@ -17,7 +15,7 @@ async function handleView(interaction) {
   const { guild } = interaction;
   const session = await db.getActiveSession(guild.id);
   if (!session) {
-    await interaction.reply({ content: '📭 Không có phiên điểm danh nào đang mở.', ephemeral: true });
+    await interaction.reply({ content: '🚫 Không có phiên điểm danh nào đang mở.', ephemeral: true });
     return true;
   }
   const attended = await db.getAttendances(session.id);
@@ -26,7 +24,6 @@ async function handleView(interaction) {
   return true;
 }
 
-// Bước 1: Admin bấm nút close → hiện confirm prompt
 async function handleClose(interaction) {
   const { guild } = interaction;
   await interaction.deferReply({ ephemeral: true });
@@ -35,7 +32,7 @@ async function handleClose(interaction) {
 
   const session = await db.getActiveSession(guild.id);
   if (!session) {
-    await interaction.editReply(replyErrEdit('📭 Không có phiên nào đang mở.'));
+    await interaction.editReply(replyErrEdit('🚫 Không có phiên nào đang mở.'));
     return true;
   }
 
@@ -49,22 +46,19 @@ async function handleClose(interaction) {
   return true;
 }
 
-// Bước 2: Admin xác nhận → thực sự đóng phiên
 async function handleConfirmClose(interaction) {
   const { guild, channel } = interaction;
   await interaction.deferUpdate();
 
   const session = await db.getActiveSession(guild.id);
   if (!session) {
-    await interaction.editReply(replyErrEdit('📭 Phiên đã được đóng trước đó.'));
+    await interaction.editReply(replyErrEdit('🚫 Phiên đã được đóng trước đó.'));
     return true;
   }
 
-  // Fix B-2: đóng session trong DB TRƯỚC để getActiveSession không trả về nữa
   try {
     await db.closeSession(session.id);
   } catch (e) {
-    // log nhưng tiếp tục để không mất thống kê
     console.error('[closeHandler] closeSession error:', e.message);
   }
 
@@ -78,7 +72,6 @@ async function handleConfirmClose(interaction) {
   return true;
 }
 
-// Bước 2b: Admin bấm Hủy
 async function handleCancelClose(interaction) {
   await interaction.update({ content: '↩️ Đã hủy. Phiên vẫn đang mở.', embeds: [], components: [] });
   return true;

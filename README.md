@@ -42,9 +42,11 @@
 - **Live embed** cập nhật real-time: % tỷ lệ tham gia, danh sách chưa điểm danh, countdown
 - **Auto-close** phiên sau thời gian đặt trước + **Reminder** ping 2 phút trước khi kết thúc
 - **Lịch hàng tuần** tự mở + tự đóng phiên, kèm thống kê theo phái
-- **Streak tracking** liên tiếp theo phiên
+- **Streak tracking** cộng khi có mặt, reset khi vắng phiên eligible
 - **Badge milestones**: 🌱 5 ⭐ 10 🌟 20 💪 30 🏆 50 👑 100 lần tham gia
 - **Badge announcement** tự động sau mỗi phiên
+- **CSV đính kèm** tự động sau mỗi phiên tự đóng
+- **Ping role** khi scheduler mở phiên tự động
 
 ---
 
@@ -77,7 +79,7 @@ Chạy SQL bên dưới trong **Supabase SQL Editor**:
 ```sql
 -- Bảng cấu hình guild
 CREATE TABLE IF NOT EXISTS guild_configs (
-  guild_id       TEXT PRIMARY KEY,
+  guild_id        TEXT PRIMARY KEY,
   allowed_role_id TEXT,
   admin_role_id   TEXT,
   phai_role_ids   TEXT[] DEFAULT '{}',
@@ -91,7 +93,7 @@ CREATE TABLE IF NOT EXISTS sessions (
   session_name        TEXT NOT NULL,
   role_name           TEXT DEFAULT 'Tất cả',
   allowed_role_id     TEXT,
-  eligible_member_ids TEXT[] DEFAULT '{}',
+  eligible_member_ids TEXT[] DEFAULT NULL,  -- NULL = tất cả thành viên
   started_by          TEXT,
   auto_close_at       TIMESTAMPTZ,
   channel_id          TEXT,
@@ -109,7 +111,7 @@ CREATE TABLE IF NOT EXISTS attendances (
   guild_id      TEXT NOT NULL,
   user_id       TEXT NOT NULL,
   display_name  TEXT,
-  status        TEXT NOT NULL, -- tham_gia | tre | khong_tham_gia | co_phep
+  status        TEXT NOT NULL,  -- tham_gia | tre | khong_tham_gia | co_phep
   checked_in_at TIMESTAMPTZ DEFAULT now(),
   UNIQUE(session_id, user_id)
 );
@@ -121,27 +123,45 @@ CREATE TABLE IF NOT EXISTS member_stats (
   total_sessions  INT DEFAULT 0,
   total_joined    INT DEFAULT 0,
   current_streak  INT DEFAULT 0,
-  best_streak     INT DEFAULT 0,
+  max_streak      INT DEFAULT 0,
   last_session_id UUID,
   updated_at      TIMESTAMPTZ DEFAULT now(),
   PRIMARY KEY (guild_id, user_id)
 );
 
+-- Bảng huy hiệu thành viên
+CREATE TABLE IF NOT EXISTS member_badges (
+  guild_id   TEXT NOT NULL,
+  user_id    TEXT NOT NULL,
+  threshold  INT NOT NULL,
+  earned_at  TIMESTAMPTZ DEFAULT now(),
+  PRIMARY KEY (guild_id, user_id, threshold)
+);
+
+-- Bảng huy hiệu guild (tuỳ chỉnh)
+CREATE TABLE IF NOT EXISTS badges (
+  guild_id   TEXT NOT NULL,
+  threshold  INT NOT NULL,
+  emoji      TEXT NOT NULL,
+  label      TEXT NOT NULL,
+  PRIMARY KEY (guild_id, threshold)
+);
+
 -- Bảng lịch cố định
 CREATE TABLE IF NOT EXISTS scheduled_sessions (
-  id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  guild_id            TEXT NOT NULL,
-  session_name        TEXT NOT NULL,
-  day_of_week         INT NOT NULL,   -- 0=CN, 1=T2 ... 6=T7
-  hour                INT NOT NULL,
-  minute              INT NOT NULL DEFAULT 0,
-  close_day_of_week   INT,
-  close_hour          INT,
-  close_minute        INT DEFAULT 0,
-  phai_role_ids       TEXT[] DEFAULT '{}',
-  channel_id          TEXT NOT NULL,
-  is_active           BOOLEAN DEFAULT true,
-  created_at          TIMESTAMPTZ DEFAULT now()
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  guild_id          TEXT NOT NULL,
+  session_name      TEXT NOT NULL,
+  day_of_week       INT NOT NULL,   -- 0=CN, 1=T2 … 6=T7
+  hour              INT NOT NULL,
+  minute            INT NOT NULL DEFAULT 0,
+  close_day_of_week INT,
+  close_hour        INT,
+  close_minute      INT DEFAULT 0,
+  allowed_role_id   TEXT,
+  channel_id        TEXT NOT NULL,
+  is_active         BOOLEAN DEFAULT true,
+  created_at        TIMESTAMPTZ DEFAULT now()
 );
 
 -- Index tăng tốc query
@@ -189,41 +209,50 @@ docker run -d --env-file .env discord-bot-diemdanh
 
 ```
 discord-bot-diemdanh/
-├── index.js                 # Entry point, khởi tạo client & load commands
-├── db.js                    # Supabase client + toàn bộ thao tác DB
-├── deploy-commands.js       # Đăng ký slash commands lên Discord
-├── .env.example             # Mẫu biến môi trường
+├── index.js                    # Entry point, khởi tạo client & load handlers
+├── db.js                       # Supabase client + toàn bộ thao tác DB
+├── deploy-commands.js          # Đăng ký slash commands lên Discord
+├── .env.example                # Mẫu biến môi trường
 ├── Dockerfile
 ├── commands/
-│   ├── batdau.js              # /batdau_diemdanh
-│   ├── ketthuc.js             # /ket_thuc_diemdanh
-│   ├── huy.js                 # /huy_diemdanh
-│   ├── them.js                # /them_diemdanh
-│   ├── sua.js                 # /sua_diemdanh
-│   ├── xoa.js                 # /xoa_diemdanh
-│   ├── xem.js                 # /xem_diemdanh
-│   ├── lichsu.js              # /lich_su
-│   ├── thongke.js             # /thong_ke
-│   ├── xuat.js                # /xuat_diemdanh
-│   ├── lichsu_member.js       # /xem_lich_su_member
-│   ├── thongke_phien.js       # /thong_ke_phien
-│   ├── nhacnho.js             # /nhac_nho
-│   ├── setup.js               # /caidat_role, /caidat_admin_role, /caidat_xem
-│   ├── lich.js                # /lich_them, /lich_xem, /lich_xoa, /lich_phai
-│   └── help.js                # /help
+│   ├── batdau.js               # /batdau_diemdanh
+│   ├── ketthuc.js              # /ket_thuc_diemdanh
+│   ├── huy.js                  # /huy_diemdanh
+│   ├── them.js                 # /them_diemdanh
+│   ├── sua.js                  # /sua_diemdanh
+│   ├── xoa.js                  # /xoa_diemdanh
+│   ├── xem.js                  # /xem_diemdanh
+│   ├── lichsu.js               # /lich_su
+│   ├── thongke.js              # /thong_ke
+│   ├── xuat.js                 # /xuat_diemdanh
+│   ├── lichsu_member.js        # /xem_lich_su_member
+│   ├── thongke_phien.js        # /thong_ke_phien
+│   ├── nhacnho.js              # /nhac_nho
+│   ├── setup.js                # /caidat_role, /caidat_admin_role, /caidat_xem
+│   ├── lich.js                 # /lich_them, /lich_xem, /lich_xoa, /lich_phai
+│   └── help.js                 # /help
 ├── handlers/
-│   ├── buttonHandler.js       # Xử lý click nút (tự điểm danh, đóng phiên)
-│   └── selectHandler.js       # Xử lý select menu
+│   ├── buttonHandler.js        # Router nút bấm
+│   ├── commandHandler.js       # Router slash commands
+│   ├── button/
+│   │   ├── attendHandler.js    # Nút điểm danh (join/late/decline)
+│   │   └── closeHandler.js     # Nút đóng phiên + xác nhận
+│   └── setup/                  # UI handlers cài đặt
 ├── events/
-│   ├── interactionCreate.js   # Router tất cả interaction
-│   └── ready.js               # Bot online → khởi phục scheduler
+│   ├── interactionCreate.js    # Router tất cả interaction
+│   └── ready.js                # Bot online → khôi phục scheduler
 └── utils/
-    ├── embeds.js              # Embed builders (session, summary, config...)
-    ├── helpers.js             # laAdmin(), MOC_HUY_HIEU, ...
-    ├── session.js             # ketThucPhien, voHieuHoaNutDiemDanh, ...
-    ├── scheduler.js           # Lịch cố định: mở/đóng tự động hàng tuần
-    ├── timers.js              # Auto-close & reminder timers
-    └── progress.js            # Progress bar UI
+    ├── embeds.js               # Embed builders (session, summary, history…)
+    ├── session.js              # ketThucPhien, thongBaoHuyHieu, guiCsvDinhKem…
+    ├── scheduler.js            # Lịch cố định: mở/đóng tự động hàng tuần
+    ├── timers.js               # Auto-close & reminder timers
+    ├── timeCalc.js             # msToNextWeekday, msFromOpenToClose…
+    ├── permissions.js          # requireAdmin, requireRole
+    ├── helpers.js              # Utility functions
+    ├── logger.js               # Structured logger
+    ├── errorHandler.js         # Global error handler
+    ├── dbRetry.js              # DB retry wrapper
+    └── progress.js             # Progress bar UI
 ```
 
 ---
@@ -260,8 +289,29 @@ Khi invite bot, đảm bảo bật:
 - `Embed Links`
 - `Read Message History`
 - `Use Slash Commands`
-- `Manage Messages` *(nếu cần chỉnh sửa embed)*
+- `Manage Messages` *(để chỉnh sửa embed real-time)*
+- `Attach Files` *(để gửi CSV đính kèm)*
 
 **Gateway Intents cần bật trong Developer Portal:**
 - `GUILDS`
 - `GUILD_MEMBERS` *(Privileged — phải bật thủ công)*
+
+---
+
+## ⚙️ Logic Quan Trọng
+
+### Scheduler (Lịch Cố Định)
+- Mỗi lịch giữ 2 timer: `{id}_open` và `{id}_close`
+- Timer mới luôn clear timer cũ trước khi set → không có zombie timer
+- Close timer gọi thẳng `_dongPhienVaThongKe` (không qua `runDongLich`) để tránh double-reschedule
+- Khi bot restart: `_khoiPhucCloseTimer` tính lại `msRemaining` từ `session.created_at`
+
+### Streak
+- Cộng `+1` khi thành viên có mặt (`tham_gia` hoặc `tre`)
+- Reset về `0` khi thành viên **eligible** vắng mặt
+- `max_streak` không bao giờ giảm
+
+### eligible_member_ids
+- `null` = tất cả thành viên có thể điểm danh (không lọc)
+- `[]` (mảng rỗng) = không ai được điểm danh
+- Luôn dùng `session.eligible_member_ids ?? []` để tránh crash `.length`

@@ -1,5 +1,3 @@
-// handlers/button/attendHandler.js — xử lý 3 nút điểm danh chính
-// Fix B-1: đồng bộ customId với embeds.js (attendance:join / attendance:late / attendance:decline)
 'use strict';
 const db = require('../../db.js');
 const { buildSessionEmbed, buildAttendanceButtons } = require('../../utils/embeds.js');
@@ -26,7 +24,7 @@ async function handleAttend(interaction) {
 
   const sessionQuick = await db.getActiveSession(guild.id);
   if (!sessionQuick) {
-    await interaction.reply({ content: '📭 Không có phiên điểm danh nào đang mở.', ephemeral: true });
+    await interaction.reply({ content: '🚫 Không có phiên điểm danh nào đang mở.', ephemeral: true });
     return true;
   }
 
@@ -49,8 +47,7 @@ async function handleAttend(interaction) {
     }
 
     if (session.allowed_role_id) {
-      const hasRole = member.roles.cache.has(session.allowed_role_id);
-      if (!hasRole) {
+      if (!member.roles.cache.has(session.allowed_role_id)) {
         const roleName = guild.roles.cache.get(session.allowed_role_id)?.name ?? 'role cần thiết';
         await interaction.editReply({ content: `🔒 Bạn cần có role **${roleName}** để điểm danh.` });
         return true;
@@ -60,7 +57,6 @@ async function handleAttend(interaction) {
     const username = member.nickname ?? user.displayName ?? user.username;
     await db.upsertAttendance(session.id, guild.id, user.id, username, status, user.id);
 
-    // best-effort update session embed
     try {
       const ch = guild.channels.cache.get(session.channel_id);
       if (ch && session.message_id) {
@@ -68,8 +64,7 @@ async function handleAttend(interaction) {
         if (msg) {
           const attended = await db.getAttendances(session.id);
           const embed    = await buildSessionEmbed(guild, session, attended);
-          const buttons  = buildAttendanceButtons(false);
-          await msg.edit({ embeds: [embed], components: [buttons] }).catch(() => null);
+          await msg.edit({ embeds: [embed], components: [buildAttendanceButtons(false)] }).catch(() => null);
         }
       }
     } catch (_) {}
