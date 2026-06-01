@@ -296,21 +296,21 @@ async function batchUpsertMemberStats(guildId, patches) {
 }
 
 // ─── Badges ───────────────────────────────────────────────────────────────────
+// Bảng thực tế: badges (định nghĩa), member_badges (user đạt được)
 
 async function getBadgeDefinitions(guildId) {
   const { data, error } = await supabase
-    .from('badge_definitions')
+    .from('badges')
     .select('*')
-    .eq('guild_id', guildId)
-    .eq('is_active', true);
+    .eq('guild_id', guildId);
   _throwSupabase(error, 'getBadgeDefinitions');
   return data ?? [];
 }
 
 async function getUserBadges(guildId, userId) {
   const { data, error } = await supabase
-    .from('user_badges')
-    .select('*, badge_definitions(*)')
+    .from('member_badges')
+    .select('*, badges(*)')
     .eq('guild_id', guildId)
     .eq('user_id', userId);
   _throwSupabase(error, 'getUserBadges');
@@ -319,30 +319,27 @@ async function getUserBadges(guildId, userId) {
 
 async function upsertUserBadge(payload) {
   const { data, error } = await supabase
-    .from('user_badges')
-    .upsert(payload, { onConflict: 'guild_id,user_id,badge_id' })
+    .from('member_badges')
+    .upsert(payload, { onConflict: 'guild_id,user_id,threshold' })
     .select()
     .single();
   _throwSupabase(error, 'upsertUserBadge');
   return data;
 }
 
-// BUG-2 fix: aliases cho session.js (dùng tên cũ khác với tên hiện tại)
-const getBadges            = getBadgeDefinitions;
+// Aliases dùng trong session.js / badge logic
+const getBadges = getBadgeDefinitions;
+
 async function getMemberBadges(guildId, userId) {
-  // Trả về mảng flat { threshold, ... } từ user_badges JOIN badge_definitions
   const rows = await getUserBadges(guildId, userId);
   return rows.map(r => ({
     ...r,
-    threshold: r.badge_definitions?.threshold ?? r.threshold,
+    threshold: r.badges?.threshold ?? r.threshold,
   }));
 }
+
 async function upsertMemberBadge(guildId, userId, threshold) {
-  // Tìm badge_definition có threshold tương ứng rồi upsert user_badge
-  const defs = await getBadgeDefinitions(guildId);
-  const def  = defs.find(d => d.threshold === threshold);
-  if (!def) return null;
-  return upsertUserBadge({ guild_id: guildId, user_id: userId, badge_id: def.id });
+  return upsertUserBadge({ guild_id: guildId, user_id: userId, threshold });
 }
 
 // ─── Lịch cố định ────────────────────────────────────────────────────────────
@@ -396,27 +393,44 @@ async function getLichCoDinhById(id) {
   return data;
 }
 
+// Aliases dùng bởi lichHandler.js
+async function themLichCoDinh(guildId, { dayOfWeek, hour, minute, sessionName, closeDayOfWeek, closeHour, closeMinute, phaiRoleIds, channelId }) {
+  return createLichCoDinh({
+    guild_id:           guildId,
+    day_of_week:        dayOfWeek,
+    hour,
+    minute,
+    session_name:       sessionName,
+    close_day_of_week:  closeDayOfWeek ?? null,
+    close_hour:         closeHour ?? null,
+    close_minute:       closeMinute ?? null,
+    phai_role_ids:      phaiRoleIds ?? [],
+    channel_id:         channelId,
+    is_active:          true,
+  });
+}
+
+async function suaLichCoDinh(guildId, id, { dayOfWeek, hour, minute, sessionName, closeDayOfWeek, closeHour, closeMinute, channelId }) {
+  return updateLichCoDinh(id, {
+    day_of_week:       dayOfWeek,
+    hour,
+    minute,
+    session_name:      sessionName,
+    close_day_of_week: closeDayOfWeek ?? null,
+    close_hour:        closeHour ?? null,
+    close_minute:      closeMinute ?? null,
+    channel_id:        channelId,
+  });
+}
+
+async function xoaLichCoDinh(guildId, id) {
+  return deleteLichCoDinh(id);
+}
+
 // ─── Nhắc nhở ────────────────────────────────────────────────────────────────
+// TODO: reminder config chưa có bảng riêng — implement sau khi xác nhận schema
 
-async function getNhacNho(guildId) {
-  const { data, error } = await supabase
-    .from('nhac_nho')
-    .select('*')
-    .eq('guild_id', guildId)
-    .eq('is_active', true);
-  _throwSupabase(error, 'getNhacNho');
-  return data ?? [];
-}
-
-async function upsertNhacNho(payload) {
-  const { data, error } = await supabase
-    .from('nhac_nho')
-    .upsert(payload, { onConflict: 'guild_id' })
-    .select()
-    .single();
-  _throwSupabase(error, 'upsertNhacNho');
-  return data;
-}
+// ─── Exports ──────────────────────────────────────────────────────────────────
 
 module.exports = {
   // Guild config
@@ -436,15 +450,14 @@ module.exports = {
 
   // Member stats
   getMemberStats, getMemberStatsMulti, getAllMemberStats,
-  upsertMemberStats, batchUpsertMemberStats, // BUG-3
+  upsertMemberStats, batchUpsertMemberStats,  // BUG-3
 
-  // Badges
+  // Badges (bảng: badges, member_badges)
   getBadgeDefinitions, getUserBadges, upsertUserBadge,
-  getBadges, getMemberBadges, upsertMemberBadge, // BUG-2 aliases
+  getBadges,                          // alias
+  getMemberBadges, upsertMemberBadge, // session.js aliases
 
   // Lịch cố định
   getLichCoDinh, createLichCoDinh, updateLichCoDinh, deleteLichCoDinh, getLichCoDinhById,
-
-  // Nhắc nhở
-  getNhacNho, upsertNhacNho,
+  themLichCoDinh, suaLichCoDinh, xoaLichCoDinh,  // lichHandler.js aliases
 };
