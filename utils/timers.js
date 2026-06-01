@@ -92,4 +92,5 @@ function coHenGio(guildId) {
   return timers.has(guildId);
 }
 
-module.exports = { datHenGioDong, huyHenGio, coHenGio };
+// xoaHenGio — alias backward-compat cho huyHenGio
+module.exports = { datHenGioDong, huyHenGio, coHenGio, xoaHenGio: huyHenGio };

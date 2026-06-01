@@ -117,4 +117,30 @@ async function voHieuHoaNutDiemDanh(client, channel, session, attended = []) {
   }
 }
 
-module.exports = { ketThucPhien, thongBaoHuyHieu, voHieuHoaNutDiemDanh, getBadgeList };
+/**
+ * guiCsvDinhKem — Gửi file CSV điểm danh đính kèm vào channel.
+ * @param {TextChannel} channel
+ * @param {Object} session
+ * @param {Array} attended
+ */
+async function guiCsvDinhKem(channel, session, attended) {
+  try {
+    const lines = [
+      'user_id,display_name,status,time',
+      ...attended.map(a =>
+        [a.user_id, (a.display_name ?? '').replace(/,/g, ' '), a.status, a.time ?? ''].join(',')
+      ),
+    ];
+    const buf  = Buffer.from(lines.join('\n'), 'utf-8');
+    const ts   = new Date().toISOString().slice(0, 10);
+    const name = `diemdanh-${(session.session_name ?? session.id.slice(0, 8)).replace(/[^a-z0-9]/gi, '_')}-${ts}.csv`;
+    await channel.send({
+      content: `📎 Báo cáo điểm danh: **${session.session_name}**`,
+      files: [{ attachment: buf, name }],
+    });
+  } catch (e) {
+    log.warn('SESSION', session.guild_id, 'guiCsvDinhKem lỗi: %s', e.message);
+  }
+}
+
+module.exports = { ketThucPhien, thongBaoHuyHieu, voHieuHoaNutDiemDanh, getBadgeList, guiCsvDinhKem };
