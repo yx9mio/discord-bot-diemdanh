@@ -1,5 +1,6 @@
 // db.js — Supabase client + data access layer
 // PERF H-4: thêm batchUpsertMemberStats() — bulk upsert 1 query thay vì N queries
+// FIX S-1: createSession nhận object thay vì positional args — khớp với scheduler.js
 'use strict';
 const { createClient } = require('@supabase/supabase-js');
 const ws  = require('ws');
@@ -60,16 +61,44 @@ async function getSessionByIdRaw(sessionId, guildId) {
   return data;
 }
 
-async function createSession(guildId, sessionName, startedBy, autoCloseAt = null, channelId = null, eligibleMemberIds = null) {
+/**
+ * createSession — nhận object để dễ maintain và tránh lỗi thứ tự tham số.
+ *
+ * @param {object} opts
+ * @param {string}   opts.guild_id
+ * @param {string}   opts.session_name
+ * @param {string}   opts.started_by
+ * @param {string|null} [opts.auto_close_at]
+ * @param {string|null} [opts.channel_id]
+ * @param {string[]|null} [opts.eligible_member_ids]
+ * @param {string|null} [opts.allowed_role_id]
+ * @param {string|null} [opts.role_name]
+ */
+async function createSession({
+  guild_id,
+  session_name,
+  started_by,
+  auto_close_at        = null,
+  channel_id           = null,
+  eligible_member_ids  = null,
+  allowed_role_id      = null,
+  role_name            = null,
+} = {}) {
+  if (!guild_id)    throw new Error('createSession: guild_id bắt buộc');
+  if (!session_name) throw new Error('createSession: session_name bắt buộc');
+  if (!started_by)  throw new Error('createSession: started_by bắt buộc');
+
   const { data, error } = await supabase
     .from('sessions')
     .insert({
-      guild_id: guildId,
-      session_name: sessionName,
-      started_by: startedBy,
-      auto_close_at: autoCloseAt ?? null,
-      channel_id: channelId ?? null,
-      eligible_member_ids: eligibleMemberIds ?? null,
+      guild_id,
+      session_name,
+      started_by,
+      auto_close_at:       auto_close_at      ?? null,
+      channel_id:          channel_id         ?? null,
+      eligible_member_ids: eligible_member_ids ?? null,
+      allowed_role_id:     allowed_role_id    ?? null,
+      role_name:           role_name          ?? null,
     })
     .select().single();
   throwIfError(error, 'createSession');
@@ -80,6 +109,9 @@ async function updateSessionMessageId(sessionId, messageId) {
   const { error } = await supabase.from('sessions').update({ message_id: messageId }).eq('id', sessionId);
   throwIfError(error, 'updateSessionMessageId');
 }
+
+// alias dùng trong scheduler
+const updateSessionMessage = updateSessionMessageId;
 
 async function endSession(sessionId) {
   const { error } = await supabase
@@ -457,8 +489,9 @@ const closeSession = endSession;
 module.exports = {
   supabase,
   getDefaultSession, getActiveSession, getAllActiveSessions,
-  getSessionById, getSessionByIdRaw, createSession, updateSessionMessageId, endSession, cancelSession,
-  closeSession,
+  getSessionById, getSessionByIdRaw, createSession,
+  updateSessionMessageId, updateSessionMessage,
+  endSession, cancelSession, closeSession,
   getAttendance, getAttendances,
   markAttendance, upsertAttendance, upsertAttendanceNoTime,
   getAttendanceSummaryForSessions,

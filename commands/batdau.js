@@ -1,10 +1,13 @@
 // commands/batdau.js
+// FIX S-1: createSession dùng object signature
+// FIX E-1: ephemeral deprecated → dùng MessageFlags.Ephemeral
 const {
   SlashCommandBuilder,
+  MessageFlags,
 } = require('discord.js');
 const db = require('../db.js');
 const { buildSessionEmbed, buildAttendanceButtons, replyWarnEdit } = require('../utils/embeds.js');
-const { datHenGioDong } = require('../utils/timers.js'); // FIX B-2: datHenGioTuDong → datHenGioDong
+const { datHenGioDong } = require('../utils/timers.js');
 const { requireAdmin } = require('../utils/permissions.js');
 
 module.exports = {
@@ -23,7 +26,8 @@ module.exports = {
     ),
 
   async execute(interaction) {
-    await interaction.deferReply({ ephemeral: false });
+    // FIX E-1: flags thay vì ephemeral
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral & 0 }); // public reply
     const { guild, member, channel } = interaction;
 
     const { ok, cfg } = await requireAdmin(interaction, { context: '/bat_dau' });
@@ -70,25 +74,17 @@ module.exports = {
 
     const sessionName = tenOption ?? `Điểm danh ${new Date().toLocaleDateString('vi-VN')}`;
 
-    // FIX B-4: createSession nhận positional args, không phải object
-    const session = await db.createSession(
-      guild.id,
-      sessionName,
-      member.user.tag,
-      autoCloseAt,
-      channel.id,
-      eligibleIds,
-    );
-
-    // Lưu allowed_role_id vào session nếu có (update riêng sau khi tạo)
-    if (allowedRoleId) {
-      await db.supabase
-        .from('sessions')
-        .update({ allowed_role_id: allowedRoleId, role_name: roleName })
-        .eq('id', session.id);
-      session.allowed_role_id = allowedRoleId;
-      session.role_name = roleName;
-    }
+    // FIX S-1: object signature — khớp với db.createSession mới
+    const session = await db.createSession({
+      guild_id:            guild.id,
+      session_name:        sessionName,
+      started_by:          member.user.tag,
+      auto_close_at:       autoCloseAt,
+      channel_id:          channel.id,
+      eligible_member_ids: eligibleIds.length ? eligibleIds : null,
+      allowed_role_id:     allowedRoleId,
+      role_name:           roleName !== 'Tất cả' ? roleName : null,
+    });
 
     const attended    = [];
     const phaiRoleIds = phaiRole ? [phaiRole.id] : (cfg.phai_role_ids ?? []);
@@ -99,7 +95,6 @@ module.exports = {
     await db.updateSessionMessageId(session.id, msg.id);
 
     if (phutOption > 0) {
-      // FIX B-2: đúng signature datHenGioDong(client, guild, session, channelId, ms)
       datHenGioDong(interaction.client, guild, session, channel.id, phutOption * 60_000);
     }
   },
