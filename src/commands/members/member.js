@@ -4,8 +4,6 @@ const { Command } = require('@sapphire/framework');
 const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 const db = require('../../db.js');
 
-const STATUS_EMOJI = { tham_gia: '✅', khong_tham_gia: '❌', tre: '⏰', co_phep: '🟡' };
-
 class MemberCommand extends Command {
   constructor(context) {
     super(context, { name: 'member', description: 'Xem thông tin chi tiết một thành viên', preconditions: ['AdminOnly'] });

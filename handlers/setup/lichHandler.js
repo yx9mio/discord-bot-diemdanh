@@ -5,26 +5,10 @@ const {
   StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle,
 } = require('discord.js');
 const db = require('../../db.js');
-const { FOOTER_DEFAULT, AUTHOR_DEFAULT } = require('../../utils/embeds.js');
-const { TEN_THU, TEN_THU_FULL, pad, ngayThucTe, formatDongStr, parseThuGio } = require('./helpers.js');
-const { buildDashboard } = require('./dashboardHandler.js');
+const { FOOTER_DEFAULT } = require('../../utils/embeds.js');
+const { TEN_THU, pad, ngayThucTe, formatDongStr, parseThuGio } = require('./helpers.js');
 
 // ─── Helper: tạo placeholder gợi ý ngày thực tế ─────────────────────────────
-function makePlaceholder(thuStr, gioStr) {
-  try {
-    const thuMap = { CN: 0, T2: 1, T3: 2, T4: 3, T5: 4, T6: 5, T7: 6 };
-    const thu = thuMap[thuStr.toUpperCase()];
-    if (thu === undefined) return `${thuStr} ${gioStr}`;
-    const [h, m] = gioStr.split(':').map(Number);
-    const { label } = ngayThucTe(thu, h, m);
-    const dateMatch = label.match(/(\d{2}\/\d{2}\/\d{4})/);
-    if (!dateMatch) return `${thuStr} ${gioStr}`;
-    return `${thuStr} ${gioStr}  →  ${dateMatch[1]}`;
-  } catch (_) {
-    return `${thuStr} ${gioStr}`;
-  }
-}
-
 function makePlaceholderFromNums(dayOfWeek, hour, minute) {
   try {
     const { label } = ngayThucTe(dayOfWeek, hour, minute);
@@ -180,9 +164,6 @@ async function handleLich(interaction) {
     return true;
   }
 
-  // ── Mở ngay ────────────────────────────────────────────────────────────────
-  // FIX: dùng deferUpdate thay vì deferReply → update chính message embed
-  // → sau thành công/thất bại embed refresh đúng trạng thái nút
   if (customId.startsWith('setup:lich:early_open:')) {
     const lichId = customId.replace('setup:lich:early_open:', '');
     try { await interaction.deferUpdate(); } catch (_) { return true; }
@@ -194,7 +175,6 @@ async function handleLich(interaction) {
       return true;
     }
 
-    // Double-check phiên đang mở (UI có thể stale)
     const activeNow = await db.getActiveSession(guild.id);
     if (activeNow) {
       await interaction.editReply(lichActionComponents(lich, lichList, activeNow, MO_PHIEN_ERROR_MSG.already_open));
@@ -211,21 +191,17 @@ async function handleLich(interaction) {
     }
 
     if (!result.ok) {
-      // Fetch lại activeSession để render đúng disabled state
       const activeAfter = await db.getActiveSession(guild.id);
       const errMsg = MO_PHIEN_ERROR_MSG[result.reason] ?? `❌ Không thể mở phiên (${result.reason}).`;
       await interaction.editReply(lichActionComponents(lich, lichList, activeAfter, errMsg));
       return true;
     }
 
-    // Thành công: fetch activeSession mới → nút "Mở ngay" tự disable, "Đóng ngay" enable
     const activeAfter = await db.getActiveSession(guild.id);
     await interaction.editReply(lichActionComponents(lich, lichList, activeAfter, `✅ Đã mở phiên **${lich.session_name}** trong <#${lich.channel_id}>.`));
     return true;
   }
 
-  // ── Đóng ngay ──────────────────────────────────────────────────────────────
-  // FIX: tương tự — deferUpdate để refresh embed sau khi đóng
   if (customId.startsWith('setup:lich:early_close:')) {
     const lichId = customId.replace('setup:lich:early_close:', '');
     try { await interaction.deferUpdate(); } catch (_) { return true; }
@@ -250,7 +226,6 @@ async function handleLich(interaction) {
       return true;
     }
 
-    // Đóng xong → activeSession = null → nút "Mở ngay" sáng lại
     await interaction.editReply(lichActionComponents(lich, lichList, null, `✅ Đã đóng phiên **${lich.session_name}** ngay lập tức.`));
     return true;
   }
@@ -306,7 +281,8 @@ async function handleLich(interaction) {
     try {
       await interaction.showModal(modal);
     } catch (e) {
-      console.warn('[lichHandler] showModal failed (interaction expired?):', e.message);
+      // Interaction expired — ignore silently
+      void e;
     }
     return true;
   }
@@ -343,7 +319,7 @@ async function handleLich(interaction) {
       const { cancelLichCoDinh, scheduleLichCoDinh } = require('../../utils/scheduler.js');
       cancelLichCoDinh(guild.id, lichId);
       await scheduleLichCoDinh(interaction.client, guild.id, updated);
-    } catch (e) { console.warn('[lichHandler] reschedule sau edit:', e.message); }
+    } catch (e) { void e; }
 
     const { label: moLabel } = ngayThucTe(parsed.thu, parsed.gio, parsed.phut);
     const dongDisplay = parsedDong
@@ -423,7 +399,7 @@ async function handleLich(interaction) {
     try {
       const { scheduleLichCoDinh } = require('../../utils/scheduler.js');
       await scheduleLichCoDinh(interaction.client, guild.id, lich);
-    } catch (e) { console.warn('[lichHandler] scheduleLichCoDinh sau add:', e.message); }
+    } catch (e) { void e; }
     const { label: moLabel } = ngayThucTe(parsed.thu, parsed.gio, parsed.phut);
     const dongDisplay = parsedDong
       ? (() => { const { label, note } = ngayThucTe(parsedDong.thu, parsedDong.gio, parsedDong.phut, parsed.thu, parsed.gio, parsed.phut); return note ? `${label} ${note}` : label; })()

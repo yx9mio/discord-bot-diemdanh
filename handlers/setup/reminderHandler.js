@@ -6,7 +6,6 @@ const {
 } = require('discord.js');
 const db = require('../../db.js');
 const { FOOTER_DEFAULT, AUTHOR_DEFAULT } = require('../../utils/embeds.js');
-const { buildDashboard } = require('./dashboardHandler.js');
 
 const DEFAULT_TZ = 'Asia/Ho_Chi_Minh';
 
