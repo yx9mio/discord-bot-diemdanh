@@ -1,11 +1,11 @@
 // services/reminderScheduler.js
 // Scan lich_co_dinh mỗi phút, gửi reminder vào kênh thông báo trước giờ mở phiên.
-// Hỗ trợ timezone per-guild (lưu trong guild_config.timezone, IANA string).
+// Hỗ trợ timezone per-guild (lưu trong guild_configs.timezone, IANA string).
 'use strict';
 const db  = require('../db.js');
 const log = require('../utils/logger.js');
 
-// ── Constants ──────────────────────────────────────────────────────────
+// ── Constants ────────────────────────────────────────────────────────
 
 const TICK_MS          = 60_000;  // 1 phút
 const WINDOW_TOLERANCE = 90_000;  // ±90s quanh đúng thời điểm nhắc
@@ -13,7 +13,7 @@ const DEFAULT_TZ       = 'Asia/Ho_Chi_Minh';
 
 const sentCache = new Set();
 
-// ── Helpers ──────────────────────────────────────────────────────────
+// ── Helpers ────────────────────────────────────────────────────────
 
 /**
  * Tính ms đến lần mở tiếp theo của lịch, tính theo timezone của guild.
@@ -82,7 +82,7 @@ function cacheKey(guildId, lichId, timezone) {
   return `${guildId}:${lichId}:${dateStr}`;
 }
 
-// ── Tick ───────────────────────────────────────────────────────────────────
+// ── Tick ───────────────────────────────────────────────────────────────
 
 async function tick(client) {
   for (const guild of client.guilds.cache.values()) {
@@ -119,7 +119,7 @@ async function tick(client) {
         ].join(''));
 
         sentCache.add(key);
-        log.info('REMINDER', guild.id, 'Gửi reminder cho “%s” (%d ph trước, tz=%s)',
+        log.info('REMINDER', guild.id, 'Gửi reminder cho "%s" (%d ph trước, tz=%s)',
           lich.session_name, minutesBefore, tz);
       }
     } catch (err) {
@@ -128,7 +128,7 @@ async function tick(client) {
   }
 }
 
-// ── Export ───────────────────────────────────────────────────────────────────
+// ── Export ────────────────────────────────────────────────────────────────
 
 function startReminderScheduler(client) {
   log.info('REMINDER', null, 'Scheduler khởi động (interval %ds)', TICK_MS / 1000);
