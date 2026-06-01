@@ -20,7 +20,6 @@ function makeSupabaseClient() {
 }
 
 function makeQuery(table) {
-  const _data = null;
   const _filters = [];
   let _isSingle = false;
   let _operation = 'select';
@@ -28,7 +27,7 @@ function makeQuery(table) {
   let _onConflict = null;
 
   const q = {
-    select: (cols) => { _operation = 'select'; return q; },
+    select: (_cols) => { _operation = 'select'; return q; },
     insert: (payload) => { _operation = 'insert'; _payload = payload; return q; },
     upsert: (payload, opts) => { _operation = 'upsert'; _payload = payload; _onConflict = opts?.onConflict; return q; },
     update: (payload) => { _operation = 'update'; _payload = payload; return q; },

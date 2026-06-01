@@ -1,7 +1,7 @@
 // src/commands/members/xoa.js
 'use strict';
 const { Command } = require('@sapphire/framework');
-const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
 const db = require('../../db.js');
 
 class XoaCommand extends Command {

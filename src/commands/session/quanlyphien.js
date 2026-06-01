@@ -1,11 +1,10 @@
 // src/commands/session/quanlyphien.js
 'use strict';
 const { Command } = require('@sapphire/framework');
-const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, ComponentType, PermissionFlagsBits, MessageFlags } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, ComponentType, PermissionFlagsBits } = require('discord.js');
 const db = require('../../db.js');
 
-const DAY_NAMES    = ['CN','T2','T3','T4','T5','T6','T7'];
-const STATUS_EMOJI = { tham_gia: '✅', khong_tham_gia: '❌', tre: '⏰', co_phep: '🟡' };
+const DAY_NAMES = ['CN','T2','T3','T4','T5','T6','T7'];
 
 function fmtTs(iso) {
   if (!iso) return '—';

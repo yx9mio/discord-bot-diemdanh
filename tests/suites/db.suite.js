@@ -8,7 +8,7 @@ const { test } = require('../testRunner.js');
 async function dbSuite(guildId) {
   return Promise.all([
     test('SELECT 1 ping', async () => {
-      const { data, error } = await db.supabase.rpc('version');
+      const { error } = await db.supabase.rpc('version');
       // rpc('version') = SELECT version() — nếu kết nối chết sẽ throw
       if (error && error.code !== 'PGRST202') throw error; // PGRST202 = function not found → vẫn connected
     }),

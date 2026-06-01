@@ -19,7 +19,7 @@ class TestBotCommand extends Command {
     );
   }
 
-  async chatInputRun(interaction) {
+  chatInputRun(interaction) {
     if (process.env.NODE_ENV !== 'development')
       return interaction.reply({ content: '⛔ Lệnh này chỉ dùng trong môi trường dev.', flags: 64 });
     const { version } = require('../../package.json');

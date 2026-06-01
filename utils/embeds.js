@@ -176,7 +176,7 @@ function buildPhaiStatsText(guild, phaiRoleIds, attended, eligibleArr) {
  * @param {Array}   [phaiRoleIds=[]]  — Phase 1.5: truyền session.phai_role_ids ?? []
  * @param {boolean} [isClosed=false]
  */
-async function buildSessionEmbed(guild, session, attended, phaiRoleIds = [], isClosed = false) {
+function buildSessionEmbed(guild, session, attended, phaiRoleIds = [], isClosed = false) {
   const joined   = attended.filter(a => a.status === 'tham_gia');
   const late     = attended.filter(a => a.status === 'tre');
   const declined = attended.filter(a => a.status === 'khong_tham_gia');
@@ -190,7 +190,6 @@ async function buildSessionEmbed(guild, session, attended, phaiRoleIds = [], isC
   const absentIds  = (session.eligible_member_ids ?? []).filter(id => !checkedIds.has(id));
 
   const startedAt = session.created_at ?? session.started_at;
-  const startTs   = Math.floor(new Date(startedAt).getTime() / 1000);
 
   const roleDisplay = session.allowed_role_id
     ? `<@&${session.allowed_role_id}>`
@@ -268,7 +267,7 @@ async function buildSessionEmbed(guild, session, attended, phaiRoleIds = [], isC
 }
 
 // buildClosedSessionEmbed — backward-compat wrapper
-async function buildClosedSessionEmbed(session, attended, guild = null) {
+function buildClosedSessionEmbed(session, attended, guild = null) {
   return buildSessionEmbed(guild, session, attended ?? [], [], true);
 }
 
