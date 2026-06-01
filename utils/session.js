@@ -26,6 +26,7 @@ const PRESENT_STATUSES = new Set(['tham_gia', 'tre']);
 
 /**
  * Kết thúc phiên: cập nhật member_stats, reset streak cho người vắng eligible.
+ * Dùng getAllMemberStats 1 lần rồi lookup từ Map — tránh N+1 queries.
  * @returns {Promise<Map<userId, {total, streak, max}>>}
  */
 async function ketThucPhien(guild, session, attended) {
@@ -36,25 +37,28 @@ async function ketThucPhien(guild, session, attended) {
     attended.filter(r => PRESENT_STATUSES.has(r.status)).map(r => r.user_id)
   );
 
+  // Load tất cả stats của guild 1 lần duy nhất
+  const allStats   = await db.getAllMemberStats(guild.id);
+  const statsCache = new Map(allStats.map(s => [s.user_id, s]));
+
   // Cộng streak cho người có mặt
   for (const record of attended) {
     if (!PRESENT_STATUSES.has(record.status)) continue;
     const uid   = record.user_id;
-    const stats = await db.getMemberStats(guild.id, uid)
-      ?? { total_joined: 0, current_streak: 0, max_streak: 0 };
+    const stats = statsCache.get(uid) ?? { total_joined: 0, current_streak: 0, best_streak: 0 };
     const total  = (stats.total_joined   ?? 0) + 1;
     const streak = (stats.current_streak ?? 0) + 1;
-    const maxS   = Math.max(stats.max_streak ?? 0, streak);
+    const maxS   = Math.max(stats.best_streak ?? 0, streak);
     statsMap.set(uid, { total, streak, max: maxS });
-    patches.push({ user_id: uid, total_joined: total, current_streak: streak, max_streak: maxS, last_session_id: session.id });
+    patches.push({ user_id: uid, total_joined: total, current_streak: streak, best_streak: maxS, last_session_id: session.id });
   }
 
   // Reset streak = 0 cho thành viên eligible vắng mặt
   const eligibleIds = session.eligible_member_ids ?? [];
   for (const uid of eligibleIds.filter(id => !presentIds.has(id))) {
-    const stats = await db.getMemberStats(guild.id, uid);
+    const stats = statsCache.get(uid);
     if (!stats || stats.current_streak === 0) continue;
-    patches.push({ user_id: uid, total_joined: stats.total_joined ?? 0, current_streak: 0, max_streak: stats.max_streak ?? 0, last_session_id: session.id });
+    patches.push({ user_id: uid, total_joined: stats.total_joined ?? 0, current_streak: 0, best_streak: stats.best_streak ?? 0, last_session_id: session.id });
     log.info('SESSION', guild.id, 'Reset streak: %s (vắng %s)', uid, session.session_name);
   }
 
@@ -98,7 +102,8 @@ async function voHieuHoaNutDiemDanh(client, channel, session, attended = []) {
   try {
     const msg = await channel.messages.fetch(session.message_id);
     if (!msg) return;
-    const closedEmbed     = buildClosedSessionEmbed(session, attended, channel.guild ?? null);
+    // C-1 fix: await vì buildClosedSessionEmbed là async
+    const closedEmbed     = await buildClosedSessionEmbed(session, attended, channel.guild ?? null);
     const disabledButtons = buildAttendanceButtons(true);
     await msg.edit({ embeds: [closedEmbed], components: [disabledButtons] });
   } catch (e) {
@@ -110,9 +115,10 @@ async function voHieuHoaNutDiemDanh(client, channel, session, attended = []) {
 async function guiCsvDinhKem(channel, session, attended) {
   try {
     const lines = [
-      'user_id,display_name,status,time',
+      'user_id,username,status,time',
+      // H-3 fix: dùng a.username thay vì a.display_name (field không tồn tại)
       ...attended.map(a =>
-        [a.user_id, (a.display_name ?? '').replace(/,/g, ' '), a.status, a.created_at ?? a.time ?? ''].join(',')
+        [a.user_id, (a.username ?? '').replace(/,/g, ' '), a.status, a.checked_in_at ?? a.created_at ?? ''].join(',')
       ),
     ];
     const buf  = Buffer.from(lines.join('\n'), 'utf-8');

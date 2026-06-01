@@ -1,6 +1,4 @@
 // db.js — Supabase client + data access layer
-// PERF H-4: thêm batchUpsertMemberStats() — bulk upsert 1 query thay vì N queries
-// FIX S-1: createSession nhận object thay vì positional args — khớp với scheduler.js
 'use strict';
 const { createClient } = require('@supabase/supabase-js');
 const ws  = require('ws');
@@ -110,7 +108,6 @@ async function updateSessionMessageId(sessionId, messageId) {
   throwIfError(error, 'updateSessionMessageId');
 }
 
-// alias dùng trong scheduler
 const updateSessionMessage = updateSessionMessageId;
 
 async function endSession(sessionId) {
@@ -257,7 +254,7 @@ async function getAllMemberStats(guildId) {
 
 /**
  * Lấy top N thành viên tích cực nhất, sắp xếp theo total_joined DESC.
- * Column thực tế trong DB: best_streak (không phải max_streak)
+ * Column thực tế trong DB: best_streak
  */
 async function getTopMembers(guildId, limit = 10) {
   const { data, error } = await supabase
@@ -271,12 +268,13 @@ async function getTopMembers(guildId, limit = 10) {
 }
 
 // ─── Server / history helpers ─────────────────────────────────────────────────
+// C-3 fix: thêm present_count, created_at vào tất cả history selects
 async function getSessionHistory(guildId, limitOrOpts = 10) {
   const { limit = 10, offset = 0 } =
     typeof limitOrOpts === 'number' ? { limit: limitOrOpts } : limitOrOpts;
   const { data, error } = await supabase
     .from('sessions')
-    .select('id, session_name, ended_at, eligible_member_ids')
+    .select('id, session_name, created_at, ended_at, eligible_member_ids, present_count')
     .eq('guild_id', guildId).eq('is_active', false).eq('cancelled', false)
     .order('ended_at', { ascending: false })
     .range(offset, offset + limit - 1);
@@ -284,13 +282,10 @@ async function getSessionHistory(guildId, limitOrOpts = 10) {
   return data ?? [];
 }
 
-/**
- * getSessionHistoryWithRange — lấy lịch sử phiên trong khoảng thời gian.
- */
 async function getSessionHistoryWithRange(guildId, since = null, limit = 100) {
   let query = supabase
     .from('sessions')
-    .select('id, session_name, ended_at, eligible_member_ids')
+    .select('id, session_name, created_at, ended_at, eligible_member_ids, present_count')
     .eq('guild_id', guildId)
     .eq('is_active', false)
     .eq('cancelled', false)
@@ -416,9 +411,6 @@ async function deleteScheduledSession(id) {
 
 const getLichCoDinh = getScheduledSessions;
 
-/**
- * themLichCoDinh — alias của createScheduledSession với tham số đặt tên tiếng Việt.
- */
 async function themLichCoDinh(guildId, {
   dayOfWeek, hour, minute,
   sessionName,
@@ -440,10 +432,6 @@ async function themLichCoDinh(guildId, {
   });
 }
 
-/**
- * suaLichCoDinh — Bug 3 fix: update lịch cố định với tham số đặt tên tiếng Việt.
- * Trả về row đã cập nhật.
- */
 async function suaLichCoDinh(guildId, lichId, {
   dayOfWeek, hour, minute,
   sessionName,
@@ -471,9 +459,6 @@ async function suaLichCoDinh(guildId, lichId, {
   return data;
 }
 
-/**
- * xoaLichCoDinh — Bug 3 fix: alias deleteScheduledSession theo tên tiếng Việt.
- */
 async function xoaLichCoDinh(guildId, lichId) {
   const { error } = await supabase
     .from('scheduled_sessions')
