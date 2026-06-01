@@ -1,6 +1,4 @@
 // utils/embeds.js — Tất cả embed builders & button builders
-// Fix E-2: thêm COLORS.PRIMARY/GOLD, COLOR_GOLD, replyOkEdit, pctColor,
-//          pctLabel, buildProgressBar alias, buildClosedSessionEmbed
 'use strict';
 const { EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder, StringSelectMenuBuilder, MessageFlags } = require('discord.js');
 
@@ -14,8 +12,8 @@ const COLORS = {
   GREY:    0x36393e,
   PURPLE:  0x9b59b6,
   TEAL:    0x1abc9c,
-  PRIMARY: 0x01696f,  // teal chính
-  GOLD:    0xFFD700,  // vàng
+  PRIMARY: 0x01696f,
+  GOLD:    0xFFD700,
 };
 
 const ICONS = {
@@ -38,69 +36,45 @@ const ICONS = {
 };
 
 const FOOTER_DEFAULT = 'Quản Gia · Bot Điểm Danh';
-
-// AUTHOR_DEFAULT dùng trong setAuthor() — phải là object { name, iconURL? }
 const AUTHOR_DEFAULT = { name: 'Quản Gia · Bot Điểm Danh' };
-
-// COLOR_GOLD — shorthand constant
 const COLOR_GOLD = COLORS.GOLD;
 
 // ─── Error / Success reply helpers ────────────────────────────────────────
 function replyErr(msg = 'Có lỗi xảy ra. Vui lòng thử lại.') {
   return {
-    embeds: [
-      new EmbedBuilder()
-        .setColor(COLORS.RED)
-        .setDescription(`❌ ${msg}`),
-    ],
+    embeds: [ new EmbedBuilder().setColor(COLORS.RED).setDescription(`❌ ${msg}`) ],
     flags: MessageFlags.Ephemeral,
   };
 }
 
 function replyErrEdit(msg = 'Có lỗi xảy ra. Vui lòng thử lại.') {
   return {
-    embeds: [
-      new EmbedBuilder()
-        .setColor(COLORS.RED)
-        .setDescription(`❌ ${msg}`),
-    ],
+    embeds: [ new EmbedBuilder().setColor(COLORS.RED).setDescription(`❌ ${msg}`) ],
     components: [],
   };
 }
 
 function replyWarnEdit(msg = 'Có vấn đề xảy ra.') {
   return {
-    embeds: [
-      new EmbedBuilder()
-        .setColor(COLORS.YELLOW)
-        .setDescription(`⚠️ ${msg}`),
-    ],
+    embeds: [ new EmbedBuilder().setColor(COLORS.YELLOW).setDescription(`⚠️ ${msg}`) ],
     components: [],
   };
 }
 
-// replyOkEdit — dùng cho editReply success
 function replyOkEdit(msg = 'Thành công.') {
   return {
-    embeds: [
-      new EmbedBuilder()
-        .setColor(COLORS.GREEN)
-        .setDescription(`✅ ${msg}`),
-    ],
+    embeds: [ new EmbedBuilder().setColor(COLORS.GREEN).setDescription(`✅ ${msg}`) ],
     components: [],
   };
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
-
-// Màu theo tỉ lệ điểm danh
 function pctColor(pct) {
   if (pct >= 80) return COLORS.GREEN;
   if (pct >= 50) return COLORS.ORANGE;
   return COLORS.RED;
 }
 
-// Nhãn mô tả theo tỉ lệ điểm danh
 function pctLabel(pct) {
   if (pct >= 90) return 'Xuất sắc';
   if (pct >= 75) return 'Tốt';
@@ -122,7 +96,6 @@ function buildRichProgressBar(pct, len = 12) {
   return '█'.repeat(filled) + '░'.repeat(empty);
 }
 
-// buildProgressBar — alias backward-compat
 const buildProgressBar = buildRichProgressBar;
 
 function formatDuration(seconds) {
@@ -215,8 +188,8 @@ async function buildSessionEmbed(guild, session, attended, isClosed = false) {
   return embed;
 }
 
-// buildClosedSessionEmbed — wrapper gọi buildSessionEmbed với isClosed=true
-function buildClosedSessionEmbed(session, attended, guild = null) {
+// buildClosedSessionEmbed — async wrapper (await bắt buộc ở caller)
+async function buildClosedSessionEmbed(session, attended, guild = null) {
   return buildSessionEmbed(guild, session, attended ?? [], true);
 }
 
@@ -259,10 +232,7 @@ function buildSummaryEmbed(session, attended, guild = null, phaiRoleIds = null) 
       .map((a, i) => `\`${String(i + 1).padStart(2)}.\` ${resolveDisplayName(guild, a.user_id, `<@${a.user_id}>`)}`);
     const extra = joined.length > MAX ? `\n*(+${joined.length - MAX} nữa)*` : '';
     chunkLines(names).slice(0, 1).forEach(chunk =>
-      embed.addFields({
-        name: `${ICONS.ATTEND_YES} Tham Gia (${joined.length})`,
-        value: chunk + extra, inline: true,
-      })
+      embed.addFields({ name: `${ICONS.ATTEND_YES} Tham Gia (${joined.length})`, value: chunk + extra, inline: true })
     );
   }
 
@@ -272,9 +242,8 @@ function buildSummaryEmbed(session, attended, guild = null, phaiRoleIds = null) 
       .map((a, i) => `\`${String(i + 1).padStart(2)}.\` ${resolveDisplayName(guild, a.user_id, `<@${a.user_id}>`)}`);
     const extra = late.length > MAX ? `\n*(+${late.length - MAX} nữa)*` : '';
     chunkLines(names).slice(0, 1).forEach(chunk =>
-      embed.addFields({
-        name: `${ICONS.ATTEND_LATE} Đến Trễ — ${late.length}`, value: chunk + extra, inline: true,
-      }));
+      embed.addFields({ name: `${ICONS.ATTEND_LATE} Đến Trễ — ${late.length}`, value: chunk + extra, inline: true })
+    );
   }
 
   const absentIds2 = (session.eligible_member_ids ?? []).filter(
@@ -286,10 +255,7 @@ function buildSummaryEmbed(session, attended, guild = null, phaiRoleIds = null) 
       .map((id, i) => `\`${String(i + 1).padStart(2)}.\` ${resolveDisplayName(guild, id, `<@${id}>`)}`);
     const extra2 = absentIds2.length > MAX2 ? `\n*(+${absentIds2.length - MAX2} nữa)*` : '';
     chunkLines(names2).slice(0, 1).forEach(chunk =>
-      embed.addFields({
-        name: `${ICONS.ATTEND_ABSENT} Vắng Mặt (${absentIds2.length})`,
-        value: chunk + extra2, inline: false,
-      })
+      embed.addFields({ name: `${ICONS.ATTEND_ABSENT} Vắng Mặt (${absentIds2.length})`, value: chunk + extra2, inline: false })
     );
   }
 
@@ -307,21 +273,9 @@ function buildSummaryEmbed(session, attended, guild = null, phaiRoleIds = null) 
 // ─── Attendance Buttons ───────────────────────────────────────────────────────
 function buildAttendanceButtons(disabled = false) {
   return new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId('attendance:join')
-      .setLabel('✅ Tham gia')
-      .setStyle(ButtonStyle.Success)
-      .setDisabled(disabled),
-    new ButtonBuilder()
-      .setCustomId('attendance:late')
-      .setLabel('🕐 Đến trễ')
-      .setStyle(ButtonStyle.Primary)
-      .setDisabled(disabled),
-    new ButtonBuilder()
-      .setCustomId('attendance:decline')
-      .setLabel('❌ Vắng')
-      .setStyle(ButtonStyle.Danger)
-      .setDisabled(disabled),
+    new ButtonBuilder().setCustomId('attendance:join').setLabel('✅ Tham gia').setStyle(ButtonStyle.Success).setDisabled(disabled),
+    new ButtonBuilder().setCustomId('attendance:late').setLabel('🕐 Đến trễ').setStyle(ButtonStyle.Primary).setDisabled(disabled),
+    new ButtonBuilder().setCustomId('attendance:decline').setLabel('❌ Vắng').setStyle(ButtonStyle.Danger).setDisabled(disabled),
   );
 }
 
@@ -460,7 +414,7 @@ function buildWeeklyStatsEmbed(guild, weekSessions, allSessions) {
   const weekElig    = thisWeek.reduce((s, sess) => s + (sess.eligible_member_ids ?? []).length, 0);
   const weekPct     = weekElig > 0 ? Math.round(weekPresent / weekElig * 100) : 0;
 
-  const sparkline   = buildTrendSparkline(all.slice(-10));
+  const sparkline = buildTrendSparkline(all.slice(-10));
 
   const lines = thisWeek.map(s => {
     const ts  = Math.floor(new Date(s.created_at ?? s.started_at).getTime() / 1000);
@@ -482,32 +436,13 @@ function buildWeeklyStatsEmbed(guild, weekSessions, allSessions) {
 }
 
 module.exports = {
-  COLORS,
-  ICONS,
-  FOOTER_DEFAULT,
-  AUTHOR_DEFAULT,
-  COLOR_GOLD,
-  replyErr,
-  replyErrEdit,
-  replyWarnEdit,
-  replyOkEdit,
-  pctColor,
-  pctLabel,
-  pctEmoji,
-  buildProgressBar,
-  buildRichProgressBar,
-  buildSessionEmbed,
-  buildSummaryEmbed,
-  buildClosedSessionEmbed,
-  buildAttendanceButtons,
-  buildSetupMenu,
-  buildHistoryEmbed,
-  buildMemberEmbed,
-  buildServerStatsEmbed,
-  buildWeeklyStatsEmbed,
-  buildTrendSparkline,
-  buildPhaiStatsText,
-  resolveDisplayName,
-  chunkLines,
-  formatDuration,
+  COLORS, ICONS, FOOTER_DEFAULT, AUTHOR_DEFAULT, COLOR_GOLD,
+  replyErr, replyErrEdit, replyWarnEdit, replyOkEdit,
+  pctColor, pctLabel, pctEmoji,
+  buildProgressBar, buildRichProgressBar,
+  buildSessionEmbed, buildClosedSessionEmbed, buildSummaryEmbed,
+  buildAttendanceButtons, buildSetupMenu,
+  buildHistoryEmbed, buildMemberEmbed,
+  buildServerStatsEmbed, buildWeeklyStatsEmbed, buildTrendSparkline,
+  buildPhaiStatsText, resolveDisplayName, chunkLines, formatDuration,
 };

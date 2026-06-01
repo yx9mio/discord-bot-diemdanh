@@ -1,9 +1,9 @@
-// utils/timers.js — Hẹn giờ tự đóng phiên (datHenGioDong)
+'use strict';
+const { EmbedBuilder } = require('discord.js');
 const db  = require('../db.js');
 const log = require('./logger.js');
 const { ketThucPhien, thongBaoHuyHieu, voHieuHoaNutDiemDanh, guiCsvDinhKem } = require('./session.js');
 const { buildSummaryEmbed, FOOTER_DEFAULT } = require('./embeds.js');
-const { EmbedBuilder } = require('discord.js');
 
 const timers = new Map(); // guildId → { remind15, remind5, autoClose }
 
@@ -58,21 +58,27 @@ async function datHenGioDong(client, guild, session, channelId, ms) {
       const ch = await guild.channels.fetch(channelId).catch(() => null);
       if (!ch) return;
 
+      // Đánh dấu closed trong DB trước khi gửi embed
+      try {
+        await db.closeSession(session.id);
+      } catch (e) {
+        log.error('TIMER', guild.id, 'closeSession thất bại %s: %s', session.id, e.message);
+      }
+
       const attended = await db.getAttendances(session.id);
       const statsMap = await ketThucPhien(guild, session, attended);
 
-      // Phase I: edit message gốc → 🔴 Đã Đóng + buttons disabled
       await voHieuHoaNutDiemDanh(client, ch, session, attended);
 
       const thongBao = new EmbedBuilder()
         .setColor(0x99AAB5)
         .setDescription('🔒 Phiên điểm danh đã tự động kết thúc.')
         .setFooter({ text: FOOTER_DEFAULT });
-      const summaryEmbed = buildSummaryEmbed(session, attended);
+      const summaryEmbed = buildSummaryEmbed(session, attended, guild);
       await ch.send({ embeds: [thongBao, summaryEmbed] });
       await thongBaoHuyHieu(guild, ch, guild.id, session.id, attended, statsMap);
       await guiCsvDinhKem(ch, session, attended);
-      huyHenGio(guild.id);
+      timers.delete(guild.id);
     } catch (e) { log.error('TIMER', guild.id, 'Tự đóng lỗi: %s', e.message); }
   }, ms);
 
