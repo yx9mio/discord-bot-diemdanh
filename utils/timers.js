@@ -52,34 +52,43 @@ async function datHenGioDong(client, guild, session, channelId, ms) {
 
   // ── Tự đóng ──────────────────────────────────────────────────────────────
   t.autoClose = setTimeout(async () => {
+    // BUG-11 fix: xóa timer khỏi Map ngay khi bắt đầu chạy (dùng finally để
+    // đảm bảo luôn được dọn dù bất kỳ bước nào throw)
     try {
       const cur = await db.getActiveSession(guild.id);
       if (!cur || cur.id !== session.id) return;
-      const ch = await guild.channels.fetch(channelId).catch(() => null);
-      if (!ch) return;
 
-      // Đánh dấu closed trong DB trước khi gửi embed
+      const ch = await guild.channels.fetch(channelId).catch(() => null);
+
       try {
         await db.closeSession(session.id);
       } catch (e) {
         log.error('TIMER', guild.id, 'closeSession thất bại %s: %s', session.id, e.message);
+        // Không return — tiếp tục dọn dẹp dù DB fail
       }
 
       const attended = await db.getAttendances(session.id);
       const statsMap = await ketThucPhien(guild, session, attended);
 
-      await voHieuHoaNutDiemDanh(client, ch, session, attended);
-
-      const thongBao = new EmbedBuilder()
-        .setColor(0x99AAB5)
-        .setDescription('🔒 Phiên điểm danh đã tự động kết thúc.')
-        .setFooter({ text: FOOTER_DEFAULT });
-      const summaryEmbed = buildSummaryEmbed(session, attended, guild);
-      await ch.send({ embeds: [thongBao, summaryEmbed] });
-      await thongBaoHuyHieu(guild, ch, guild.id, session.id, attended, statsMap);
-      await guiCsvDinhKem(ch, session, attended);
+      if (ch) {
+        await voHieuHoaNutDiemDanh(client, ch, session, attended);
+        const thongBao = new EmbedBuilder()
+          .setColor(0x99AAB5)
+          .setDescription('🔒 Phiên điểm danh đã tự động kết thúc.')
+          .setFooter({ text: FOOTER_DEFAULT });
+        const summaryEmbed = buildSummaryEmbed(session, attended, guild);
+        await ch.send({ embeds: [thongBao, summaryEmbed] });
+        await thongBaoHuyHieu(guild, ch, guild.id, session.id, attended, statsMap);
+        await guiCsvDinhKem(ch, session, attended);
+      } else {
+        log.warn('TIMER', guild.id, 'autoClose: channel %s không tồn tại, bỏ qua gửi embed', channelId);
+      }
+    } catch (e) {
+      log.error('TIMER', guild.id, 'Tự đóng lỗi: %s', e.message);
+    } finally {
+      // BUG-11 fix: luôn xóa khỏi Map dù success hay throw
       timers.delete(guild.id);
-    } catch (e) { log.error('TIMER', guild.id, 'Tự đóng lỗi: %s', e.message); }
+    }
   }, ms);
 
   timers.set(guild.id, t);
@@ -98,5 +107,4 @@ function coHenGio(guildId) {
   return timers.has(guildId);
 }
 
-// xoaHenGio — alias backward-compat cho huyHenGio
 module.exports = { datHenGioDong, huyHenGio, coHenGio, xoaHenGio: huyHenGio };

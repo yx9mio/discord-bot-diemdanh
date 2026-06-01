@@ -25,7 +25,7 @@ function _validateSession(row, ctx) {
   if (!row) return null;
   const v = safeParse(SessionSchema, row);
   if (!v.ok) log.warn('DB', null, '[%s] SessionSchema warn: %s', ctx, v.error);
-  return row; // trả về raw row để không break caller nếu schema cũ hơn
+  return row;
 }
 
 /** Validate mảng attendance rows */
@@ -34,7 +34,7 @@ function _validateAttendances(rows, ctx) {
   return rows.filter(row => {
     const v = safeParse(AttendanceSchema, row);
     if (!v.ok) log.warn('DB', null, '[%s] AttendanceSchema warn for user %s: %s', ctx, row?.user_id, v.error);
-    return true; // warn-only, không filter ra
+    return true;
   });
 }
 
@@ -59,6 +59,9 @@ async function upsertGuildConfig(config) {
   _throwSupabase(error, 'upsertGuildConfig');
   return data;
 }
+
+// BUG-5 fix: alias getConfig → getGuildConfig
+const getConfig = getGuildConfig;
 
 // ─── Sessions ─────────────────────────────────────────────────────────────────
 
@@ -173,6 +176,9 @@ async function getAllSessions(guildId) {
   return data;
 }
 
+// BUG-4 fix: alias getSessionHistory → getRecentSessions
+const getSessionHistory = getRecentSessions;
+
 // ─── Attendances ──────────────────────────────────────────────────────────────
 
 async function upsertAttendance(payload) {
@@ -182,6 +188,42 @@ async function upsertAttendance(payload) {
     .select()
     .single();
   _throwSupabase(error, 'upsertAttendance');
+  return data;
+}
+
+/**
+ * upsertAttendanceNoTime — sửa điểm danh mà không đụng checked_in_at
+ * BUG-13 fix: SELECT checked_in_at hiện tại trước, giữ nguyên khi upsert
+ * để tránh ghi đè thành null khi admin override user đã điểm danh.
+ */
+async function upsertAttendanceNoTime(sessionId, guildId, userId, username, status, markedBy) {
+  // Lấy checked_in_at hiện tại (nếu có) để giữ nguyên
+  const { data: existing } = await supabase
+    .from('attendances')
+    .select('checked_in_at')
+    .eq('session_id', sessionId)
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  const payload = {
+    session_id:     sessionId,
+    guild_id:       guildId,
+    user_id:        userId,
+    username,
+    status,
+    marked_by:      markedBy,
+    // BUG-13 fix: giữ nguyên checked_in_at gốc, chỉ set nếu chưa có
+    ...(existing?.checked_in_at
+      ? { checked_in_at: existing.checked_in_at }
+      : {}),
+  };
+
+  const { data, error } = await supabase
+    .from('attendances')
+    .upsert(payload, { onConflict: 'session_id,user_id', ignoreDuplicates: false })
+    .select()
+    .single();
+  _throwSupabase(error, 'upsertAttendanceNoTime');
   return data;
 }
 
@@ -195,12 +237,14 @@ async function getAttendances(sessionId) {
 }
 
 async function getAttendancesByUser(guildId, userId, limit = 50) {
+  // BUG-14 fix: dùng .not() thay vì .eq() trên joined relation để lọc đúng
+  // trên mọi phiên bản PostgREST (kể cả v11 trên Supabase Free tier cũ)
   const { data, error } = await supabase
     .from('attendances')
     .select('session_id, status, checked_in_at, sessions!inner(session_name, created_at, cancelled)')
     .eq('guild_id', guildId)
     .eq('user_id', userId)
-    .eq('sessions.cancelled', false)
+    .not('sessions.cancelled', 'is', true)
     .order('checked_in_at', { ascending: false })
     .limit(limit);
   _throwSupabase(error, 'getAttendancesByUser');
@@ -262,6 +306,16 @@ async function upsertMemberStats(payload) {
   return data;
 }
 
+// BUG-3 fix: batch upsert member stats (tránh N+1 trong ketThucPhien)
+async function batchUpsertMemberStats(guildId, patches) {
+  if (!patches?.length) return;
+  const rows = patches.map(p => ({ ...p, guild_id: guildId }));
+  const { error } = await supabase
+    .from('member_stats')
+    .upsert(rows, { onConflict: 'guild_id,user_id' });
+  _throwSupabase(error, 'batchUpsertMemberStats');
+}
+
 // ─── Badges ───────────────────────────────────────────────────────────────────
 
 async function getBadgeDefinitions(guildId) {
@@ -292,6 +346,22 @@ async function upsertUserBadge(payload) {
     .single();
   _throwSupabase(error, 'upsertUserBadge');
   return data;
+}
+
+// BUG-2 fix: aliases cho session.js (dùng tên cũ khác với tên hiện tại)
+const getBadges            = getBadgeDefinitions;
+async function getMemberBadges(guildId, userId) {
+  const rows = await getUserBadges(guildId, userId);
+  return rows.map(r => ({
+    ...r,
+    threshold: r.badge_definitions?.threshold ?? r.threshold,
+  }));
+}
+async function upsertMemberBadge(guildId, userId, threshold) {
+  const defs = await getBadgeDefinitions(guildId);
+  const def  = defs.find(d => d.threshold === threshold);
+  if (!def) return null;
+  return upsertUserBadge({ guild_id: guildId, user_id: userId, badge_id: def.id });
 }
 
 // ─── Lịch cố định ────────────────────────────────────────────────────────────
@@ -368,14 +438,32 @@ async function upsertNhacNho(payload) {
 }
 
 module.exports = {
+  // Guild config
   getGuildConfig, upsertGuildConfig,
+  getConfig,                          // BUG-5 alias
+
+  // Sessions
   createSession, getActiveSession, getSessionById,
   closeSession, cancelSession,
   updateSessionMessage, updateSessionName, updateSessionEligible,
   getRecentSessions, getAllSessions,
-  upsertAttendance, getAttendances, getAttendancesByUser, getAttendanceStats,
-  getMemberStats, getMemberStatsMulti, getAllMemberStats, upsertMemberStats,
+  getSessionHistory,                  // BUG-4 alias
+
+  // Attendances
+  upsertAttendance, upsertAttendanceNoTime,
+  getAttendances, getAttendancesByUser, getAttendanceStats,
+
+  // Member stats
+  getMemberStats, getMemberStatsMulti, getAllMemberStats,
+  upsertMemberStats, batchUpsertMemberStats, // BUG-3
+
+  // Badges
   getBadgeDefinitions, getUserBadges, upsertUserBadge,
+  getBadges, getMemberBadges, upsertMemberBadge, // BUG-2 aliases
+
+  // Lịch cố định
   getLichCoDinh, createLichCoDinh, updateLichCoDinh, deleteLichCoDinh, getLichCoDinhById,
+
+  // Nhắc nhở
   getNhacNho, upsertNhacNho,
 };
