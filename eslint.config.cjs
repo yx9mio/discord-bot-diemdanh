@@ -47,9 +47,10 @@ module.exports = [
     ignores: ['node_modules/**'],
   },
 
-  // ── Override cho tests/ (CJS globals + node:test) ──────────────────────────
+  // ── Override cho tests/ CJS (commands.test.js, v.v.) ──────────────────────
   {
-    files: ['tests/**/*.js'],
+    files: ['tests/*.js', 'tests/**/*.js'],
+    ignores: ['tests/unit/**', 'tests/validate.test.js'],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType:  'commonjs',
@@ -69,6 +70,24 @@ module.exports = [
         Map:           'readonly',
         Set:           'readonly',
         Promise:       'readonly',
+      },
+    },
+    rules: {
+      'no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
+      'no-console':     'off',
+      'require-await':  'off',
+    },
+  },
+
+  // ── Override cho tests/unit/ và tests/validate.test.js (ESM / Vitest) ─────
+  {
+    files: ['tests/unit/**/*.js', 'tests/unit/**/*.ts', 'tests/validate.test.js'],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType:  'module',
+      globals: {
+        process:   'readonly',
+        console:   'readonly',
       },
     },
     rules: {
