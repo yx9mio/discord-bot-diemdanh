@@ -25,7 +25,7 @@ const MOCK_SUPABASE = {
 };
 
 const MOCK_DB = new Proxy({}, {
-  get: (_, prop) => {
+  get: (_target, prop) => {
     if (prop === 'supabase') return MOCK_SUPABASE;
     return async () => null;
   },
@@ -34,7 +34,7 @@ const MOCK_DB = new Proxy({}, {
 const MOCK_DISCORD = {
   SlashCommandBuilder: class {
     setName(n)    { this._name = n; return this; }
-    setDescription(d) { return this; }
+    setDescription(_d) { return this; }
     addStringOption(fn) { fn({ setName: ()=>({setDescription:()=>({setRequired:()=>({addChoices:()=>({})})})})}); return this; }
     addUserOption(fn)   { fn({ setName: ()=>({setDescription:()=>({setRequired:()=>({})})})}); return this; }
     addIntegerOption(fn){ fn({ setName: ()=>({setDescription:()=>({setRequired:()=>({setMinValue:()=>({setMaxValue:()=>({})})})})})}); return this; }
