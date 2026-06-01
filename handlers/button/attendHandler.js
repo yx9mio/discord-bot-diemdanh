@@ -67,7 +67,7 @@ async function handleAttend(interaction) {
           await msg.edit({ embeds: [embed], components: [buildAttendanceButtons(false)] }).catch(() => null);
         }
       }
-    } catch (_) {}
+    } catch (_e) { /* cập nhật embed thất bại — không ảnh hưởng reply chính */ }
 
     await interaction.editReply({ content: `${STATUS_LABEL[status]} Đã ghi nhận cho bạn.` });
     return true;

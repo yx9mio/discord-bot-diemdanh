@@ -141,7 +141,7 @@ async function _dongPhienVaThongKe(guild, session, ch, lich, client, silent = fa
         await msg.edit({ embeds: [closedEmbed], components: [disabledBtns] }).catch(() => null);
       }
     }
-  } catch (_) {}
+  } catch (_e) { /* cập nhật message đã xóa — bỏ qua */ }
 
   if (!silent) {
     const thongBao = new EmbedBuilder()
@@ -156,8 +156,8 @@ async function _dongPhienVaThongKe(guild, session, ch, lich, client, silent = fa
     const summaryEmbed = buildSummaryEmbed(session, attended, guild);
     await ch.send({ embeds: [thongBao, summaryEmbed] });
 
-    try { await guiCsvDinhKem(ch, session, attended); } catch (_) {}
-    try { await thongBaoHuyHieu(guild, ch, guild.id, session.id, attended, statsMap); } catch (_) {}
+    try { await guiCsvDinhKem(ch, session, attended); } catch (_e) { /* gửi CSV thất bại — không chặn flow */ }
+    try { await thongBaoHuyHieu(guild, ch, guild.id, session.id, attended, statsMap); } catch (_e) { /* huy hiệu thất bại — không chặn flow */ }
   }
 
   log.info('SCHEDULER', guild.id, '%s — đã đóng%s: %s', guild.name, silent ? ' (silent)' : '', session.session_name);
@@ -205,7 +205,6 @@ async function khoiPhucScheduler(client) {
     try {
       const rows = await db.getLichCoDinh(guild.id);
       for (const row of rows) {
-        // Validate từng lịch trước khi schedule — bỏ qua lịch bị corrupt thay vì crash toàn bộ
         const v = safeParse(LichSchema, row);
         if (!v.ok) {
           log.warn('SCHEDULER', guild.id, '%s — lịch #%s bị invalid, bỏ qua: %s', guild.name, row.id ?? '?', v.error);
@@ -243,7 +242,6 @@ function cancelLichCoDinh(guildId, lichId) {
 async function runLichNgay(client, guildId, lich) {
   const g = client.guilds.cache.get(guildId);
   if (!g) throw new Error('Guild không tìm thấy');
-  // Validate trước khi chạy thủ công
   const v = safeParse(LichSchema, lich);
   if (!v.ok) throw new Error(`Lịch không hợp lệ: ${v.error}`);
   const result = await _moPhien(g, v.data);
