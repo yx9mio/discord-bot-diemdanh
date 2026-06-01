@@ -13,10 +13,10 @@ module.exports = [
       'n/handle-callback-err': 'error',
 
       'no-unused-vars': ['warn', {
-        argsIgnorePattern:       '^_',
-        varsIgnorePattern:       '^_',
+        argsIgnorePattern:         '^_',
+        varsIgnorePattern:         '^_',
         caughtErrorsIgnorePattern: '^_',
-        caughtErrors:            'all',
+        caughtErrors:              'all',
       }],
       'no-console':     'warn',
       'eqeqeq':         ['error', 'always', { null: 'ignore' }],
@@ -52,12 +52,13 @@ module.exports = [
     ignores: ['node_modules/**'],
   },
 
-  // ── Override cho tests/ CJS (commands.test.js, v.v.) ──────────────────────────
+  // ── Override cho tests/ CJS (các file không phải ESM) ────────────────────────
   {
     files:   ['tests/*.js', 'tests/**/*.js'],
     ignores: [
       'tests/unit/**',
       'tests/validate.test.js',
+      'tests/commands.test.js',
       'tests/embeds.test.js',
       'tests/scheduler.test.js',
       'tests/session.test.js',
@@ -88,19 +89,20 @@ module.exports = [
     },
     rules: {
       'no-unused-vars': ['warn', {
-        argsIgnorePattern:       '^_',
-        varsIgnorePattern:       '^_',
+        argsIgnorePattern:         '^_',
+        varsIgnorePattern:         '^_',
         caughtErrorsIgnorePattern: '^_',
-        caughtErrors:            'all',
+        caughtErrors:              'all',
       }],
       'no-console':    'off',
       'require-await': 'off',
     },
   },
 
-  // ── Override cho tests/unit/, tests/validate.test.js và ESM test files ─────────
+  // ── Override cho ESM test files (Vitest) ──────────────────────────────────────
   {
     files: [
+      'tests/commands.test.js',
       'tests/unit/**/*.js',
       'tests/unit/**/*.ts',
       'tests/validate.test.js',
@@ -121,10 +123,10 @@ module.exports = [
     },
     rules: {
       'no-unused-vars': ['warn', {
-        argsIgnorePattern:       '^_',
-        varsIgnorePattern:       '^_',
+        argsIgnorePattern:         '^_',
+        varsIgnorePattern:         '^_',
         caughtErrorsIgnorePattern: '^_',
-        caughtErrors:            'all',
+        caughtErrors:              'all',
       }],
       'no-console':    'off',
       'require-await': 'off',

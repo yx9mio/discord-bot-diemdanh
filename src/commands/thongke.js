@@ -33,7 +33,8 @@ class ThongKeCommand extends Command {
     );
   }
 
-  async chatInputRun(interaction) {
+  // không dùng await trực tiếp — dispatch sang private methods (không cần async)
+  chatInputRun(interaction) {
     const sub = interaction.options.getSubcommand();
 
     if (sub === 'ca_nhan') return this.#caNhan(interaction);
