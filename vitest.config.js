@@ -16,6 +16,10 @@ export default defineConfig({
       'tests/testConstants.js',
       'node_modules/**',
     ],
+    reporters: [
+      'verbose',
+      ['junit', { outputFile: 'test-results/junit.xml' }],
+    ],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],

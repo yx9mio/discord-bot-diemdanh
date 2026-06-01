@@ -44,8 +44,9 @@ jobs:
         run: npm run lint
 
       # —— Test + coverage —————————————————————————————
+      # reporters + outputFile được cấu hình trong vitest.config.js
       - name: Run tests (Vitest)
-        run: npm test -- --reporter=verbose --reporter=junit --outputFile=test-results/junit.xml
+        run: npm test
         env:
           NODE_ENV: test
           SUPABASE_URL: http://localhost
