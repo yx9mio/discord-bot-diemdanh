@@ -1,56 +1,46 @@
 'use strict';
+// commands/test_bot.js
+// Phase 1A: guard DEV_MODE — chỉ load trong môi trường dev
+// Nếu NODE_ENV !== 'development', Sapphire sẽ không register command này
 const { Command } = require('@sapphire/framework');
 
-// ── Logic gốc ──────────────────────────────────────────────────────────────
-// commands/test_bot.js — /test_bot: kiểm tra toàn bộ chức năng bot
-'use strict';
-const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
-const db = require('../db.js');
-
-module.exports = {
-  data: new SlashCommandBuilder()
-    .setName('test_bot')
-    .setDescription('Kiểm tra kết nối DB và các tính năng cơ bản (Admin)')
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
-
-  async execute(interaction) {
-    await interaction.deferReply({ ephemeral: true });
-    const results = [];
-
-    // Test DB ping
-    try {
-      await db.getGuildConfig(interaction.guild.id);
-      results.push('✅ DB: Kết nối OK');
-    } catch (e) {
-      results.push(`❌ DB: ${e.message}`);
-    }
-
-    // Test getActiveSession
-    try {
-      const s = await db.getActiveSession(interaction.guild.id);
-      results.push(s ? `✅ Phiên đang mở: ${s.session_name}` : '✅ Không có phiên đang mở');
-    } catch (e) {
-      results.push(`❌ getActiveSession: ${e.message}`);
-    }
-
-    // Bot info
-    results.push(`✅ Bot: ${interaction.client.user.tag}`);
-    results.push(`✅ Ping: ${interaction.client.ws.ping}ms`);
-
-    const embed = new EmbedBuilder()
-      .setColor(0x437a22)
-      .setTitle('🧪 Kết quả Test Bot')
-      .setDescription(results.join('\n'))
-      .setTimestamp();
-
-    await interaction.editReply({ embeds: [embed] });
-  },
-};
-// ── Sapphire wrapper ──────────────────────────────────────────────────────────
-const _origModule = module.exports;
 class TestBotCommand extends Command {
-  constructor(context) { super(context, { name: _origModule.data.name, description: _origModule.data.description, preconditions: ['AdminOnly'] }); }
-  registerApplicationCommands(registry) { registry.registerChatInputCommand(_origModule.data); }
-  async chatInputRun(interaction) { return _origModule.execute(interaction); }
+  constructor(context, options) {
+    super(context, {
+      ...options,
+      name: 'test_bot',
+      description: '[DEV] Kiểm tra bot còn sống không',
+      // Sapphire precondition: chỉ chạy trong development
+      enabled: process.env.NODE_ENV === 'development',
+    });
+  }
+
+  registerApplicationCommands(registry) {
+    if (process.env.NODE_ENV !== 'development') return;
+    registry.registerChatInputCommand(builder =>
+      builder
+        .setName('test_bot')
+        .setDescription('[DEV] Kiểm tra bot còn sống không')
+    );
+  }
+
+  async chatInputRun(interaction) {
+    if (process.env.NODE_ENV !== 'development') {
+      return interaction.reply({ content: '⛔ Lệnh này chỉ dùng trong môi trường dev.', ephemeral: true });
+    }
+    const { version } = require('../package.json');
+    return interaction.reply({
+      content: [
+        '✅ **Bot đang hoạt động**',
+        `> Version: \`${version}\``,
+        `> Node: \`${process.version}\``,
+        `> Uptime: \`${Math.round(process.uptime())}s\``,
+        `> Guilds: \`${interaction.client.guilds.cache.size}\``,
+        `> ENV: \`${process.env.NODE_ENV ?? 'undefined'}\``,
+      ].join('\n'),
+      ephemeral: true,
+    });
+  }
 }
+
 module.exports = { TestBotCommand };

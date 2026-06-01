@@ -1,4 +1,9 @@
 'use strict';
+// utils/session.js
+// Phase 1B fixes:
+//   - badge earnedSet null-safe: filter out undefined threshold trước khi đưa vào Set
+//   - eligible_member_ids === [] (rỗng): streak reset KHÔNG chạy (đúng semantic)
+//     → chỉ reset streak khi eligible có data (admin đã set danh sách)
 const { EmbedBuilder } = require('discord.js');
 const db  = require('../db.js');
 const log = require('./logger.js');
@@ -15,7 +20,6 @@ const DEFAULT_BADGES = [
 
 async function getBadgeList(guildId) {
   try {
-    // BUG-2 fix: dùng getBadges (alias của getBadgeDefinitions)
     const rows = await db.getBadges(guildId);
     return rows.length ? rows : DEFAULT_BADGES;
   } catch {
@@ -27,7 +31,11 @@ const PRESENT_STATUSES = new Set(['tham_gia', 'tre']);
 
 /**
  * Kết thúc phiên: cập nhật member_stats, reset streak cho người vắng eligible.
- * Dùng getAllMemberStats 1 lần rồi lookup từ Map — tránh N+1 queries.
+ *
+ * Semantic eligible_member_ids:
+ *   - null / []  → admin chưa set danh sách → KHÔNG reset streak bất kỳ ai
+ *   - [id1, id2] → admin đã set → reset streak người trong list mà vắng
+ *
  * @returns {Promise<Map<userId, {total, streak, max}>>}
  */
 async function ketThucPhien(guild, session, attended) {
@@ -41,6 +49,7 @@ async function ketThucPhien(guild, session, attended) {
   const allStats   = await db.getAllMemberStats(guild.id);
   const statsCache = new Map(allStats.map(s => [s.user_id, s]));
 
+  // Cập nhật stats cho người có mặt
   for (const record of attended) {
     if (!PRESENT_STATUSES.has(record.status)) continue;
     const uid   = record.user_id;
@@ -49,41 +58,64 @@ async function ketThucPhien(guild, session, attended) {
     const streak = (stats.current_streak ?? 0) + 1;
     const maxS   = Math.max(stats.best_streak ?? 0, streak);
     statsMap.set(uid, { total, streak, max: maxS });
-    patches.push({ user_id: uid, total_joined: total, current_streak: streak, best_streak: maxS, last_session_id: session.id });
+    patches.push({
+      user_id:          uid,
+      total_joined:     total,
+      current_streak:   streak,
+      best_streak:      maxS,
+      last_session_id:  session.id,
+    });
   }
 
+  // Reset streak cho người eligible mà vắng — CHỈ khi eligible có data
   const eligibleIds = session.eligible_member_ids ?? [];
-  for (const uid of eligibleIds.filter(id => !presentIds.has(id))) {
-    const stats = statsCache.get(uid);
-    if (!stats || stats.current_streak === 0) continue;
-    patches.push({ user_id: uid, total_joined: stats.total_joined ?? 0, current_streak: 0, best_streak: stats.best_streak ?? 0, last_session_id: session.id });
-    log.info('SESSION', guild.id, 'Reset streak: %s (vắng %s)', uid, session.session_name);
+  if (eligibleIds.length > 0) {
+    for (const uid of eligibleIds.filter(id => !presentIds.has(id))) {
+      const stats = statsCache.get(uid);
+      if (!stats || stats.current_streak === 0) continue;
+      patches.push({
+        user_id:          uid,
+        total_joined:     stats.total_joined   ?? 0,
+        current_streak:   0,
+        best_streak:      stats.best_streak    ?? 0,
+        last_session_id:  session.id,
+      });
+      log.info('SESSION', guild.id, 'Reset streak: %s (vắng %s)', uid, session.session_name);
+    }
   }
 
-  // BUG-3 fix: dùng batchUpsertMemberStats thay vì hàm không tồn tại
   if (patches.length) await db.batchUpsertMemberStats(guild.id, patches);
   return statsMap;
 }
 
 /**
  * Thông báo huy hiệu mới.
+ * Phase 1B fix: earnedSet null-safe — filter undefined threshold trước khi Set
  */
 async function thongBaoHuyHieu(guild, channel, guildId, sessionId, attended, statsMap) {
   const badges = await getBadgeList(guildId);
   if (!badges.length) return;
   const newBadges = [];
+
   for (const [userId, stats] of statsMap.entries()) {
-    // BUG-2 fix: dùng getMemberBadges (alias của getUserBadges + flatten)
     const existing  = await db.getMemberBadges(guildId, userId);
-    const earnedSet = new Set(existing.map(b => b.threshold));
+    // Fix null-safe: bỏ qua row có threshold undefined/null
+    const earnedSet = new Set(
+      existing.map(b => b.threshold).filter(t => t != null)
+    );
     for (const badge of badges) {
+      if (badge.threshold == null) continue; // skip badge definition lỗi
       if (stats.total >= badge.threshold && !earnedSet.has(badge.threshold)) {
-        // BUG-2 fix: dùng upsertMemberBadge (alias lookup def rồi upsert)
-        await db.upsertMemberBadge(guildId, userId, badge.threshold);
-        newBadges.push({ userId, badge });
+        try {
+          await db.upsertMemberBadge(guildId, userId, badge.threshold);
+          newBadges.push({ userId, badge });
+        } catch (e) {
+          log.warn('BADGE', guildId, 'upsertMemberBadge lỗi uid=%s th=%d: %s', userId, badge.threshold, e.message);
+        }
       }
     }
   }
+
   if (!newBadges.length) return;
   const embed = new EmbedBuilder()
     .setTitle('🎖️ Huy Hiệu Mới!')

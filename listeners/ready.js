@@ -1,10 +1,65 @@
 'use strict';
+// listeners/ready.js
+// Phase 2 fix: restore active-session timers khi bot restart
+// Nếu không restore, phiên đang mở sẽ không tự đóng sau restart
 const { Listener, Events } = require('@sapphire/framework');
+const db  = require('../db.js');
+const log = require('../utils/logger.js');
+const { datHenGioDong } = require('../utils/timers.js');
 
 class ReadyListener extends Listener {
-  constructor(context) { super(context, { event: Events.ClientReady, once: true }); }
-  run(client) {
-    this.container.logger.info(`[Ready] Đăng nhập: ${client.user.tag} · ${client.guilds.cache.size} server(s)`);
+  constructor(context) {
+    super(context, { event: Events.ClientReady, once: true });
+  }
+
+  async run(client) {
+    log.info('READY', null, `Đăng nhập: ${client.user.tag} · ${client.guilds.cache.size} server(s)`);
+
+    // Restore timers cho tất cả phiên đang active
+    let restored = 0;
+    for (const guild of client.guilds.cache.values()) {
+      try {
+        const session = await db.getActiveSession(guild.id);
+        if (!session || !session.auto_close_at) continue;
+
+        const msLeft = new Date(session.auto_close_at).getTime() - Date.now();
+        if (msLeft <= 0) {
+          // Phiên đã quá giờ → đóng ngay
+          log.warn('READY', guild.id, 'Phiên %s quá giờ, đóng ngay.', session.session_name);
+          const { ketThucPhien, thongBaoHuyHieu, voHieuHoaNutDiemDanh } = require('../utils/session.js');
+          const { buildSummaryEmbed } = require('../utils/embeds.js');
+          try {
+            await db.closeSession(session.id);
+            const attended = await db.getAttendances(session.id);
+            const ch = session.channel_id
+              ? await guild.channels.fetch(session.channel_id).catch(() => null)
+              : null;
+            if (ch) {
+              const statsMap = await ketThucPhien(guild, session, attended);
+              await voHieuHoaNutDiemDanh(client, ch, session, attended);
+              await ch.send({ embeds: [buildSummaryEmbed(session, attended, guild)] });
+              await thongBaoHuyHieu(guild, ch, guild.id, session.id, attended, statsMap);
+            }
+          } catch (e) {
+            log.error('READY', guild.id, 'Đóng phiên quá giờ thất bại: %s', e.message);
+          }
+        } else {
+          // Phiên còn giờ → restore timer
+          const ch = session.channel_id
+            ? await guild.channels.fetch(session.channel_id).catch(() => null)
+            : null;
+          if (!ch) continue;
+          await datHenGioDong(client, guild, session, session.channel_id, msLeft);
+          restored++;
+          log.info('READY', guild.id, 'Restored timer: %s (~%dm còn lại)',
+            session.session_name, Math.round(msLeft / 60_000));
+        }
+      } catch (e) {
+        log.error('READY', guild.id, 'Lỗi restore timer: %s', e.message);
+      }
+    }
+    if (restored) log.info('READY', null, 'Đã restore %d timer(s).', restored);
   }
 }
+
 module.exports = { ReadyListener };
