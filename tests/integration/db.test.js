@@ -20,8 +20,8 @@ function makeSupabaseClient() {
 }
 
 function makeQuery(table) {
-  let _data = null;
-  let _filters = [];
+  const _data = null;
+  const _filters = [];
   let _isSingle = false;
   let _operation = 'select';
   let _payload = null;
@@ -84,7 +84,6 @@ function makeQuery(table) {
       return Promise.resolve({ data: filtered, error: null });
     }
     if (_operation === 'delete') {
-      const before = store[table].length;
       store[table] = store[table].filter(row =>
         !_filters.every(f => f.op === 'eq' && row[f.col] === f.val)
       );
