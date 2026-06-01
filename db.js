@@ -94,6 +94,16 @@ async function getSessionById(sessionId) {
   return _validateSession(data, 'getSessionById');
 }
 
+async function getSessionByMessageId(messageId) {
+  const { data, error } = await supabase
+    .from('sessions')
+    .select('*')
+    .eq('message_id', messageId)
+    .maybeSingle();
+  _throwSupabase(error, 'getSessionByMessageId');
+  return _validateSession(data, 'getSessionByMessageId');
+}
+
 async function closeSession(sessionId) {
   const { data, error } = await supabase
     .from('sessions')
@@ -462,7 +472,7 @@ module.exports = {
   getConfig,
 
   // Sessions
-  createSession, getActiveSession, getSessionById,
+  createSession, getActiveSession, getSessionById, getSessionByMessageId,
   closeSession, cancelSession,
   updateSessionMessage, updateSessionName, updateSessionEligible,
   getRecentSessions, getAllSessions,
