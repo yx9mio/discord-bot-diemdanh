@@ -22,6 +22,7 @@ function _setTimer(guildId, key, tid) {
 }
 
 // ── Lên lịch mở phiên theo tuần ────────────────────────────────────────────────────────────────
+// eslint-disable-next-line require-await
 async function scheduleLichCoDinh(client, guildId, lich) {
   // Validate lịch trước khi schedule — bỏ qua lịch bị corrupt thay vì crash
   const v = safeParse(LichSchema, lich);
