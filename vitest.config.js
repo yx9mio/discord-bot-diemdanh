@@ -5,6 +5,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
+    isolate: true,
     include: [
       'tests/**/*.test.js',
       'tests/unit/**/*.test.js',
