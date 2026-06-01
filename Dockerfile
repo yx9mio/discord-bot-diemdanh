@@ -3,9 +3,9 @@ FROM node:20-alpine AS deps
 WORKDIR /app
 
 # Chỉ copy manifest trước — tận dụng Docker layer cache
-# Layer này chỉ rebuild khi package.json / package-lock.json thay đổi
-COPY package.json package-lock.json* ./
-RUN npm ci --omit=dev --ignore-scripts
+# Layer này chỉ rebuild khi package.json thay đổi
+COPY package.json ./
+RUN npm install --omit=dev --ignore-scripts
 
 # ─── Stage 2: runtime ────────────────────────────────────────────────────
 FROM node:20-alpine AS runtime
