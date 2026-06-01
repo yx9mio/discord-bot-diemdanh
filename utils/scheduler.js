@@ -5,11 +5,12 @@ const log = require('./logger.js');
 const { msToNextWeekday, msFromOpenToClose, msToCloseFromNow } = require('./timeCalc.js');
 const { buildAttendanceButtons, buildSummaryEmbed, buildClosedSessionEmbed, FOOTER_DEFAULT } = require('./embeds.js');
 const { ketThucPhien, thongBaoHuyHieu, guiCsvDinhKem } = require('./session.js');
+const { LichSchema, safeParse } = require('./validate.js');
 
 // Map<guildId, Map<key, timeoutId>>
 const schedulerMap = new Map();
 
-// M-1: floor toối thiểu tránh reschedule tại chỗ nếu msToNextWeekday trả về gần 0
+// M-1: floor tối thiểu tránh reschedule tại chỗ nếu msToNextWeekday trả về gần 0
 const MIN_RESCHEDULE_MS = 5_000;
 
 function _setTimer(guildId, key, tid) {
@@ -20,8 +21,16 @@ function _setTimer(guildId, key, tid) {
   gMap.set(key, tid);
 }
 
-// ── Lên lịch mở phiên theo tuần ─────────────────────────────────────────────────────────────────────
+// ── Lên lịch mở phiên theo tuần ────────────────────────────────────────────────────────────────
 async function scheduleLichCoDinh(client, guildId, lich) {
+  // Validate lịch trước khi schedule — bỏ qua lịch bị corrupt thay vì crash
+  const v = safeParse(LichSchema, lich);
+  if (!v.ok) {
+    log.warn('SCHEDULER', guildId, 'Lịch bị invalid, bỏ qua: %s', v.error);
+    return;
+  }
+  lich = v.data;
+
   // M-1: đảm bảo luôn ≥ MIN_RESCHEDULE_MS trước lần mở tiếp theo
   const msOpenRaw = msToNextWeekday(lich.day_of_week, lich.hour, lich.minute);
   const msOpen    = Math.max(msOpenRaw, MIN_RESCHEDULE_MS);
@@ -123,8 +132,6 @@ async function _dongPhienVaThongKe(guild, session, ch, lich, client, silent = fa
   const attended = await db.getAttendances(session.id);
   const statsMap = await ketThucPhien(guild, session, attended);
 
-  // M-2: dùng buildClosedSessionEmbed (giống timers.js) thay vì buildSessionEmbed(..., true)
-  // để đảm bảo embed đóng có giao diện thống nhất giữa 2 path đóng phiên
   try {
     if (session.message_id) {
       const msg = await ch.messages.fetch(session.message_id).catch(() => null);
@@ -159,8 +166,6 @@ async function _dongPhienVaThongKe(guild, session, ch, lich, client, silent = fa
 // ── Reschedule close sau bot restart ────────────────────────────────────────────────────────────────
 async function _khoiPhucCloseTimer(client, guild, danhSach) {
   const session = await db.getActiveSession(guild.id);
-  // H-1 fix: chỉ recover phiên do scheduler mở và chưa có auto_close_at riêng
-  // (auto_close_at != null nghĩa là đã có timer khác xử lý rồi)
   if (!session || session.started_by !== 'scheduler' || session.auto_close_at != null) return;
 
   const lich = danhSach.find(
@@ -195,22 +200,30 @@ async function _khoiPhucCloseTimer(client, guild, danhSach) {
 // ── Khởi phục khi bot restart ───────────────────────────────────────────────────────────────────
 async function khoiPhucScheduler(client) {
   let totalLich = 0;
+  let totalSkipped = 0;
   for (const guild of client.guilds.cache.values()) {
     try {
-      const danhSach = await db.getLichCoDinh(guild.id);
-      for (const lich of danhSach) {
-        await scheduleLichCoDinh(client, guild.id, lich);
+      const rows = await db.getLichCoDinh(guild.id);
+      for (const row of rows) {
+        // Validate từng lịch trước khi schedule — bỏ qua lịch bị corrupt thay vì crash toàn bộ
+        const v = safeParse(LichSchema, row);
+        if (!v.ok) {
+          log.warn('SCHEDULER', guild.id, '%s — lịch #%s bị invalid, bỏ qua: %s', guild.name, row.id ?? '?', v.error);
+          totalSkipped++;
+          continue;
+        }
+        await scheduleLichCoDinh(client, guild.id, v.data);
+        totalLich++;
       }
-      if (danhSach.length > 0) {
-        totalLich += danhSach.length;
-        log.info('SCHEDULER', guild.id, '%s — khôi phục %s lịch', guild.name, danhSach.length);
-        await _khoiPhucCloseTimer(client, guild, danhSach);
+      if (rows.length > 0) {
+        log.info('SCHEDULER', guild.id, '%s — khôi phục %s/%s lịch', guild.name, totalLich, rows.length);
+        await _khoiPhucCloseTimer(client, guild, rows.filter(r => safeParse(LichSchema, r).ok).map(r => safeParse(LichSchema, r).data));
       }
     } catch (e) {
       log.error('SCHEDULER', guild.id, 'Lỗi khôi phục guild: %s', e.message);
     }
   }
-  log.info('SCHEDULER', null, 'Tổng: %s lịch trên %s guild(s)', totalLich, client.guilds.cache.size);
+  log.info('SCHEDULER', null, 'Tổng: %s lịch (%s bỏ qua) trên %s guild(s)', totalLich, totalSkipped, client.guilds.cache.size);
 }
 
 // ── Hủy lịch ────────────────────────────────────────────────────────────────────────────────────────
@@ -230,24 +243,27 @@ function cancelLichCoDinh(guildId, lichId) {
 async function runLichNgay(client, guildId, lich) {
   const g = client.guilds.cache.get(guildId);
   if (!g) throw new Error('Guild không tìm thấy');
-  const result = await _moPhien(g, lich);
+  // Validate trước khi chạy thủ công
+  const v = safeParse(LichSchema, lich);
+  if (!v.ok) throw new Error(`Lịch không hợp lệ: ${v.error}`);
+  const result = await _moPhien(g, v.data);
   if (!result.ok) return result;
-  if (lich.close_day_of_week != null) {
+  if (v.data.close_day_of_week != null) {
     const msClose = msFromOpenToClose(
-      lich.day_of_week, lich.hour, lich.minute,
-      lich.close_day_of_week, lich.close_hour, lich.close_minute
+      v.data.day_of_week, v.data.hour, v.data.minute,
+      v.data.close_day_of_week, v.data.close_hour, v.data.close_minute
     );
-    log.info('SCHEDULER', guildId, '"%s" đóng sau %s phút (manual)', lich.session_name, Math.round(msClose / 60000));
+    log.info('SCHEDULER', guildId, '"%s" đóng sau %s phút (manual)', v.data.session_name, Math.round(msClose / 60000));
     const tidC = setTimeout(async () => {
       const g2 = client.guilds.cache.get(guildId);
       if (!g2) return;
       const sess2 = await db.getActiveSession(guildId);
       if (!sess2) return;
-      const ch2 = await g2.channels.fetch(lich.channel_id).catch(() => null);
+      const ch2 = await g2.channels.fetch(v.data.channel_id).catch(() => null);
       if (!ch2) return;
-      await _dongPhienVaThongKe(g2, sess2, ch2, lich, client, false);
+      await _dongPhienVaThongKe(g2, sess2, ch2, v.data, client, false);
     }, msClose);
-    _setTimer(guildId, `${lich.id}_close`, tidC);
+    _setTimer(guildId, `${v.data.id}_close`, tidC);
   }
   return result;
 }
