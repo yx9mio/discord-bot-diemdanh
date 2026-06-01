@@ -1,7 +1,7 @@
 {
   "name": "discord-bot-diemdanh",
-  "version": "2.3.0",
-  "description": "Bot Discord điểm danh — Supabase Edition",
+  "version": "3.0.0",
+  "description": "Bot Discord điểm danh — Sapphire JS Edition",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
@@ -22,6 +22,11 @@
     ]
   },
   "dependencies": {
+    "@sapphire/framework": "^5.3.4",
+    "@sapphire/plugin-logger": "^4.0.2",
+    "@sapphire/plugin-subcommands": "^7.0.1",
+    "@sapphire/utilities": "^3.17.0",
+    "@sapphire/discord.js-utilities": "^7.3.1",
     "@sentry/node": "^8.47.0",
     "@supabase/supabase-js": "^2.49.4",
     "croner": "^9.0.0",
