@@ -1,9 +1,9 @@
 // commands/batdau.js
 // FIX S-1: createSession dùng object signature
-// FIX E-1: ephemeral deprecated → dùng MessageFlags.Ephemeral
+// FIX E-1: deferReply public (không ephemeral) — không cần flags
+'use strict';
 const {
   SlashCommandBuilder,
-  MessageFlags,
 } = require('discord.js');
 const db = require('../db.js');
 const { buildSessionEmbed, buildAttendanceButtons, replyWarnEdit } = require('../utils/embeds.js');
@@ -26,8 +26,7 @@ module.exports = {
     ),
 
   async execute(interaction) {
-    // FIX E-1: flags thay vì ephemeral
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral & 0 }); // public reply
+    await interaction.deferReply(); // public reply, không cần flags
     const { guild, member, channel } = interaction;
 
     const { ok, cfg } = await requireAdmin(interaction, { context: '/bat_dau' });
@@ -74,7 +73,6 @@ module.exports = {
 
     const sessionName = tenOption ?? `Điểm danh ${new Date().toLocaleDateString('vi-VN')}`;
 
-    // FIX S-1: object signature — khớp với db.createSession mới
     const session = await db.createSession({
       guild_id:            guild.id,
       session_name:        sessionName,

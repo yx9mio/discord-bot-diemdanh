@@ -9,10 +9,11 @@
 // Phase G: buildSummaryEmbed thêm cột đến trễ
 // M-1: eligible_member_ids null guard — fix crash lịch cố định
 // Fix: export AUTHOR_DEFAULT + replyErr + replyErrEdit
+// Fix E-1: ephemeral → MessageFlags.Ephemeral
 'use strict';
-const { EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder, StringSelectMenuBuilder } = require('discord.js');
+const { EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder, StringSelectMenuBuilder, MessageFlags } = require('discord.js');
 
-// ─── Palette & Icons ──────────────────────────────────────────────────────────
+// ─── Palette & Icons ────────────────────────────────────────────────
 const COLORS = {
   GREEN:  0x57f287,
   RED:    0xff4444,
@@ -48,8 +49,7 @@ const FOOTER_DEFAULT = 'Quản Gia · Bot Điểm Danh';
 // AUTHOR_DEFAULT dùng trong setAuthor() — phải là object { name, iconURL? }
 const AUTHOR_DEFAULT = { name: 'Quản Gia · Bot Điểm Danh' };
 
-// ─── Error reply helpers (dùng bởi errorHandler.js) ──────────────────────────
-// replyErr   — dùng cho interaction.reply / followUp (chưa deferred)
+// ─── Error reply helpers (dùng bởi errorHandler.js) ────────────────────
 function replyErr(msg = 'Có lỗi xảy ra. Vui lòng thử lại.') {
   return {
     embeds: [
@@ -57,7 +57,7 @@ function replyErr(msg = 'Có lỗi xảy ra. Vui lòng thử lại.') {
         .setColor(COLORS.RED)
         .setDescription(`❌ ${msg}`),
     ],
-    ephemeral: true,
+    flags: MessageFlags.Ephemeral,
   };
 }
 
@@ -73,7 +73,19 @@ function replyErrEdit(msg = 'Có lỗi xảy ra. Vui lòng thử lại.') {
   };
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// replyWarnEdit — dùng cho editReply warning (public, không ephemeral)
+function replyWarnEdit(msg = 'Có vấn đề xảy ra.') {
+  return {
+    embeds: [
+      new EmbedBuilder()
+        .setColor(COLORS.YELLOW)
+        .setDescription(`⚠️ ${msg}`),
+    ],
+    components: [],
+  };
+}
+
+// ─── Helpers ───────────────────────────────────────────────────────────────────
 function pctEmoji(pct) {
   if (pct >= 90) return '🏆';
   if (pct >= 80) return '🥇';
@@ -112,7 +124,7 @@ function chunkLines(lines, maxLen = 1020) {
   return chunks;
 }
 
-// ─── Phái stats helper ────────────────────────────────────────────────────────
+// ─── Phái stats helper ──────────────────────────────────────────────────────────────
 function buildPhaiStatsText(guild, phaiRoleIds, attended, eligibleArr) {
   if (!phaiRoleIds || !phaiRoleIds.length || !guild) return null;
   const safe = eligibleArr ?? [];
@@ -132,7 +144,7 @@ function buildPhaiStatsText(guild, phaiRoleIds, attended, eligibleArr) {
   return lines.length ? lines.join('\n') : null;
 }
 
-// ─── Session Embed (live + closed view) ──────────────────────────────────────
+// ─── Session Embed (live + closed view) ─────────────────────────────────
 async function buildSessionEmbed(guild, session, attended, isClosed = false) {
   const joined   = attended.filter(a => a.status === 'tham_gia');
   const late     = attended.filter(a => a.status === 'tre');
@@ -178,7 +190,7 @@ async function buildSessionEmbed(guild, session, attended, isClosed = false) {
   return embed;
 }
 
-// ─── Summary Embed (khi đóng phiên) ──────────────────────────────────────────
+// ─── Summary Embed (khi đóng phiên) ─────────────────────────────────────────
 function buildSummaryEmbed(session, attended, guild = null, phaiRoleIds = null) {
   const joined       = attended.filter(a => a.status === 'tham_gia');
   const late         = attended.filter(a => a.status === 'tre');
@@ -283,7 +295,7 @@ function buildAttendanceButtons(disabled = false) {
   );
 }
 
-// ─── Setup Menu ───────────────────────────────────────────────────────────────
+// ─── Setup Menu ──────────────────────────────────────────────────────────────────
 function buildSetupMenu() {
   return {
     embeds: [
@@ -307,11 +319,11 @@ function buildSetupMenu() {
           ]),
       ),
     ],
-    ephemeral: true,
+    flags: MessageFlags.Ephemeral,
   };
 }
 
-// ─── History Embed ────────────────────────────────────────────────────────────
+// ─── History Embed ────────────────────────────────────────────────────────────────
 function buildHistoryEmbed(guild, sessions, page = 1, perPage = 10) {
   const total = sessions.length;
   const totalPages = Math.max(1, Math.ceil(total / perPage));
@@ -334,7 +346,7 @@ function buildHistoryEmbed(guild, sessions, page = 1, perPage = 10) {
     .setFooter({ text: `${FOOTER_DEFAULT} · Tổng: ${total} phiên` });
 }
 
-// ─── Member Embed ─────────────────────────────────────────────────────────────
+// ─── Member Embed ────────────────────────────────────────────────────────────────────
 function buildMemberEmbed(guild, userId, stats, badges) {
   const member = guild?.members.cache.get(userId);
   const name   = member ? (member.displayName || member.user.username) : `<@${userId}>`;
@@ -361,7 +373,7 @@ function buildMemberEmbed(guild, userId, stats, badges) {
   return embed;
 }
 
-// ─── Server Stats Embed ───────────────────────────────────────────────────────
+// ─── Server Stats Embed ───────────────────────────────────────────────────────────────
 function buildServerStatsEmbed(guild, stats) {
   const { totalSessions, totalPresent, topMembers, recentSessions } = stats;
 
@@ -397,7 +409,7 @@ function buildServerStatsEmbed(guild, stats) {
   return embed;
 }
 
-// ─── Trend Sparkline ─────────────────────────────────────────────────────────
+// ─── Trend Sparkline ───────────────────────────────────────────────────────────────────
 function buildTrendSparkline(sessions) {
   if (!sessions || sessions.length === 0) return '*(chưa có dữ liệu)*';
   const values = sessions.map(s => {
@@ -409,7 +421,7 @@ function buildTrendSparkline(sessions) {
   return values.map(v => bars[Math.min(7, Math.floor(v / max * 7))]).join('');
 }
 
-// ─── Weekly Stats Embed ───────────────────────────────────────────────────────
+// ─── Weekly Stats Embed ───────────────────────────────────────────────────────────────
 function buildWeeklyStatsEmbed(guild, weekSessions, allSessions) {
   const thisWeek = weekSessions ?? [];
   const all      = allSessions ?? [];
@@ -446,6 +458,7 @@ module.exports = {
   AUTHOR_DEFAULT,
   replyErr,
   replyErrEdit,
+  replyWarnEdit,
   buildSessionEmbed,
   buildSummaryEmbed,
   buildAttendanceButtons,
