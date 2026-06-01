@@ -1,5 +1,5 @@
 // commands/quanlyphien.js — Quản lý Phiên (UX/UI nâng cao)
-// Chức năng: xem phiên đang chạy, lịch sử, kết thúc, hủy, xem điểm danh
+// Fix: STATUS_EMOJI + tất cả status string → tham_gia/khong_tham_gia/tre/co_phep
 'use strict';
 const {
   SlashCommandBuilder,
@@ -13,7 +13,7 @@ const {
 const db = require('../db.js');
 
 const DAY_NAMES = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
-const STATUS_EMOJI = { present: '✅', absent: '❌', late: '⏰', excused: '🟡' };
+const STATUS_EMOJI = { tham_gia: '✅', khong_tham_gia: '❌', tre: '⏰', co_phep: '🟡' };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function fmtTs(iso) {
@@ -31,8 +31,8 @@ function durationStr(startedAt, endedAt) {
 
 // ─── Embeds ───────────────────────────────────────────────────────────────────
 function buildActiveEmbed(session, attendances) {
-  const present  = attendances.filter(a => a.status === 'present').length;
-  const late     = attendances.filter(a => a.status === 'late').length;
+  const present  = attendances.filter(a => a.status === 'tham_gia').length;
+  const late     = attendances.filter(a => a.status === 'tre').length;
   const eligible = (session.eligible_member_ids ?? []).length;
 
   return new EmbedBuilder()
@@ -45,7 +45,7 @@ function buildActiveEmbed(session, attendances) {
       { name: '✅ Có mặt',      value: `${present}`,                                                inline: true },
       { name: '⏰ Trễ',         value: `${late}`,                                                   inline: true },
       { name: '👥 Bắt buộc',    value: eligible > 0 ? `${eligible}` : 'Tất cả',                    inline: true },
-      { name: '📋 Tổng ĐD',    value: `${attendances.length}`,                                     inline: true },
+      { name: '📋 Tổng ĐD',     value: `${attendances.length}`,                                    inline: true },
       { name: '📢 Kênh',        value: session.channel_id ? `<#${session.channel_id}>` : '—',      inline: true },
       { name: '👤 Tạo bởi',     value: `<@${session.started_by}>`,                                 inline: true },
     )
@@ -72,12 +72,12 @@ function buildHistoryListEmbed(sessions) {
 }
 
 function buildSessionDetailEmbed(session, attendances) {
-  const counts = { present: 0, absent: 0, late: 0, excused: 0 };
+  const counts = { tham_gia: 0, khong_tham_gia: 0, tre: 0, co_phep: 0 };
   for (const a of attendances) counts[a.status] = (counts[a.status] ?? 0) + 1;
   const eligible = (session.eligible_member_ids ?? []).length;
 
   const topRows = attendances
-    .filter(a => a.status === 'present' || a.status === 'late')
+    .filter(a => a.status === 'tham_gia' || a.status === 'tre')
     .slice(0, 15)
     .map(a => `${STATUS_EMOJI[a.status] ?? '❓'} <@${a.user_id}>`);
 
@@ -89,10 +89,10 @@ function buildSessionDetailEmbed(session, attendances) {
       { name: '📅 Bắt đầu',  value: fmtTs(session.started_at ?? session.created_at),                                  inline: true },
       { name: '🏁 Kết thúc', value: fmtTs(session.ended_at),                                                          inline: true },
       { name: '⏱️ Thời gian', value: durationStr(session.started_at ?? session.created_at, session.ended_at),         inline: true },
-      { name: '✅ Có mặt',   value: `${counts.present}`,                                                               inline: true },
-      { name: '⏰ Trễ',      value: `${counts.late}`,                                                                  inline: true },
-      { name: '❌ Vắng',     value: `${counts.absent}`,                                                                inline: true },
-      { name: '🟡 Có phép',  value: `${counts.excused}`,                                                               inline: true },
+      { name: '✅ Có mặt',   value: `${counts.tham_gia}`,                                                              inline: true },
+      { name: '⏰ Trễ',      value: `${counts.tre}`,                                                                   inline: true },
+      { name: '❌ Vắng',     value: `${counts.khong_tham_gia}`,                                                        inline: true },
+      { name: '🟡 Có phép',  value: `${counts.co_phep}`,                                                               inline: true },
       { name: '👥 Bắt buộc', value: eligible > 0 ? `${eligible}` : 'Tất cả',                                          inline: true },
     )
     .addFields({
@@ -210,7 +210,6 @@ module.exports = {
       collector.on('collect', async (btn) => {
         await btn.deferUpdate();
 
-        // Làm mới
         if (btn.customId.startsWith('qp_refresh_')) {
           const s2 = await db.getActiveSession(guildId);
           if (!s2) {
@@ -222,7 +221,6 @@ module.exports = {
           return;
         }
 
-        // Xem điểm danh chi tiết
         if (btn.customId.startsWith('qp_view_')) {
           const s2 = await db.getActiveSession(guildId);
           if (!s2) {
@@ -234,7 +232,6 @@ module.exports = {
           return;
         }
 
-        // Kết thúc / Hủy → confirm
         if (btn.customId.startsWith('qp_end_') || btn.customId.startsWith('qp_cancel_')) {
           const action = btn.customId.startsWith('qp_end_') ? 'end' : 'cancel';
           const sid    = btn.customId.replace(`qp_${action}_`, '');
@@ -249,11 +246,10 @@ module.exports = {
           return;
         }
 
-        // Xác nhận thực thi
         if (btn.customId.startsWith('qp_confirm_')) {
-          const parts      = btn.customId.split('_'); // ['qp','confirm','end'/'cancel', ...uuid]
+          const parts      = btn.customId.split('_');
           const realAction = parts[2];
-          const realSid    = parts.slice(3).join('_'); // uuid có thể chứa _
+          const realSid    = parts.slice(3).join('_');
           if (realAction === 'end')    await db.endSession(realSid);
           if (realAction === 'cancel') await db.cancelSession(realSid);
           const doneEmbed = new EmbedBuilder()
@@ -266,7 +262,6 @@ module.exports = {
           return;
         }
 
-        // Hủy confirm → quay lại active view
         if (btn.customId === 'qp_cancel_confirm') {
           const s2 = await db.getActiveSession(guildId);
           if (!s2) {

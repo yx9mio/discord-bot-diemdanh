@@ -1,28 +1,21 @@
 // utils/embeds.js — Tất cả embed builders & button builders
-// Phase 1: Design system thống nhất — COLORS, ICONS, helpers
-// Phase 3: buildSessionEmbed & buildSummaryEmbed nâng cấp visual
-// Phase 5: buildHistoryEmbed + buildMemberEmbed
-// Phase 6 + F: buildServerStatsEmbed + trend sparkline
-// UX-A: buildAttendanceButtons + buildSetupMenu
-// UX-B: buildSummaryEmbed cột vắng mặt
-// UX-C: buildSummaryEmbed cột phái
-// Phase G: buildSummaryEmbed thêm cột đến trễ
-// M-1: eligible_member_ids null guard — fix crash lịch cố định
-// Fix: export AUTHOR_DEFAULT + replyErr + replyErrEdit
-// Fix E-1: ephemeral → MessageFlags.Ephemeral
+// Fix E-2: thêm COLORS.PRIMARY/GOLD, COLOR_GOLD, replyOkEdit, pctColor,
+//          pctLabel, buildProgressBar alias, buildClosedSessionEmbed
 'use strict';
 const { EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder, StringSelectMenuBuilder, MessageFlags } = require('discord.js');
 
 // ─── Palette & Icons ────────────────────────────────────────────────
 const COLORS = {
-  GREEN:  0x57f287,
-  RED:    0xff4444,
-  BLUE:   0x5865f2,
-  YELLOW: 0xfee75c,
-  ORANGE: 0xf0a500,
-  GREY:   0x36393e,
-  PURPLE: 0x9b59b6,
-  TEAL:   0x1abc9c,
+  GREEN:   0x57f287,
+  RED:     0xff4444,
+  BLUE:    0x5865f2,
+  YELLOW:  0xfee75c,
+  ORANGE:  0xf0a500,
+  GREY:    0x36393e,
+  PURPLE:  0x9b59b6,
+  TEAL:    0x1abc9c,
+  PRIMARY: 0x01696f,  // teal chính
+  GOLD:    0xFFD700,  // vàng
 };
 
 const ICONS = {
@@ -49,7 +42,10 @@ const FOOTER_DEFAULT = 'Quản Gia · Bot Điểm Danh';
 // AUTHOR_DEFAULT dùng trong setAuthor() — phải là object { name, iconURL? }
 const AUTHOR_DEFAULT = { name: 'Quản Gia · Bot Điểm Danh' };
 
-// ─── Error reply helpers (dùng bởi errorHandler.js) ────────────────────
+// COLOR_GOLD — shorthand constant
+const COLOR_GOLD = COLORS.GOLD;
+
+// ─── Error / Success reply helpers ────────────────────────────────────────
 function replyErr(msg = 'Có lỗi xảy ra. Vui lòng thử lại.') {
   return {
     embeds: [
@@ -61,7 +57,6 @@ function replyErr(msg = 'Có lỗi xảy ra. Vui lòng thử lại.') {
   };
 }
 
-// replyErrEdit — dùng cho interaction.editReply (đã deferred), xóa components
 function replyErrEdit(msg = 'Có lỗi xảy ra. Vui lòng thử lại.') {
   return {
     embeds: [
@@ -73,7 +68,6 @@ function replyErrEdit(msg = 'Có lỗi xảy ra. Vui lòng thử lại.') {
   };
 }
 
-// replyWarnEdit — dùng cho editReply warning (public, không ephemeral)
 function replyWarnEdit(msg = 'Có vấn đề xảy ra.') {
   return {
     embeds: [
@@ -85,7 +79,35 @@ function replyWarnEdit(msg = 'Có vấn đề xảy ra.') {
   };
 }
 
+// replyOkEdit — dùng cho editReply success
+function replyOkEdit(msg = 'Thành công.') {
+  return {
+    embeds: [
+      new EmbedBuilder()
+        .setColor(COLORS.GREEN)
+        .setDescription(`✅ ${msg}`),
+    ],
+    components: [],
+  };
+}
+
 // ─── Helpers ───────────────────────────────────────────────────────────────────
+
+// Màu theo tỉ lệ điểm danh
+function pctColor(pct) {
+  if (pct >= 80) return COLORS.GREEN;
+  if (pct >= 50) return COLORS.ORANGE;
+  return COLORS.RED;
+}
+
+// Nhãn mô tả theo tỉ lệ điểm danh
+function pctLabel(pct) {
+  if (pct >= 90) return 'Xuất sắc';
+  if (pct >= 75) return 'Tốt';
+  if (pct >= 50) return 'Trung bình';
+  return 'Cần cải thiện';
+}
+
 function pctEmoji(pct) {
   if (pct >= 90) return '🏆';
   if (pct >= 80) return '🥇';
@@ -99,6 +121,9 @@ function buildRichProgressBar(pct, len = 12) {
   const empty  = len - filled;
   return '█'.repeat(filled) + '░'.repeat(empty);
 }
+
+// buildProgressBar — alias backward-compat
+const buildProgressBar = buildRichProgressBar;
 
 function formatDuration(seconds) {
   const h = Math.floor(seconds / 3600);
@@ -124,7 +149,7 @@ function chunkLines(lines, maxLen = 1020) {
   return chunks;
 }
 
-// ─── Phái stats helper ──────────────────────────────────────────────────────────────
+// ─── Phái stats helper ─────────────────────────────────────────────────────────
 function buildPhaiStatsText(guild, phaiRoleIds, attended, eligibleArr) {
   if (!phaiRoleIds || !phaiRoleIds.length || !guild) return null;
   const safe = eligibleArr ?? [];
@@ -190,6 +215,11 @@ async function buildSessionEmbed(guild, session, attended, isClosed = false) {
   return embed;
 }
 
+// buildClosedSessionEmbed — wrapper gọi buildSessionEmbed với isClosed=true
+function buildClosedSessionEmbed(session, attended, guild = null) {
+  return buildSessionEmbed(guild, session, attended ?? [], true);
+}
+
 // ─── Summary Embed (khi đóng phiên) ─────────────────────────────────────────
 function buildSummaryEmbed(session, attended, guild = null, phaiRoleIds = null) {
   const joined       = attended.filter(a => a.status === 'tham_gia');
@@ -243,7 +273,7 @@ function buildSummaryEmbed(session, attended, guild = null, phaiRoleIds = null) 
     const extra = late.length > MAX ? `\n*(+${late.length - MAX} nữa)*` : '';
     chunkLines(names).slice(0, 1).forEach(chunk =>
       embed.addFields({
-        name: `${ICONS.ATTEND_LATE} Đến Trễ — ${late.length}`, value: chunk, inline: true,
+        name: `${ICONS.ATTEND_LATE} Đến Trễ — ${late.length}`, value: chunk + extra, inline: true,
       }));
   }
 
@@ -456,11 +486,19 @@ module.exports = {
   ICONS,
   FOOTER_DEFAULT,
   AUTHOR_DEFAULT,
+  COLOR_GOLD,
   replyErr,
   replyErrEdit,
   replyWarnEdit,
+  replyOkEdit,
+  pctColor,
+  pctLabel,
+  pctEmoji,
+  buildProgressBar,
+  buildRichProgressBar,
   buildSessionEmbed,
   buildSummaryEmbed,
+  buildClosedSessionEmbed,
   buildAttendanceButtons,
   buildSetupMenu,
   buildHistoryEmbed,
@@ -469,8 +507,6 @@ module.exports = {
   buildWeeklyStatsEmbed,
   buildTrendSparkline,
   buildPhaiStatsText,
-  buildRichProgressBar,
-  pctEmoji,
   resolveDisplayName,
   chunkLines,
   formatDuration,
