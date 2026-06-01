@@ -1,0 +1,16 @@
+[build]
+  builder = "dockerfile"
+  dockerfilePath = "Dockerfile"
+
+[deploy]
+  # Railway tự restart khi process exit code != 0
+  restartPolicyType    = "on_failure"
+  restartPolicyMaxRetries = 5
+
+  # Health check — với bot Discord (không có HTTP) dùng TCP check tắt
+  # Railway detect healthy qua exit code của HEALTHCHECK trong Dockerfile
+  healthcheckPath      = ""
+  healthcheckTimeout   = 30
+
+  # Railway kích hoạt sleep sau X giây idle — bot phải luôn chạy nên disable
+  sleepApplication     = false

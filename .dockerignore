@@ -1,0 +1,19 @@
+# .dockerignore — giữ image gọn, build nhanh hơn
+node_modules
+npm-debug.log*
+.env
+.env.*
+!.env.example
+.git
+.github
+.gitignore
+tests/
+*.test.js
+vitest.config.js
+nodemon.json
+eslint.config.cjs
+.eslintrc*
+README.md
+DOCKER*.md
+*.md
+migrations/

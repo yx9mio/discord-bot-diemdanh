@@ -1,27 +1,32 @@
-// utils/discordQueue.js — Rate-limit Discord API calls bằng p-queue
-// Ngăn bot bị 429 khi gửi nhiều message/edit cùng lúc
+// utils/discordQueue.js — Rate-limit Discord API calls
+// p-queue là ESM-only package — dùng dynamic import() để tương thích CJS
 'use strict';
+const log = require('./logger.js');
 
-// p-queue là ESM-only → dùng dynamic import một lần rồi cache
+/** @type {import('p-queue').default | null} */
 let _queue = null;
 
+/** Khởi tạo queue lười (lazy) và cache lại. */
 async function getQueue() {
   if (_queue) return _queue;
+  // dynamic import ESM module từ CJS — đây là cách duy nhất hợp lệ
   const { default: PQueue } = await import('p-queue');
   _queue = new PQueue({
-    concurrency:  5,   // tối đa 5 task chạy đồng thời
-    intervalCap:  5,   // tối đa 5 task mỗi interval
-    interval:     1000, // interval = 1 giây
+    concurrency: 5,    // tối đa 5 task chạy song song
+    intervalCap: 5,    // tối đa 5 task / interval
+    interval:    1000, // interval 1 giây — khớp với Discord global rate-limit
   });
-  _queue.on('error', err => {
-    const log = require('./logger.js');
-    log.error('DISCORD_QUEUE', null, 'Queue error: %s', err.message);
+  _queue.on('error', (err) => {
+    log.error('DISCORD_QUEUE', null, 'Queue task error: %s', err.message);
   });
   return _queue;
 }
 
 /**
- * Enqueue một Discord API call vào rate-limit queue.
+ * Đưa một Discord API call vào queue.
+ * Sử dụng thay cho channel.send() / message.edit() trực tiếp
+ * khi có nhiều call đồng thời (ví dụ: đóng phiên + gửi CSV + gửi badge).
+ *
  * @param {() => Promise<any>} fn
  * @returns {Promise<any>}
  */
@@ -30,4 +35,13 @@ async function enqueue(fn) {
   return q.add(fn);
 }
 
-module.exports = { enqueue };
+/**
+ * Trả về số task đang chờ — hữơu ích để debug / health check.
+ * @returns {Promise<number>}
+ */
+async function pendingCount() {
+  const q = await getQueue();
+  return q.size;
+}
+
+module.exports = { enqueue, pendingCount };
