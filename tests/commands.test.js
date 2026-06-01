@@ -11,7 +11,6 @@ const path   = require('node:path');
 const fs     = require('node:fs');
 
 // Mock db.js + discord.js để commands load được mà không cần env thật
-// Node cache-busting: dùng Module._resolveFilename mock pattern
 const Module = require('node:module');
 const _origLoad = Module._load.bind(Module);
 
@@ -28,7 +27,6 @@ const MOCK_SUPABASE = {
 const MOCK_DB = new Proxy({}, {
   get: (_, prop) => {
     if (prop === 'supabase') return MOCK_SUPABASE;
-    // Tất cả hàm DB trả về stub async
     return async () => null;
   },
 });
@@ -80,41 +78,53 @@ Module._load = function(request, parent, isMain) {
   return _origLoad(request, parent, isMain);
 };
 
-// ─── Test mỗi command ─────────────────────────────────────────────────────────
-const COMMANDS_DIR = path.join(__dirname, '..', 'commands');
-const files = fs.readdirSync(COMMANDS_DIR).filter(f => f.endsWith('.js'));
+// ─── Scan đệ quy src/commands/ ───────────────────────────────────────────────
+function collectCommandFiles(dir) {
+  const results = [];
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      results.push(...collectCommandFiles(full));
+    } else if (entry.isFile() && entry.name.endsWith('.js')) {
+      results.push(full);
+    }
+  }
+  return results;
+}
 
+const COMMANDS_DIR = path.join(__dirname, '..', 'src', 'commands');
+const files = collectCommandFiles(COMMANDS_DIR);
+
+// ─── Test mỗi command ─────────────────────────────────────────────────────────
 describe('commands — contract check', () => {
-  for (const file of files) {
-    const filePath = path.join(COMMANDS_DIR, file);
-    describe(file, () => {
+  for (const filePath of files) {
+    const label = path.relative(COMMANDS_DIR, filePath);
+    describe(label, () => {
       let cmd;
 
       it('loads without MODULE_NOT_FOUND', () => {
-        // Xoá cache để mock có hiệu lực
         delete require.cache[filePath];
         try {
           cmd = require(filePath);
         } catch (e) {
           if (e.code === 'MODULE_NOT_FOUND') throw e;
-          // Lỗi khác (env, Discord API) là chấp nhận được trong CI
           cmd = e._partialModule ?? {};
         }
       });
 
       it('exports data object', () => {
-        assert.ok(cmd && cmd.data, `${file} thiếu export "data"`);
+        assert.ok(cmd && cmd.data, `${label} thiếu export "data"`);
       });
 
       it('data.name là string không rỗng', () => {
         const name = cmd?.data?.name ?? cmd?.data?._name;
         assert.ok(typeof name === 'string' && name.length > 0,
-          `${file}: data.name = ${JSON.stringify(name)}`);
+          `${label}: data.name = ${JSON.stringify(name)}`);
       });
 
       it('exports execute function', () => {
         assert.equal(typeof cmd?.execute, 'function',
-          `${file} thiếu export "execute"`);
+          `${label} thiếu export "execute"`);
       });
     });
   }
