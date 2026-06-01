@@ -1,5 +1,4 @@
 // utils/validate.js — Zod schemas cho các object quan trọng
-// Dùng để validate data từ DB trước khi đưa vào scheduler / session logic
 'use strict';
 const { z } = require('zod');
 
@@ -57,10 +56,22 @@ const ConfigSchema = z.object({
   default_role_id: z.string().nullable().optional(),
 });
 
+// ─── Slash command inputs ─────────────────────────────────────────────────────
+// P1: validate input từ người dùng trước khi ghi DB
+const BatDauInputSchema = z.object({
+  session_name:    z.string().min(1).max(100),
+  allowed_role_id: z.string().nullable().optional(),
+  eligible_member_ids: z.array(z.string()).nullable().optional(),
+});
+
+const CaiDatInputSchema = z.object({
+  log_channel_id:  z.string().nullable().optional(),
+  admin_role_id:   z.string().nullable().optional(),
+  default_role_id: z.string().nullable().optional(),
+});
+
 /**
  * Parse + validate an toàn — trả về { ok, data } thay vì throw.
- * Dùng trong scheduler để bỏ qua lịch bị broken thay vì crash toàn bộ.
- *
  * @template T
  * @param {import('zod').ZodSchema<T>} schema
  * @param {unknown} input
@@ -73,4 +84,8 @@ function safeParse(schema, input) {
   return { ok: false, error: msg };
 }
 
-module.exports = { LichSchema, SessionSchema, AttendanceSchema, ConfigSchema, safeParse };
+module.exports = {
+  LichSchema, SessionSchema, AttendanceSchema, ConfigSchema,
+  BatDauInputSchema, CaiDatInputSchema,
+  safeParse,
+};

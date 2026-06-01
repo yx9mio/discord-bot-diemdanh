@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { LichSchema, SessionSchema, AttendanceSchema, safeParse } from '../utils/validate.js';
+import { LichSchema, SessionSchema, AttendanceSchema, BatDauInputSchema, safeParse } from '../utils/validate.js';
 
 describe('LichSchema', () => {
   const validLich = {
@@ -16,24 +16,21 @@ describe('LichSchema', () => {
   };
 
   it('parse lịch hợp lệ', () => {
-    const r = safeParse(LichSchema, validLich);
-    expect(r.ok).toBe(true);
+    expect(safeParse(LichSchema, validLich).ok).toBe(true);
   });
-
   it('từ chối day_of_week > 6', () => {
     const r = safeParse(LichSchema, { ...validLich, day_of_week: 7 });
     expect(r.ok).toBe(false);
     expect(r.error).toContain('day_of_week');
   });
-
   it('từ chối hour > 23', () => {
-    const r = safeParse(LichSchema, { ...validLich, hour: 24 });
-    expect(r.ok).toBe(false);
+    expect(safeParse(LichSchema, { ...validLich, hour: 24 }).ok).toBe(false);
   });
-
   it('từ chối session_name rỗng', () => {
-    const r = safeParse(LichSchema, { ...validLich, session_name: '' });
-    expect(r.ok).toBe(false);
+    expect(safeParse(LichSchema, { ...validLich, session_name: '' }).ok).toBe(false);
+  });
+  it('chấp nhận close_day_of_week null', () => {
+    expect(safeParse(LichSchema, { ...validLich, close_day_of_week: null }).ok).toBe(true);
   });
 });
 
@@ -47,35 +44,37 @@ describe('SessionSchema', () => {
   };
 
   it('parse session hợp lệ', () => {
-    const r = safeParse(SessionSchema, validSession);
-    expect(r.ok).toBe(true);
+    expect(safeParse(SessionSchema, validSession).ok).toBe(true);
   });
-
   it('eligible_member_ids nullable', () => {
-    const r = safeParse(SessionSchema, { ...validSession, eligible_member_ids: null });
-    expect(r.ok).toBe(true);
+    expect(safeParse(SessionSchema, { ...validSession, eligible_member_ids: null }).ok).toBe(true);
+  });
+  it('từ chối thiếu is_active', () => {
+    const { is_active: _, ...noActive } = validSession;
+    expect(safeParse(SessionSchema, noActive).ok).toBe(false);
   });
 });
 
 describe('AttendanceSchema', () => {
+  const base = { session_id: '00000000-0000-0000-0000-000000000002', user_id: 'u1' };
+
   it('reject status không hợp lệ', () => {
-    const r = safeParse(AttendanceSchema, {
-      session_id: '00000000-0000-0000-0000-000000000002',
-      user_id: 'u1',
-      status: 'di_tre', // sai
-    });
+    const r = safeParse(AttendanceSchema, { ...base, status: 'di_tre' });
     expect(r.ok).toBe(false);
     expect(r.error).toContain('status');
   });
-
   it('accept tất cả status hợp lệ', () => {
     for (const s of ['tham_gia', 'tre', 'khong_tham_gia', 'co_phep']) {
-      const r = safeParse(AttendanceSchema, {
-        session_id: '00000000-0000-0000-0000-000000000002',
-        user_id: 'u1',
-        status: s,
-      });
-      expect(r.ok).toBe(true);
+      expect(safeParse(AttendanceSchema, { ...base, status: s }).ok).toBe(true);
     }
+  });
+});
+
+describe('BatDauInputSchema', () => {
+  it('parse input hợp lệ', () => {
+    expect(safeParse(BatDauInputSchema, { session_name: 'Họp' }).ok).toBe(true);
+  });
+  it('từ chối session_name > 100 ký tự', () => {
+    expect(safeParse(BatDauInputSchema, { session_name: 'x'.repeat(101) }).ok).toBe(false);
   });
 });

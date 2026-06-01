@@ -1,6 +1,6 @@
 {
   "name": "discord-bot-diemdanh",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "Bot Discord điểm danh — Supabase Edition",
   "main": "index.js",
   "scripts": {
@@ -9,9 +9,20 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint . --ext .js",
-    "lint:fix": "eslint . --ext .js --fix"
+    "lint:fix": "eslint . --ext .js --fix",
+    "prepare": "simple-git-hooks"
+  },
+  "simple-git-hooks": {
+    "pre-commit": "npx lint-staged"
+  },
+  "lint-staged": {
+    "*.js": [
+      "eslint --fix",
+      "eslint"
+    ]
   },
   "dependencies": {
+    "@sentry/node": "^8.47.0",
     "@supabase/supabase-js": "^2.49.4",
     "discord.js": "^14.18.0",
     "dotenv": "^16.5.0",
@@ -23,8 +34,10 @@
     "@eslint/js": "^9.27.0",
     "eslint": "^9.27.0",
     "eslint-plugin-n": "^17.18.0",
+    "lint-staged": "^15.5.0",
     "nodemon": "^3.1.10",
     "pino-pretty": "^13.0.0",
+    "simple-git-hooks": "^2.11.1",
     "vitest": "^3.2.0"
   }
 }
