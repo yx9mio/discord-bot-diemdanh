@@ -8,6 +8,8 @@
 // Fix #7: guard createSession null trong _moPhien → reschedule mở tuần sau thay vì crash
 // Fix #8: _moPhien trả về { ok, reason } thay vì null thuần — handler hiển thị đúng message
 // Fix #9: _dongPhienVaThongKe gọi db.closeSession(session.id) → set ended_at, tránh getActiveSession trả về phiên đã đóng
+// Fix #10 (B-3): thongBaoHuyHieu signature đúng (guild, ch, guildId, sessionId, attended, statsMap)
+// Fix #11 (B-4): runDongLich KHÔNG gọi scheduleLichCoDinh — đã được scheduleLichCoDinh tự gọi lại
 // Phase H: ping role điểm danh khi mở phiên tự động
 'use strict';
 const { EmbedBuilder, MessageFlags } = require('discord.js');
@@ -48,11 +50,22 @@ async function scheduleLichCoDinh(client, guildId, lich) {
           lich.close_day_of_week, lich.close_hour, lich.close_minute
         );
         log.info('SCHEDULER', guildId, '"%s" ĐÓNG sau %s phút', lich.session_name, Math.round(msClose / 60000));
-        const tidC = setTimeout(() => runDongLich(client, guildId, lich), msClose);
+        // Fix B-4: close timer gọi _dongPhienVaThongKe trực tiếp, KHÔNG gọi runDongLich
+        // để tránh runDongLich gọi lại scheduleLichCoDinh → double open timer
+        const tidC = setTimeout(async () => {
+          const g2 = client.guilds.cache.get(guildId);
+          if (!g2) return;
+          const sess2 = await db.getActiveSession(guildId);
+          if (!sess2) return;
+          const ch2 = await g2.channels.fetch(lich.channel_id).catch(() => null);
+          if (!ch2) return;
+          await _dongPhienVaThongKe(g2, sess2, ch2, lich, client, false);
+        }, msClose);
         _setTimer(guildId, `${lich.id}_close`, tidC);
       } else if (!result.ok) {
         log.warn('SCHEDULER', guildId, '"%s" bỏ qua mở tự động: %s', lich.session_name, result.reason);
       }
+      // Luôn reschedule mở tuần sau
       await scheduleLichCoDinh(client, guildId, lich);
     } catch (e) {
       log.error('SCHEDULER', guildId, 'Lỗi mở phiên: %s', e.message);
@@ -112,6 +125,8 @@ async function _moPhien(guild, lich) {
 }
 
 // ── GIAI ĐOẠN 3: Đóng phiên + thống kê ──────────────────────────────────────────
+// Fix B-4: runDongLich CHỈ dùng cho manual dong / _khoiPhucCloseTimer
+// KHÔNG gọi scheduleLichCoDinh ở đây → tránh double open timer
 async function runDongLich(client, guildId, lich, silent = false) {
   const g = client.guilds.cache.get(guildId);
   if (!g) return;
@@ -120,7 +135,8 @@ async function runDongLich(client, guildId, lich, silent = false) {
   const ch = await g.channels.fetch(lich.channel_id).catch(() => null);
   if (!ch) return;
   await _dongPhienVaThongKe(g, session, ch, lich, client, silent);
-  await scheduleLichCoDinh(client, guildId, lich);
+  // Fix B-4: ĐÃ XÓA scheduleLichCoDinh ở đây
+  // scheduleLichCoDinh sẽ reschedule tuần sau từ trong chính nó (sau khi mở)
 }
 
 async function _dongPhienVaThongKe(guild, session, ch, lich, client, silent = false) {
@@ -129,7 +145,6 @@ async function _dongPhienVaThongKe(guild, session, ch, lich, client, silent = fa
     await db.closeSession(session.id);
   } catch (e) {
     log.error('SCHEDULER', guild.id, 'closeSession thất bại cho %s: %s', session.id, e.message);
-    // Vẫn tiếp tục để gửi thống kê, nhưng log lỗi để debug
   }
 
   const attended = await db.getAttendances(session.id);
@@ -149,7 +164,7 @@ async function _dongPhienVaThongKe(guild, session, ch, lich, client, silent = fa
 
   // Chỉ gửi thông báo/thống kê khi KHÔNG phải silent close (restart)
   if (!silent) {
-    const closedEmbed  = new EmbedBuilder()
+    const closedEmbed = new EmbedBuilder()
       .setColor(0xff4444)
       .setTitle('🔒 Phiên đã kết thúc tự động')
       .setDescription(
@@ -158,8 +173,7 @@ async function _dongPhienVaThongKe(guild, session, ch, lich, client, silent = fa
         `📋 Có phép: ${attended.filter(a => a.status === 'co_phep').length}`
       );
 
-    // FIX #6: đúng thứ tự (session, attended, guild) theo signature của embeds.js
-    const summaryEmbed = await buildSummaryEmbed(session, attended, guild);
+    const summaryEmbed = buildSummaryEmbed(session, attended, guild);
     await ch.send({ embeds: [closedEmbed, summaryEmbed] });
 
     // CSV đính kèm
@@ -168,9 +182,9 @@ async function _dongPhienVaThongKe(guild, session, ch, lich, client, silent = fa
       await guiCsvDinhKem(ch, session, attended);
     } catch (_) {}
 
-    // Thông báo hủy hiệu
+    // Fix B-3: thongBaoHuyHieu(guild, channel, guildId, sessionId, attended, statsMap)
     try {
-      await thongBaoHuyHieu(client, guild.id, session, attended);
+      await thongBaoHuyHieu(guild, ch, guild.id, session.id, attended, statsMap);
     } catch (_) {}
   }
 
@@ -235,7 +249,6 @@ async function _khoiPhucCloseTimer(client, guild, danhSach) {
   }
 
   if (msRemaining <= 0) {
-    // Phiên đã qua giờ đóng trong khi bot offline → đóng SILENT (không spam channel)
     log.info('SCHEDULER', guild.id, '%s — phiên "%s" đã qua giờ đóng khi offline, đóng silent', guild.name, session.session_name);
     setImmediate(() => runDongLich(client, guild.id, lich, true));
   } else {
@@ -267,22 +280,30 @@ async function khoiPhucScheduler(client) {
 }
 
 // ── PUBLIC API ──────────────────────────────────────────────────────────────────
-// FIX #8: runLichNgay giờ trả về { ok, reason } từ _moPhien — caller (lichHandler) đọc để hiển thị đúng
 async function runLichNgay(client, guildId, lich) {
   const g = client.guilds.cache.get(guildId);
   if (!g) throw new Error('Guild không tìm thấy');
   const result = await _moPhien(g, lich);
-  if (!result.ok) return result; // trả về { ok: false, reason } cho handler
+  if (!result.ok) return result;
   if (lich.close_day_of_week != null) {
     const msClose = msFromOpenToClose(
       lich.day_of_week, lich.hour, lich.minute,
       lich.close_day_of_week, lich.close_hour, lich.close_minute
     );
     log.info('SCHEDULER', guildId, '%s — "%s" ĐÓNG sau %s phút (manual open)', g.name, lich.session_name, Math.round(msClose / 60000));
-    const tidC = setTimeout(() => runDongLich(client, guildId, lich), msClose);
+    // Fix B-4: dùng inline timer thay vì runDongLich để không trigger reschedule
+    const tidC = setTimeout(async () => {
+      const g2 = client.guilds.cache.get(guildId);
+      if (!g2) return;
+      const sess2 = await db.getActiveSession(guildId);
+      if (!sess2) return;
+      const ch2 = await g2.channels.fetch(lich.channel_id).catch(() => null);
+      if (!ch2) return;
+      await _dongPhienVaThongKe(g2, sess2, ch2, lich, client, false);
+    }, msClose);
     _setTimer(guildId, `${lich.id}_close`, tidC);
   }
-  return result; // { ok: true, session }
+  return result;
 }
 
 async function runDongLichNgay(client, guildId, lich) {

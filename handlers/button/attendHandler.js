@@ -1,12 +1,13 @@
 // handlers/button/attendHandler.js — xử lý 3 nút điểm danh chính
+// Fix B-1: đồng bộ customId với embeds.js (attendance:join / attendance:late / attendance:decline)
 'use strict';
 const db = require('../../db.js');
 const { buildSessionEmbed, buildAttendanceButtons } = require('../../utils/embeds.js');
 
 const BUTTON_TO_STATUS = {
-  attend_yes:  'tham_gia',
-  attend_late: 'tre',
-  attend_no:   'khong_tham_gia',
+  'attendance:join':    'tham_gia',
+  'attendance:late':   'tre',
+  'attendance:decline':'khong_tham_gia',
 };
 
 const STATUS_LABEL = {
@@ -56,7 +57,6 @@ async function handleAttend(interaction) {
       }
     }
 
-    // Fix: dùng upsertAttendance để include guild_id (NOT NULL constraint)
     const username = member.nickname ?? user.displayName ?? user.username;
     await db.upsertAttendance(session.id, guild.id, user.id, username, status, user.id);
 

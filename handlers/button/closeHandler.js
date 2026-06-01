@@ -1,4 +1,5 @@
 // handlers/button/closeHandler.js — nút đóng phiên + nút xem danh sách
+// Fix B-2: thêm db.closeSession() trong handleConfirmClose trước ketThucPhien
 'use strict';
 const db = require('../../db.js');
 const {
@@ -59,10 +60,18 @@ async function handleConfirmClose(interaction) {
     return true;
   }
 
+  // Fix B-2: đóng session trong DB TRƯỚC để getActiveSession không trả về nữa
+  try {
+    await db.closeSession(session.id);
+  } catch (e) {
+    // log nhưng tiếp tục để không mất thống kê
+    console.error('[closeHandler] closeSession error:', e.message);
+  }
+
   const attended = await db.getAttendances(session.id);
   xoaHenGio(guild.id);
   const statsMap = await ketThucPhien(guild, session, attended);
-  await voHieuHoaNutDiemDanh(interaction.client, channel, session);
+  await voHieuHoaNutDiemDanh(interaction.client, channel, session, attended);
   await channel.send({ embeds: [buildSummaryEmbed(session, attended, guild)] });
   await thongBaoHuyHieu(guild, channel, guild.id, session.id, attended, statsMap);
   await interaction.editReply(replyOkEdit('✅ Phiên điểm danh đã được đóng thành công.'));
