@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   LichSchema, SessionSchema, AttendanceSchema,
-  ConfigSchema, BatDauInputSchema, CaiDatInputSchema, safeParse
+  ConfigSchema, BatDauInputSchema, safeParse
 } from '../utils/validate.js';
 
 // ─── safeParse helper ────────────────────────────────────────────────────────────
@@ -24,7 +24,6 @@ describe('safeParse helper', () => {
   it('error message chứa tên field', () => {
     const r = safeParse(LichSchema, { day_of_week: 99 });
     expect(r.ok).toBe(false);
-    // phải nêu field nào sai
     expect(r.error).toMatch(/guild_id|id|session_name|day_of_week/);
   });
 });
@@ -47,7 +46,6 @@ describe('LichSchema', () => {
     expect(r.ok).toBe(true);
   });
 
-  // boundary: day_of_week
   it.each([0,1,2,3,4,5,6])('day_of_week=%i hợp lệ', d =>
     expect(safeParse(LichSchema, { ...baseLich, day_of_week: d }).ok).toBe(true)
   );
@@ -55,7 +53,6 @@ describe('LichSchema', () => {
     expect(safeParse(LichSchema, { ...baseLich, day_of_week: d }).ok).toBe(false)
   );
 
-  // boundary: hour
   it.each([0, 23])('hour=%i hợp lệ', h =>
     expect(safeParse(LichSchema, { ...baseLich, hour: h }).ok).toBe(true)
   );
@@ -63,7 +60,6 @@ describe('LichSchema', () => {
     expect(safeParse(LichSchema, { ...baseLich, hour: h }).ok).toBe(false)
   );
 
-  // boundary: minute
   it.each([0, 59])('minute=%i hợp lệ', m =>
     expect(safeParse(LichSchema, { ...baseLich, minute: m }).ok).toBe(true)
   );
@@ -71,7 +67,6 @@ describe('LichSchema', () => {
     expect(safeParse(LichSchema, { ...baseLich, minute: m }).ok).toBe(false)
   );
 
-  // session_name
   it('session_name rỗng bị từ chối', () =>
     expect(safeParse(LichSchema, { ...baseLich, session_name: '' }).ok).toBe(false)
   );
@@ -82,7 +77,6 @@ describe('LichSchema', () => {
     expect(safeParse(LichSchema, { ...baseLich, session_name: 'x'.repeat(101) }).ok).toBe(false)
   );
 
-  // close fields nullable
   it.each([null, undefined])('close_day_of_week=%s chấp nhận', v =>
     expect(safeParse(LichSchema, { ...baseLich, close_day_of_week: v }).ok).toBe(true)
   );

@@ -1,7 +1,7 @@
 // src/commands/attendance/diemdanh.js
 'use strict';
 const { Command } = require('@sapphire/framework');
-const { SlashCommandBuilder, EmbedBuilder, MessageFlags } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const db = require('../../db.js');
 
 const STATUS_LABEL = { tham_gia: '✅ Tham gia', tre: '⏰ Trễ', co_phep: '🟡 Có phép', khong_tham_gia: '❌ Vắng' };

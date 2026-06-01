@@ -7,7 +7,7 @@
 const { EmbedBuilder } = require('discord.js');
 const db  = require('../db.js');
 const log = require('./logger.js');
-const { FOOTER_DEFAULT, buildSummaryEmbed, buildAttendanceButtons, buildClosedSessionEmbed } = require('./embeds.js');
+const { FOOTER_DEFAULT, buildAttendanceButtons, buildClosedSessionEmbed } = require('./embeds.js');
 
 const DEFAULT_BADGES = [
   { threshold:   5, emoji: '🌱', label: 'Lính Mới'     },

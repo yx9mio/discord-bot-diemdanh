@@ -1,7 +1,7 @@
 // src/commands/attendance/toi.js
 'use strict';
 const { Command } = require('@sapphire/framework');
-const { SlashCommandBuilder, EmbedBuilder, MessageFlags } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const db = require('../../db.js');
 
 class ToiCommand extends Command {
@@ -40,7 +40,6 @@ class ToiCommand extends Command {
         { name: '📊 Tỉ lệ',     value: `${rate}%`,    inline: true },
         { name: '🔥 Streak',    value: `${streak}`,   inline: true },
       )
-      .setFooter({ text: `Tổng ${total} phiên` })
       .setTimestamp();
 
     await interaction.editReply({ embeds: [embed] });

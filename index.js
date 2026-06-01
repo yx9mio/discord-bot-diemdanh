@@ -19,7 +19,7 @@ const log = require('./utils/logger.js');
 
 if (!process.env.DISCORD_TOKEN) {
   log.error('SYSTEM', null, 'Thiếu DISCORD_TOKEN trong .env!');
-  process.exit(1);
+  throw new Error('Thiếu DISCORD_TOKEN trong .env!');
 }
 
 ApplicationCommandRegistries.setDefaultBehaviorWhenNotIdentical(

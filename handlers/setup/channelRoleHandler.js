@@ -1,11 +1,10 @@
 // handlers/setup/channelRoleHandler.js — setup:channel, setup:role, setup:phai
 'use strict';
 const {
-  EmbedBuilder, ActionRowBuilder,
+  ActionRowBuilder,
   StringSelectMenuBuilder, ChannelSelectMenuBuilder,
 } = require('discord.js');
 const db = require('../../db.js');
-const { FOOTER_DEFAULT, AUTHOR_DEFAULT } = require('../../utils/embeds.js');
 const { buildDashboard }  = require('./dashboardHandler.js');
 const log = require('../../utils/logger.js');
 
