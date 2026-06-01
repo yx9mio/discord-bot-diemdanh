@@ -1,8 +1,19 @@
-# CI Pipeline
+# CI Pipeline — rebuilt
+#
 # Jobs:
-#   lint-and-test   — ESLint + Vitest + coverage report
-#   security-scan   — gitleaks secret scan
-#   dependency-review — audit new deps trên PR (chỉ chạy khi có PR vào main)
+#   lint          — ESLint --max-warnings 0, fail fast
+#   test          — Vitest + coverage (needs: lint)
+#   security      — gitleaks secret scan (blocks CI)
+#   dep-review    — audit new deps, PR vào main only
+#
+# Thay đổi so với bản cũ:
+#   - Tách 4 jobs độc lập thay vì 1 job to
+#   - Cache node_modules bằng hash package-lock.json
+#   - lint: --max-warnings 0 (warning = error)
+#   - test: fail-on-error: true (fix bản cũ để false)
+#   - security: bỏ continue-on-error, block CI nếu tìm thấy secret
+#   - timeout-minutes cho mỗi job
+
 name: CI
 
 on:
@@ -11,20 +22,21 @@ on:
   pull_request:
     branches: [main]
 
-# Huỷ run cũ cùng branch nếu có push mới đến
+# Huỷ run cũ cùng branch nếu có push mới
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  # ────────────────────────────────────────────────────
-  lint-and-test:
-    name: Lint & Test
+  # ── 1. LINT ──────────────────────────────────────────────────────────────────
+  lint:
+    name: Lint (ESLint)
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
       contents: read
-      checks: write        # cho phép annotate lỗi ESLint/test lên PR
-      pull-requests: write # đăng comment coverage summary lên PR
+      checks: write
+      pull-requests: write
 
     steps:
       - name: Checkout
@@ -36,15 +48,50 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
+      - name: Cache node_modules
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: node_modules-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: node_modules-${{ runner.os }}-
+
       - name: Install dependencies
         run: npm ci --prefer-offline
 
-      # —— Lint ————————————————————————————————————
-      - name: Lint (ESLint)
-        run: npm run lint
+      - name: Lint (ESLint — 0 warnings allowed)
+        run: npm run lint -- --max-warnings 0
 
-      # —— Test + coverage —————————————————————————————
-      # reporters + outputFile được cấu hình trong vitest.config.js
+  # ── 2. TEST ──────────────────────────────────────────────────────────────────
+  test:
+    name: Test (Vitest + Coverage)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: lint
+    permissions:
+      contents: read
+      checks: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Cache node_modules
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: node_modules-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: node_modules-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: npm ci --prefer-offline
+
       - name: Run tests (Vitest)
         run: npm test
         env:
@@ -54,7 +101,6 @@ jobs:
           DISCORD_TOKEN: test-token
           CLIENT_ID: '000000000000000000'
 
-      # —— Annotations lỗi test lên GitHub Checks —————————————
       - name: Annotate test results
         if: always()
         uses: dorny/test-reporter@v1
@@ -62,9 +108,8 @@ jobs:
           name: Vitest Results
           path: test-results/junit.xml
           reporter: java-junit
-          fail-on-error: 'false'
+          fail-on-error: 'true'
 
-      # —— Upload artifacts ——————————————————————————
       - name: Upload coverage & test results
         if: always()
         uses: actions/upload-artifact@v4
@@ -75,29 +120,32 @@ jobs:
             test-results/
           retention-days: 14
 
-  # ────────────────────────────────────────────────────
-  security-scan:
-    name: Secret Scanning
+  # ── 3. SECURITY ──────────────────────────────────────────────────────────────
+  security:
+    name: Secret Scanning (gitleaks)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout (full history)
+        uses: actions/checkout@v4
         with:
-          fetch-depth: 0   # full history cho gitleaks
+          fetch-depth: 0
 
       - name: Scan for secrets (gitleaks)
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        continue-on-error: true
+        # Không có continue-on-error — block CI nếu tìm thấy secret
 
-  # ────────────────────────────────────────────────────
-  dependency-review:
+  # ── 4. DEPENDENCY REVIEW ─────────────────────────────────────────────────────
+  dep-review:
     name: Dependency Review
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
+    timeout-minutes: 5
     permissions:
       contents: read
       pull-requests: write
