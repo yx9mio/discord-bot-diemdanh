@@ -7,8 +7,7 @@
 if (process.env.NODE_ENV !== 'development') {
   module.exports = { handleTestBot: async () => {} };
 } else {
-  const log = require('./logger.js') ?? require('../utils/logger.js');
-  async function handleTestBot(interaction) {
+  function handleTestBot(interaction) {
     const { version } = require('../package.json');
     return interaction.reply({
       content: [
