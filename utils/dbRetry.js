@@ -20,7 +20,7 @@ function isRetryable(err) {
  * @param {() => Promise<any>} fn
  * @param {{ maxAttempts?: number, baseMs?: number, label?: string }} opts
  */
-async function dbRetry(fn, { maxAttempts = 3, baseMs = 400, label = 'db' } = {}) {
+function dbRetry(fn, { maxAttempts = 3, baseMs = 400, label = 'db' } = {}) {
   return pRetry(fn, {
     retries:    maxAttempts - 1,
     minTimeout: baseMs,

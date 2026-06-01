@@ -1,49 +1,53 @@
-// utils/errorHandler.js — Centralized interaction error handler
+// utils/errorHandler.js
 'use strict';
-const { MessageFlags } = require('discord.js');
 const log = require('./logger.js');
 const { replyErr, replyErrEdit } = require('./embeds.js');
 
 let Sentry;
-try { Sentry = require('@sentry/node'); } catch (_) { Sentry = null; }
+try { Sentry = require('@sentry/node'); } catch (_e) { Sentry = null; }
 
 /**
  * Gửi thông báo lỗi về interaction theo đúng state hiện tại.
  * P5: tự động gửi exception lên Sentry nếu có DSN.
  */
 async function handleInteractionError(interaction, err, context = 'unknown') {
-  const guildId = interaction.guildId ?? null;
-  const tag     = context ? `[${context}]` : '';
+  log.error('ERROR_HANDLER', interaction.guild?.id, '[%s] %s', context, err?.message ?? err);
 
-  log.error('ERR_HANDLER', guildId, '%s %s', tag, err.stack ?? err.message);
-
-  // P5: report lên Sentry với context guild
-  if (Sentry && process.env.SENTRY_DSN) {
-    Sentry.withScope((scope) => {
-      scope.setTag('guildId', guildId ?? 'unknown');
-      scope.setTag('context', context);
-      scope.setExtra('commandName', interaction.commandName ?? interaction.customId ?? null);
-      Sentry.captureException(err);
-    });
+  if (Sentry) {
+    try { Sentry.captureException(err, { extra: { context, guildId: interaction.guild?.id } }); }
+    catch (_e) { /* Sentry unavailable */ }
   }
+
+  const msg = err?.userMessage ?? '❌ Có lỗi xảy ra. Vui lòng thử lại sau.';
+  const fallback = typeof replyErr === 'function'
+    ? replyErr(msg)
+    : { content: msg, ephemeral: true };
 
   try {
-    if (interaction.deferred) {
-      await interaction.editReply(replyErrEdit('Có lỗi xảy ra. Vui lòng thử lại.'));
-    } else if (interaction.replied) {
-      await interaction.followUp(replyErr('Có lỗi xảy ra. Vui lòng thử lại.'));
-    } else {
-      await interaction.reply(replyErr('Có lỗi xảy ra. Vui lòng thử lại.'));
-    }
-  } catch (replyErr_) {
-    log.warn('ERR_HANDLER', guildId, '%s Không thể gửi error reply: %s', tag, replyErr_.message);
-    try {
-      const fallback = { content: '❌ Có lỗi xảy ra. Vui lòng thử lại.', flags: MessageFlags.Ephemeral };
-      if (interaction.deferred)     await interaction.editReply(fallback).catch(() => {});
-      else if (interaction.replied) await interaction.followUp(fallback).catch(() => {});
-      else                          await interaction.reply(fallback).catch(() => {});
-    } catch (_) { /* hết cách — bỏ qua */ }
-  }
+    if (interaction.deferred)     await interaction.editReply(fallback).catch(() => {});
+    else if (interaction.replied) await interaction.followUp(fallback).catch(() => {});
+    else                          await interaction.reply(fallback).catch(() => {});
+  } catch (_e) { /* hết cách — bỏ qua */ }
 }
 
-module.exports = { handleInteractionError };
+async function handleCommandError(interaction, err, context = 'command') {
+  log.error('ERROR_HANDLER', interaction.guild?.id, '[%s] %s', context, err?.message ?? err);
+
+  if (Sentry) {
+    try { Sentry.captureException(err, { extra: { context } }); }
+    catch (_e) { /* Sentry unavailable */ }
+  }
+
+  const msg = err?.userMessage ?? '❌ Có lỗi xảy ra. Vui lòng thử lại sau.';
+  const fallback = typeof replyErrEdit === 'function'
+    ? replyErrEdit(msg)
+    : { content: msg, ephemeral: true };
+
+  try {
+    if (interaction.deferred)     await interaction.editReply(fallback).catch(() => {});
+    else if (interaction.replied) await interaction.followUp(fallback).catch(() => {});
+    else                          await interaction.reply(fallback).catch(() => {});
+  } catch (_e) { /* hết cách — bỏ qua */ }
+}
+
+module.exports = { handleInteractionError, handleCommandError };

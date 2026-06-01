@@ -7,7 +7,7 @@ const { buildSummaryEmbed, FOOTER_DEFAULT } = require('./embeds.js');
 
 const timers = new Map(); // guildId → { remind15, remind5, autoClose }
 
-async function datHenGioDong(client, guild, session, channelId, ms) {
+function datHenGioDong(client, guild, session, channelId, ms) {
   huyHenGio(guild.id);
 
   const t = {};
@@ -56,14 +56,12 @@ async function datHenGioDong(client, guild, session, channelId, ms) {
       const cur = await db.getActiveSession(guild.id);
       if (!cur || cur.id !== session.id) return;
 
-      // BUG-9 fix: fetch channel trước, nếu null thì vẫn đóng DB nhưng không gửi embed
       const ch = await guild.channels.fetch(channelId).catch(() => null);
 
       try {
         await db.closeSession(session.id);
       } catch (e) {
         log.error('TIMER', guild.id, 'closeSession thất bại %s: %s', session.id, e.message);
-        // Không return — tiếp tục dọn dẹp bộ nhớ dù DB fail
       }
 
       const attended = await db.getAttendances(session.id);
