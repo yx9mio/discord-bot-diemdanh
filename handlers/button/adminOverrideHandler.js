@@ -7,7 +7,7 @@ const {
 const db  = require('../../db.js');
 const log = require('../../utils/logger.js');
 const { requireAdmin }  = require('../../utils/permissions.js');
-const { replyErrEdit, replyOkEdit, _replyWarn, replyErr } = require('../../utils/embeds.js');
+const { replyErrEdit, replyOkEdit, replyErr } = require('../../utils/embeds.js');
 
 const VALID_STATUSES = ['tham_gia', 'tre', 'khong_tham_gia', 'co_phep', 'vang'];
 const STATUS_LABEL   = {

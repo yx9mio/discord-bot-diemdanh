@@ -2,6 +2,7 @@
 // Scan scheduled_sessions mỗi phút, gửi reminder vào kênh thông báo trước giờ mở phiên.
 // Hỗ trợ timezone per-guild (lưu trong guild_configs.timezone, IANA string).
 // Hỗ trợ 2 mốc nhắc (reminder_1_min, reminder_2_min) và skip_until.
+/* eslint-env node */
 'use strict';
 const db  = require('../db.js');
 const log = require('../utils/logger.js');

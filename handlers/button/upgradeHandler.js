@@ -1,7 +1,6 @@
 // handlers/button/upgradeHandler.js — Phase N: Ephemeral confirm nâng cấp
 'use strict';
 const { requireAdmin } = require('../../utils/permissions.js');
-const { _replyErrEdit } = require('../../utils/embeds.js');
 
 /**
  * Hiển thị ephemeral confirm khi admin bấm nút upgrade:confirm.
