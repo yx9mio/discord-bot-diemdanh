@@ -3,6 +3,9 @@ const js       = require('@eslint/js');
 const nPlugin  = require('eslint-plugin-n');
 
 module.exports = [
+  {
+    ignores: ['node_modules/**', 'dist/**', 'data/**', '.github/**', 'coverage/**'],
+  },
   js.configs.recommended,
 
   // ── Base config cho tất cả file CJS ──────────────────────────────────────────
@@ -49,7 +52,6 @@ module.exports = [
         URLSearchParams: 'readonly',
       },
     },
-    ignores: ['node_modules/**'],
   },
 
   // ── Override cho tests/ CJS (các file không phải ESM) ────────────────────────
