@@ -60,6 +60,7 @@ module.exports = [
       'tests/validate.test.js',
       'tests/commands.test.js',
       'tests/embeds.test.js',
+      'tests/handlers.test.js',
       'tests/scheduler.test.js',
       'tests/session.test.js',
       'tests/timeCalc.test.js',
@@ -103,6 +104,7 @@ module.exports = [
   {
     files: [
       'tests/commands.test.js',
+      'tests/handlers.test.js',
       'tests/unit/**/*.js',
       'tests/unit/**/*.ts',
       'tests/validate.test.js',
