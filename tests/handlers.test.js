@@ -1,7 +1,7 @@
 // tests/handlers.test.js
 // Kiểm tra commandHandler load + handleCommand dispatch
 'use strict';
-import { describe, it, expect, vi, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
