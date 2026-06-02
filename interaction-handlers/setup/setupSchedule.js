@@ -10,6 +10,7 @@ const db = require('../../db.js');
 const log = require('../../utils/logger.js');
 const { ScheduleView } = require('../../src/commands/setup/ScheduleView.js');
 const { CUSTOM_ID } = ScheduleView;
+const { openTypeModal } = require('./setupScheduleAddTypeModal.js');
 
 class SetupScheduleHandler extends InteractionHandler {
   constructor(ctx, options) {
@@ -21,11 +22,18 @@ class SetupScheduleHandler extends InteractionHandler {
     if (id === 'setup:sch') return this.some();
     if (id === CUSTOM_ID.PAGE_NEXT || id === CUSTOM_ID.PAGE_PREV) return this.some();
     if (id?.startsWith(CUSTOM_ID.DEL_PREFIX)) return this.some();
+    if (id === CUSTOM_ID.ADD) return this.some();
     return this.none();
   }
 
   async run(interaction) {
     const { customId, guild } = interaction;
+
+    // Thêm lịch → mở Modal 1 (Loại)
+    if (customId === CUSTOM_ID.ADD) {
+      return openTypeModal(interaction);
+    }
+
     await interaction.deferUpdate();
 
     // Xoá 1 lịch
