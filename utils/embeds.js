@@ -1,6 +1,6 @@
 // utils/embeds.js — Tất cả embed builders & button builders
 'use strict';
-const { EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder, StringSelectMenuBuilder, MessageFlags } = require('discord.js');
+const { EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder, MessageFlags } = require('discord.js');
 
 // ─── Palette & Icons ────────────────────────────────────────────────
 const COLORS = {
@@ -563,9 +563,6 @@ function buildConfigEmbed(cfg) {
     flags: MessageFlags.Ephemeral,
   };
 }
-
-// ─── Setup Menu ───────────────────
-// (rest of file truncated in read — export block follows)
 
 module.exports = {
   COLORS, ICONS, FOOTER_DEFAULT, AUTHOR_DEFAULT, COLOR_GOLD,
