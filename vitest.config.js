@@ -7,8 +7,7 @@ export default defineConfig({
     environment: 'node',
     isolate: true,
     include: [
-      'tests/unit/**/*.test.js',
-      'tests/smoke/**/*.test.js',
+      'tests/**/*.test.js',
     ],
     exclude: [
       'tests/integration/**',
