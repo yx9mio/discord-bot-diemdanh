@@ -130,7 +130,8 @@ describe('run() — điểm danh thành công', () => {
   });
 
   it('gọi deferReply ephemeral trước khi xử lý', async () => {
-    await handler.run(makeInteraction('attendance:join'));
+    const interaction = makeInteraction('attendance:join');
+    await handler.run(interaction);
     expect(interaction.deferReply).toHaveBeenCalledWith({ ephemeral: true });
   });
 
