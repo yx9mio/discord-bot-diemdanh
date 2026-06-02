@@ -69,6 +69,12 @@ async function upsertGuildConfig(config) {
   return data;
 }
 
+// Alias tiện dụng: setGuildConfig(guildId, patch) → upsert patch kèm guild_id.
+// Tránh caller phải tự truyền guild_id (dễ quên).
+function setGuildConfig(guildId, patch) {
+  return upsertGuildConfig({ ...patch, guild_id: guildId });
+}
+
 const getConfig = getGuildConfig;
 
 // ─── Sessions ───────────────────────────────────────────────────────────────────────────────────────────
@@ -441,7 +447,7 @@ const createLichCoDinh    = createScheduledSession;
 const updateLichCoDinh    = updateScheduledSession;
 const deleteLichCoDinh    = deleteScheduledSession;
 
-function themLichCoDinh(guildId, { dayOfWeek, hour, minute, sessionName, closeDayOfWeek, closeHour, closeMinute, phaiRoleIds, channelId, allowedRoleId, reminder1Min, reminder2Min }) {
+function themLichCoDinh(guildId, { dayOfWeek, hour, minute, sessionName, closeDayOfWeek, closeHour, closeMinute, preCloseMinutes, phaiRoleIds, channelId, allowedRoleId, reminder1Min, reminder2Min }) {
   return createScheduledSession({
     guild_id:           guildId,
     day_of_week:        dayOfWeek,
@@ -451,6 +457,7 @@ function themLichCoDinh(guildId, { dayOfWeek, hour, minute, sessionName, closeDa
     close_day_of_week:  closeDayOfWeek ?? null,
     close_hour:         closeHour ?? null,
     close_minute:       closeMinute ?? null,
+    pre_close_minutes:  preCloseMinutes ?? 30,
     phai_role_ids:      phaiRoleIds ?? [],
     allowed_role_id:    allowedRoleId ?? null,
     channel_id:         channelId,
@@ -461,7 +468,7 @@ function themLichCoDinh(guildId, { dayOfWeek, hour, minute, sessionName, closeDa
   });
 }
 
-function suaLichCoDinh(guildId, id, { dayOfWeek, hour, minute, sessionName, closeDayOfWeek, closeHour, closeMinute, channelId, allowedRoleId, reminder1Min, reminder2Min }) {
+function suaLichCoDinh(guildId, id, { dayOfWeek, hour, minute, sessionName, closeDayOfWeek, closeHour, closeMinute, preCloseMinutes, channelId, allowedRoleId, reminder1Min, reminder2Min }) {
   return updateScheduledSession(id, {
     day_of_week:       dayOfWeek,
     hour,
@@ -470,6 +477,7 @@ function suaLichCoDinh(guildId, id, { dayOfWeek, hour, minute, sessionName, clos
     close_day_of_week: closeDayOfWeek ?? null,
     close_hour:        closeHour ?? null,
     close_minute:      closeMinute ?? null,
+    pre_close_minutes: preCloseMinutes ?? undefined,
     channel_id:        channelId,
     allowed_role_id:   allowedRoleId ?? null,
     reminder_1_min:    reminder1Min ?? undefined,
@@ -614,7 +622,7 @@ async function getAllAttendances(guildId, limit = 5000) {
 
 module.exports = {
   // Guild config
-  getGuildConfig, upsertGuildConfig,
+  getGuildConfig, upsertGuildConfig, setGuildConfig,
   getConfig,
 
   // Sessions

@@ -23,10 +23,11 @@ class SetupCommand extends Command {
     const { guild } = interaction;
     const cfg = await db.getGuildConfig(guild.id);
 
+    const schedules = await db.getScheduledSessions(guild.id);
     const steps = [
       `${cfg.log_channel_id ? '✅' : '⬜'} **Kênh log** — \`/caidat kenh_log\``,
       `${(cfg.phai_role_ids ?? []).length ? '✅' : '⬜'} **Phái** — \`/caidatphai them\``,
-      `${(cfg.schedules ?? []).length ? '✅' : '⬜'} **Lịch cố định** — \`/lichcodinh them\``,
+      `${schedules.length ? '✅' : '⬜'} **Lịch cố định** — \`/lichcodinh them\``,
       `${cfg.timezone ? '✅' : '⬜'} **Timezone** — \`/caidat timezone\` (hiện tại: ${cfg.timezone ?? 'Asia/Ho_Chi_Minh'})`,
     ];
 

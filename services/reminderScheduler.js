@@ -73,8 +73,8 @@ async function processOneReminder(guild, cfg, sched, now, tz) {
 
 function getMinutesToOpen(sched, now, _tz) {
   try {
-    if (!sched.open_hour && sched.open_hour !== 0) return null;
-    const target = now.set({ hour: sched.open_hour, minute: sched.open_minute ?? 0, second: 0, millisecond: 0 });
+    if (sched.hour == null) return null;
+    const target = now.set({ hour: sched.hour, minute: sched.minute ?? 0, second: 0, millisecond: 0 });
     const diffMin = Math.round(target.diff(now, 'minutes').minutes);
     return diffMin >= 0 ? diffMin : null;
   } catch (_e) {

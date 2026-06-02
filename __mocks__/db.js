@@ -8,6 +8,7 @@ const db = {
   // Guild config
   getGuildConfig:           vi.fn().mockResolvedValue(null),
   upsertGuildConfig:        vi.fn().mockResolvedValue(null),
+  setGuildConfig:           vi.fn().mockResolvedValue(null),
   getConfig:                vi.fn().mockResolvedValue(null),
 
   // Sessions

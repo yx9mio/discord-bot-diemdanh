@@ -5,19 +5,20 @@ const { fromZodError }            = require('zod-validation-error');
 
 // ─── Scheduled session (lịch cố định) ────────────────────────────────────────
 const LichSchema = z.object({
-  id:                z.string().uuid(),
-  guild_id:          z.string().min(1),
-  channel_id:        z.string().min(1),
-  session_name:      z.string().min(1).max(100),
-  day_of_week:       z.number().int().min(0).max(6),
-  hour:              z.number().int().min(0).max(23),
-  minute:            z.number().int().min(0).max(59),
-  close_day_of_week: z.number().int().min(0).max(6).nullable().optional(),
-  close_hour:        z.number().int().min(0).max(23).nullable().optional(),
-  close_minute:      z.number().int().min(0).max(59).nullable().optional(),
-  allowed_role_id:   z.string().nullable().optional(),
-  phai_role_ids:     z.array(z.string()).nullable().optional(),
-  is_active:         z.boolean().optional(),
+  id:                 z.string().uuid(),
+  guild_id:           z.string().min(1),
+  channel_id:         z.string().min(1),
+  session_name:       z.string().min(1).max(100),
+  day_of_week:        z.number().int().min(0).max(6),
+  hour:               z.number().int().min(0).max(23),
+  minute:             z.number().int().min(0).max(59),
+  close_day_of_week:  z.number().int().min(0).max(6).nullable().optional(),
+  close_hour:         z.number().int().min(0).max(23).nullable().optional(),
+  close_minute:       z.number().int().min(0).max(59).nullable().optional(),
+  pre_close_minutes:  z.number().int().min(0).max(180).optional().default(30),
+  allowed_role_id:    z.string().nullable().optional(),
+  phai_role_ids:      z.array(z.string()).nullable().optional(),
+  is_active:          z.boolean().optional(),
 });
 
 // ─── Session row (từ DB) ──────────────────────────────────────────────────────

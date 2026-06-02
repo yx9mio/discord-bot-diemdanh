@@ -38,12 +38,13 @@ class CaiDatCommand extends Command {
     const cfg  = await db.getGuildConfig(guild.id);
 
     if (sub === 'xem') {
+      const schedules = await db.getScheduledSessions(guild.id);
       const embed = new EmbedBuilder().setColor(0x01696f).setTitle('⚙️ Cài đặt server')
         .addFields(
           { name: '📢 Kênh log',   value: cfg.log_channel_id ? `<#${cfg.log_channel_id}>` : '_Chưa cài_', inline: true },
           { name: '🌏 Timezone',   value: cfg.timezone ?? 'Asia/Ho_Chi_Minh',                               inline: true },
           { name: '🎭 Phái',        value: (cfg.phai_role_ids ?? []).map(r => `<@&${r}>`).join(', ') || 'Tất cả', inline: false },
-          { name: '🔔 Lịch cố định', value: (cfg.schedules ?? []).length ? `${(cfg.schedules ?? []).length} lịch` : '_Chưa cài_', inline: true },
+          { name: '🔔 Lịch cố định', value: schedules.length ? `${schedules.length} lịch` : '_Chưa cài_', inline: true },
           { name: '⏰ Nhắc nhở',    value: cfg.reminder_enabled === false ? '⛔ Tắt' : '✅ Bật',                inline: true },
         )
         .setFooter({ text: FOOTER_DEFAULT })

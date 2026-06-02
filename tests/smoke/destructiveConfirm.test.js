@@ -21,13 +21,15 @@ function mockModule(modulePath, exports) {
 }
 
 mockModule('../../db.js', {
-  getActiveSession: (...a) => mockGetActiveSession(...a),
-  getSessionById:   (...a) => mockGetSessionById(...a),
-  cancelSession:    (...a) => mockCancelSession(...a),
-  getGuildConfig:   (...a) => mockGetGuildConfig(...a),
-  setGuildConfig:   (...a) => mockSetGuildConfig(...a),
-  deleteMember:     (...a) => mockDeleteMember(...a),
-  resetStreak:      (...a) => mockResetStreak(...a),
+  getActiveSession:        (...a) => mockGetActiveSession(...a),
+  getSessionById:          (...a) => mockGetSessionById(...a),
+  cancelSession:           (...a) => mockCancelSession(...a),
+  getGuildConfig:          (...a) => mockGetGuildConfig(...a),
+  setGuildConfig:          (...a) => mockSetGuildConfig(...a),
+  deleteMember:            (...a) => mockDeleteMember(...a),
+  resetStreak:             (...a) => mockResetStreak(...a),
+  getScheduledSessions:    vi.fn().mockResolvedValue([]),
+  deleteScheduledSession:  vi.fn().mockResolvedValue(null),
 });
 
 mockModule('../../utils/logger.js', {
@@ -208,7 +210,7 @@ describe('huy:confirm', () => {
 describe('caidat:reset:confirm', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('gọi setGuildConfig với defaults', async () => {
+  it('gọi setGuildConfig với defaults (không còn schedules cũ)', async () => {
     mockSetGuildConfig.mockResolvedValue(null);
     const i = makeInteraction('caidat:reset:confirm');
     await handler.run(i);
@@ -216,7 +218,6 @@ describe('caidat:reset:confirm', () => {
       log_channel_id: null,
       timezone: 'Asia/Ho_Chi_Minh',
       phai_role_ids: [],
-      schedules: [],
     }));
   });
 
@@ -233,16 +234,23 @@ describe('caidat:reset:confirm', () => {
 describe('lichcd:delall:confirm', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('gọi setGuildConfig với schedules=[]', async () => {
-    mockSetGuildConfig.mockResolvedValue(null);
-    mockGetGuildConfig.mockResolvedValue({ auto_schedule_enabled: true });
+  it('gọi deleteScheduledSession cho từng lịch', async () => {
+    const delFn = require('../../db.js').deleteScheduledSession;
+    delFn.mockClear();
+    delFn.mockResolvedValue(null);
+    require('../../db.js').getScheduledSessions.mockResolvedValueOnce([
+      { id: 's1' }, { id: 's2' }, { id: 's3' },
+    ]);
     const i = makeInteraction('lichcd:delall:confirm');
     await handler.run(i);
-    expect(mockSetGuildConfig).toHaveBeenCalledWith('g1', { schedules: [] });
+    expect(delFn).toHaveBeenCalledTimes(3);
+    expect(delFn).toHaveBeenCalledWith('s1');
+    expect(delFn).toHaveBeenCalledWith('s2');
+    expect(delFn).toHaveBeenCalledWith('s3');
   });
 
-  it('editReply lỗi khi setGuildConfig throw', async () => {
-    mockSetGuildConfig.mockRejectedValue(new Error('fail'));
+  it('editReply lỗi khi getScheduledSessions throw', async () => {
+    require('../../db.js').getScheduledSessions.mockRejectedValueOnce(new Error('fail'));
     const i = makeInteraction('lichcd:delall:confirm');
     await handler.run(i);
     expect(i.editReply).toHaveBeenCalledWith(expect.objectContaining({

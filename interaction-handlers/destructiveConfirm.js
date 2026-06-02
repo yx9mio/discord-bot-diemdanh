@@ -126,8 +126,12 @@ async function handleCaidatResetConfirm(interaction) {
       log_channel_id: null,
       timezone: 'Asia/Ho_Chi_Minh',
       phai_role_ids: [],
-      schedules: [],
     });
+    // Xoá hết lịch trong table
+    const schedules = await db.getScheduledSessions(guild.id);
+    for (const s of schedules) {
+      await db.deleteScheduledSession(s.id).catch(() => null);
+    }
   } catch (e) {
     log.error('CAIDATRESET', guild.id, 'reset thất bại: %s', e.message);
     return interaction.editReply({ content: '❌ Không thể reset, thử lại sau.', embeds: [], components: [] });
@@ -143,14 +147,16 @@ async function handleLichcdDelAllConfirm(interaction) {
   const { guild } = interaction;
   await interaction.deferUpdate();
   try {
-    await db.setGuildConfig(guild.id, { schedules: [] });
+    const schedules = await db.getScheduledSessions(guild.id);
+    for (const s of schedules) {
+      await db.deleteScheduledSession(s.id).catch(() => null);
+    }
   } catch (e) {
     log.error('LICHDDELALL', guild.id, 'delete-all-schedules thất bại: %s', e.message);
     return interaction.editReply({ content: '❌ Không thể xóa, thử lại sau.', embeds: [], components: [] });
   }
   const { buildLichcdEmbed, buildScheduleDeleteRows } = require('../src/commands/schedule/lichcodinh.js');
-  const cfg = await db.getGuildConfig(guild.id);
-  const embed = buildLichcdEmbed([], cfg.auto_schedule_enabled);
+  const embed = buildLichcdEmbed([]);
   const rows  = buildScheduleDeleteRows([]);
   return interaction.editReply({ embeds: [embed], components: rows });
 }

@@ -1,12 +1,13 @@
 // tests/smoke/lichcdDelete.test.js
-// Test cho inline delete handler: lichcd:del:<idx>
+// Test cho inline delete handler: lichcd:del:<scheduleId>
+// (Commit 2: dùng table scheduled_sessions thay cho JSON cfg.schedules)
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 
-const mockGetGuildConfig = vi.fn();
-const mockSetGuildConfig = vi.fn();
-const mockBuildLichcdEmbed = vi.fn().mockReturnValue({ _embed: 'rebuilt' });
+const mockDeleteScheduledSession = vi.fn();
+const mockGetScheduledSessions   = vi.fn();
+const mockBuildLichcdEmbed        = vi.fn().mockReturnValue({ _embed: 'rebuilt' });
 const mockBuildScheduleDeleteRows = vi.fn().mockReturnValue([{ _row: 'new' }]);
 
 function mockModule(modulePath, exports) {
@@ -18,8 +19,8 @@ function mockModule(modulePath, exports) {
 }
 
 mockModule('../../db.js', {
-  getGuildConfig: (...a) => mockGetGuildConfig(...a),
-  setGuildConfig: (...a) => mockSetGuildConfig(...a),
+  deleteScheduledSession: (...a) => mockDeleteScheduledSession(...a),
+  getScheduledSessions:   (...a) => mockGetScheduledSessions(...a),
 });
 
 mockModule('../../utils/logger.js', {
@@ -54,8 +55,8 @@ const makeInteraction = (customId, overrides = {}) => ({
 const handler = new LichcdDeleteHandler({}, {});
 
 describe('parse()', () => {
-  it('match lichcd:del:<idx> với mọi index', () => {
-    for (const id of ['lichcd:del:0', 'lichcd:del:1', 'lichcd:del:99']) {
+  it('match lichcd:del:<id> với mọi id', () => {
+    for (const id of ['lichcd:del:uuid-1', 'lichcd:del:abc-123']) {
       expect(handler.parse(makeInteraction(id))).toBeTruthy();
     }
   });
@@ -69,28 +70,17 @@ describe('parse()', () => {
 describe('run()', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('xóa schedule tại idx, save DB, rebuild embed + rows', async () => {
-    mockGetGuildConfig.mockResolvedValue({
-      schedules: [
-        { day_of_week: 1, hour: 20, minute: 0, session_name: 'A' },
-        { day_of_week: 3, hour: 21, minute: 0, session_name: 'B' },
-        { day_of_week: 5, hour: 22, minute: 0, session_name: 'C' },
-      ],
-      auto_schedule_enabled: true,
-    });
-    mockSetGuildConfig.mockResolvedValue(null);
-    const i = makeInteraction('lichcd:del:1');
+  it('xóa schedule theo id, rebuild embed + rows từ table', async () => {
+    mockDeleteScheduledSession.mockResolvedValue(null);
+    mockGetScheduledSessions.mockResolvedValue([
+      { id: 'uuid-1', day_of_week: 1, hour: 20, minute: 0, session_name: 'A' },
+      { id: 'uuid-3', day_of_week: 5, hour: 22, minute: 0, session_name: 'C' },
+    ]);
+    const i = makeInteraction('lichcd:del:uuid-2');
     await handler.run(i);
-    expect(mockSetGuildConfig).toHaveBeenCalledWith('g1', {
-      schedules: [
-        { day_of_week: 1, hour: 20, minute: 0, session_name: 'A' },
-        { day_of_week: 5, hour: 22, minute: 0, session_name: 'C' },
-      ],
-    });
-    expect(mockBuildLichcdEmbed).toHaveBeenCalledWith(
-      expect.any(Array),
-      true,
-    );
+    expect(mockDeleteScheduledSession).toHaveBeenCalledWith('uuid-2');
+    expect(mockGetScheduledSessions).toHaveBeenCalledWith('g1');
+    expect(mockBuildLichcdEmbed).toHaveBeenCalledWith(expect.any(Array));
     expect(i.editReply).toHaveBeenCalledOnce();
     const arg = i.editReply.mock.calls[0][0];
     expect(arg.embeds).toEqual([{ _embed: 'rebuilt' }]);
@@ -101,50 +91,31 @@ describe('run()', () => {
     }));
   });
 
-  it('idx ngoài range → followUp ephemeral warning', async () => {
-    mockGetGuildConfig.mockResolvedValue({ schedules: [{ day_of_week: 1, hour: 20, minute: 0 }] });
-    const i = makeInteraction('lichcd:del:5');
+  it('deleteScheduledSession throw → followUp ephemeral error', async () => {
+    mockDeleteScheduledSession.mockRejectedValue(new Error('db error'));
+    const i = makeInteraction('lichcd:del:uuid-1');
     await handler.run(i);
     expect(i.editReply).not.toHaveBeenCalled();
     expect(i.followUp).toHaveBeenCalledWith(expect.objectContaining({
-      content: expect.stringContaining('đã bị xóa trước đó'),
+      content: expect.stringContaining('Không thể xoá'),
       ephemeral: true,
     }));
   });
 
-  it('idx âm → followUp warning', async () => {
-    mockGetGuildConfig.mockResolvedValue({ schedules: [{ day_of_week: 1, hour: 20, minute: 0 }] });
-    const i = makeInteraction('lichcd:del:-1');
-    await handler.run(i);
-    expect(i.followUp).toHaveBeenCalledWith(expect.objectContaining({
-      content: expect.stringContaining('đã bị xóa trước đó'),
-    }));
-  });
-
-  it('schedules rỗng → followUp warning', async () => {
-    mockGetGuildConfig.mockResolvedValue({ schedules: [] });
-    const i = makeInteraction('lichcd:del:0');
-    await handler.run(i);
-    expect(i.followUp).toHaveBeenCalledWith(expect.objectContaining({
-      content: expect.stringContaining('đã bị xóa trước đó'),
-    }));
-  });
-
-  it('customId không phải số → không làm gì (silent return)', async () => {
-    const i = makeInteraction('lichcd:del:abc');
+  it('customId không có id (empty) → silent return', async () => {
+    const i = makeInteraction('lichcd:del:');
     await handler.run(i);
     expect(i.deferUpdate).toHaveBeenCalledOnce();
     expect(i.editReply).not.toHaveBeenCalled();
-    expect(mockGetGuildConfig).not.toHaveBeenCalled();
+    expect(mockDeleteScheduledSession).not.toHaveBeenCalled();
   });
 
-  it('truyền auto_schedule_enabled=false vào buildLichcdEmbed', async () => {
-    mockGetGuildConfig.mockResolvedValue({
-      schedules: [{ day_of_week: 1, hour: 20, minute: 0 }, { day_of_week: 3, hour: 21, minute: 0 }],
-      auto_schedule_enabled: false,
-    });
-    mockSetGuildConfig.mockResolvedValue(null);
-    await handler.run(makeInteraction('lichcd:del:0'));
-    expect(mockBuildLichcdEmbed).toHaveBeenCalledWith(expect.any(Array), false);
+  it('sau khi xóa, lấy lại danh sách mới từ DB', async () => {
+    mockDeleteScheduledSession.mockResolvedValue(null);
+    const afterDelete = [{ id: 'uuid-2' }];
+    mockGetScheduledSessions.mockResolvedValue(afterDelete);
+    await handler.run(makeInteraction('lichcd:del:uuid-1'));
+    expect(mockBuildLichcdEmbed).toHaveBeenCalledWith(afterDelete);
+    expect(mockBuildScheduleDeleteRows).toHaveBeenCalledWith(afterDelete);
   });
 });
