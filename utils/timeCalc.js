@@ -70,4 +70,21 @@ function msToCloseFromNow(openDay, openH, openM, closeDay, closeH, closeM, sessi
   return openedAt + duration - Date.now();
 }
 
-module.exports = { nowVN, msToNextWeekday, msFromOpenToClose, msToCloseFromNow };
+/**
+ * Format số giây thành chuỗi đọc được (VD: "1g 2p", "45p", "0 giây")
+ * @param {number} seconds
+ * @returns {string}
+ */
+function formatDuration(seconds) {
+  if (!seconds || seconds <= 0) return '0 giây';
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.floor(seconds % 60);
+  if (h > 0 && m > 0) return `${h}g ${m}p`;
+  if (h > 0) return `${h}g`;
+  if (m > 0 && s > 0) return `${m}p ${s}s`;
+  if (m > 0) return `${m}p`;
+  return `${s} giây`;
+}
+
+module.exports = { nowVN, msToNextWeekday, msFromOpenToClose, msToCloseFromNow, formatDuration };
