@@ -5,13 +5,17 @@ const { createClient } = require('@supabase/supabase-js');
 const log = require('./utils/logger.js');
 const { SessionSchema, AttendanceSchema, safeParse } = require('./utils/validate.js');
 
-// ─── Lazy-init Supabase client ────────────────────────────────────────────────
+// ─── Lazy-init Supabase client ─────────────────────────────────────────────────
 // Không khởi tạo ngay khi require() để tránh crash trong môi trường test
 // (Node.js 20 không có native WebSocket, Supabase Realtime sẽ throw ngay).
 // Client chỉ được tạo lần đầu tiên khi một hàm DB thực sự được gọi.
 let _supabase = null;
 function getClient() {
   if (!_supabase) {
+    // Guard: fail fast trong môi trường test/CI không có env
+    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_KEY) {
+      throw new Error('[DB] SUPABASE_URL hoặc SUPABASE_KEY chưa được cấu hình. Kiểm tra file .env');
+    }
     _supabase = createClient(
       process.env.SUPABASE_URL,
       process.env.SUPABASE_KEY
@@ -45,16 +49,14 @@ function _validateAttendances(rows, ctx) {
   });
 }
 
-// ─── Guild config ───────────────────────────────────────────────────────────────────────────
-
-async function getGuildConfig(guildId) {
-  const { data, error } = await getClient()
+// ─── Guild config ───────────────────────────────────────────────────────────────────────────────────────
+function getGuildConfig(guildId) {
+  return getClient()
     .from('guild_configs')
     .select('*')
     .eq('guild_id', guildId)
-    .maybeSingle();
-  _throwSupabase(error, 'getGuildConfig');
-  return data;
+    .maybeSingle()
+    .then(({ data, error }) => { _throwSupabase(error, 'getGuildConfig'); return data; });
 }
 
 async function upsertGuildConfig(config) {
@@ -69,7 +71,7 @@ async function upsertGuildConfig(config) {
 
 const getConfig = getGuildConfig;
 
-// ─── Sessions ───────────────────────────────────────────────────────────────────────────────────
+// ─── Sessions ───────────────────────────────────────────────────────────────────────────────────────────
 
 async function createSession(payload) {
   const { data, error } = await getClient()
@@ -194,7 +196,7 @@ async function getAllSessions(guildId) {
 
 const getSessionHistory = getRecentSessions;
 
-// ─── Attendances ──────────────────────────────────────────────────────────────────────────────
+// ─── Attendances ─────────────────────────────────────────────────────────────────────────────────────────
 
 async function upsertAttendance(payload) {
   const { data, error } = await getClient()
@@ -252,7 +254,7 @@ async function getAttendanceStats(guildId, userId) {
   return data ?? [];
 }
 
-// ─── Member stats ────────────────────────────────────────────────────────────────────────────
+// ─── Member stats ──────────────────────────────────────────────────────────────────────────────────────────
 
 async function getMemberStats(guildId, userId) {
   const { data, error } = await getClient()
@@ -305,7 +307,7 @@ async function batchUpsertMemberStats(guildId, patches) {
   _throwSupabase(error, 'batchUpsertMemberStats');
 }
 
-// ─── Badges ─────────────────────────────────────────────────────────────────────────────────────
+// ─── Badges ─────────────────────────────────────────────────────────────────────────────────────────────────
 
 async function getBadgeDefinitions(guildId) {
   const { data, error } = await getClient()
@@ -350,7 +352,7 @@ function upsertMemberBadge(guildId, userId, threshold) {
   return upsertUserBadge({ guild_id: guildId, user_id: userId, threshold });
 }
 
-// ─── Scheduled sessions ───────────────────────────────────────────────────────────────────
+// ─── Scheduled sessions ──────────────────────────────────────────────────────────────────────────────────
 
 async function getScheduledSessions(guildId) {
   const { data, error } = await getClient()
@@ -424,7 +426,7 @@ function themLichCoDinh(guildId, { dayOfWeek, hour, minute, sessionName, closeDa
     day_of_week:        dayOfWeek,
     hour,
     minute,
-    session_name:       sessionName ?? 'Điểm danh',
+    session_name:       sessionName ?? 'Diểm danh',
     close_day_of_week:  closeDayOfWeek ?? null,
     close_hour:         closeHour ?? null,
     close_minute:       closeMinute ?? null,
@@ -458,7 +460,7 @@ function xoaLichCoDinh(_guildId, id) {
   return deleteScheduledSession(id);
 }
 
-// ─── Exports ───────────────────────────────────────────────────────────────────────────────────
+// ─── Exports ─────────────────────────────────────────────────────────────────────────────────────────────
 
 module.exports = {
   // Guild config
