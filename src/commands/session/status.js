@@ -5,8 +5,8 @@ const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const db = require('../../db.js');
 
 const DAY_NAMES = ['CN','T2','T3','T4','T5','T6','T7'];
-const STATUS_EMOJI = { tham_gia: '✅', khong_tham_gia: '❌', tre: '⏰', co_phep: '🟡' };
-void STATUS_EMOJI; // intentionally kept for future use
+const _STATUS_EMOJI = { tham_gia: '✅', khong_tham_gia: '❌', tre: '⏰', co_phep: '🟡' };
+void _STATUS_EMOJI;
 
 function fmtTs(iso) {
   if (!iso) return '—';

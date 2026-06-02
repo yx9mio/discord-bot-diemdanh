@@ -90,7 +90,6 @@ describe('buildSummaryEmbed', () => {
   });
   it('guild={} không crash', async () => {
     const { buildSummaryEmbed } = await import('../utils/embeds.js');
-    // guild là object rỗng — iconURL sẽ là undefined, không crash vì embeds.js dùng ?.iconURL()
     expect(() => buildSummaryEmbed(makeSession(), makeAttended(), {})).not.toThrow();
   });
   it('guild đầy đủ method không crash', async () => {
