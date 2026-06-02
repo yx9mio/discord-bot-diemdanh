@@ -13,16 +13,17 @@ function findCmdFiles(dir) {
   for (const f of readdirSync(dir)) {
     const p = join(dir, f);
     if (statSync(p).isDirectory()) out = out.concat(findCmdFiles(p));
-    else if (f.endsWith('.js') && f !== 'test_bot.js') out.push(p);
+    else if (f.endsWith('.js') && f !== 'test_bot.js' && !f.endsWith('View.js')) out.push(p);
   }
   return out;
 }
 
 function fileToCmdName(filename) {
-  // Map: batdau.js → bat_dau, ketthuc.js → ket_thuc
+  // Map: batdau.js → bat_dau, ketthuc.js → ket_thuc, setupCommand.js → setup
   return filename
     .replace(/dau$/,  '_dau')
     .replace(/thuc$/, '_thuc')
+    .replace(/Command$/, '')
     .replace(/\.js$/, '');
 }
 
@@ -46,8 +47,9 @@ describe('Commands contract', () => {
     ].map(c => c.name);
     const fileSet = new Set(files);
     const missing = registryNames.filter(name => {
-      const fileForm = name.replace('_dau', 'dau').replace('_thuc', 'thuc');
-      return !fileSet.has(fileForm);
+      // Try: bat_dau → batdau, setup → setup OR setupCommand
+      const base = name.replace('_dau', 'dau').replace('_thuc', 'thuc');
+      return !fileSet.has(base) && !fileSet.has(`${base}Command`);
     });
     expect(missing, `Missing files: ${missing.join(', ')}`).toEqual([]);
   });

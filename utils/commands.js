@@ -127,7 +127,9 @@ const COMMANDS = [
     desc: 'Cài đặt danh sách role phái được điểm danh', ephemeral: true,
     detail: '4 subcommand: xem / them / xoa / xoa_tat_ca.' },
   { name: 'setup',         category: 'CAI_DAT',    audience: 'admin',
-    desc: 'Hướng dẫn cài đặt nhanh cho server mới', ephemeral: true },
+    desc: 'Bảng điều khiển — quản lý lịch, thành viên, phiên, cài đặt', ephemeral: true,
+    detail: 'Smart Home dashboard với 4 sections: Phiên đang mở, Cài đặt chung, Lịch cố định, Thành viên.\n'
+      + 'Đây là hub duy nhất cho mọi thao tác quản trị — không cần nhớ subcommand.' },
   { name: 'log',           category: 'CAI_DAT',    audience: 'admin',
     desc: 'Xem log hoạt động của bot', ephemeral: true },
   { name: 'quanly',        category: 'CAI_DAT',    audience: 'admin',
