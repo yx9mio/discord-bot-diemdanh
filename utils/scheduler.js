@@ -1,18 +1,15 @@
 'use strict';
 // utils/scheduler.js
-// Không import EmbedBuilder trực tiếp — dùng buildSummaryEmbed từ embeds.js
-// để tránh mock issue trong vitest (discord.js CJS mock không intercept require)
 const db  = require('../db.js');
 const log = require('./logger.js');
 const { msToNextWeekday, msFromOpenToClose, msToCloseFromNow } = require('./timeCalc.js');
-const { buildAttendanceButtons, buildSummaryEmbed, buildClosedSessionEmbed, FOOTER_DEFAULT } = require('./embeds.js');
+const { buildAttendanceButtons, buildSummaryEmbed, buildClosedSessionEmbed } = require('./embeds.js');
 const { ketThucPhien, thongBaoHuyHieu, guiCsvDinhKem } = require('./session.js');
 const { LichSchema, safeParse } = require('./validate.js');
 
 // Map<guildId, Map<key, timeoutId>>
 const schedulerMap = new Map();
 
-// M-1: floor tối thiểu tránh reschedule tại chỗ nếu msToNextWeekday trả về gần 0
 const MIN_RESCHEDULE_MS = 5_000;
 
 function _setTimer(guildId, key, tid) {
@@ -23,7 +20,7 @@ function _setTimer(guildId, key, tid) {
   gMap.set(key, tid);
 }
 
-// ── Lên lịch mở phiên theo tuần ────────────────────────────────────────────────
+// ── Lên lịch mở phiên theo tuần ────────────────────────────────────────────
 // eslint-disable-next-line require-await
 async function scheduleLichCoDinh(client, guildId, lich) {
   const v = safeParse(LichSchema, lich);
@@ -73,7 +70,7 @@ async function scheduleLichCoDinh(client, guildId, lich) {
   _setTimer(guildId, `${lich.id}_open`, tidO);
 }
 
-// ── Mở phiên ──────────────────────────────────────────────────────────────────
+// ── Mở phiên ──────────────────────────────────────────────────────────────
 async function _moPhien(guild, lich) {
   const existing = await db.getActiveSession(guild.id);
   if (existing) {
@@ -112,7 +109,7 @@ async function _moPhien(guild, lich) {
   return { ok: true, session };
 }
 
-// ── Đóng phiên ────────────────────────────────────────────────────────────────
+// ── Đóng phiên ───────────────────────────────────────────────────────────
 async function runDongLich(client, guildId, lich, silent = false) {
   const g = client.guilds.cache.get(guildId);
   if (!g) return;
@@ -145,8 +142,6 @@ async function _dongPhienVaThongKe(guild, session, ch, lich, client, silent = fa
   } catch (_e) { /* cập nhật message đã xóa — bỏ qua */ }
 
   if (!silent) {
-    // Dùng buildSummaryEmbed thay vì tạo EmbedBuilder trực tiếp
-    // → embeds.js đã được mock trong test, tránh lỗi discord.js require
     const summaryEmbed = buildSummaryEmbed(session, attended, guild);
     await ch.send({ embeds: [summaryEmbed] });
 
@@ -157,7 +152,7 @@ async function _dongPhienVaThongKe(guild, session, ch, lich, client, silent = fa
   log.info('SCHEDULER', guild.id, '%s — đã đóng%s: %s', guild.name, silent ? ' (silent)' : '', session.session_name);
 }
 
-// ── Reschedule close sau bot restart ──────────────────────────────────────────
+// ── Reschedule close sau bot restart ────────────────────────────────────
 async function _khoiPhucCloseTimer(client, guild, danhSach) {
   const session = await db.getActiveSession(guild.id);
   if (!session || session.started_by !== 'scheduler' || session.auto_close_at != null) return;
@@ -191,7 +186,7 @@ async function _khoiPhucCloseTimer(client, guild, danhSach) {
   }
 }
 
-// ── Khởi phục khi bot restart ─────────────────────────────────────────────────
+// ── Khởi phục khi bot restart ──────────────────────────────────────────
 async function khoiPhucScheduler(client) {
   let totalLich = 0;
   let totalSkipped = 0;
@@ -219,7 +214,7 @@ async function khoiPhucScheduler(client) {
   log.info('SCHEDULER', null, 'Tổng: %s lịch (%s bỏ qua) trên %s guild(s)', totalLich, totalSkipped, client.guilds.cache.size);
 }
 
-// ── Hủy lịch ──────────────────────────────────────────────────────────────────
+// ── Hủy lịch ────────────────────────────────────────────────────────────
 function cancelLichCoDinh(guildId, lichId) {
   const gMap = schedulerMap.get(guildId);
   if (!gMap) return;
@@ -232,7 +227,7 @@ function cancelLichCoDinh(guildId, lichId) {
   log.info('SCHEDULER', guildId, 'Đã hủy lịch %s', lichId);
 }
 
-// ── Public API ─────────────────────────────────────────────────────────────────
+// ── Public API ─────────────────────────────────────────────────────────
 async function runLichNgay(client, guildId, lich) {
   const g = client.guilds.cache.get(guildId);
   if (!g) throw new Error('Guild không tìm thấy');
