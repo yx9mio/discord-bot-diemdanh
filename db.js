@@ -5,10 +5,20 @@ const { createClient } = require('@supabase/supabase-js');
 const log = require('./utils/logger.js');
 const { SessionSchema, AttendanceSchema, safeParse } = require('./utils/validate.js');
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_KEY
-);
+// ─── Lazy-init Supabase client ────────────────────────────────────────────────
+// Không khởi tạo ngay khi require() để tránh crash trong môi trường test
+// (Node.js 20 không có native WebSocket, Supabase Realtime sẽ throw ngay).
+// Client chỉ được tạo lần đầu tiên khi một hàm DB thực sự được gọi.
+let _supabase = null;
+function getClient() {
+  if (!_supabase) {
+    _supabase = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_KEY
+    );
+  }
+  return _supabase;
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────────────────────
 
@@ -38,7 +48,7 @@ function _validateAttendances(rows, ctx) {
 // ─── Guild config ───────────────────────────────────────────────────────────────────────────
 
 async function getGuildConfig(guildId) {
-  const { data, error } = await supabase
+  const { data, error } = await getClient()
     .from('guild_configs')
     .select('*')
     .eq('guild_id', guildId)
@@ -48,7 +58,7 @@ async function getGuildConfig(guildId) {
 }
 
 async function upsertGuildConfig(config) {
-  const { data, error } = await supabase
+  const { data, error } = await getClient()
     .from('guild_configs')
     .upsert(config, { onConflict: 'guild_id' })
     .select()
@@ -62,7 +72,7 @@ const getConfig = getGuildConfig;
 // ─── Sessions ───────────────────────────────────────────────────────────────────────────────────
 
 async function createSession(payload) {
-  const { data, error } = await supabase
+  const { data, error } = await getClient()
     .from('sessions')
     .insert(payload)
     .select()
@@ -72,7 +82,7 @@ async function createSession(payload) {
 }
 
 async function getActiveSession(guildId) {
-  const { data, error } = await supabase
+  const { data, error } = await getClient()
     .from('sessions')
     .select('*')
     .eq('guild_id', guildId)
@@ -84,7 +94,7 @@ async function getActiveSession(guildId) {
 }
 
 async function getSessionById(sessionId) {
-  const { data, error } = await supabase
+  const { data, error } = await getClient()
     .from('sessions')
     .select('*')
     .eq('id', sessionId)
@@ -94,7 +104,7 @@ async function getSessionById(sessionId) {
 }
 
 async function getSessionByMessageId(messageId) {
-  const { data, error } = await supabase
+  const { data, error } = await getClient()
     .from('sessions')
     .select('*')
     .eq('message_id', messageId)
@@ -104,7 +114,7 @@ async function getSessionByMessageId(messageId) {
 }
 
 async function closeSession(sessionId) {
-  const { data, error } = await supabase
+  const { data, error } = await getClient()
     .from('sessions')
     .update({ is_active: false, ended_at: new Date().toISOString() })
     .eq('id', sessionId)
@@ -115,7 +125,7 @@ async function closeSession(sessionId) {
 }
 
 async function cancelSession(sessionId) {
-  const { data, error } = await supabase
+  const { data, error } = await getClient()
     .from('sessions')
     .update({ is_active: false, cancelled: true, ended_at: new Date().toISOString() })
     .eq('id', sessionId)
@@ -126,7 +136,7 @@ async function cancelSession(sessionId) {
 }
 
 async function updateSessionMessage(sessionId, messageId) {
-  const { error } = await supabase
+  const { error } = await getClient()
     .from('sessions')
     .update({ message_id: messageId })
     .eq('id', sessionId);
@@ -134,7 +144,7 @@ async function updateSessionMessage(sessionId, messageId) {
 }
 
 async function updateSessionName(sessionId, newName) {
-  const { data, error } = await supabase
+  const { data, error } = await getClient()
     .from('sessions')
     .update({ session_name: newName })
     .eq('id', sessionId)
@@ -145,7 +155,7 @@ async function updateSessionName(sessionId, newName) {
 }
 
 async function updateSessionEligible(sessionId, memberIds) {
-  const { data, error } = await supabase
+  const { data, error } = await getClient()
     .from('sessions')
     .update({ eligible_member_ids: memberIds })
     .eq('id', sessionId)
@@ -156,7 +166,7 @@ async function updateSessionEligible(sessionId, memberIds) {
 }
 
 async function getRecentSessions(guildId, limit = 10) {
-  const { data, error } = await supabase
+  const { data, error } = await getClient()
     .from('sessions')
     .select('*')
     .eq('guild_id', guildId)
@@ -170,7 +180,7 @@ async function getRecentSessions(guildId, limit = 10) {
 }
 
 async function getAllSessions(guildId) {
-  const { data, error } = await supabase
+  const { data, error } = await getClient()
     .from('sessions')
     .select('*')
     .eq('guild_id', guildId)
@@ -187,7 +197,7 @@ const getSessionHistory = getRecentSessions;
 // ─── Attendances ──────────────────────────────────────────────────────────────────────────────
 
 async function upsertAttendance(payload) {
-  const { data, error } = await supabase
+  const { data, error } = await getClient()
     .from('attendances')
     .upsert(payload, { onConflict: 'session_id,user_id' })
     .select()
@@ -197,7 +207,7 @@ async function upsertAttendance(payload) {
 }
 
 async function upsertAttendanceNoTime(sessionId, guildId, userId, username, status, markedBy) {
-  const { data, error } = await supabase
+  const { data, error } = await getClient()
     .from('attendances')
     .upsert(
       { session_id: sessionId, guild_id: guildId, user_id: userId, username, status, marked_by: markedBy },
@@ -210,7 +220,7 @@ async function upsertAttendanceNoTime(sessionId, guildId, userId, username, stat
 }
 
 async function getAttendances(sessionId) {
-  const { data, error } = await supabase
+  const { data, error } = await getClient()
     .from('attendances')
     .select('user_id, username, status, marked_by, checked_in_at')
     .eq('session_id', sessionId);
@@ -219,7 +229,7 @@ async function getAttendances(sessionId) {
 }
 
 async function getAttendancesByUser(guildId, userId, limit = 50) {
-  const { data, error } = await supabase
+  const { data, error } = await getClient()
     .from('attendances')
     .select('session_id, status, checked_in_at, sessions!inner(session_name, created_at, cancelled)')
     .eq('guild_id', guildId)
@@ -232,7 +242,7 @@ async function getAttendancesByUser(guildId, userId, limit = 50) {
 }
 
 async function getAttendanceStats(guildId, userId) {
-  const { data, error } = await supabase
+  const { data, error } = await getClient()
     .from('attendances')
     .select('status, sessions!inner(cancelled)')
     .eq('guild_id', guildId)
@@ -245,7 +255,7 @@ async function getAttendanceStats(guildId, userId) {
 // ─── Member stats ────────────────────────────────────────────────────────────────────────────
 
 async function getMemberStats(guildId, userId) {
-  const { data, error } = await supabase
+  const { data, error } = await getClient()
     .from('member_stats')
     .select('*')
     .eq('guild_id', guildId)
@@ -257,7 +267,7 @@ async function getMemberStats(guildId, userId) {
 
 async function getMemberStatsMulti(guildId, userIds) {
   if (!userIds?.length) return [];
-  const { data, error } = await supabase
+  const { data, error } = await getClient()
     .from('member_stats')
     .select('user_id, current_streak, best_streak, total_joined, total_sessions, updated_at')
     .eq('guild_id', guildId)
@@ -267,7 +277,7 @@ async function getMemberStatsMulti(guildId, userIds) {
 }
 
 async function getAllMemberStats(guildId) {
-  const { data, error } = await supabase
+  const { data, error } = await getClient()
     .from('member_stats')
     .select('*')
     .eq('guild_id', guildId)
@@ -277,7 +287,7 @@ async function getAllMemberStats(guildId) {
 }
 
 async function upsertMemberStats(payload) {
-  const { data, error } = await supabase
+  const { data, error } = await getClient()
     .from('member_stats')
     .upsert(payload, { onConflict: 'guild_id,user_id' })
     .select()
@@ -289,7 +299,7 @@ async function upsertMemberStats(payload) {
 async function batchUpsertMemberStats(guildId, patches) {
   if (!patches?.length) return;
   const rows = patches.map(p => ({ ...p, guild_id: guildId }));
-  const { error } = await supabase
+  const { error } = await getClient()
     .from('member_stats')
     .upsert(rows, { onConflict: 'guild_id,user_id' });
   _throwSupabase(error, 'batchUpsertMemberStats');
@@ -298,7 +308,7 @@ async function batchUpsertMemberStats(guildId, patches) {
 // ─── Badges ─────────────────────────────────────────────────────────────────────────────────────
 
 async function getBadgeDefinitions(guildId) {
-  const { data, error } = await supabase
+  const { data, error } = await getClient()
     .from('badges')
     .select('*')
     .eq('guild_id', guildId);
@@ -307,7 +317,7 @@ async function getBadgeDefinitions(guildId) {
 }
 
 async function getUserBadges(guildId, userId) {
-  const { data, error } = await supabase
+  const { data, error } = await getClient()
     .from('member_badges')
     .select('*, badges(*)')
     .eq('guild_id', guildId)
@@ -317,7 +327,7 @@ async function getUserBadges(guildId, userId) {
 }
 
 async function upsertUserBadge(payload) {
-  const { data, error } = await supabase
+  const { data, error } = await getClient()
     .from('member_badges')
     .upsert(payload, { onConflict: 'guild_id,user_id,threshold' })
     .select()
@@ -343,7 +353,7 @@ function upsertMemberBadge(guildId, userId, threshold) {
 // ─── Scheduled sessions ───────────────────────────────────────────────────────────────────
 
 async function getScheduledSessions(guildId) {
-  const { data, error } = await supabase
+  const { data, error } = await getClient()
     .from('scheduled_sessions')
     .select('*')
     .eq('guild_id', guildId)
@@ -353,7 +363,7 @@ async function getScheduledSessions(guildId) {
 }
 
 async function getScheduledSessionById(id) {
-  const { data, error } = await supabase
+  const { data, error } = await getClient()
     .from('scheduled_sessions')
     .select('*')
     .eq('id', id)
@@ -363,7 +373,7 @@ async function getScheduledSessionById(id) {
 }
 
 async function createScheduledSession(payload) {
-  const { data, error } = await supabase
+  const { data, error } = await getClient()
     .from('scheduled_sessions')
     .insert(payload)
     .select()
@@ -373,7 +383,7 @@ async function createScheduledSession(payload) {
 }
 
 async function updateScheduledSession(id, payload) {
-  const { data, error } = await supabase
+  const { data, error } = await getClient()
     .from('scheduled_sessions')
     .update(payload)
     .eq('id', id)
@@ -384,7 +394,7 @@ async function updateScheduledSession(id, payload) {
 }
 
 async function deleteScheduledSession(id) {
-  const { error } = await supabase
+  const { error } = await getClient()
     .from('scheduled_sessions')
     .delete()
     .eq('id', id);
@@ -392,7 +402,7 @@ async function deleteScheduledSession(id) {
 }
 
 async function skipScheduledSession(id, skipUntil) {
-  const { data, error } = await supabase
+  const { data, error } = await getClient()
     .from('scheduled_sessions')
     .update({ skip_until: skipUntil })
     .eq('id', id)

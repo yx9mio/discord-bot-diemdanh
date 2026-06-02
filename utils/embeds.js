@@ -242,8 +242,11 @@ function buildSessionEmbed(guild, session, attended, phaiRoleIds = [], isClosed 
     .setFooter({ text: FOOTER_DEFAULT })
     .setTimestamp();
 
-  // Thumbnail guild icon (Phase 3.1)
-  if (guild?.iconURL()) embed.setThumbnail(guild.iconURL({ dynamic: true, size: 64 }));
+  // Thumbnail guild icon — guard: chỉ gọi nếu iconURL là function
+  if (typeof guild?.iconURL === 'function') {
+    const url = guild.iconURL({ dynamic: true, size: 64 });
+    if (url) embed.setThumbnail(url);
+  }
 
   if (!isClosed && eligible > 0) {
     embed.addFields({ name: `${ICONS.CHART} Tiến độ`, value: `${buildRichProgressBar(pct)} **${pct}%**`, inline: false });
@@ -312,7 +315,11 @@ function buildSummaryEmbed(session, attended, guild = null, phaiRoleIds = null) 
     .setFooter({ text: FOOTER_DEFAULT })
     .setTimestamp();
 
-  if (guild?.iconURL()) embed.setThumbnail(guild.iconURL({ dynamic: true, size: 64 }));
+  // Thumbnail guild icon — guard: chỉ gọi nếu iconURL là function
+  if (typeof guild?.iconURL === 'function') {
+    const url = guild.iconURL({ dynamic: true, size: 64 });
+    if (url) embed.setThumbnail(url);
+  }
 
   // Top 3 điểm danh sớm nhất (Phase 3.2)
   const earliest = [...joined, ...late]
@@ -428,7 +435,10 @@ function buildAttendConfirmEmbed(member, status, sessionName, streak) {
     .setFooter({ text: FOOTER_DEFAULT })
     .setTimestamp();
 
-  if (member?.displayAvatarURL()) embed.setThumbnail(member.displayAvatarURL({ dynamic: true, size: 64 }));
+  if (typeof member?.displayAvatarURL === 'function') {
+    const url = member.displayAvatarURL({ dynamic: true, size: 64 });
+    if (url) embed.setThumbnail(url);
+  }
 
   if (streak != null && streak > 0 && ['tham_gia', 'tre'].includes(status)) {
     embed.addFields({ name: `${ICONS.FIRE} Streak`, value: `**${streak}** phiên liên tiếp`, inline: true });
