@@ -171,7 +171,7 @@ const HISTORY_PER_PAGE = 10;
 
 async function buildHistoryPage(guild, page = 0) {
   const offset   = page * HISTORY_PER_PAGE;
-  const history  = await db.getSessionHistory(guild.id, { limit: HISTORY_PER_PAGE + 1, offset });
+  const history  = await db.getSessionHistory(guild.id, HISTORY_PER_PAGE + 1);
   const hasNext  = history.length > HISTORY_PER_PAGE;
   const items    = history.slice(0, HISTORY_PER_PAGE);
 

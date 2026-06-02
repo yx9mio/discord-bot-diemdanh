@@ -74,9 +74,21 @@ const getConfig = getGuildConfig;
 // ─── Sessions ───────────────────────────────────────────────────────────────────────────────────────────
 
 async function createSession(payload) {
+  const row = {
+    ...payload,
+    guild_id:            payload.guild_id            ?? payload.guildId,
+    session_name:        payload.session_name        ?? payload.sessionName,
+    eligible_member_ids: payload.eligible_member_ids ?? payload.eligibleMemberIds ?? null,
+    description:         payload.description         ?? null,
+    is_active:           payload.is_active           ?? true,
+    cancelled:           payload.cancelled           ?? false,
+  };
+  delete row.guildId;
+  delete row.sessionName;
+  delete row.eligibleMemberIds;
   const { data, error } = await getClient()
     .from('sessions')
-    .insert(payload)
+    .insert(row)
     .select()
     .single();
   _throwSupabase(error, 'createSession');
@@ -137,10 +149,19 @@ async function cancelSession(sessionId) {
   return _validateSession(data, 'cancelSession');
 }
 
-async function updateSessionMessage(sessionId, messageId) {
+async function updateSessionMessage(sessionId, msgOrId) {
+  const update = typeof msgOrId === 'string' || typeof msgOrId === 'number'
+    ? { message_id: String(msgOrId) }
+    : {
+        ...(msgOrId.messageId  ? { message_id: String(msgOrId.messageId)  } : {}),
+        ...(msgOrId.message_id ? { message_id: String(msgOrId.message_id) } : {}),
+        ...(msgOrId.channelId  ? { channel_id: String(msgOrId.channelId)  } : {}),
+        ...(msgOrId.channel_id ? { channel_id: String(msgOrId.channel_id) } : {}),
+      };
+  if (!Object.keys(update).length) return;
   const { error } = await getClient()
     .from('sessions')
-    .update({ message_id: messageId })
+    .update(update)
     .eq('id', sessionId);
   _throwSupabase(error, 'updateSessionMessage');
 }
@@ -460,6 +481,45 @@ function xoaLichCoDinh(_guildId, id) {
   return deleteScheduledSession(id);
 }
 
+// ─── Members (danh sách thành viên được quản lý) ────────────────────────
+async function getMembers(guildId) {
+  const { data, error } = await getClient()
+    .from('members')
+    .select('*')
+    .eq('guild_id', guildId)
+    .order('id', { ascending: true });
+  _throwSupabase(error, 'getMembers');
+  return data ?? [];
+}
+
+async function addMember(payload) {
+  const { data, error } = await getClient()
+    .from('members')
+    .upsert(payload, { onConflict: 'guild_id,user_id' })
+    .select()
+    .single();
+  _throwSupabase(error, 'addMember');
+  return data;
+}
+
+async function deleteMember(guildId, userId) {
+  const { error } = await getClient()
+    .from('members')
+    .delete()
+    .eq('guild_id', guildId)
+    .eq('user_id', userId);
+  _throwSupabase(error, 'deleteMember');
+}
+
+async function resetStreak(guildId, userId) {
+  const { error } = await getClient()
+    .from('member_stats')
+    .update({ current_streak: 0, updated_at: new Date().toISOString() })
+    .eq('guild_id', guildId)
+    .eq('user_id', userId);
+  _throwSupabase(error, 'resetStreak');
+}
+
 // ─── Exports ─────────────────────────────────────────────────────────────────────────────────────────────
 
 module.exports = {
@@ -477,6 +537,9 @@ module.exports = {
   // Attendances
   upsertAttendance, upsertAttendanceNoTime,
   getAttendances, getAttendancesByUser, getAttendanceStats,
+
+  // Members
+  getMembers, addMember, deleteMember, resetStreak,
 
   // Member stats
   getMemberStats, getMemberStatsMulti, getAllMemberStats,
