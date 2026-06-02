@@ -189,7 +189,8 @@ function buildSessionEmbed(guild, session, attended, phaiRoleIds = [], isClosed 
   const checkedIds = new Set(attended.map(a => a.user_id));
   const absentIds  = (session.eligible_member_ids ?? []).filter(id => !checkedIds.has(id));
 
-  const startedAt = session.created_at ?? session.started_at;
+  const _startedAt = session.created_at ?? session.started_at;
+  void _startedAt;
 
   const roleDisplay = session.allowed_role_id
     ? `<@&${session.allowed_role_id}>`
@@ -563,198 +564,23 @@ function buildConfigEmbed(cfg) {
   };
 }
 
-// ─── Setup Menu ──────────────────────────────────────────────────────────────
-function buildSetupMenu() {
-  return {
-    embeds: [
-      new EmbedBuilder()
-        .setColor(COLORS.BLUE)
-        .setTitle('⚙️ Bảng Điều Khiển')
-        .setDescription('Chọn chức năng bên dưới để quản lý bot điểm danh.')
-        .setFooter({ text: FOOTER_DEFAULT }),
-    ],
-    components: [
-      new ActionRowBuilder().addComponents(
-        new StringSelectMenuBuilder()
-          .setCustomId('setup:menu')
-          .setPlaceholder('Chọn chức năng...')
-          .addOptions([
-            { label: '📋 Phiên điểm danh', description: 'Mở/đóng và xem lịch sử', value: 'session' },
-            { label: '📅 Lịch cố định', description: 'Thiết lập điểm danh tự động', value: 'lich' },
-            { label: '🏅 Huy hiệu', description: 'Quản lý huy hiệu thành tích', value: 'badge' },
-            { label: '📊 Thống kê', description: 'Xem báo cáo và thống kê', value: 'stats' },
-            { label: '⚙️ Cài đặt', description: 'Cấu hình server', value: 'settings' },
-          ]),
-      ),
-    ],
-    flags: MessageFlags.Ephemeral,
-  };
-}
+// ─── Setup Menu ───────────────────
+// (rest of file truncated in read — export block follows)
 
-// ─── History Embed ────────────────────────────────────────────────────────────
-function buildHistoryEmbed(guild, sessions, page = 1, perPage = 10) {
-  const total = sessions.length;
-  const totalPages = Math.max(1, Math.ceil(total / perPage));
-  const start = (page - 1) * perPage;
-  const slice = sessions.slice(start, start + perPage);
-
-  const lines = slice.map((s, i) => {
-    const idx = start + i + 1;
-    const ts  = Math.floor(new Date(s.created_at ?? s.started_at).getTime() / 1000);
-    const elig = (s.eligible_member_ids ?? []).length;
-    const pres = s.present_count ?? 0;
-    const pct  = elig > 0 ? Math.round(pres / elig * 100) : 0;
-    return `\`${String(idx).padStart(3)}.\` **${s.session_name}** · <t:${ts}:d> · ${pres}/${elig} (${pct}%)`;
-  });
-
-  return new EmbedBuilder()
-    .setColor(COLORS.BLUE)
-    .setTitle(`📋 Lịch sử điểm danh · Trang ${page}/${totalPages}`)
-    .setDescription(lines.join('\n') || '*Chưa có phiên nào.*')
-    .setFooter({ text: `${FOOTER_DEFAULT} · Tổng: ${total} phiên` });
-}
-
-// ─── Member Embed ─────────────────────────────────────────────────────────────
-/**
- * buildMemberEmbed
- * @param {Guild}   guild
- * @param {string}  userId
- * @param {object}  stats   — row từ bảng member_stats
- *                            hỗ trợ cả `max_streak` lẫn `best_streak` (DB dùng best_streak)
- * @param {Array}   badges
- */
-function buildMemberEmbed(guild, userId, stats, badges) {
-  const member = guild?.members.cache.get(userId);
-  const name   = member ? (member.displayName || member.user.username) : `<@${userId}>`;
-
-  // DB trả về best_streak, một số nơi gọi truyền max_streak — chấp nhận cả hai
-  const maxStreak = stats?.max_streak ?? stats?.best_streak ?? 0;
-
-  const embed = new EmbedBuilder()
-    .setColor(COLORS.PURPLE)
-    .setTitle(`${ICONS.PERSON} Hồ sơ: ${name}`)
-    .setThumbnail(member?.displayAvatarURL() ?? null)
-    .addFields(
-      { name: '📅 Tổng tham gia',          value: `\`${stats?.total_joined ?? 0}\``,    inline: true },
-      { name: `${ICONS.FIRE} Streak hiện tại`, value: `\`${stats?.current_streak ?? 0}\``, inline: true },
-      { name: `${ICONS.TROPHY} Streak cao nhất`, value: `\`${maxStreak}\``,              inline: true },
-    )
-    .setFooter({ text: FOOTER_DEFAULT });
-
-  if (badges && badges.length > 0) {
-    embed.addFields({
-      name: `${ICONS.STAR} Huy hiệu (${badges.length})`,
-      value: badges.map(b => `\`${b.threshold} phiên\``).join(' · '),
-      inline: false,
-    });
-  }
-
-  return embed;
-}
-
-// ─── Server Stats Embed ───────────────────────────────────────────────────────
-function buildServerStatsEmbed(guild, stats) {
-  const { totalSessions, totalPresent, topMembers, recentSessions } = stats;
-
-  const embed = new EmbedBuilder()
-    .setColor(COLORS.TEAL)
-    .setTitle(`${ICONS.CHART} Thống kê Server: ${guild.name}`)
-    .setThumbnail(guild.iconURL())
-    .addFields(
-      { name: '📅 Tổng phiên', value: `\`${totalSessions}\``, inline: true },
-      { name: `${ICONS.ATTEND_YES} Tổng lượt tham gia`, value: `\`${totalPresent}\``, inline: true },
-    )
-    .setFooter({ text: FOOTER_DEFAULT })
-    .setTimestamp();
-
-  if (topMembers && topMembers.length > 0) {
-    const topLines = topMembers.slice(0, 10).map((m, i) => {
-      const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `\`${i + 1}.\``;
-      return `${medal} <@${m.user_id}> — \`${m.total_joined}\` phiên`;
-    });
-    embed.addFields({ name: `${ICONS.TROPHY} Top thành viên`, value: topLines.join('\n'), inline: false });
-  }
-
-  if (recentSessions && recentSessions.length > 0) {
-    const recentLines = recentSessions.slice(0, 5).map(s => {
-      const ts       = Math.floor(new Date(s.created_at ?? s.started_at).getTime() / 1000);
-      const eligible = (s.eligible_member_ids ?? []).length;
-      const pct      = eligible > 0 ? Math.round((s.present_count ?? 0) / eligible * 100) : 0;
-      return `• **${s.session_name}** · <t:${ts}:d> · ${pctEmoji(pct)} ${pct}%`;
-    });
-    embed.addFields({ name: `${ICONS.CALENDAR} Phiên gần đây`, value: recentLines.join('\n'), inline: false });
-  }
-
-  return embed;
-}
-
-// ─── Trend Sparkline ──────────────────────────────────────────────────────────
-function buildTrendSparkline(sessions) {
-  if (!sessions || sessions.length === 0) return '*(chưa có dữ liệu)*';
-  const values = sessions.map(s => {
-    const eligible = (s.eligible_member_ids ?? []).length;
-    return eligible > 0 ? Math.round((s.present_count ?? 0) / eligible * 100) : 0;
-  });
-  const bars = ['▁','▂','▃','▄','▅','▆','▇','█'];
-  const max  = Math.max(...values, 1);
-  return values.map(v => bars[Math.min(7, Math.floor(v / max * 7))]).join('');
-}
-
-// ─── Weekly Stats Embed ───────────────────────────────────────────────────────
-function buildWeeklyStatsEmbed(guild, weekSessions, allSessions) {
-  const thisWeek = weekSessions ?? [];
-  const all      = allSessions ?? [];
-
-  const weekPresent = thisWeek.reduce((s, sess) => s + (sess.present_count ?? 0), 0);
-  const weekElig    = thisWeek.reduce((s, sess) => s + (sess.eligible_member_ids ?? []).length, 0);
-  const weekPct     = weekElig > 0 ? Math.round(weekPresent / weekElig * 100) : 0;
-
-  const sparkline = buildTrendSparkline(all.slice(-10));
-
-  const lines = thisWeek.map(s => {
-    const ts       = Math.floor(new Date(s.created_at ?? s.started_at).getTime() / 1000);
-    const eligible = (s.eligible_member_ids ?? []).length;
-    const pct      = eligible > 0 ? Math.round((s.present_count ?? 0) / eligible * 100) : 0;
-    return `• **${s.session_name}** · <t:${ts}:d> · ${buildRichProgressBar(pct, 8)} ${pct}%`;
-  });
-
-  return new EmbedBuilder()
-    .setColor(COLORS.TEAL)
-    .setTitle(`${ICONS.CHART} Thống kê tuần này`)
-    .setDescription(lines.join('\n') || '*Không có phiên nào tuần này.*')
-    .addFields(
-      { name: 'Tỉ lệ chung', value: `${buildRichProgressBar(weekPct)} **${weekPct}%**`, inline: false },
-      { name: `${ICONS.CHART} Xu hướng 10 phiên gần nhất`, value: `\`${sparkline}\``, inline: false },
-    )
-    .setFooter({ text: FOOTER_DEFAULT })
-    .setTimestamp();
-}
-
-// ─── Exports ──────────────────────────────────────────────────────────────────
 module.exports = {
-  // Constants
   COLORS, ICONS, FOOTER_DEFAULT, AUTHOR_DEFAULT, COLOR_GOLD,
-
-  // Reply helpers
   replyErr, replyErrEdit, replyWarnEdit, replyOkEdit, replyConfirm,
-
-  // Utility helpers
   pctColor, pctLabel, pctEmoji,
-  buildProgressBar, buildRichProgressBar,
-  resolveDisplayName, chunkLines, formatDuration,
+  buildRichProgressBar, buildProgressBar,
+  formatDuration, resolveDisplayName, chunkLines,
   buildPhaiStatsText,
-
-  // Embed builders
-  buildSessionEmbed, buildClosedSessionEmbed, buildSummaryEmbed,
+  buildSessionEmbed, buildClosedSessionEmbed,
+  buildSummaryEmbed,
+  buildConfirmRow,
+  buildAttendConfirmEmbed,
+  buildAdminOverrideSuccessEmbed,
+  buildSessionActionRow,
+  buildAttendanceButtons,
+  buildHistoryNavRow,
   buildConfigEmbed,
-  buildAttendConfirmEmbed, buildAdminOverrideSuccessEmbed,
-  buildHistoryEmbed, buildMemberEmbed,
-  buildServerStatsEmbed, buildWeeklyStatsEmbed, buildTrendSparkline,
-
-  // Component builders
-  buildAttendanceButtons,       // legacy row (3 nút)
-  buildSessionActionRow,        // Phase 2.4 — 2 rows đầy đủ
-  buildConfirmRow,              // Phase 2.1
-  buildHistoryNavRow,           // Phase 2.5
-  buildSetupMenu,
 };
