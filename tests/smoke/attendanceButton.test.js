@@ -11,8 +11,10 @@ const mockDb = {
 };
 vi.mock('../../db.js', () => mockDb);
 vi.mock('../../utils/embeds.js', () => ({
-  buildSessionEmbed: vi.fn().mockResolvedValue({}),
-  buildAttendanceButtons: vi.fn().mockReturnValue([]),
+  buildSessionEmbed:       vi.fn().mockResolvedValue({}),
+  buildAttendanceButtons:  vi.fn().mockReturnValue([]),
+  buildSessionActionRow:   vi.fn().mockReturnValue([]),
+  buildAttendConfirmEmbed: vi.fn().mockReturnValue({ embeds: [], flags: 64 }),
 }));
 
 const SESSION = {

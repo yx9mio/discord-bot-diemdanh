@@ -106,28 +106,30 @@ vi.mock('@sapphire/framework', () => {
 });
 
 vi.mock('../utils/embeds.js', () => ({
-  buildAttendanceButtons: vi.fn().mockReturnValue({}),
-  buildSummaryEmbed: vi.fn().mockReturnValue({ data: {} }),
+  buildAttendanceButtons:  vi.fn().mockReturnValue({}),
+  buildSummaryEmbed:       vi.fn().mockReturnValue({ data: {} }),
   buildClosedSessionEmbed: vi.fn().mockResolvedValue({ data: {} }),
-  buildSessionEmbed: vi.fn().mockResolvedValue({ data: {} }),
-  replyErr: vi.fn().mockReturnValue({ embeds: [], flags: 64 }),
-  replyErrEdit: vi.fn().mockReturnValue({ embeds: [], components: [] }),
-  replyOkEdit: vi.fn().mockReturnValue({ embeds: [], components: [] }),
-  replyWarnEdit: vi.fn().mockReturnValue({ embeds: [], components: [] }),
-  replyConfirm: vi.fn().mockReturnValue({ embeds: [], components: [], flags: 64 }),
+  buildSessionEmbed:       vi.fn().mockResolvedValue({ data: {} }),
+  buildSessionActionRow:   vi.fn().mockReturnValue([]),
+  buildAttendConfirmEmbed: vi.fn().mockReturnValue({ embeds: [], flags: 64 }),
+  replyErr:       vi.fn().mockReturnValue({ embeds: [], flags: 64 }),
+  replyErrEdit:   vi.fn().mockReturnValue({ embeds: [], components: [] }),
+  replyOkEdit:    vi.fn().mockReturnValue({ embeds: [], components: [] }),
+  replyWarnEdit:  vi.fn().mockReturnValue({ embeds: [], components: [] }),
+  replyConfirm:   vi.fn().mockReturnValue({ embeds: [], components: [], flags: 64 }),
   FOOTER_DEFAULT: 'Quản Gia · Bot Điểm Danh',
 }));
 
 vi.mock('../utils/session.js', () => ({
-  ketThucPhien: vi.fn().mockResolvedValue(new Map()),
-  thongBaoHuyHieu: vi.fn().mockResolvedValue(null),
-  guiCsvDinhKem: vi.fn().mockResolvedValue(null),
+  ketThucPhien:     vi.fn().mockResolvedValue(new Map()),
+  thongBaoHuyHieu:  vi.fn().mockResolvedValue(null),
+  guiCsvDinhKem:    vi.fn().mockResolvedValue(null),
 }));
 
 vi.mock('../utils/scheduler.js', () => ({
-  scheduleLichCoDinh: vi.fn().mockResolvedValue(undefined),
-  khoiPhucScheduler: vi.fn().mockResolvedValue(undefined),
-  runLichNgay: vi.fn().mockResolvedValue({ ok: true }),
+  scheduleLichCoDinh:  vi.fn().mockResolvedValue(undefined),
+  khoiPhucScheduler:   vi.fn().mockResolvedValue(undefined),
+  runLichNgay:         vi.fn().mockResolvedValue({ ok: true }),
 }));
 
 // ─── Helper: lấy Command class từ module CJS ────────────────────────────────
