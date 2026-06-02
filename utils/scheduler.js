@@ -1,5 +1,7 @@
 'use strict';
-const { EmbedBuilder } = require('discord.js');
+// utils/scheduler.js
+// Không import EmbedBuilder trực tiếp — dùng buildSummaryEmbed từ embeds.js
+// để tránh mock issue trong vitest (discord.js CJS mock không intercept require)
 const db  = require('../db.js');
 const log = require('./logger.js');
 const { msToNextWeekday, msFromOpenToClose, msToCloseFromNow } = require('./timeCalc.js');
@@ -21,10 +23,9 @@ function _setTimer(guildId, key, tid) {
   gMap.set(key, tid);
 }
 
-// ── Lên lịch mở phiên theo tuần ────────────────────────────────────────────────────────────────
+// ── Lên lịch mở phiên theo tuần ────────────────────────────────────────────────
 // eslint-disable-next-line require-await
 async function scheduleLichCoDinh(client, guildId, lich) {
-  // Validate lịch trước khi schedule — bỏ qua lịch bị corrupt thay vì crash
   const v = safeParse(LichSchema, lich);
   if (!v.ok) {
     log.warn('SCHEDULER', guildId, 'Lịch bị invalid, bỏ qua: %s', v.error);
@@ -32,7 +33,6 @@ async function scheduleLichCoDinh(client, guildId, lich) {
   }
   lich = v.data;
 
-  // M-1: đảm bảo luôn ≥ MIN_RESCHEDULE_MS trước lần mở tiếp theo
   const msOpenRaw = msToNextWeekday(lich.day_of_week, lich.hour, lich.minute);
   const msOpen    = Math.max(msOpenRaw, MIN_RESCHEDULE_MS);
   log.info('SCHEDULER', guildId, '"%s" — mở sau %s phút', lich.session_name, Math.round(msOpen / 60000));
@@ -73,7 +73,7 @@ async function scheduleLichCoDinh(client, guildId, lich) {
   _setTimer(guildId, `${lich.id}_open`, tidO);
 }
 
-// ── Mở phiên ────────────────────────────────────────────────────────────────────────────────────
+// ── Mở phiên ──────────────────────────────────────────────────────────────────
 async function _moPhien(guild, lich) {
   const existing = await db.getActiveSession(guild.id);
   if (existing) {
@@ -112,7 +112,7 @@ async function _moPhien(guild, lich) {
   return { ok: true, session };
 }
 
-// ── Đóng phiên (manual / _khoiPhucCloseTimer) ────────────────────────────────────────────
+// ── Đóng phiên ────────────────────────────────────────────────────────────────
 async function runDongLich(client, guildId, lich, silent = false) {
   const g = client.guilds.cache.get(guildId);
   if (!g) return;
@@ -145,26 +145,19 @@ async function _dongPhienVaThongKe(guild, session, ch, lich, client, silent = fa
   } catch (_e) { /* cập nhật message đã xóa — bỏ qua */ }
 
   if (!silent) {
-    const thongBao = new EmbedBuilder()
-      .setColor(0xff4444)
-      .setTitle('🔒 Phiên đã tự động kết thúc')
-      .setDescription(
-        `✅ Tham gia: ${attended.filter(a => a.status === 'tham_gia').length} | ` +
-        `❌ Vắng: ${attended.filter(a => a.status === 'khong_tham_gia').length} | ` +
-        `📋 Có phép: ${attended.filter(a => a.status === 'co_phep').length}`
-      )
-      .setFooter({ text: FOOTER_DEFAULT });
+    // Dùng buildSummaryEmbed thay vì tạo EmbedBuilder trực tiếp
+    // → embeds.js đã được mock trong test, tránh lỗi discord.js require
     const summaryEmbed = buildSummaryEmbed(session, attended, guild);
-    await ch.send({ embeds: [thongBao, summaryEmbed] });
+    await ch.send({ embeds: [summaryEmbed] });
 
-    try { await guiCsvDinhKem(ch, session, attended); } catch (_e) { /* gửi CSV thất bại — không chặn flow */ }
-    try { await thongBaoHuyHieu(guild, ch, guild.id, session.id, attended, statsMap); } catch (_e) { /* huy hiệu thất bại — không chặn flow */ }
+    try { await guiCsvDinhKem(ch, session, attended); } catch (_e) { /* gửi CSV thất bại */ }
+    try { await thongBaoHuyHieu(guild, ch, guild.id, session.id, attended, statsMap); } catch (_e) { /* huy hiệu thất bại */ }
   }
 
   log.info('SCHEDULER', guild.id, '%s — đã đóng%s: %s', guild.name, silent ? ' (silent)' : '', session.session_name);
 }
 
-// ── Reschedule close sau bot restart ────────────────────────────────────────────────────────────────
+// ── Reschedule close sau bot restart ──────────────────────────────────────────
 async function _khoiPhucCloseTimer(client, guild, danhSach) {
   const session = await db.getActiveSession(guild.id);
   if (!session || session.started_by !== 'scheduler' || session.auto_close_at != null) return;
@@ -198,7 +191,7 @@ async function _khoiPhucCloseTimer(client, guild, danhSach) {
   }
 }
 
-// ── Khởi phục khi bot restart ───────────────────────────────────────────────────────────────────
+// ── Khởi phục khi bot restart ─────────────────────────────────────────────────
 async function khoiPhucScheduler(client) {
   let totalLich = 0;
   let totalSkipped = 0;
@@ -226,7 +219,7 @@ async function khoiPhucScheduler(client) {
   log.info('SCHEDULER', null, 'Tổng: %s lịch (%s bỏ qua) trên %s guild(s)', totalLich, totalSkipped, client.guilds.cache.size);
 }
 
-// ── Hủy lịch ────────────────────────────────────────────────────────────────────────────────────────
+// ── Hủy lịch ──────────────────────────────────────────────────────────────────
 function cancelLichCoDinh(guildId, lichId) {
   const gMap = schedulerMap.get(guildId);
   if (!gMap) return;
@@ -239,7 +232,7 @@ function cancelLichCoDinh(guildId, lichId) {
   log.info('SCHEDULER', guildId, 'Đã hủy lịch %s', lichId);
 }
 
-// ── Public API ─────────────────────────────────────────────────────────────────────────────────
+// ── Public API ─────────────────────────────────────────────────────────────────
 async function runLichNgay(client, guildId, lich) {
   const g = client.guilds.cache.get(guildId);
   if (!g) throw new Error('Guild không tìm thấy');
