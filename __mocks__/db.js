@@ -47,6 +47,18 @@ const db = {
   upsertMemberBadge:        vi.fn().mockResolvedValue(null),
   getStreak:                vi.fn().mockResolvedValue(null),
 
+  // Members (danh sách thành viên được quản lý)
+  getMembers:               vi.fn().mockResolvedValue([]),
+  addMember:                vi.fn().mockResolvedValue(null),
+  deleteMember:             vi.fn().mockResolvedValue(null),
+  resetStreak:              vi.fn().mockResolvedValue(null),
+  upsertMember:             vi.fn().mockResolvedValue(null),
+  ensureGuildConfig:        vi.fn().mockResolvedValue(null),
+  getSessionByIdRaw:        vi.fn().mockResolvedValue(null),
+  getTopMembers:            vi.fn().mockResolvedValue([]),
+  getServerStats:           vi.fn().mockResolvedValue({ total_sessions: 0, total_members: 0, total_attendances: 0, rate_present: 0 }),
+  getAllAttendances:        vi.fn().mockResolvedValue([]),
+
   // Scheduled sessions
   getScheduledSessions:     vi.fn().mockResolvedValue([]),
   getScheduledSessionById:  vi.fn().mockResolvedValue(null),

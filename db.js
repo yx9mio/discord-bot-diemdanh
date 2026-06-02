@@ -520,6 +520,96 @@ async function resetStreak(guildId, userId) {
   _throwSupabase(error, 'resetStreak');
 }
 
+// ─── Đảm bảo guild_configs tồn tại (idempotent) ──────────────────────────────────────────────────────
+// INSERT ON CONFLICT DO NOTHING — gọi khi guild join hoặc trước khi đọc config
+// Trả về row hiện tại (mới tạo hoặc đã tồn tại).
+async function ensureGuildConfig(guildId) {
+  const { data, error } = await getClient()
+    .from('guild_configs')
+    .upsert({ guild_id: guildId }, { onConflict: 'guild_id', ignoreDuplicates: true })
+    .select()
+    .single();
+  _throwSupabase(error, 'ensureGuildConfig');
+  return data;
+}
+
+// ─── Upsert member với aliases hợp nhất (guildId/userId/phongBan/ghiChu) ─────────────────────
+// Wrapper cho addMember — chấp nhận camelCase + chuẩn hoá sang snake_case.
+// Tránh caller phải nhớ cấu trúc cột.
+function upsertMember({ guildId, userId, phongBan = null, ghiChu = null, username = null }) {
+  return addMember({
+    guild_id:    guildId,
+    user_id:     userId,
+    phong_ban:   phongBan,
+    ghi_chu:     ghiChu,
+    username,
+  });
+}
+
+// ─── Lấy session kèm filter guild (chống IDOR khi admin dùng chéo server) ─────────────────────
+async function getSessionByIdRaw(sessionId, guildId) {
+  const { data, error } = await getClient()
+    .from('sessions')
+    .select('*')
+    .eq('id', sessionId)
+    .eq('guild_id', guildId)
+    .maybeSingle();
+  _throwSupabase(error, 'getSessionByIdRaw');
+  return _validateSession(data, 'getSessionByIdRaw');
+}
+
+// ─── Top N members theo total_joined (cho /rank dashboard) ──────────────────────────────────────
+// Lấy từ member_stats, sort desc, limit N.
+async function getTopMembers(guildId, limit = 10) {
+  const { data, error } = await getClient()
+    .from('member_stats')
+    .select('*')
+    .eq('guild_id', guildId)
+    .order('total_joined', { ascending: false })
+    .limit(limit);
+  _throwSupabase(error, 'getTopMembers');
+  return data ?? [];
+}
+
+// ─── Thống kê tổng quan cho dashboard server ──────────────────────────────────────────────
+// Trả về: total_sessions (chưa huỷ), total_members, total_attendances, rate_present.
+async function getServerStats(guildId) {
+  const [sessionsRes, membersRes, attRes] = await Promise.all([
+    getClient().from('sessions').select('id, cancelled', { count: 'exact', head: false })
+      .eq('guild_id', guildId).eq('cancelled', false),
+    getClient().from('members').select('user_id', { count: 'exact', head: false })
+      .eq('guild_id', guildId),
+    getClient().from('attendances').select('status', { count: 'exact', head: false })
+      .eq('guild_id', guildId),
+  ]);
+  _throwSupabase(sessionsRes.error, 'getServerStats.sessions');
+  _throwSupabase(membersRes.error, 'getServerStats.members');
+  _throwSupabase(attRes.error, 'getServerStats.attendances');
+  const totalSessions = sessionsRes.count ?? (sessionsRes.data?.length ?? 0);
+  const totalMembers  = membersRes.count  ?? (membersRes.data?.length  ?? 0);
+  const atts          = attRes.data ?? [];
+  const present       = atts.filter(a => a.status === 'tham_gia' || a.status === 'tre').length;
+  return {
+    total_sessions:   totalSessions,
+    total_members:    totalMembers,
+    total_attendances: atts.length,
+    rate_present:     atts.length ? Math.round((present / atts.length) * 100) : 0,
+  };
+}
+
+// ─── Tất cả attendances của guild (cho export CSV / bulk) ──────────────────────────────
+// Trả về tối đa `limit` rows (default 5000), mới nhất trước.
+async function getAllAttendances(guildId, limit = 5000) {
+  const { data, error } = await getClient()
+    .from('attendances')
+    .select('user_id, username, status, session_id, checked_in_at, marked_by, sessions!inner(session_name, created_at, cancelled)')
+    .eq('guild_id', guildId)
+    .order('checked_in_at', { ascending: false })
+    .limit(limit);
+  _throwSupabase(error, 'getAllAttendances');
+  return _validateAttendances(data ?? [], 'getAllAttendances');
+}
+
 // ─── Exports ─────────────────────────────────────────────────────────────────────────────────────────────
 
 module.exports = {
@@ -539,7 +629,12 @@ module.exports = {
   getAttendances, getAttendancesByUser, getAttendanceStats,
 
   // Members
-  getMembers, addMember, deleteMember, resetStreak,
+  getMembers, addMember, deleteMember, resetStreak, upsertMember,
+  ensureGuildConfig,
+  getSessionByIdRaw,
+  getTopMembers,
+  getServerStats,
+  getAllAttendances,
 
   // Member stats
   getMemberStats, getMemberStatsMulti, getAllMemberStats,
