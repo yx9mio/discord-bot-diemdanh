@@ -1,7 +1,8 @@
 // __mocks__/db.js
-// Manual mock — Vitest/Jest tự động dùng file này khi gọi vi.mock('../../db.js')
-// Không có kết nối Supabase thật, mọi hàm trả về resolved Promise mặc định.
-import { vi } from 'vitest';
+// Manual mock — Vitest tự động dùng file này khi gọi vi.mock('../../db.js')
+// Dùng CJS (require) để khớp với sourceType của project (không phải ESM module)
+'use strict';
+const { vi } = require('vitest');
 
 const db = {
   // Guild config
@@ -63,23 +64,7 @@ const db = {
   xoaLichCoDinh:            vi.fn().mockResolvedValue(null),
 };
 
-export default db;
-export const {
-  getGuildConfig, upsertGuildConfig, getConfig,
-  createSession, getActiveSession, getSessionById, getSessionByMessageId,
-  closeSession, cancelSession,
-  updateSessionMessage, updateSessionName, updateSessionEligible,
-  getRecentSessions, getAllSessions, getSessionHistory,
-  upsertAttendance, upsertAttendanceNoTime,
-  getAttendances, getAttendancesByUser, getAttendanceStats,
-  getMemberStats, getMemberStatsMulti, getAllMemberStats,
-  upsertMemberStats, batchUpsertMemberStats,
-  getBadgeDefinitions, getUserBadges, upsertUserBadge,
-  getBadges, getMemberBadges, upsertMemberBadge, getStreak,
-  getScheduledSessions, getScheduledSessionById,
-  createScheduledSession, updateScheduledSession,
-  deleteScheduledSession, skipScheduledSession,
-  getLichCoDinh, getLichCoDinhById,
-  createLichCoDinh, updateLichCoDinh, deleteLichCoDinh,
-  themLichCoDinh, suaLichCoDinh, xoaLichCoDinh,
-} = db;
+module.exports = db;
+module.exports.default = db;
+// Named exports (spread)
+Object.assign(module.exports, db);

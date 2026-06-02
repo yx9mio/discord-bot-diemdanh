@@ -1,7 +1,7 @@
 'use strict';
 // handlers/setup/timezoneHandler.js
 // Stub — timezone logic chưa implement, trả về false để pass-through
-async function handleTimezone(_interaction) {
+function handleTimezone(_interaction) {
   return false;
 }
 
