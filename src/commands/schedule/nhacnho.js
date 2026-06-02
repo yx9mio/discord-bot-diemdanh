@@ -2,7 +2,8 @@
 'use strict';
 const { Command } = require('@sapphire/framework');
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
-const db = require('../../db.js');
+const db = require('../../../db.js');
+const { FOOTER_DEFAULT } = require('../../../utils/embeds.js');
 
 class NhacNhoCommand extends Command {
   constructor(context) {
@@ -38,7 +39,8 @@ class NhacNhoCommand extends Command {
           { name: 'Phút trước', value: cfg.reminder_minutes ? `${cfg.reminder_minutes} phút` : '_Chưa cài_', inline: true },
           { name: 'Kênh',       value: cfg.reminder_channel_id ? `<#${cfg.reminder_channel_id}>` : '_Chưa cài_', inline: true },
           { name: 'Trạng thái', value: cfg.reminder_enabled ? '✅ Bật' : '❌ Tắt', inline: true },
-        );
+        )
+        .setFooter({ text: FOOTER_DEFAULT });
       return interaction.editReply({ embeds: [embed] });
     }
 

@@ -2,7 +2,8 @@
 'use strict';
 const { Command } = require('@sapphire/framework');
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
-const db = require('../../db.js');
+const db = require('../../../db.js');
+const { FOOTER_DEFAULT } = require('../../../utils/embeds.js');
 
 class CaiDatPhaiCommand extends Command {
   constructor(context) {
@@ -33,7 +34,8 @@ class CaiDatPhaiCommand extends Command {
 
     if (sub === 'xem') {
       const embed = new EmbedBuilder().setColor(0x01696f).setTitle('🎭 Danh sách Phái')
-        .setDescription(roleIds.length ? roleIds.map(r => `<@&${r}>`).join('\n') : '_Tất cả thành viên_');
+        .setDescription(roleIds.length ? roleIds.map(r => `<@&${r}>`).join('\n') : '_Tất cả thành viên_')
+        .setFooter({ text: FOOTER_DEFAULT });
       return interaction.editReply({ embeds: [embed] });
     }
     if (sub === 'them') {

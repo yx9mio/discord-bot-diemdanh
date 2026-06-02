@@ -2,7 +2,8 @@
 'use strict';
 const { Command } = require('@sapphire/framework');
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const db = require('../../db.js');
+const db = require('../../../db.js');
+const { FOOTER_DEFAULT } = require('../../../utils/embeds.js');
 
 class ToiCommand extends Command {
   constructor(context) {
@@ -40,6 +41,7 @@ class ToiCommand extends Command {
         { name: '📊 Tỉ lệ',     value: `${rate}%`,    inline: true },
         { name: '🔥 Streak',    value: `${streak}`,   inline: true },
       )
+      .setFooter({ text: FOOTER_DEFAULT })
       .setTimestamp();
 
     await interaction.editReply({ embeds: [embed] });

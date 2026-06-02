@@ -2,7 +2,7 @@
 'use strict';
 const { Command } = require('@sapphire/framework');
 const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
-const db = require('../../db.js');
+const db = require('../../../db.js');
 
 class MemberCommand extends Command {
   constructor(context) {

@@ -1,13 +1,14 @@
 // index.js — Entry point (Sapphire JS Edition v3)
 'use strict';
 require('dotenv').config();
+const path = require('node:path');
 const Sentry = require('@sentry/node');
 
 if (process.env.SENTRY_DSN) {
   Sentry.init({
     dsn:              process.env.SENTRY_DSN,
     environment:      process.env.NODE_ENV ?? 'development',
-    tracesSampleRate: 0.2,
+    tracesSampleRate:  0.2,
   });
 }
 
@@ -35,9 +36,14 @@ const client = new SapphireClient({
   ],
   partials:                    [Partials.Message, Partials.Channel],
   loadMessageCommandListeners:  false,
-  baseUserDirectory:            __dirname,
+  baseUserDirectory:            null,
   logger: { level: process.env.NODE_ENV === 'production' ? 30 : 20 },
 });
+
+client.stores.get('commands').registerPath(path.join(__dirname, 'src', 'commands'));
+client.stores.get('listeners').registerPath(path.join(__dirname, 'listeners'));
+client.stores.get('interaction-handlers').registerPath(path.join(__dirname, 'interaction-handlers'));
+client.stores.get('preconditions').registerPath(path.join(__dirname, 'preconditions'));
 
 process.on('unhandledRejection', (reason) => {
   log.error('SYSTEM', null, 'unhandledRejection: %s', reason?.stack ?? reason);

@@ -1,8 +1,9 @@
 // src/commands/members/xem.js
 'use strict';
 const { Command } = require('@sapphire/framework');
-const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
-const db = require('../../db.js');
+const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const db = require('../../../db.js');
+const { FOOTER_DEFAULT } = require('../../../utils/embeds.js');
 
 class XemCommand extends Command {
   constructor(context) {
@@ -30,6 +31,7 @@ class XemCommand extends Command {
       .setColor(0x01696f)
       .setTitle(`👥 Danh sách thành viên (${members.length})`)
       .setDescription(lines.join('\n'))
+      .setFooter({ text: FOOTER_DEFAULT })
       .setTimestamp();
 
     await interaction.editReply({ embeds: [embed] });

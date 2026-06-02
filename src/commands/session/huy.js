@@ -1,8 +1,9 @@
 // src/commands/session/huy.js
 'use strict';
 const { Command } = require('@sapphire/framework');
-const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
-const db = require('../../db.js');
+const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
+const db = require('../../../db.js');
+const { replyConfirm, replyErr } = require('../../../utils/embeds.js');
 
 class HuyCommand extends Command {
   constructor(context) {
@@ -20,26 +21,16 @@ class HuyCommand extends Command {
 
   async chatInputRun(interaction) {
     await interaction.deferReply({ ephemeral: true });
-    const { guild } = interaction;
-    const session = await db.getActiveSession(guild.id);
-    if (!session) return interaction.editReply({ content: '⚠️ Không có phiên nào đang mở.' });
+    const session = await db.getActiveSession(interaction.guild.id);
+    if (!session) return interaction.editReply(replyErr('Không có phiên nào đang mở.'));
 
-    await db.cancelSession(session.id);
-    const embed = new EmbedBuilder()
-      .setColor(0xa12c7b)
-      .setTitle('🚫 Phiên đã bị hủy')
-      .setDescription(`Phiên **${session.session_name}** đã bị hủy bởi <@${interaction.user.id}>.`)
-      .setTimestamp();
-
-    await interaction.editReply({ embeds: [embed] });
-
-    if (session.message_id && session.channel_id) {
-      const ch = guild.channels.cache.get(session.channel_id);
-      if (ch) {
-        const msg = await ch.messages.fetch(session.message_id).catch(() => null);
-        if (msg) await msg.edit({ embeds: [embed], components: [] }).catch(() => null);
-      }
-    }
+    return interaction.editReply(
+      replyConfirm(
+        `Hủy phiên **"${session.session_name}"**?\n> Kết quả điểm danh của phiên này sẽ không được lưu.`,
+        `huy:confirm:${session.id}`,
+        `huy:cancel:${session.id}`,
+      ),
+    );
   }
 }
 

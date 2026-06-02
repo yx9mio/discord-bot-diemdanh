@@ -2,7 +2,8 @@
 'use strict';
 const { Command } = require('@sapphire/framework');
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, ComponentType, PermissionFlagsBits } = require('discord.js');
-const db = require('../../db.js');
+const db = require('../../../db.js');
+const { FOOTER_DEFAULT, replyErr } = require('../../../utils/embeds.js');
 
 const DAY_NAMES = ['CN','T2','T3','T4','T5','T6','T7'];
 
@@ -28,7 +29,9 @@ function buildActiveEmbed(session, attendances) {
       { name: '✅ Có mặt',    value: `${present}`,   inline: true },
       { name: '⏰ Trễ',        value: `${late}`,      inline: true },
       { name: '👥 Bắt buộc',  value: eligible ? `${eligible}` : 'Tất cả', inline: true },
-    ).setTimestamp();
+    )
+    .setFooter({ text: FOOTER_DEFAULT })
+    .setTimestamp();
 }
 function buildHistoryEmbed(sessions) {
   const lines = sessions.map((s, i) => {
@@ -36,7 +39,9 @@ function buildHistoryEmbed(sessions) {
     return `${icon} **${i + 1}.** ${s.session_name} — ${fmtTs(s.ended_at ?? s.created_at)}`;
   });
   return new EmbedBuilder().setColor(0x006494).setTitle('📚 Lịch sử phiên')
-    .setDescription(lines.join('\n') || '_Chưa có phiên nào_').setTimestamp();
+    .setDescription(lines.join('\n') || '_Chưa có phiên nào_')
+    .setFooter({ text: FOOTER_DEFAULT })
+    .setTimestamp();
 }
 
 class QuanLyPhienCommand extends Command {
@@ -64,20 +69,20 @@ class QuanLyPhienCommand extends Command {
 
     if (sub === 'hien_tai') {
       const session = await db.getActiveSession(guild.id);
-      if (!session) return interaction.editReply({ content: '📭 Không có phiên nào đang mở.' });
+      if (!session) return interaction.editReply(replyErr('Không có phiên nào đang mở.'));
       const attendances = await db.getAttendances(session.id);
       return interaction.editReply({ embeds: [buildActiveEmbed(session, attendances)] });
     }
 
     if (sub === 'lich_su') {
       const limit = interaction.options.getInteger('so_luong') ?? 10;
-      const sessions = await db.getSessionHistory(guild.id, { limit, offset: 0 });
+      const sessions = await db.getSessionHistory(guild.id, limit);
       return interaction.editReply({ embeds: [buildHistoryEmbed(sessions)] });
     }
 
     if (sub === 'diem_danh_vang') {
       const session = await db.getActiveSession(guild.id);
-      if (!session) return interaction.editReply({ content: '⚠️ Không có phiên nào đang mở.' });
+      if (!session) return interaction.editReply(replyErr('Không có phiên nào đang mở.'));
 
       const attendances = await db.getAttendances(session.id);
       const presentIds  = new Set(attendances.map(a => a.user_id));

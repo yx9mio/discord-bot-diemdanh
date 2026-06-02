@@ -1,10 +1,44 @@
 // src/commands/schedule/lichcodinh.js
 'use strict';
 const { Command } = require('@sapphire/framework');
-const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
-const db = require('../../db.js');
+const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const db = require('../../../db.js');
+const { FOOTER_DEFAULT, replyConfirm, replyErr } = require('../../../utils/embeds.js');
 
 const DAY_VI = ['CN','T2','T3','T4','T5','T6','T7'];
+const fmt = s => `${DAY_VI[s.day_of_week]} ${String(s.hour).padStart(2,'0')}:${String(s.minute).padStart(2,'0')}`;
+
+function buildLichcdEmbed(schedules, autoEnabled) {
+  const embed = new EmbedBuilder().setColor(0x01696f).setTitle('📅 Lịch điểm danh cố định');
+  if (!schedules.length) {
+    embed.setDescription('_Chưa có lịch nào. Dùng `/lichcodinh them` để thêm._');
+  } else {
+    embed.setDescription(schedules.map((s, i) =>
+      `**${i + 1}.** ${fmt(s)} — ${s.session_name ?? 'Auto'}`
+    ).join('\n'));
+  }
+  embed.addFields({ name: '🔔 Tự động', value: autoEnabled ? '✅ Đang bật' : '❌ Tắt', inline: true });
+  embed.setFooter({ text: `${FOOTER_DEFAULT} · Bấm ✕ để xóa từng dòng · /lichcodinh xoa_tat_ca để xóa hết` });
+  return embed;
+}
+
+function buildScheduleDeleteRows(schedules) {
+  if (!schedules.length) return [];
+  const rows = [];
+  let row = new ActionRowBuilder();
+  for (let i = 0; i < schedules.length; i++) {
+    if (i > 0 && i % 5 === 0) { rows.push(row); row = new ActionRowBuilder(); }
+    const s = schedules[i];
+    row.addComponents(
+      new ButtonBuilder()
+        .setCustomId(`lichcd:del:${i}`)
+        .setLabel(`✕ ${i + 1}. ${fmt(s)}`)
+        .setStyle(ButtonStyle.Danger),
+    );
+  }
+  rows.push(row);
+  return rows.slice(0, 5);
+}
 
 class LichCoDinhCommand extends Command {
   constructor(context) {
@@ -48,16 +82,9 @@ class LichCoDinhCommand extends Command {
     const schedules = cfg.schedules ?? [];
 
     if (sub === 'xem') {
-      const embed = new EmbedBuilder().setColor(0x01696f).setTitle('📅 Lịch điểm danh cố định');
-      if (!schedules.length) {
-        embed.setDescription('_Chưa có lịch nào_');
-      } else {
-        embed.setDescription(schedules.map((s, i) =>
-          `**${i + 1}.** ${DAY_VI[s.day_of_week]} ${String(s.hour).padStart(2,'0')}:${String(s.minute).padStart(2,'0')} — ${s.session_name ?? 'Auto'}`
-        ).join('\n'));
-      }
-      embed.addFields({ name: '🔔 Tự động', value: cfg.auto_schedule_enabled ? '✅ Đang bật' : '❌ Tắt', inline: true });
-      return interaction.editReply({ embeds: [embed] });
+      const embed = buildLichcdEmbed(schedules, cfg.auto_schedule_enabled);
+      const rows  = buildScheduleDeleteRows(schedules);
+      return interaction.editReply({ embeds: [embed], components: rows });
     }
 
     if (sub === 'them') {
@@ -67,22 +94,36 @@ class LichCoDinhCommand extends Command {
         minute:       interaction.options.getInteger('phut'),
         session_name: interaction.options.getString('ten') ?? null,
       };
+      const dup = schedules.find(s =>
+        s.day_of_week === entry.day_of_week &&
+        s.hour === entry.hour &&
+        s.minute === entry.minute,
+      );
+      if (dup) {
+        return interaction.editReply(replyErr(`Lịch ${fmt(entry)} đã tồn tại. Dùng \`/lichcodinh xoa\` hoặc bấm nút ✕ trong \`/lichcodinh xem\`.`));
+      }
       schedules.push(entry);
       await db.setGuildConfig(guild.id, { schedules });
-      return interaction.editReply({ content: `✅ Đã thêm lịch: ${DAY_VI[entry.day_of_week]} ${String(entry.hour).padStart(2,'0')}:${String(entry.minute).padStart(2,'0')}` });
+      return interaction.editReply({ content: `✅ Đã thêm lịch: ${fmt(entry)}` });
     }
 
     if (sub === 'xoa') {
       const idx = interaction.options.getInteger('index') - 1;
-      if (idx < 0 || idx >= schedules.length) return interaction.editReply({ content: '⚠️ Index không hợp lệ.' });
+      if (idx < 0 || idx >= schedules.length) return interaction.editReply(replyErr('Index không hợp lệ.'));
       schedules.splice(idx, 1);
       await db.setGuildConfig(guild.id, { schedules });
       return interaction.editReply({ content: '✅ Đã xóa lịch.' });
     }
 
     if (sub === 'xoa_tat_ca') {
-      await db.setGuildConfig(guild.id, { schedules: [] });
-      return interaction.editReply({ content: '✅ Đã xóa tất cả lịch.' });
+      if (!schedules.length) return interaction.editReply({ content: '📭 Chưa có lịch nào để xóa.' });
+      return interaction.editReply(
+        replyConfirm(
+          `Xóa toàn bộ **${schedules.length} lịch** cố định?\n> Bot sẽ không tự động tạo phiên theo lịch cho đến khi bạn thêm lại.`,
+          'lichcd:delall:confirm',
+          'lichcd:delall:cancel',
+        ),
+      );
     }
 
     if (sub === 'bat_tat') {
@@ -93,4 +134,4 @@ class LichCoDinhCommand extends Command {
   }
 }
 
-module.exports = { LichCoDinhCommand };
+module.exports = { LichCoDinhCommand, buildScheduleDeleteRows, buildLichcdEmbed };

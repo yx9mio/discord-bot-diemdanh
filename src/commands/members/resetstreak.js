@@ -1,8 +1,8 @@
 // src/commands/members/resetstreak.js
 'use strict';
 const { Command } = require('@sapphire/framework');
-const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
-const db = require('../../db.js');
+const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
+const { replyConfirm } = require('../../../utils/embeds.js');
 
 class ResetStreakCommand extends Command {
   constructor(context) {
@@ -21,18 +21,15 @@ class ResetStreakCommand extends Command {
 
   async chatInputRun(interaction) {
     await interaction.deferReply({ ephemeral: true });
-    const { guild } = interaction;
     const target = interaction.options.getUser('thanh_vien');
 
-    await db.resetStreak(guild.id, target.id);
-
-    const embed = new EmbedBuilder()
-      .setColor(0xda7101)
-      .setTitle('🔄 Đã reset streak')
-      .setDescription(`Streak của <@${target.id}> đã được đặt về 0.`)
-      .setTimestamp();
-
-    await interaction.editReply({ embeds: [embed] });
+    return interaction.editReply(
+      replyConfirm(
+        `Reset streak của <@${target.id}> về 0?\n> Lịch sử điểm danh vẫn được giữ nguyên.`,
+        `resetstreak:confirm:${target.id}`,
+        `resetstreak:cancel:${target.id}`,
+      ),
+    );
   }
 }
 

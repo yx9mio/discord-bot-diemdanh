@@ -2,7 +2,7 @@
 'use strict';
 const { Command } = require('@sapphire/framework');
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const db = require('../../db.js');
+const db = require('../../../db.js');
 
 class ThongKeCommand extends Command {
   constructor(context) {

@@ -2,7 +2,8 @@
 'use strict';
 const { Command } = require('@sapphire/framework');
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
-const db = require('../../db.js');
+const db = require('../../../db.js');
+const { FOOTER_DEFAULT } = require('../../../utils/embeds.js');
 
 class ThemCommand extends Command {
   constructor(context) {
@@ -32,6 +33,7 @@ class ThemCommand extends Command {
       .setColor(0x437a22)
       .setTitle('✅ Đã thêm thành viên')
       .setDescription(`<@${target.id}>${phongBan ? ` — ${phongBan}` : ''}`)
+      .setFooter({ text: FOOTER_DEFAULT })
       .setTimestamp();
 
     await interaction.editReply({ embeds: [embed] });

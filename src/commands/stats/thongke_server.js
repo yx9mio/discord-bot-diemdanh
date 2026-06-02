@@ -1,8 +1,9 @@
 // src/commands/stats/thongke_server.js
 'use strict';
 const { Command } = require('@sapphire/framework');
-const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
-const db = require('../../db.js');
+const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const db = require('../../../db.js');
+const { FOOTER_DEFAULT } = require('../../../utils/embeds.js');
 
 class ThongKeServerCommand extends Command {
   constructor(context) {
@@ -33,6 +34,7 @@ class ThongKeServerCommand extends Command {
         { name: '👥 Thành viên',    value: `${stats?.total_members ?? 0}`,     inline: true },
         { name: '📊 Tỉ lệ TB',      value: stats?.avg_rate ? `${Math.round(stats.avg_rate)}%` : '—', inline: true },
       )
+      .setFooter({ text: FOOTER_DEFAULT })
       .setTimestamp();
 
     await interaction.editReply({ embeds: [embed] });

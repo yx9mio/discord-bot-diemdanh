@@ -2,7 +2,8 @@
 'use strict';
 const { Command } = require('@sapphire/framework');
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
-const db = require('../../db.js');
+const db = require('../../../db.js');
+const { FOOTER_DEFAULT } = require('../../../utils/embeds.js');
 
 class SuaCommand extends Command {
   constructor(context) {
@@ -42,6 +43,7 @@ class SuaCommand extends Command {
         ...(phongBan ? [{ name: 'Phòng ban', value: phongBan, inline: true }] : []),
         ...(ghiChu   ? [{ name: 'Ghi chú',   value: ghiChu,   inline: true }] : []),
       )
+      .setFooter({ text: FOOTER_DEFAULT })
       .setTimestamp();
 
     await interaction.editReply({ embeds: [embed] });

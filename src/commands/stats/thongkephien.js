@@ -2,7 +2,8 @@
 'use strict';
 const { Command } = require('@sapphire/framework');
 const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
-const db = require('../../db.js');
+const db = require('../../../db.js');
+const { FOOTER_DEFAULT, replyErr } = require('../../../utils/embeds.js');
 
 const STATUS_EMOJI = { tham_gia: '✅', khong_tham_gia: '❌', tre: '⏰', co_phep: '🟡' };
 
@@ -30,11 +31,11 @@ class ThongKePhienCommand extends Command {
     if (sessionId) {
       session = await db.getSessionById(sessionId);
     } else {
-      const history = await db.getSessionHistory(guild.id, { limit: 1, offset: 0 });
+      const history = await db.getSessionHistory(guild.id, 1);
       session = history[0];
     }
 
-    if (!session) return interaction.editReply({ content: '⚠️ Không tìm thấy phiên.' });
+    if (!session) return interaction.editReply(replyErr('Không tìm thấy phiên.'));
 
     const attendances = await db.getAttendances(session.id);
     const groups = { tham_gia: [], tre: [], co_phep: [], khong_tham_gia: [] };
@@ -52,7 +53,7 @@ class ThongKePhienCommand extends Command {
       .setColor(0x006494)
       .setTitle(`📋 Chi tiết phiên — ${session.session_name}`)
       .addFields(...fields)
-      .setFooter({ text: `ID: ${session.id}` })
+      .setFooter({ text: `${FOOTER_DEFAULT} · ID: ${session.id}` })
       .setTimestamp();
 
     await interaction.editReply({ embeds: [embed] });

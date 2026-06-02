@@ -2,7 +2,8 @@
 'use strict';
 const { Command } = require('@sapphire/framework');
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
-const db = require('../../db.js');
+const db = require('../../../db.js');
+const { replyConfirm, replyErr, FOOTER_DEFAULT } = require('../../../utils/embeds.js');
 
 class CaiDatCommand extends Command {
   constructor(context) {
@@ -42,7 +43,10 @@ class CaiDatCommand extends Command {
           { name: '📢 Kênh log',   value: cfg.log_channel_id ? `<#${cfg.log_channel_id}>` : '_Chưa cài_', inline: true },
           { name: '🌏 Timezone',   value: cfg.timezone ?? 'Asia/Ho_Chi_Minh',                               inline: true },
           { name: '🎭 Phái',        value: (cfg.phai_role_ids ?? []).map(r => `<@&${r}>`).join(', ') || 'Tất cả', inline: false },
+          { name: '🔔 Lịch cố định', value: (cfg.schedules ?? []).length ? `${(cfg.schedules ?? []).length} lịch` : '_Chưa cài_', inline: true },
+          { name: '⏰ Nhắc nhở',    value: cfg.reminder_enabled === false ? '⛔ Tắt' : '✅ Bật',                inline: true },
         )
+        .setFooter({ text: FOOTER_DEFAULT })
         .setTimestamp();
       return interaction.editReply({ embeds: [embed] });
     }
@@ -55,14 +59,19 @@ class CaiDatCommand extends Command {
 
     if (sub === 'timezone') {
       const tz = interaction.options.getString('tz');
-      try { Intl.DateTimeFormat(undefined, { timeZone: tz }); } catch { return interaction.editReply({ content: '⚠️ Timezone không hợp lệ.' }); }
+      try { Intl.DateTimeFormat(undefined, { timeZone: tz }); } catch { return interaction.editReply(replyErr('Timezone không hợp lệ.')); }
       await db.setGuildConfig(guild.id, { timezone: tz });
       return interaction.editReply({ content: `✅ Timezone: \`${tz}\`` });
     }
 
     if (sub === 'reset') {
-      await db.setGuildConfig(guild.id, { log_channel_id: null, timezone: 'Asia/Ho_Chi_Minh', phai_role_ids: [], schedules: [] });
-      return interaction.editReply({ content: '✅ Đã reset cài đặt về mặc định.' });
+      return interaction.editReply(
+        replyConfirm(
+          'Xóa toàn bộ cài đặt về mặc định?\n> Sẽ xóa: kênh log, timezone, phái, toàn bộ lịch cố định.',
+          'caidat:reset:confirm',
+          'caidat:reset:cancel',
+        ),
+      );
     }
   }
 }

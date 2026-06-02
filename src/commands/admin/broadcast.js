@@ -2,7 +2,8 @@
 'use strict';
 const { Command } = require('@sapphire/framework');
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
-const db = require('../../db.js');
+const db = require('../../../db.js');
+const { FOOTER_DEFAULT, replyErr } = require('../../../utils/embeds.js');
 
 class BroadcastCommand extends Command {
   constructor(context) {
@@ -23,7 +24,7 @@ class BroadcastCommand extends Command {
     await interaction.deferReply({ ephemeral: true });
     const { guild } = interaction;
     const session = await db.getActiveSession(guild.id);
-    if (!session) return interaction.editReply({ content: '⚠️ Không có phiên nào đang mở.' });
+    if (!session) return interaction.editReply(replyErr('Không có phiên nào đang mở.'));
 
     const attendances = await db.getAttendances(session.id);
     const presentIds  = new Set(attendances.map(a => a.user_id));
@@ -42,7 +43,7 @@ class BroadcastCommand extends Command {
       .setColor(0xda7101)
       .setTitle('📢 Nhắc nhở điểm danh')
       .setDescription(`${tags}\n\n${msg}`)
-      .setFooter({ text: `Phiên: ${session.session_name}` })
+      .setFooter({ text: `${FOOTER_DEFAULT} · Phiên: ${session.session_name}` })
       .setTimestamp();
 
     await interaction.channel.send({ embeds: [embed] });

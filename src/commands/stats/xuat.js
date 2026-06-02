@@ -2,7 +2,8 @@
 'use strict';
 const { Command } = require('@sapphire/framework');
 const { SlashCommandBuilder, PermissionFlagsBits, AttachmentBuilder } = require('discord.js');
-const db = require('../../db.js');
+const db = require('../../../db.js');
+const { replyErr } = require('../../../utils/embeds.js');
 
 class XuatCommand extends Command {
   constructor(context) {
@@ -32,7 +33,7 @@ class XuatCommand extends Command {
 
     if (loai === 'current') {
       const session = await db.getActiveSession(guild.id);
-      if (!session) return interaction.editReply({ content: '⚠️ Không có phiên nào đang mở.' });
+      if (!session) return interaction.editReply(replyErr('Không có phiên nào đang mở.'));
       rows     = await db.getAttendances(session.id);
       filename = `phien_${session.id.slice(0, 8)}.csv`;
     } else {
@@ -40,7 +41,7 @@ class XuatCommand extends Command {
       filename = `toan_bo_${guild.id}.csv`;
     }
 
-    if (!rows.length) return interaction.editReply({ content: '⚠️ Không có dữ liệu.' });
+    if (!rows.length) return interaction.editReply(replyErr('Không có dữ liệu.'));
 
     const header = 'session_id,user_id,status,timestamp\n';
     const csv    = header + rows.map(r => `${r.session_id},${r.user_id},${r.status},${r.created_at}`).join('\n');

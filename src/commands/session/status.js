@@ -1,23 +1,9 @@
 // src/commands/session/status.js
 'use strict';
 const { Command } = require('@sapphire/framework');
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const db = require('../../db.js');
-
-const DAY_NAMES = ['CN','T2','T3','T4','T5','T6','T7'];
-const _STATUS_EMOJI = { tham_gia: '✅', khong_tham_gia: '❌', tre: '⏰', co_phep: '🟡' };
-void _STATUS_EMOJI;
-
-function fmtTs(iso) {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  return `${DAY_NAMES[d.getDay()]} ${d.toLocaleDateString('vi-VN')} ${d.toLocaleTimeString('vi-VN', { hour:'2-digit', minute:'2-digit' })}`;
-}
-function durationStr(start) {
-  const ms = Date.now() - new Date(start);
-  const h = Math.floor(ms / 3600000), m = Math.floor((ms % 3600000) / 60000);
-  return h > 0 ? `${h}h ${m}m` : `${m}m`;
-}
+const { SlashCommandBuilder } = require('discord.js');
+const db = require('../../../db.js');
+const { buildSessionEmbed, buildSessionActionRow } = require('../../../utils/embeds.js');
 
 class StatusCommand extends Command {
   constructor(context) {
@@ -37,24 +23,13 @@ class StatusCommand extends Command {
     if (!session) return interaction.editReply({ content: '📭 Không có phiên nào đang mở.' });
 
     const attendances = await db.getAttendances(session.id);
-    const present  = attendances.filter(a => a.status === 'tham_gia').length;
-    const late     = attendances.filter(a => a.status === 'tre').length;
-    const eligible = (session.eligible_member_ids ?? []).length;
+    const cfg         = await db.getGuildConfig(guild.id);
+    const phaiRoleIds = cfg.phai_role_ids ?? [];
 
-    const embed = new EmbedBuilder()
-      .setColor(0x01696f)
-      .setTitle(`🟢 Phiên đang chạy — ${session.session_name}`)
-      .addFields(
-        { name: '🆔 ID',         value: `\`${session.id}\``,                          inline: true },
-        { name: '⏱️ Bắt đầu',   value: fmtTs(session.started_at ?? session.created_at), inline: true },
-        { name: '⏳ Đang chạy', value: durationStr(session.started_at ?? session.created_at), inline: true },
-        { name: '✅ Có mặt',    value: `${present}`,                                   inline: true },
-        { name: '⏰ Trễ',        value: `${late}`,                                      inline: true },
-        { name: '👥 Bắt buộc',  value: eligible ? `${eligible}` : 'Tất cả',            inline: true },
-      )
-      .setTimestamp();
+    const embed   = buildSessionEmbed(guild, session, attendances, phaiRoleIds, false);
+    const actions = buildSessionActionRow(false);
 
-    await interaction.editReply({ embeds: [embed] });
+    await interaction.editReply({ embeds: [embed], components: actions });
   }
 }
 

@@ -2,6 +2,7 @@
 'use strict';
 const { Command } = require('@sapphire/framework');
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, codeBlock } = require('discord.js');
+const { FOOTER_DEFAULT } = require('../../../utils/embeds.js');
 
 const _logBuffer = [];
 const MAX_LOG = 200;
@@ -48,6 +49,7 @@ class LogCommand extends Command {
       .setColor(0x006494)
       .setTitle(`📜 Log Bot (${logs.length} dòng)`)
       .setDescription(codeBlock('yaml', lines.slice(0, 3900)))
+      .setFooter({ text: FOOTER_DEFAULT })
       .setTimestamp();
 
     await interaction.editReply({ embeds: [embed] });

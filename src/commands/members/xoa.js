@@ -2,7 +2,7 @@
 'use strict';
 const { Command } = require('@sapphire/framework');
 const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
-const db = require('../../db.js');
+const { replyConfirm } = require('../../../utils/embeds.js');
 
 class XoaCommand extends Command {
   constructor(context) {
@@ -21,12 +21,15 @@ class XoaCommand extends Command {
 
   async chatInputRun(interaction) {
     await interaction.deferReply({ ephemeral: true });
-    const { guild } = interaction;
     const target = interaction.options.getUser('thanh_vien');
 
-    await db.deleteMember(guild.id, target.id);
-
-    await interaction.editReply({ content: `✅ Đã xóa <@${target.id}> khỏi danh sách.` });
+    return interaction.editReply(
+      replyConfirm(
+        `Xóa <@${target.id}> khỏi danh sách thành viên?\n> Hành động này sẽ xóa luôn lịch sử điểm danh của họ.`,
+        `xoa:confirm:${target.id}`,
+        `xoa:cancel:${target.id}`,
+      ),
+    );
   }
 }
 

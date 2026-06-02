@@ -1,10 +1,9 @@
 // src/commands/attendance/xem_diemdanh.js
 'use strict';
 const { Command } = require('@sapphire/framework');
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const db = require('../../db.js');
-
-const STATUS_EMOJI = { tham_gia: '✅', khong_tham_gia: '❌', tre: '⏰', co_phep: '🟡' };
+const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const db = require('../../../db.js');
+const { buildSessionEmbed } = require('../../../utils/embeds.js');
 
 class XemDiemDanhCommand extends Command {
   constructor(context) {
@@ -26,17 +25,15 @@ class XemDiemDanhCommand extends Command {
     if (!session) return interaction.editReply({ content: '⚠️ Không có phiên nào đang mở.' });
 
     const attendances = await db.getAttendances(session.id);
-    if (!attendances.length) return interaction.editReply({ content: '📭 Chưa có ai điểm danh.' });
+    const cfg         = await db.getGuildConfig(guild.id);
+    const phaiRoleIds = cfg.phai_role_ids ?? [];
 
-    const lines = attendances.map(a => `${STATUS_EMOJI[a.status] ?? '❓'} <@${a.user_id}>`);
-    const embed = new EmbedBuilder()
-      .setColor(0x01696f)
-      .setTitle(`📋 Điểm danh — ${session.session_name}`)
-      .setDescription(lines.join('\n'))
-      .setFooter({ text: `${attendances.length} người đã điểm danh` })
-      .setTimestamp();
+    const embed   = buildSessionEmbed(guild, session, attendances, phaiRoleIds, false);
+    const refresh = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId('attend_refresh').setLabel('🔄 Làm mới').setStyle(ButtonStyle.Secondary),
+    );
 
-    await interaction.editReply({ embeds: [embed] });
+    await interaction.editReply({ embeds: [embed], components: [refresh] });
   }
 }
 
