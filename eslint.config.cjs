@@ -57,6 +57,7 @@ module.exports = [
     files:   ['tests/*.js', 'tests/**/*.js'],
     ignores: [
       'tests/unit/**',
+      'tests/utils.test.js',
       'tests/validate.test.js',
       'tests/commands.test.js',
       'tests/embeds.test.js',
@@ -103,6 +104,7 @@ module.exports = [
   // ── Override cho ESM test files (Vitest) ──────────────────────────────────────
   {
     files: [
+      'tests/utils.test.js',
       'tests/commands.test.js',
       'tests/handlers.test.js',
       'tests/unit/**/*.js',
