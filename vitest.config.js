@@ -34,8 +34,6 @@ export default defineConfig({
         'node_modules/**',
         'tests/**',
         'migrations/**',
-        'commands/test_bot.js',
-        'handlers/testBotHandler.js',
       ],
       thresholds: {
         lines:      60,

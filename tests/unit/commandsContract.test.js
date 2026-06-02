@@ -1,6 +1,5 @@
 // tests/unit/commandsContract.test.js
-// Đảm bảo: mọi command file trong src/commands/ đều có entry trong utils/commands.js
-// + không có command nào trong registry mà thiếu file.
+// Commit 6: chỉ còn 6 commands. Categories giảm xuống 3 (PHIEN, DIEM_DANH, TIEN_ICH).
 
 import { describe, it, expect } from 'vitest';
 import { readdirSync, statSync } from 'node:fs';
@@ -13,16 +12,13 @@ function findCmdFiles(dir) {
   for (const f of readdirSync(dir)) {
     const p = join(dir, f);
     if (statSync(p).isDirectory()) out = out.concat(findCmdFiles(p));
-    else if (f.endsWith('.js') && f !== 'test_bot.js' && !f.endsWith('View.js')) out.push(p);
+    else if (f.endsWith('.js') && !f.endsWith('View.js')) out.push(p);
   }
   return out;
 }
 
 function fileToCmdName(filename) {
-  // Map: batdau.js → bat_dau, ketthuc.js → ket_thuc, setupCommand.js → setup
   return filename
-    .replace(/dau$/,  '_dau')
-    .replace(/thuc$/, '_thuc')
     .replace(/Command$/, '')
     .replace(/\.js$/, '');
 }
@@ -47,19 +43,17 @@ describe('Commands contract', () => {
     ].map(c => c.name);
     const fileSet = new Set(files);
     const missing = registryNames.filter(name => {
-      // Try: bat_dau → batdau, setup → setup OR setupCommand
-      const base = name.replace('_dau', 'dau').replace('_thuc', 'thuc');
-      return !fileSet.has(base) && !fileSet.has(`${base}Command`);
+      return !fileSet.has(name) && !fileSet.has(`${name}Command`);
     });
     expect(missing, `Missing files: ${missing.join(', ')}`).toEqual([]);
   });
 
-  it('ít nhất 5 user commands và 15 admin commands (regression)', () => {
-    expect(byAudience('user').length).toBeGreaterThanOrEqual(5);
-    expect(byAudience('admin').length).toBeGreaterThanOrEqual(15);
+  it('3 user commands và 3 admin commands (Commit 6)', () => {
+    expect(byAudience('user')).toHaveLength(3);
+    expect(byAudience('admin')).toHaveLength(3);
   });
 
-  it('mỗi category có ít nhất 1 command', () => {
+  it('mỗi category trong CATEGORIES đều có ≥1 command', () => {
     for (const cat of Object.keys(CATEGORIES)) {
       expect(byCategory(cat).length, `${cat} phải có ≥1 command`).toBeGreaterThan(0);
     }

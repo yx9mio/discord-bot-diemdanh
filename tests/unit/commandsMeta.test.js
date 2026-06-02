@@ -1,5 +1,6 @@
 // tests/unit/commandsMeta.test.js
 // Test: central registry utils/commands.js consistency.
+// Commit 6: 6 commands (Q1=b: /batdau, /ketthuc, /status, /diemdanh, /help, /setup).
 
 import { describe, it, expect } from 'vitest';
 const {
@@ -46,18 +47,21 @@ describe('utils/commands.js (registry)', () => {
     expect(phien.every(c => c.category === 'PHIEN')).toBe(true);
   });
 
-  it('admin commands đều nằm trong danh sách rõ ràng', () => {
+  it('admin commands core đều có mặt', () => {
     const adminNames = byAudience('admin').map(c => c.name);
-    expect(adminNames).toContain('bat_dau');
-    expect(adminNames).toContain('ket_thuc');
-    expect(adminNames).toContain('caidat');
+    expect(adminNames).toContain('batdau');
+    expect(adminNames).toContain('ketthuc');
+    expect(adminNames).toContain('setup');
   });
 
-  it('user commands phổ biến đều nằm trong user audience', () => {
+  it('user commands phổ biến đều có mặt', () => {
     const userNames = byAudience('user').map(c => c.name);
     expect(userNames).toContain('diemdanh');
-    expect(userNames).toContain('toi');
-    expect(userNames).toContain('rank');
+    expect(userNames).toContain('status');
     expect(userNames).toContain('help');
+  });
+
+  it('đúng 6 commands (Q1=b)', () => {
+    expect(COMMANDS).toHaveLength(6);
   });
 });
