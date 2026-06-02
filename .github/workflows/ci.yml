@@ -27,6 +27,11 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# Tắt cảnh báo Node.js 20 deprecated trên GitHub Actions runners
+# Actions sẽ mặc định chạy Node 24 từ 16/06/2026
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
 jobs:
   # ── 1. LINT ──────────────────────────────────────────────────────────────────
   lint:

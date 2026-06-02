@@ -1,5 +1,7 @@
 // tests/unit/session.test.js
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
 
 const mockGetAllMemberStats      = vi.fn();
 const mockBatchUpsertMemberStats = vi.fn();
@@ -7,38 +9,39 @@ const mockGetMemberBadges        = vi.fn();
 const mockUpsertMemberBadge      = vi.fn();
 const mockGetBadges              = vi.fn();
 
-vi.mock('../../db.js', () => ({
+// Pre-populate require.cache cho SUT dependencies (CJS). Workaround vì
+// vi.mock() không intercept require() trong module CJS khi test file là ESM.
+// KHÔNG mock session.js — đây là file đang được test.
+function mockModule(modulePath, exports) {
+  const resolved = require.resolve(modulePath);
+  require.cache[resolved] = {
+    id: resolved, filename: resolved, loaded: true,
+    exports, children: [], paths: [],
+  };
+}
+
+mockModule('../../db.js', {
   getAllMemberStats:      (...a) => mockGetAllMemberStats(...a),
   batchUpsertMemberStats: (...a) => mockBatchUpsertMemberStats(...a),
   getMemberBadges:        (...a) => mockGetMemberBadges(...a),
   upsertMemberBadge:      (...a) => mockUpsertMemberBadge(...a),
   getBadges:              (...a) => mockGetBadges(...a),
-}));
+});
 
-vi.mock('discord.js', () => ({
-  EmbedBuilder: class {
-    setTitle()       { return this; }
-    setColor()       { return this; }
-    setDescription() { return this; }
-    setFooter()      { return this; }
-    setTimestamp()   { return this; }
-  },
-}));
-
-vi.mock('../../utils/embeds.js', () => ({
+mockModule('../../utils/embeds.js', {
   FOOTER_DEFAULT:          'footer',
   buildSummaryEmbed:       vi.fn().mockReturnValue({}),
   buildAttendanceButtons:  vi.fn().mockReturnValue({}),
   buildClosedSessionEmbed: vi.fn().mockResolvedValue({}),
-}));
+});
 
-vi.mock('../../utils/logger.js', () => ({
+mockModule('../../utils/logger.js', {
   default: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
   info: vi.fn(), warn: vi.fn(), error: vi.fn(),
-}));
+});
 
 const { ketThucPhien, thongBaoHuyHieu, guiCsvDinhKem, getBadgeList } =
-  await import('../../utils/session.js');
+  require('../../utils/session.js');
 
 const GUILD   = { id: 'g1', name: 'Test Guild' };
 const SESSION = { id: 'sess-1', session_name: 'Họp thường' };

@@ -1,6 +1,8 @@
 // tests/smoke/sessionClose.test.js
 // Smoke test: BUG-8 regression — closeSession throw → abort, không gửi embed
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
 
 const mockDb = {
   getActiveSession: vi.fn(),
@@ -14,13 +16,23 @@ const mockBuildSummary   = vi.fn().mockReturnValue({});
 const mockXoaHenGio      = vi.fn();
 const mockRequireAdmin   = vi.fn().mockResolvedValue({ ok: true });
 
-vi.mock('../../db.js', () => mockDb);
-vi.mock('../../utils/session.js', () => ({
+// Pre-populate require.cache cho SUT dependencies (CJS). Workaround vì
+// vi.mock() không intercept require() trong module CJS khi test file là ESM.
+function mockModule(modulePath, exports) {
+  const resolved = require.resolve(modulePath);
+  require.cache[resolved] = {
+    id: resolved, filename: resolved, loaded: true,
+    exports, children: [], paths: [],
+  };
+}
+
+mockModule('../../db.js', mockDb);
+mockModule('../../utils/session.js', {
   ketThucPhien:          mockKetThucPhien,
   thongBaoHuyHieu:       mockThongBao,
   voHieuHoaNutDiemDanh:  mockVoHieuHoa,
-}));
-vi.mock('../../utils/embeds.js', () => ({
+});
+mockModule('../../utils/embeds.js', {
   buildSummaryEmbed:     mockBuildSummary,
   replyErrEdit:          (msg) => ({ content: msg }),
   replyOkEdit:           (msg) => ({ content: msg }),
@@ -28,9 +40,11 @@ vi.mock('../../utils/embeds.js', () => ({
   buildSessionEmbed:     vi.fn().mockResolvedValue({}),
   buildAttendanceButtons: vi.fn().mockReturnValue([]),
   buildConfigEmbed:      vi.fn().mockReturnValue({}),
-}));
-vi.mock('../../utils/timers.js', () => ({ xoaHenGio: mockXoaHenGio }));
-vi.mock('../../utils/permissions.js', () => ({ requireAdmin: mockRequireAdmin }));
+});
+mockModule('../../utils/timers.js', { xoaHenGio: mockXoaHenGio });
+mockModule('../../utils/permissions.js', { requireAdmin: mockRequireAdmin });
+
+const { SessionButtonHandler } = require('../../interaction-handlers/sessionButton.js');
 
 const SESSION = { id: 'sess1', session_name: 'TestPhien', guild_id: 'g1' };
 
@@ -61,7 +75,6 @@ describe('SessionButton confirm_close — BUG-8 regression', () => {
     mockDb.getActiveSession.mockResolvedValue(SESSION);
     mockDb.closeSession.mockRejectedValue(new Error('DB timeout'));
 
-    const { SessionButtonHandler } = await import('../../interaction-handlers/sessionButton.js');
     const handler = { run: SessionButtonHandler.prototype.run };
     const interaction = makeInteraction('session:confirm_close');
 
@@ -77,7 +90,6 @@ describe('SessionButton confirm_close — BUG-8 regression', () => {
     mockDb.getActiveSession.mockResolvedValue(SESSION);
     mockDb.closeSession.mockResolvedValue({ ...SESSION, is_active: false });
 
-    const { SessionButtonHandler } = await import('../../interaction-handlers/sessionButton.js');
     const handler = { run: SessionButtonHandler.prototype.run };
     const interaction = makeInteraction('session:confirm_close');
 
@@ -92,7 +104,6 @@ describe('SessionButton confirm_close — BUG-8 regression', () => {
   it('không có phiên → editReply lỗi, không làm gì thêm', async () => {
     mockDb.getActiveSession.mockResolvedValue(null);
 
-    const { SessionButtonHandler } = await import('../../interaction-handlers/sessionButton.js');
     const handler = { run: SessionButtonHandler.prototype.run };
     const interaction = makeInteraction('session:confirm_close');
 

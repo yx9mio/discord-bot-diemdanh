@@ -1,29 +1,45 @@
 // tests/smoke/attendanceButton.test.js
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
 
 const mockGetActiveSession = vi.fn();
 const mockUpsertAttendance = vi.fn();
 const mockGetAttendances   = vi.fn();
 
-vi.mock('../../db.js', () => ({
+// Pre-populate require.cache cho SUT dependencies (CJS). Workaround vì
+// vi.mock() không intercept require() trong module CJS khi test file là ESM.
+function mockModule(modulePath, exports) {
+  const resolved = require.resolve(modulePath);
+  require.cache[resolved] = {
+    id: resolved, filename: resolved, loaded: true,
+    exports, children: [], paths: [],
+  };
+}
+
+mockModule('../../db.js', {
   getActiveSession:  (...a) => mockGetActiveSession(...a),
   upsertAttendance:  (...a) => mockUpsertAttendance(...a),
   getAttendances:    (...a) => mockGetAttendances(...a),
   getStreak:         vi.fn().mockResolvedValue(null),
-}));
+});
 
-vi.mock('../../utils/embeds.js', () => ({
+mockModule('../../utils/embeds.js', {
   buildSessionEmbed:       vi.fn().mockReturnValue({ _embed: true }),
   buildSessionActionRow:   vi.fn().mockReturnValue([]),
   buildAttendConfirmEmbed: vi.fn().mockReturnValue({ embeds: [], flags: 64 }),
-}));
+});
 
-vi.mock('@sapphire/framework', () => ({
-  InteractionHandler:      class { constructor(ctx, opts) { Object.assign(this, opts); } },
+mockModule('@sapphire/framework', {
+  InteractionHandler: class {
+    constructor(ctx, opts) { Object.assign(this, opts); }
+    some() { return { some: true }; }
+    none() { return { none: true }; }
+  },
   InteractionHandlerTypes: { Button: 'Button' },
-}));
+});
 
-const { AttendanceButtonHandler } = await import('../../interaction-handlers/attendanceButton.js');
+const { AttendanceButtonHandler } = require('../../interaction-handlers/attendanceButton.js');
 
 const makeInteraction = (customId, overrides = {}) => ({
   customId,

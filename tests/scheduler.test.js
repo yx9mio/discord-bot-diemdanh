@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
 
 // ─── Mock tất cả deps ────────────────────────────────────────────────────────────
 const mockGetActiveSession      = vi.fn();
@@ -8,38 +10,40 @@ const mockGetAttendances        = vi.fn().mockResolvedValue([]);
 const mockGetLichCoDinh         = vi.fn().mockResolvedValue([]);
 const mockUpdateSessionMessage  = vi.fn().mockResolvedValue(null);
 
-vi.mock('../db.js', () => ({
+// Pre-populate require.cache cho SUT (CJS). Workaround vì vi.mock() không
+// intercept require() trong module CJS khi test file là ESM.
+function mockModule(modulePath, exports) {
+  const resolved = require.resolve(modulePath);
+  require.cache[resolved] = {
+    id: resolved, filename: resolved, loaded: true,
+    exports, children: [], paths: [],
+  };
+}
+
+mockModule('../db.js', {
   getActiveSession:     (...a) => mockGetActiveSession(...a),
   createSession:        (...a) => mockCreateSession(...a),
   closeSession:         (...a) => mockCloseSession(...a),
   getAttendances:       (...a) => mockGetAttendances(...a),
   getLichCoDinh:        (...a) => mockGetLichCoDinh(...a),
   updateSessionMessage: (...a) => mockUpdateSessionMessage(...a),
-}));
+});
 
-vi.mock('../utils/session.js', () => ({
-  ketThucPhien:    vi.fn().mockResolvedValue(new Map()),
-  thongBaoHuyHieu: vi.fn().mockResolvedValue(null),
-  guiCsvDinhKem:   vi.fn().mockResolvedValue(null),
-}));
-
-vi.mock('../utils/embeds.js', () => ({
+mockModule('../utils/embeds.js', {
   buildAttendanceButtons:  vi.fn().mockReturnValue({}),
   buildSummaryEmbed:       vi.fn().mockReturnValue({ data: {} }),
   buildClosedSessionEmbed: vi.fn().mockResolvedValue({ data: {} }),
   buildSessionEmbed:       vi.fn().mockResolvedValue({ data: {} }),
   FOOTER_DEFAULT:          'footer',
-}));
+});
 
-vi.mock('discord.js', () => ({
-  EmbedBuilder: class {
-    setColor() { return this; }
-    setTitle() { return this; }
-    setDescription() { return this; }
-    setFooter() { return this; }
-    data = {};
-  },
-}));
+mockModule('../utils/session.js', {
+  ketThucPhien:    vi.fn().mockResolvedValue(new Map()),
+  thongBaoHuyHieu: vi.fn().mockResolvedValue(null),
+  guiCsvDinhKem:   vi.fn().mockResolvedValue(null),
+});
+
+const { scheduleLichCoDinh, khoiPhucScheduler, runLichNgay } = require('../utils/scheduler.js');
 
 const validLich = {
   id: '00000000-0000-0000-0000-000000000001',
@@ -54,7 +58,6 @@ describe('scheduleLichCoDinh', () => {
   afterEach(() => { vi.useRealTimers(); vi.clearAllMocks(); });
 
   it('bỏ qua lịch invalid (day_of_week=99) không throw', async () => {
-    const { scheduleLichCoDinh } = await import('../utils/scheduler.js');
     const client = { guilds: { cache: new Map() } };
     await expect(
       scheduleLichCoDinh(client, 'g1', { id: 'not-uuid', day_of_week: 99 })
@@ -62,7 +65,6 @@ describe('scheduleLichCoDinh', () => {
   });
 
   it('đăng ký timer khi lịch hợp lệ', async () => {
-    const { scheduleLichCoDinh } = await import('../utils/scheduler.js');
     const client = { guilds: { cache: new Map() } };
     const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout');
     await scheduleLichCoDinh(client, 'g1', validLich);
@@ -84,7 +86,6 @@ describe('runLichNgay — _moPhien guards', () => {
 
   it('guard: đã có active session → { ok: false, reason: already_open }', async () => {
     mockGetActiveSession.mockResolvedValueOnce({ id: 'existing-sess' });
-    const { runLichNgay } = await import('../utils/scheduler.js');
     const result = await runLichNgay(client, 'g1', validLich);
     expect(result.ok).toBe(false);
     expect(result.reason).toBe('already_open');
@@ -98,7 +99,6 @@ describe('runLichNgay — _moPhien guards', () => {
       channels: { fetch: vi.fn().mockResolvedValue(null) },
     };
     const client2 = { guilds: { cache: new Map([['g1', guildNoChannel]]) } };
-    const { runLichNgay } = await import('../utils/scheduler.js');
     const result = await runLichNgay(client2, 'g1', validLich);
     expect(result.ok).toBe(false);
     expect(result.reason).toBe('channel_not_found');
@@ -107,7 +107,6 @@ describe('runLichNgay — _moPhien guards', () => {
   it('guard: createSession trả về null → { ok: false, reason: db_error }', async () => {
     mockGetActiveSession.mockResolvedValueOnce(null);
     mockCreateSession.mockResolvedValueOnce(null); // simulate DB fail
-    const { runLichNgay } = await import('../utils/scheduler.js');
     const result = await runLichNgay(client, 'g1', validLich);
     expect(result.ok).toBe(false);
     expect(result.reason).toBe('db_error');
@@ -116,7 +115,6 @@ describe('runLichNgay — _moPhien guards', () => {
   it('mở thành công → { ok: true, session }', async () => {
     mockGetActiveSession.mockResolvedValueOnce(null);
     mockCreateSession.mockResolvedValueOnce({ id: 'new-sess', session_name: 'Hop', guild_id: 'g1' });
-    const { runLichNgay } = await import('../utils/scheduler.js');
     const result = await runLichNgay(client, 'g1', validLich);
     expect(result.ok).toBe(true);
     expect(result.session.id).toBe('new-sess');
@@ -124,7 +122,6 @@ describe('runLichNgay — _moPhien guards', () => {
   });
 
   it('lịch invalid throw Error', async () => {
-    const { runLichNgay } = await import('../utils/scheduler.js');
     await expect(
       runLichNgay(client, 'g1', { id: 'bad', day_of_week: 99 })
     ).rejects.toThrow(/Lịch không hợp lệ/);
@@ -138,7 +135,6 @@ describe('khoiPhucScheduler', () => {
 
   it('chạy không lỗi khi không có lịch', async () => {
     mockGetLichCoDinh.mockResolvedValue([]);
-    const { khoiPhucScheduler } = await import('../utils/scheduler.js');
     const client = { guilds: { cache: new Map([['g1', { id: 'g1', name: 'G' }]]) } };
     await expect(khoiPhucScheduler(client)).resolves.toBeUndefined();
   });
@@ -148,7 +144,6 @@ describe('khoiPhucScheduler', () => {
       { id: 'bad-uuid', day_of_week: 99 }, // invalid
       validLich,                           // hợp lệ
     ]);
-    const { khoiPhucScheduler } = await import('../utils/scheduler.js');
     const client = { guilds: { cache: new Map([['g1', { id: 'g1', name: 'G' }]]) } };
     await expect(khoiPhucScheduler(client)).resolves.toBeUndefined();
     // valid lich phải tạo 1 setTimeout (open timer)
@@ -157,7 +152,6 @@ describe('khoiPhucScheduler', () => {
 
   it('mỗi guild lỗi DB không làm crash toàn bộ', async () => {
     mockGetLichCoDinh.mockRejectedValue(new Error('DB down'));
-    const { khoiPhucScheduler } = await import('../utils/scheduler.js');
     const client = { guilds: { cache: new Map([
       ['g1', { id: 'g1', name: 'G1' }],
       ['g2', { id: 'g2', name: 'G2' }],

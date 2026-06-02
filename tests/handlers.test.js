@@ -10,7 +10,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
 const Module = require('node:module');
 
-// Patch Module._load để mock discord.js và db.js
+// Patch Module._load để mock discord.js, @sapphire/framework, và db.js
 const MOCK_DISCORD = {
   SlashCommandBuilder: class {
     setName(n)    { this._name = n; return this; }
@@ -24,12 +24,22 @@ const MOCK_DISCORD = {
   StringSelectMenuBuilder: class{setCustomId(){return this;}setPlaceholder(){return this;}addOptions(){return this;}},
   StringSelectMenuOptionBuilder: class{setLabel(){return this;}setValue(){return this;}setDescription(){return this;}setEmoji(){return this;}setDefault(){return this;}},
   time: (ts,f)=>`<t:${ts}:${f}>`, userMention: id=>`<@${id}>`, roleMention: id=>`<@&${id}>`,
+  MessageFlags: { Ephemeral: 64 },
+};
+// @sapphire/framework — các command file dùng `const { Command } = require('@sapphire/framework')`
+// Cung cấp class Command rỗng + các helper khác để require() không throw
+const MOCK_SAPPHIRE = {
+  Command: class { constructor() {} },
+  container: { client: null, logger: { info: () => {}, warn: () => {}, error: () => {} } },
+  Piece: class {},
+  Listener: class {},
 };
 const MOCK_DB = new Proxy({}, { get: (_,p) => p==='supabase'?{}:async()=>null });
 
 const _origLoad = Module._load.bind(Module);
 Module._load = function(request, parent, isMain) {
   if (request === 'discord.js') return MOCK_DISCORD;
+  if (request === '@sapphire/framework') return MOCK_SAPPHIRE;
   const resolved = (() => { try { return Module._resolveFilename(request, parent); } catch { return ''; } })();
   if (resolved.endsWith('/db.js') && !resolved.includes('node_modules')) return MOCK_DB;
   return _origLoad(request, parent, isMain);
