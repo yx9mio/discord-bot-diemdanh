@@ -45,7 +45,7 @@ class SessionButtonHandler extends InteractionHandler {
 
     // Shortcuts setup panel
     if (customId === 'setup_help') {
-      const { execute } = require('../commands/help.js');
+      const { execute } = require('../src/commands/help.js');
       return execute(interaction);
     }
     if (customId === 'setup_config') {
@@ -62,7 +62,7 @@ class SessionButtonHandler extends InteractionHandler {
       const curPage  = parseInt(parts[2], 10);
       const newPage  = action === 'next' ? curPage + 1 : curPage - 1;
       await interaction.deferUpdate();
-      const { buildHistoryPageEmbed, buildNavRow, PAGE_SIZE } = require('../commands/lichsu.js');
+      const { buildHistoryPageEmbed, buildNavRow, PAGE_SIZE } = require('../src/commands/lichsu.js');
       // BUG-4 fix: getSessionHistory là alias của getRecentSessions
       const history     = await db.getSessionHistory(guild.id, 50);
       const totalPages  = Math.max(1, Math.ceil(history.length / PAGE_SIZE));
