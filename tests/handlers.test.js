@@ -1,16 +1,17 @@
 // tests/handlers.test.js
 // Kiểm tra commandHandler load + handleCommand dispatch
 'use strict';
-const { describe, it } = require('node:test');
-const assert = require('node:assert/strict');
-const path   = require('node:path');
+import { describe, it, expect, vi, beforeAll } from 'vitest';
+import path from 'node:path';
+import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const require = createRequire(import.meta.url);
 const Module = require('node:module');
 
-// Reuse discord.js mock từ commands.test đã register
-// (Module._load đã bị patch ở commands.test nên nếu chạy riêng cần re-patch)
-// Để test độc lập, patch lại ở đây:
-const _origLoad2 = Module._load.bind(Module);
-const MOCK_DISCORD2 = {
+// Patch Module._load để mock discord.js và db.js
+const MOCK_DISCORD = {
   SlashCommandBuilder: class {
     setName(n)    { this._name = n; return this; }
     setDescription() { return this; }
@@ -24,37 +25,43 @@ const MOCK_DISCORD2 = {
   StringSelectMenuOptionBuilder: class{setLabel(){return this;}setValue(){return this;}setDescription(){return this;}setEmoji(){return this;}setDefault(){return this;}},
   time: (ts,f)=>`<t:${ts}:${f}>`, userMention: id=>`<@${id}>`, roleMention: id=>`<@&${id}>`,
 };
-const MOCK_DB2 = new Proxy({}, { get: (_,p) => p==='supabase'?{}:async()=>null });
+const MOCK_DB = new Proxy({}, { get: (_,p) => p==='supabase'?{}:async()=>null });
 
+const _origLoad = Module._load.bind(Module);
 Module._load = function(request, parent, isMain) {
-  if (request === 'discord.js') return MOCK_DISCORD2;
+  if (request === 'discord.js') return MOCK_DISCORD;
   const resolved = (() => { try { return Module._resolveFilename(request, parent); } catch { return ''; } })();
-  if (resolved.endsWith('/db.js') && !resolved.includes('node_modules')) return MOCK_DB2;
-  return _origLoad2(request, parent, isMain);
+  if (resolved.endsWith('/db.js') && !resolved.includes('node_modules')) return MOCK_DB;
+  return _origLoad(request, parent, isMain);
 };
 
 describe('commandHandler.js', () => {
   let loadCommands, handleCommand;
 
-  it('loads without error', () => {
+  beforeAll(() => {
     // Xoá cache để mock có hiệu lực
     const hPath = path.join(__dirname, '..', 'handlers', 'commandHandler.js');
     delete require.cache[hPath];
     ({ loadCommands, handleCommand } = require('../handlers/commandHandler.js'));
   });
 
+  it('loads without error', () => {
+    expect(loadCommands).toBeDefined();
+    expect(handleCommand).toBeDefined();
+  });
+
   it('exports loadCommands function', () => {
-    assert.equal(typeof loadCommands, 'function');
+    expect(typeof loadCommands).toBe('function');
   });
 
   it('exports handleCommand function', () => {
-    assert.equal(typeof handleCommand, 'function');
+    expect(typeof handleCommand).toBe('function');
   });
 
   it('loadCommands() trả về Map', () => {
     const commands = loadCommands();
-    assert.ok(commands instanceof Map, 'loadCommands phải trả về Map');
-    assert.ok(commands.size > 0, `Map rỗng — không load được command nào`);
+    expect(commands).toBeInstanceOf(Map);
+    expect(commands.size).toBeGreaterThan(0);
   });
 
   it('handleCommand bỏ qua command không tồn tại (không throw)', async () => {
@@ -66,6 +73,6 @@ describe('commandHandler.js', () => {
       guildId: 'test-guild',
       reply: async () => {},
     };
-    await assert.doesNotReject(() => handleCommand(fakeInteraction, commands));
+    await expect(() => handleCommand(fakeInteraction, commands)).not.toThrow();
   });
 });
