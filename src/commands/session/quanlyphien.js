@@ -1,22 +1,11 @@
 // src/commands/session/quanlyphien.js
+// Quản lý phiên: xem phiên hiện tại, lịch sử, đánh dấu vắng hàng loạt.
 'use strict';
 const { Command } = require('@sapphire/framework');
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, ComponentType, PermissionFlagsBits } = require('discord.js');
 const db = require('../../../db.js');
 const { FOOTER_DEFAULT, replyErr } = require('../../../utils/embeds.js');
-
-const DAY_NAMES = ['CN','T2','T3','T4','T5','T6','T7'];
-
-function fmtTs(iso) {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  return `${DAY_NAMES[d.getDay()]} ${d.toLocaleDateString('vi-VN')} ${d.toLocaleTimeString('vi-VN', { hour:'2-digit', minute:'2-digit' })}`;
-}
-function durationStr(startedAt, endedAt) {
-  const ms = new Date(endedAt ?? Date.now()) - new Date(startedAt);
-  const h = Math.floor(ms / 3600000), m = Math.floor((ms % 3600000) / 60000);
-  return h > 0 ? `${h}h ${m}m` : `${m}m`;
-}
+const { fmtTs, durationStr } = require('../../../utils/format.js');
 function buildActiveEmbed(session, attendances) {
   const present  = attendances.filter(a => a.status === 'tham_gia').length;
   const late     = attendances.filter(a => a.status === 'tre').length;

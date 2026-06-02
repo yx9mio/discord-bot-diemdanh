@@ -1,16 +1,12 @@
 // src/commands/session/batdau.js
+// Mở phiên điểm danh mới. Tạo session, gửi embed + buttons, set timer nếu có `phut`.
 'use strict';
 const { Command } = require('@sapphire/framework');
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const db = require('../../../db.js');
 const { datHenGioDong } = require('../../../utils/timers.js');
 const { FOOTER_DEFAULT } = require('../../../utils/embeds.js');
-
-const DAY_NAMES = ['CN','T2','T3','T4','T5','T6','T7'];
-function fmtTs(iso) {
-  const d = new Date(iso);
-  return `${DAY_NAMES[d.getDay()]} ${d.toLocaleDateString('vi-VN')} ${d.toLocaleTimeString('vi-VN', { hour:'2-digit', minute:'2-digit' })}`;
-}
+const { fmtTs } = require('../../../utils/format.js');
 
 class BatDauCommand extends Command {
   constructor(context) {

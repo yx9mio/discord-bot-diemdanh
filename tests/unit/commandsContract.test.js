@@ -1,0 +1,65 @@
+// tests/unit/commandsContract.test.js
+// Đảm bảo: mọi command file trong src/commands/ đều có entry trong utils/commands.js
+// + không có command nào trong registry mà thiếu file.
+
+import { describe, it, expect } from 'vitest';
+import { readdirSync, statSync } from 'node:fs';
+import { join, basename } from 'node:path';
+
+const { byAudience, byCategory, CATEGORIES } = await import('../../utils/commands.js');
+
+function findCmdFiles(dir) {
+  let out = [];
+  for (const f of readdirSync(dir)) {
+    const p = join(dir, f);
+    if (statSync(p).isDirectory()) out = out.concat(findCmdFiles(p));
+    else if (f.endsWith('.js') && f !== 'test_bot.js') out.push(p);
+  }
+  return out;
+}
+
+function fileToCmdName(filename) {
+  // Map: batdau.js → bat_dau, ketthuc.js → ket_thuc
+  return filename
+    .replace(/dau$/,  '_dau')
+    .replace(/thuc$/, '_thuc')
+    .replace(/\.js$/, '');
+}
+
+describe('Commands contract', () => {
+  it('mọi file trong src/commands/ đều có entry trong registry', () => {
+    const files = findCmdFiles('src/commands').map(f => basename(f, '.js'));
+    const registryNames = [
+      ...byAudience('user'),
+      ...byAudience('admin'),
+    ].map(c => c.name);
+    const mapped = files.map(fileToCmdName);
+    const missing = mapped.filter(name => !registryNames.includes(name));
+    expect(missing, `Missing registry entries: ${missing.join(', ')}`).toEqual([]);
+  });
+
+  it('mọi entry trong registry đều có file tương ứng', () => {
+    const files = findCmdFiles('src/commands').map(f => basename(f, '.js'));
+    const registryNames = [
+      ...byAudience('user'),
+      ...byAudience('admin'),
+    ].map(c => c.name);
+    const fileSet = new Set(files);
+    const missing = registryNames.filter(name => {
+      const fileForm = name.replace('_dau', 'dau').replace('_thuc', 'thuc');
+      return !fileSet.has(fileForm);
+    });
+    expect(missing, `Missing files: ${missing.join(', ')}`).toEqual([]);
+  });
+
+  it('ít nhất 5 user commands và 15 admin commands (regression)', () => {
+    expect(byAudience('user').length).toBeGreaterThanOrEqual(5);
+    expect(byAudience('admin').length).toBeGreaterThanOrEqual(15);
+  });
+
+  it('mỗi category có ít nhất 1 command', () => {
+    for (const cat of Object.keys(CATEGORIES)) {
+      expect(byCategory(cat).length, `${cat} phải có ≥1 command`).toBeGreaterThan(0);
+    }
+  });
+});
