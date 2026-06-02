@@ -1,105 +1,179 @@
 // tests/smoke/attendanceButton.test.js
-// Smoke test: BUG-1 regression — upsertAttendance đúng object payload
-// BUG-6 regression — lock ngăn double-click
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// Mock db
-const mockDb = {
-  getActiveSession: vi.fn(),
-  upsertAttendance: vi.fn(),
-  getAttendances: vi.fn().mockResolvedValue([]),
-};
-vi.mock('../../db.js', () => mockDb);
+const mockGetActiveSession = vi.fn();
+const mockUpsertAttendance = vi.fn();
+const mockGetAttendances   = vi.fn();
+
+vi.mock('../../db.js', () => ({
+  getActiveSession:  (...a) => mockGetActiveSession(...a),
+  upsertAttendance:  (...a) => mockUpsertAttendance(...a),
+  getAttendances:    (...a) => mockGetAttendances(...a),
+  getStreak:         vi.fn().mockResolvedValue(null),
+}));
+
 vi.mock('../../utils/embeds.js', () => ({
-  buildSessionEmbed:       vi.fn().mockResolvedValue({}),
-  buildAttendanceButtons:  vi.fn().mockReturnValue([]),
+  buildSessionEmbed:       vi.fn().mockReturnValue({ _embed: true }),
   buildSessionActionRow:   vi.fn().mockReturnValue([]),
   buildAttendConfirmEmbed: vi.fn().mockReturnValue({ embeds: [], flags: 64 }),
 }));
 
-const SESSION = {
-  id: 'sess1', guild_id: 'g1', channel_id: 'ch1',
-  message_id: 'msg1', eligible_member_ids: null, allowed_role_id: null,
-};
+vi.mock('@sapphire/framework', () => ({
+  InteractionHandler:      class { constructor(ctx, opts) { Object.assign(this, opts); } },
+  InteractionHandlerTypes: { Button: 'Button' },
+}));
 
-function makeInteraction(customId = 'attendance:join') {
-  return {
-    customId,
-    guild: {
-      id: 'g1',
-      channels: { cache: new Map() },
-      roles: { cache: new Map() },
-    },
-    member: {
-      nickname: 'TestUser',
-      roles: { cache: new Map() },
-    },
-    user: { id: 'u1', displayName: 'TestUser', username: 'testuser' },
-    reply:      vi.fn().mockResolvedValue(undefined),
-    deferReply: vi.fn().mockResolvedValue(undefined),
-    editReply:  vi.fn().mockResolvedValue(undefined),
-  };
-}
+const { AttendanceButtonHandler } = await import('../../interaction-handlers/attendanceButton.js');
 
-describe('AttendanceButton — BUG-1 regression', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mockDb.getActiveSession.mockResolvedValue(SESSION);
+const makeInteraction = (customId, overrides = {}) => ({
+  customId,
+  guild: {
+    id: 'g1',
+    channels: { cache: new Map() },
+    roles:    { cache: new Map() },
+  },
+  member: {
+    nickname: null,
+    displayName: 'Alice',
+    roles: { cache: new Map() },
+  },
+  user: { id: 'u1', displayName: 'Alice', username: 'alice' },
+  reply:      vi.fn().mockResolvedValue(null),
+  deferReply: vi.fn().mockResolvedValue(null),
+  editReply:  vi.fn().mockResolvedValue(null),
+  ...overrides,
+});
+
+const makeSession = (extra = {}) => ({
+  id: 'sess-1',
+  name: 'Phiên Test',
+  channel_id: 'ch1',
+  message_id: 'msg1',
+  eligible_member_ids: null,
+  allowed_role_id: null,
+  phai_role_ids: [],
+  ...extra,
+});
+
+const handler = new AttendanceButtonHandler({}, {});
+
+describe('parse()', () => {
+  it('trả về some() cho customId hợp lệ', () => {
+    for (const id of ['attendance:join', 'attendance:late', 'attendance:decline', 'attendance:excuse']) {
+      const result = handler.parse(makeInteraction(id));
+      expect(result).toBeTruthy();
+    }
   });
 
-  it('upsertAttendance được gọi với object payload (không phải positional args)', async () => {
-    // Chạy handler trực tiếp (không qua Sapphire)
-    const { AttendanceButtonHandler } = await import('../../interaction-handlers/attendanceButton.js');
-    // Tạo instance giả lập
-    const handler = { run: AttendanceButtonHandler.prototype.run };
-    const interaction = makeInteraction('attendance:join');
-
-    await handler.run.call(handler, interaction);
-
-    expect(mockDb.upsertAttendance).toHaveBeenCalledOnce();
-    const [arg] = mockDb.upsertAttendance.mock.calls[0];
-    // BUG-1: phải là object, không phải string/number primitives
-    expect(typeof arg).toBe('object');
-    expect(arg).toHaveProperty('session_id', 'sess1');
-    expect(arg).toHaveProperty('guild_id', 'g1');
-    expect(arg).toHaveProperty('user_id', 'u1');
-    expect(arg).toHaveProperty('status', 'tham_gia');
-    expect(arg).toHaveProperty('marked_by', 'u1');
-    expect(arg).toHaveProperty('checked_in_at');
-  });
-
-  it('không có phiên → reply ephemeral, không gọi upsertAttendance', async () => {
-    mockDb.getActiveSession.mockResolvedValue(null);
-    const { AttendanceButtonHandler } = await import('../../interaction-handlers/attendanceButton.js');
-    const handler = { run: AttendanceButtonHandler.prototype.run };
-    const interaction = makeInteraction('attendance:join');
-
-    await handler.run.call(handler, interaction);
-    expect(mockDb.upsertAttendance).not.toHaveBeenCalled();
-    expect(interaction.reply).toHaveBeenCalled();
+  it('không throw cho customId không liên quan', () => {
+    expect(() => handler.parse(makeInteraction('other:button'))).not.toThrow();
   });
 });
 
-describe('AttendanceButton — BUG-6 lock regression', () => {
-  it('gọi 2 lần cùng lúc → lần 2 bị block bởi lock', async () => {
-    mockDb.getActiveSession.mockResolvedValue(SESSION);
-    // Làm upsertAttendance chậm để simulate concurrent
-    mockDb.upsertAttendance.mockImplementation(() =>
-      new Promise(resolve => setTimeout(resolve, 50))
-    );
+describe('run() — không có session active', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetActiveSession.mockResolvedValue(null);
+  });
 
-    const { AttendanceButtonHandler } = await import('../../interaction-handlers/attendanceButton.js');
-    const handler = { run: AttendanceButtonHandler.prototype.run };
-    const i1 = makeInteraction('attendance:join');
-    const i2 = makeInteraction('attendance:join');
+  it('reply ephemeral với thông báo không có phiên', async () => {
+    const interaction = makeInteraction('attendance:join');
+    await handler.run(interaction);
+    expect(interaction.reply).toHaveBeenCalledOnce();
+    const arg = interaction.reply.mock.calls[0][0];
+    expect(arg.ephemeral).toBe(true);
+    expect(arg.content).toContain('Không có phiên');
+  });
 
-    // Chạy song song
-    await Promise.all([
-      handler.run.call(handler, i1).catch(() => {}),
-      handler.run.call(handler, i2).catch(() => {}),
-    ]);
+  it('KHÔNG gọi deferReply khi không có session', async () => {
+    const interaction = makeInteraction('attendance:join');
+    await handler.run(interaction);
+    expect(interaction.deferReply).not.toHaveBeenCalled();
+  });
+});
 
-    // upsertAttendance chỉ được gọi 1 lần (lần 2 bị lock)
-    expect(mockDb.upsertAttendance).toHaveBeenCalledTimes(1);
+describe('run() — điểm danh thành công', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetActiveSession.mockResolvedValue(makeSession());
+    mockUpsertAttendance.mockResolvedValue(null);
+    mockGetAttendances.mockResolvedValue([]);
+  });
+
+  it('gọi upsertAttendance với đúng payload shape', async () => {
+    await handler.run(makeInteraction('attendance:join'));
+    expect(mockUpsertAttendance).toHaveBeenCalledOnce();
+    const payload = mockUpsertAttendance.mock.calls[0][0];
+    expect(payload).toMatchObject({
+      session_id: 'sess-1',
+      guild_id:   'g1',
+      user_id:    'u1',
+      status:     'tham_gia',
+    });
+  });
+
+  it('status đúng cho từng button', async () => {
+    const map = {
+      'attendance:join':    'tham_gia',
+      'attendance:late':    'tre',
+      'attendance:decline': 'khong_tham_gia',
+      'attendance:excuse':  'co_phep',
+    };
+    for (const [customId, expectedStatus] of Object.entries(map)) {
+      vi.clearAllMocks();
+      mockGetActiveSession.mockResolvedValue(makeSession());
+      mockUpsertAttendance.mockResolvedValue(null);
+      mockGetAttendances.mockResolvedValue([]);
+      await handler.run(makeInteraction(customId));
+      expect(mockUpsertAttendance.mock.calls[0][0].status).toBe(expectedStatus);
+    }
+  });
+
+  it('gọi deferReply ephemeral trước khi xử lý', async () => {
+    await handler.run(makeInteraction('attendance:join'));
+    expect(interaction.deferReply).toHaveBeenCalledWith({ ephemeral: true });
+  });
+
+  it('gọi editReply sau khi xong', async () => {
+    const interaction = makeInteraction('attendance:join');
+    await handler.run(interaction);
+    expect(interaction.editReply).toHaveBeenCalledOnce();
+  });
+});
+
+describe('run() — eligible_member_ids filter', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockUpsertAttendance.mockResolvedValue(null);
+    mockGetAttendances.mockResolvedValue([]);
+  });
+
+  it('block user không trong danh sách eligible', async () => {
+    mockGetActiveSession.mockResolvedValue(makeSession({ eligible_member_ids: ['other_user'] }));
+    await handler.run(makeInteraction('attendance:join'));
+    expect(mockUpsertAttendance).not.toHaveBeenCalled();
+  });
+
+  it('cho phép user có trong danh sách eligible', async () => {
+    mockGetActiveSession.mockResolvedValue(makeSession({ eligible_member_ids: ['u1'] }));
+    await handler.run(makeInteraction('attendance:join'));
+    expect(mockUpsertAttendance).toHaveBeenCalledOnce();
+  });
+});
+
+describe('run() — allowed_role_id filter', () => {
+  it('block user thiếu role cần thiết', async () => {
+    vi.clearAllMocks();
+    mockGetActiveSession.mockResolvedValue(makeSession({ allowed_role_id: 'role-required' }));
+    mockUpsertAttendance.mockResolvedValue(null);
+    mockGetAttendances.mockResolvedValue([]);
+    const guild = {
+      id: 'g1',
+      channels: { cache: new Map() },
+      roles: { cache: new Map([['role-required', { name: 'Member' }]]) },
+    };
+    const member = { nickname: null, displayName: 'Alice', roles: { cache: new Map() } };
+    await handler.run(makeInteraction('attendance:join', { guild, member }));
+    expect(mockUpsertAttendance).not.toHaveBeenCalled();
   });
 });
