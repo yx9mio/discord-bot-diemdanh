@@ -3,7 +3,7 @@
 // Sau khi submit → show Modal 2 phù hợp.
 //
 // [BUG-2&3] ONE-TIME gộp date+time thành 1 modal 5 fields:
-//   ngay, thang, nam, gio, ten (bỏ modal chain từ ModalSubmit)
+//   ngay_thang_nam, gio, ten, pre_close, phut_bu (bỏ modal chain từ ModalSubmit)
 'use strict';
 const {
   InteractionHandler, InteractionHandlerTypes,
@@ -14,11 +14,10 @@ const log = require('../../utils/logger.js');
 const CUSTOM_ID = {
   TYPE:       'setup:sch:add:type',         // Modal 1 submit
   DETAIL_R:   'setup:sch:add:detail:r',     // Modal 2 (Recurring)
-  DETAIL_O:   'setup:sch:add:detail:o',     // Modal 2 (One-time combined, thay DETAIL_O_A + TIME_O)
+  DETAIL_O:   'setup:sch:add:detail:o',     // Modal 2 (One-time combined)
 };
 
 const PRE_CLOSE_OPTIONS = [0, 15, 30, 45, 60, 90];
-
 const DAY_LABELS = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
 
 // Mở Modal 1 (Loại lịch) từ interaction
@@ -100,13 +99,18 @@ function openRecurringDetailModal(interaction, prefill = {}, scheduleId = null) 
   return interaction.showModal(modal);
 }
 
-// [BUG-2&3] Mở Modal 2 cho One-time: gộp Ngày+Tháng+Năm+Giờ+Tên vào 1 modal
-// Không còn modal chain từ ModalSubmit → tránh lỗi Discord
-function openOneTimeCombinedModal(interaction, prefill = {}) {
+// ── Builder: xây dựng One-time Combined Modal (tái sử dụng cho cả ADD và EDIT) ─────────
+// @param {object} opts
+// @param {string} opts.submitCustomId - customId của modal (mặc định: CUSTOM_ID.DETAIL_O)
+// @param {object} [opts.prefill]      - dữ liệu prefill
+function _buildOneTimeCombinedModal({ submitCustomId = CUSTOM_ID.DETAIL_O, prefill = {} } = {}) {
   const currentYear = new Date().getFullYear();
   const modal = new ModalBuilder()
-    .setCustomId(CUSTOM_ID.DETAIL_O)
-    .setTitle('➕ Lịch một lần — Bước 2/2');
+    .setCustomId(submitCustomId)
+    .setTitle(submitCustomId.startsWith('setup:sch:edit:ot:submit:')
+      ? '✏️ Sửa lịch một lần'
+      : '➕ Lịch một lần — Bước 2/2',
+    );
 
   modal.addComponents(new ActionRowBuilder().addComponents(
     new TextInputBuilder()
@@ -161,10 +165,15 @@ function openOneTimeCombinedModal(interaction, prefill = {}) {
       .setStyle(TextInputStyle.Short)
       .setRequired(false)
       .setPlaceholder('Để trống = đóng thủ công')
-      .setValue(prefill.closeHour ? '60' : ''),
+      .setValue(prefill.closeHour != null ? '60' : ''),
   ));
 
-  return interaction.showModal(modal);
+  return modal;
+}
+
+// [BUG-2&3] Mở One-time Combined Modal từ Button (ADD flow)
+function openOneTimeCombinedModal(interaction, prefill = {}) {
+  return interaction.showModal(_buildOneTimeCombinedModal({ submitCustomId: CUSTOM_ID.DETAIL_O, prefill }));
 }
 
 class SetupScheduleAddTypeModal extends InteractionHandler {
@@ -185,7 +194,6 @@ class SetupScheduleAddTypeModal extends InteractionHandler {
     }
     if (loai === 'one_time') {
       // [BUG-2&3] Gọi combined modal trực tiếp từ ModalSubmit của Modal 1
-      // Discord cho phép showModal từ ModalSubmit (chỉ không cho chain quá 1 lần)
       return openOneTimeCombinedModal(interaction);
     }
     return interaction.reply({ content: '❌ Loại lịch không hợp lệ. Gõ "recurring" hoặc "one_time".', flags: MessageFlags.Ephemeral });
@@ -200,4 +208,5 @@ module.exports = {
   openTypeModal,
   openRecurringDetailModal,
   openOneTimeCombinedModal,
+  _buildOneTimeCombinedModal, // export cho setupSchedule.js (EDIT one-time)
 };
