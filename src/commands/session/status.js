@@ -22,14 +22,17 @@ class StatusCommand extends Command {
     const session = await db.getActiveSession(guild.id);
     if (!session) return interaction.editReply({ content: '📭 Không có phiên nào đang mở.' });
 
-    const attendances = await db.getAttendances(session.id);
-    const cfg         = await db.getGuildConfig(guild.id);
+    // Parallel execution: getAttendances và getGuildConfig độc lập với nhau
+    const [attendances, cfg] = await Promise.all([
+      db.getAttendances(session.id),
+      db.getGuildConfig(guild.id),
+    ]);
     const phaiRoleIds = cfg.phai_role_ids ?? [];
 
-    const embed   = buildSessionEmbed(guild, session, attendances, phaiRoleIds, false);
+    const { embed, components: paginationComponents } = buildSessionEmbed(guild, session, attendances, phaiRoleIds, false);
     const actions = buildSessionActionRow(false);
 
-    await interaction.editReply({ embeds: [embed], components: actions });
+    await interaction.editReply({ embeds: [embed], components: [...actions, ...paginationComponents] });
   }
 }
 

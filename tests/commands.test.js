@@ -108,8 +108,8 @@ vi.mock('@sapphire/framework', () => {
 vi.mock('../utils/embeds.js', () => ({
   buildAttendanceButtons:  vi.fn().mockReturnValue({}),
   buildSummaryEmbed:       vi.fn().mockReturnValue({ data: {} }),
-  buildClosedSessionEmbed: vi.fn().mockResolvedValue({ data: {} }),
-  buildSessionEmbed:       vi.fn().mockResolvedValue({ data: {} }),
+  buildClosedSessionEmbed: vi.fn().mockReturnValue({ data: {} }),
+  buildSessionEmbed:       vi.fn().mockReturnValue({ embed: { data: {} }, components: [] }),
   buildSessionActionRow:   vi.fn().mockReturnValue([]),
   buildAttendConfirmEmbed: vi.fn().mockReturnValue({ embeds: [], flags: 64 }),
   replyErr:       vi.fn().mockReturnValue({ embeds: [], flags: 64 }),

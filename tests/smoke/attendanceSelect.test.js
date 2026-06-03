@@ -1,4 +1,5 @@
-// tests/smoke/attendanceButton.test.js
+// tests/smoke/attendanceSelect.test.js
+// [B1] Test cho attendanceSelect handler (StringSelectMenu thay thế button)
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
@@ -7,8 +8,6 @@ const mockGetActiveSession = vi.fn();
 const mockUpsertAttendance = vi.fn();
 const mockGetAttendances   = vi.fn();
 
-// Pre-populate require.cache cho SUT dependencies (CJS). Workaround vì
-// vi.mock() không intercept require() trong module CJS khi test file là ESM.
 function mockModule(modulePath, exports) {
   const resolved = require.resolve(modulePath);
   require.cache[resolved] = {
@@ -18,14 +17,16 @@ function mockModule(modulePath, exports) {
 }
 
 mockModule('../../db.js', {
-  getActiveSession:  (...a) => mockGetActiveSession(...a),
-  upsertAttendance:  (...a) => mockUpsertAttendance(...a),
-  getAttendances:    (...a) => mockGetAttendances(...a),
-  getStreak:         vi.fn().mockResolvedValue(null),
+  getActiveSession:           (...a) => mockGetActiveSession(...a),
+  upsertAttendance:           (...a) => mockUpsertAttendance(...a),
+  getAttendances:             (...a) => mockGetAttendances(...a),
+  getStreak:                  vi.fn().mockResolvedValue(null),
+  tryAcquireAttendanceLock:   vi.fn().mockResolvedValue(true),
+  releaseAttendanceLock:      vi.fn().mockResolvedValue(true),
 });
 
 mockModule('../../utils/embeds.js', {
-  buildSessionEmbed:       vi.fn().mockReturnValue({ _embed: true }),
+  buildSessionEmbed:       vi.fn().mockReturnValue({ embed: { _embed: true }, components: [] }),
   buildSessionActionRow:   vi.fn().mockReturnValue([]),
   buildAttendConfirmEmbed: vi.fn().mockReturnValue({ embeds: [], flags: 64 }),
 });
@@ -36,13 +37,14 @@ mockModule('@sapphire/framework', {
     some() { return { some: true }; }
     none() { return { none: true }; }
   },
-  InteractionHandlerTypes: { Button: 'Button' },
+  InteractionHandlerTypes: { StringSelect: 'StringSelect' },
 });
 
-const { AttendanceButtonHandler } = require('../../interaction-handlers/attendanceButton.js');
+const { AttendanceSelectHandler } = require('../../interaction-handlers/attendanceSelect.js');
 
-const makeInteraction = (customId, overrides = {}) => ({
+const makeInteraction = (customId, values = ['tham_gia'], overrides = {}) => ({
   customId,
+  values,
   guild: {
     id: 'g1',
     channels: { cache: new Map() },
@@ -71,18 +73,16 @@ const makeSession = (extra = {}) => ({
   ...extra,
 });
 
-const handler = new AttendanceButtonHandler({}, {});
+const handler = new AttendanceSelectHandler({}, {});
 
 describe('parse()', () => {
-  it('trả về some() cho customId hợp lệ', () => {
-    for (const id of ['attendance:join', 'attendance:late', 'attendance:decline', 'attendance:excuse']) {
-      const result = handler.parse(makeInteraction(id));
-      expect(result).toBeTruthy();
-    }
+  it('trả về some() cho customId attendance:select', () => {
+    const result = handler.parse(makeInteraction('attendance:select'));
+    expect(result).toBeTruthy();
   });
 
   it('không throw cho customId không liên quan', () => {
-    expect(() => handler.parse(makeInteraction('other:button'))).not.toThrow();
+    expect(() => handler.parse(makeInteraction('other:select'))).not.toThrow();
   });
 });
 
@@ -93,7 +93,7 @@ describe('run() — không có session active', () => {
   });
 
   it('reply ephemeral với thông báo không có phiên', async () => {
-    const interaction = makeInteraction('attendance:join');
+    const interaction = makeInteraction('attendance:select');
     await handler.run(interaction);
     expect(interaction.reply).toHaveBeenCalledOnce();
     const arg = interaction.reply.mock.calls[0][0];
@@ -102,7 +102,7 @@ describe('run() — không có session active', () => {
   });
 
   it('KHÔNG gọi deferReply khi không có session', async () => {
-    const interaction = makeInteraction('attendance:join');
+    const interaction = makeInteraction('attendance:select');
     await handler.run(interaction);
     expect(interaction.deferReply).not.toHaveBeenCalled();
   });
@@ -117,7 +117,7 @@ describe('run() — điểm danh thành công', () => {
   });
 
   it('gọi upsertAttendance với đúng payload shape', async () => {
-    await handler.run(makeInteraction('attendance:join'));
+    await handler.run(makeInteraction('attendance:select', ['tham_gia']));
     expect(mockUpsertAttendance).toHaveBeenCalledOnce();
     const payload = mockUpsertAttendance.mock.calls[0][0];
     expect(payload).toMatchObject({
@@ -128,31 +128,31 @@ describe('run() — điểm danh thành công', () => {
     });
   });
 
-  it('status đúng cho từng button', async () => {
+  it('status đúng cho từng option', async () => {
     const map = {
-      'attendance:join':    'tham_gia',
-      'attendance:late':    'tre',
-      'attendance:decline': 'khong_tham_gia',
-      'attendance:excuse':  'co_phep',
+      'tham_gia':       'tham_gia',
+      'tre':            'tre',
+      'khong_tham_gia': 'khong_tham_gia',
+      'co_phep':        'co_phep',
     };
-    for (const [customId, expectedStatus] of Object.entries(map)) {
+    for (const [value, expectedStatus] of Object.entries(map)) {
       vi.clearAllMocks();
       mockGetActiveSession.mockResolvedValue(makeSession());
       mockUpsertAttendance.mockResolvedValue(null);
       mockGetAttendances.mockResolvedValue([]);
-      await handler.run(makeInteraction(customId));
+      await handler.run(makeInteraction('attendance:select', [value]));
       expect(mockUpsertAttendance.mock.calls[0][0].status).toBe(expectedStatus);
     }
   });
 
   it('gọi deferReply ephemeral trước khi xử lý', async () => {
-    const interaction = makeInteraction('attendance:join');
+    const interaction = makeInteraction('attendance:select');
     await handler.run(interaction);
     expect(interaction.deferReply).toHaveBeenCalledWith({ ephemeral: true });
   });
 
   it('gọi editReply sau khi xong', async () => {
-    const interaction = makeInteraction('attendance:join');
+    const interaction = makeInteraction('attendance:select');
     await handler.run(interaction);
     expect(interaction.editReply).toHaveBeenCalledOnce();
   });
@@ -167,13 +167,13 @@ describe('run() — eligible_member_ids filter', () => {
 
   it('block user không trong danh sách eligible', async () => {
     mockGetActiveSession.mockResolvedValue(makeSession({ eligible_member_ids: ['other_user'] }));
-    await handler.run(makeInteraction('attendance:join'));
+    await handler.run(makeInteraction('attendance:select'));
     expect(mockUpsertAttendance).not.toHaveBeenCalled();
   });
 
   it('cho phép user có trong danh sách eligible', async () => {
     mockGetActiveSession.mockResolvedValue(makeSession({ eligible_member_ids: ['u1'] }));
-    await handler.run(makeInteraction('attendance:join'));
+    await handler.run(makeInteraction('attendance:select'));
     expect(mockUpsertAttendance).toHaveBeenCalledOnce();
   });
 });
@@ -190,7 +190,7 @@ describe('run() — allowed_role_id filter', () => {
       roles: { cache: new Map([['role-required', { name: 'Member' }]]) },
     };
     const member = { nickname: null, displayName: 'Alice', roles: { cache: new Map() } };
-    await handler.run(makeInteraction('attendance:join', { guild, member }));
+    await handler.run(makeInteraction('attendance:select', ['tham_gia'], { guild, member }));
     expect(mockUpsertAttendance).not.toHaveBeenCalled();
   });
 });

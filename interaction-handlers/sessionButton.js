@@ -3,9 +3,10 @@
 // Refactored ở Commit 6: đã bỏ các branch liên quan tới handlers/ cũ
 // (admin:override, upgrade:confirm, setup:dashboard, lichsu:*, setup_help, setup_config).
 'use strict';
-const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
+const { InteractionHandler, InteractionHandlerTypes, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, AttachmentBuilder } = require('@sapphire/framework');
 const db  = require('../db.js');
 const log = require('../utils/logger.js');
+const { buildCsvBuffer, buildCsvFilename } = require('../utils/csvHelper.js');
 const { requireAdmin } = require('../utils/permissions.js');
 const {
   buildSessionEmbed, buildSummaryEmbed, buildAttendanceButtons,
@@ -15,7 +16,10 @@ const { ketThucPhien, thongBaoHuyHieu, voHieuHoaNutDiemDanh } = require('../util
 const { xoaHenGio } = require('../utils/timers.js');
 
 const SESSION_BUTTON_IDS = new Set([
-  'attend_view', 'attend_close', 'attend_refresh',
+  'attend_view', 'attend_close', 'attend_refresh', 'admin:mark',
+  'attend_view:prev', 'attend_view:next',
+  'session:export_csv',
+  'session:cancel', 'session:confirm_cancel', 'session:cancel_cancel',
   'session:confirm_close', 'session:cancel_close',
 ]);
 
@@ -32,11 +36,23 @@ class SessionButtonHandler extends InteractionHandler {
   async run(interaction) {
     const { customId, guild } = interaction;
 
-    if (customId === 'attend_view') {
+    if (customId === 'attend_view' || customId.startsWith('attend_view:')) {
       const session = await db.getActiveSession(guild.id);
       if (!session) return interaction.reply({ content: '🚫 Không có phiên điểm danh nào đang mở.', ephemeral: true });
       const attended = await db.getAttendances(session.id);
-      return interaction.reply({ embeds: [await buildSessionEmbed(guild, session, attended)], ephemeral: true });
+
+      // [B2] Parse page từ customId (attend_view:prev:N hoặc attend_view:next:N)
+      let page = 1;
+      if (customId.startsWith('attend_view:')) {
+        const parts = customId.split(':');
+        const action = parts[1];
+        const currentPage = parseInt(parts[2], 10) || 1;
+        page = action === 'prev' ? Math.max(1, currentPage - 1) : currentPage + 1;
+      }
+
+      const { embed, components } = await buildSessionEmbed(guild, session, attended, session.phai_role_ids ?? [], false, page);
+      const method = customId.startsWith('attend_view:') ? 'editReply' : 'reply';
+      return interaction[method]({ embeds: [embed], components, ephemeral: true });
     }
 
     if (customId === 'attend_refresh') {
@@ -46,14 +62,110 @@ class SessionButtonHandler extends InteractionHandler {
         if (!session) return interaction.followUp({ ...replyErr('Không có phiên điểm danh đang mở.'), ephemeral: true });
         const attended = await db.getAttendances(session.id);
         await interaction.guild.members.fetch().catch(() => {});
-        const embed = await buildSessionEmbed(interaction.guild, session, attended, session.phai_role_ids ?? []);
-        await interaction.editReply({ embeds: [embed], components: [buildAttendanceButtons(false)] });
+        const { embed, components: paginationComponents } = await buildSessionEmbed(interaction.guild, session, attended, session.phai_role_ids ?? [], false);
+        await interaction.editReply({ embeds: [embed], components: [buildAttendanceButtons(false), ...paginationComponents] });
         log.info('REFRESH', interaction.guildId, '%s làm mới embed điểm danh', interaction.user.tag);
       } catch (e) {
         log.error('REFRESH', interaction.guildId, 'Lỗi handleRefresh: %s', e.message);
         await interaction.followUp({ ...replyErr('Không thể làm mới, thử lại sau.'), ephemeral: true });
       }
       return;
+    }
+
+    if (customId === 'admin:mark') {
+      const { ok } = await requireAdmin(interaction, { context: 'điểm danh thay' });
+      if (!ok) return;
+      const session = await db.getActiveSession(guild.id);
+      if (!session) return interaction.reply({ content: '🚫 Không có phiên điểm danh nào đang mở.', ephemeral: true });
+
+      const modal = new ModalBuilder()
+        .setCustomId('admin:mark:modal')
+        .setTitle('Điểm danh thay')
+        .addComponents(
+          new ActionRowBuilder().addComponents(
+            new TextInputBuilder()
+              .setCustomId('user_id')
+              .setLabel('User ID hoặc @mention')
+              .setStyle(TextInputStyle.Short)
+              .setPlaceholder('VD: 123456789012345678 hoặc @user')
+              .setRequired(true),
+          ),
+          new ActionRowBuilder().addComponents(
+            new TextInputBuilder()
+              .setCustomId('status')
+              .setLabel('Trạng thái')
+              .setStyle(TextInputStyle.Short)
+              .setPlaceholder('tham_gia / tre / khong_tham_gia / co_phep')
+              .setRequired(true),
+          ),
+        );
+      return interaction.showModal(modal);
+    }
+
+    if (customId === 'session:cancel') {
+      await interaction.deferReply({ ephemeral: true });
+      const { ok } = await requireAdmin(interaction, { context: 'hủy phiên' });
+      if (!ok) return;
+      const session = await db.getActiveSession(guild.id);
+      if (!session) return interaction.editReply(replyErrEdit('🚫 Không có phiên nào đang mở.'));
+      return interaction.editReply(
+        replyConfirm(
+          `Bạn có chắc muốn **HỦY** phiên **"${session.session_name}"**?\n> Hành động này sẽ hủy phiên và giữ nguyên tất cả điểm danh đã ghi.`,
+          'session:confirm_cancel',
+          'session:cancel_cancel',
+        ),
+      );
+    }
+
+    if (customId === 'session:confirm_cancel') {
+      const { channel } = interaction;
+      await interaction.deferUpdate();
+      const session = await db.getActiveSession(guild.id);
+      if (!session) return interaction.editReply(replyErrEdit('🚫 Phiên đã được đóng hoặc hủy trước đó.'));
+
+      try {
+        await db.cancelSession(session.id);
+      } catch (e) {
+        log.error('CANCEL', guild.id, 'cancelSession thất bại %s: %s', session.id, e.message);
+        return interaction.editReply(replyErrEdit('❌ Không thể hủy phiên do lỗi DB, thử lại sau.'));
+      }
+
+      xoaHenGio(guild.id);
+      const attended = await db.getAttendances(session.id);
+      // Parallel execution: voHieuHoaNutDiemDanh và editReply có thể chạy song song
+      const [editResult] = await Promise.all([
+        interaction.editReply(replyOkEdit('✅ Phiên điểm danh đã được hủy thành công.')),
+        voHieuHoaNutDiemDanh(interaction.client, channel, session, attended),
+      ]);
+      return editResult;
+    }
+
+    if (customId === 'session:cancel_cancel') {
+      return interaction.update({ content: '↩️ Đã hủy. Phiên vẫn đang mở.', embeds: [], components: [] });
+    }
+
+    if (customId === 'session:export_csv') {
+      await interaction.deferReply({ ephemeral: true });
+      const { ok } = await requireAdmin(interaction, { context: 'xuất CSV' });
+      if (!ok) return;
+      const session = await db.getActiveSession(guild.id);
+      if (!session) return interaction.editReply(replyErrEdit('🚫 Không có phiên nào đang mở.'));
+
+      const attended = await db.getAttendances(session.id);
+      if (!attended.length) return interaction.editReply(replyErrEdit('🚫 Chưa có ai điểm danh trong phiên này.'));
+
+      try {
+        const csvBuffer = buildCsvBuffer(attended);
+        const filename = buildCsvFilename(session.session_name ?? session.id, session.id);
+        const attachment = new AttachmentBuilder(csvBuffer, { name: filename });
+        return interaction.editReply({
+          content: `📄 File CSV điểm danh phiên **${session.session_name}** (${attended.length} bản ghi)`,
+          files: [attachment],
+        });
+      } catch (e) {
+        log.error('EXPORT_CSV', guild.id, 'Lỗi tạo CSV: %s', e.message);
+        return interaction.editReply(replyErrEdit('❌ Không thể tạo file CSV, thử lại sau.'));
+      }
     }
 
     if (customId === 'attend_close') {
@@ -84,10 +196,13 @@ class SessionButtonHandler extends InteractionHandler {
         return interaction.editReply(replyErrEdit('❌ Không thể đóng phiên do lỗi DB, thử lại sau.'));
       }
 
-      const attended = await db.getAttendances(session.id);
       xoaHenGio(guild.id);
-      const statsMap = await ketThucPhien(guild, session, attended);
-      await voHieuHoaNutDiemDanh(interaction.client, channel, session, attended);
+      const attended = await db.getAttendances(session.id);
+      // Parallel execution: ketThucPhien và voHieuHoaNutDiemDanh độc lập với nhau
+      const [statsMap] = await Promise.all([
+        ketThucPhien(guild, session, attended),
+        voHieuHoaNutDiemDanh(interaction.client, channel, session, attended),
+      ]);
       await channel.send({ embeds: [buildSummaryEmbed(session, attended, guild)] });
       await thongBaoHuyHieu(guild, channel, guild.id, session.id, attended, statsMap);
       return interaction.editReply(replyOkEdit('✅ Phiên điểm danh đã được đóng thành công.'));

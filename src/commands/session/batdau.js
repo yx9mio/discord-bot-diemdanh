@@ -2,7 +2,7 @@
 // Mở phiên điểm danh mới. Tạo session, gửi embed + buttons, set timer nếu có `phut`.
 'use strict';
 const { Command } = require('@sapphire/framework');
-const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder } = require('discord.js');
 const db = require('../../../db.js');
 const { datHenGioDong } = require('../../../utils/timers.js');
 const { FOOTER_DEFAULT } = require('../../../utils/embeds.js');
@@ -52,7 +52,8 @@ class BatDauCommand extends Command {
         .map(m => m.id);
     }
 
-    const session = await db.createSession({ guildId: guild.id, sessionName, description: moTa, eligibleMemberIds: eligibleIds });
+    // [A3] Persist phai_role_ids vào DB
+    const session = await db.createSession({ guildId: guild.id, sessionName, description: moTa, eligibleMemberIds: eligibleIds, phaiRoleIds });
 
     const embed = new EmbedBuilder()
       .setColor(0x01696f)
@@ -68,9 +69,29 @@ class BatDauCommand extends Command {
       .setFooter({ text: FOOTER_DEFAULT })
       .setTimestamp();
 
+    // [B1] Thay button bằng StringSelectMenu cho 4 trạng thái điểm danh
     const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId('diemdanh_thamgia').setLabel('✅ Điểm danh').setStyle(ButtonStyle.Success),
-      new ButtonBuilder().setCustomId('diemdanh_tre').setLabel('⏰ Trễ').setStyle(ButtonStyle.Secondary),
+      new StringSelectMenuBuilder()
+        .setCustomId('attendance:select')
+        .setPlaceholder('👆 Chọn trạng thái điểm danh...')
+        .addOptions(
+          new StringSelectMenuOptionBuilder()
+            .setLabel('✅ Điểm danh')
+            .setDescription('Điểm danh đúng giờ')
+            .setValue('tham_gia'),
+          new StringSelectMenuOptionBuilder()
+            .setLabel('⏰ Trễ')
+            .setDescription('Điểm danh muộn')
+            .setValue('tre'),
+          new StringSelectMenuOptionBuilder()
+            .setLabel('❌ Không tham gia')
+            .setDescription('Báo vắng mặt')
+            .setValue('khong_tham_gia'),
+          new StringSelectMenuOptionBuilder()
+            .setLabel('🏥 Có phép')
+            .setDescription('Vắng mặt có lý do')
+            .setValue('co_phep'),
+        )
     );
 
     const msg = await interaction.editReply({ embeds: [embed], components: [row] });

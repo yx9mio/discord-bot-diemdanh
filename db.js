@@ -85,6 +85,7 @@ async function createSession(payload) {
     guild_id:            payload.guild_id            ?? payload.guildId,
     session_name:        payload.session_name        ?? payload.sessionName,
     eligible_member_ids: payload.eligible_member_ids ?? payload.eligibleMemberIds ?? null,
+    phai_role_ids:       payload.phai_role_ids       ?? payload.phaiRoleIds ?? null, // [A3] Persist phai_role_ids
     description:         payload.description         ?? null,
     is_active:           payload.is_active           ?? true,
     cancelled:           payload.cancelled           ?? false,
@@ -92,6 +93,7 @@ async function createSession(payload) {
   delete row.guildId;
   delete row.sessionName;
   delete row.eligibleMemberIds;
+  delete row.phaiRoleIds;
   const { data, error } = await getClient()
     .from('sessions')
     .insert(row)
@@ -379,6 +381,40 @@ function upsertMemberBadge(guildId, userId, threshold) {
   return upsertUserBadge({ guild_id: guildId, user_id: userId, threshold });
 }
 
+// ─── Batch badge operations (parallel execution optimization) ─────────────────────────────────────────
+
+async function getMemberBadgesMulti(guildId, userIds) {
+  if (!userIds?.length) return {};
+  const { data, error } = await getClient()
+    .from('member_badges')
+    .select('*, badges(*)')
+    .eq('guild_id', guildId)
+    .in('user_id', userIds);
+  _throwSupabase(error, 'getMemberBadgesMulti');
+  
+  // Group by user_id for easy lookup
+  const result = {};
+  for (const row of data ?? []) {
+    if (!result[row.user_id]) {
+      result[row.user_id] = [];
+    }
+    result[row.user_id].push({
+      ...row,
+      threshold: row.badges?.threshold ?? row.threshold,
+    });
+  }
+  return result;
+}
+
+async function batchUpsertUserBadges(guildId, badges) {
+  if (!badges?.length) return;
+  const rows = badges.map(b => ({ guild_id: guildId, user_id: b.user_id, threshold: b.threshold }));
+  const { error } = await getClient()
+    .from('member_badges')
+    .upsert(rows, { onConflict: 'guild_id,user_id,threshold' });
+  _throwSupabase(error, 'batchUpsertUserBadges');
+}
+
 // ─── Scheduled sessions ──────────────────────────────────────────────────────────────────────────────────
 
 async function getScheduledSessions(guildId) {
@@ -618,6 +654,32 @@ async function getAllAttendances(guildId, limit = 5000) {
   return _validateAttendances(data ?? [], 'getAllAttendances');
 }
 
+// ─── Distributed Lock (PostgreSQL Advisory Locks) ─────────────────────────────────────────────────
+// [A2] Thay thế in-memory _pendingLock bằng distributed lock
+// Key: hash(session_id) + hash(user_id) → 2 params cho pg_try_advisory_lock(key1, key2)
+
+function _hashString(str) {
+  // Simple hash: loại bỏ non-alphanumeric, lấy prefix 8 ký tự, parse as base-36
+  const cleaned = str.replace(/[^a-zA-Z0-9]/g, '').slice(0, 8);
+  return parseInt(cleaned, 36);
+}
+
+async function tryAcquireAttendanceLock(sessionId, userId) {
+  const key1 = _hashString(sessionId);
+  const key2 = _hashString(userId);
+  const { data, error } = await getClient().rpc('try_advisory_lock', { key1, key2 });
+  _throwSupabase(error, 'tryAcquireAttendanceLock');
+  return data === true;
+}
+
+async function releaseAttendanceLock(sessionId, userId) {
+  const key1 = _hashString(sessionId);
+  const key2 = _hashString(userId);
+  const { data, error } = await getClient().rpc('advisory_unlock', { key1, key2 });
+  _throwSupabase(error, 'releaseAttendanceLock');
+  return data === true;
+}
+
 // ─── Exports ─────────────────────────────────────────────────────────────────────────────────────────────
 
 module.exports = {
@@ -644,6 +706,10 @@ module.exports = {
   getServerStats,
   getAllAttendances,
 
+  // Distributed lock
+  tryAcquireAttendanceLock,
+  releaseAttendanceLock,
+
   // Member stats
   getMemberStats, getMemberStatsMulti, getAllMemberStats,
   upsertMemberStats, batchUpsertMemberStats,
@@ -652,6 +718,7 @@ module.exports = {
   getBadgeDefinitions, getUserBadges, upsertUserBadge,
   getBadges,
   getMemberBadges, upsertMemberBadge,
+  getMemberBadgesMulti, batchUpsertUserBadges,
 
   // Scheduled sessions
   getScheduledSessions, getScheduledSessionById,

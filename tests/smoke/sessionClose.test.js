@@ -37,7 +37,7 @@ mockModule('../../utils/embeds.js', {
   replyErrEdit:          (msg) => ({ content: msg }),
   replyOkEdit:           (msg) => ({ content: msg }),
   replyConfirm:          vi.fn().mockReturnValue({}),
-  buildSessionEmbed:     vi.fn().mockResolvedValue({}),
+  buildSessionEmbed:     vi.fn().mockReturnValue({ embed: {}, components: [] }),
   buildAttendanceButtons: vi.fn().mockReturnValue([]),
   buildConfigEmbed:      vi.fn().mockReturnValue({}),
 });

@@ -179,4 +179,55 @@ describe('db.js — functions mới (Commit 1)', () => {
     await db.getAllAttendances('g1', 100);
     expect(limit).toHaveBeenCalledWith(100);
   });
+
+  it('getMemberBadgesMulti: batch fetch badges cho nhiều users', async () => {
+    const inFilter = vi.fn().mockReturnThis();
+    const select = vi.fn().mockReturnThis();
+    const eq = vi.fn().mockReturnThis();
+    const mockData = [
+      { user_id: 'u1', badges: { threshold: 5 } },
+      { user_id: 'u1', badges: { threshold: 10 } },
+      { user_id: 'u2', badges: { threshold: 5 } },
+    ];
+    setClient({
+      from: vi.fn().mockReturnValue({ select, eq, in: inFilter }),
+    });
+    inFilter.mockResolvedValue({ data: mockData, error: null });
+    const db = loadDb();
+    const result = await db.getMemberBadgesMulti('g1', ['u1', 'u2']);
+    expect(inFilter).toHaveBeenCalledWith('user_id', ['u1', 'u2']);
+    expect(result.u1).toHaveLength(2);
+    expect(result.u2).toHaveLength(1);
+  });
+
+  it('getMemberBadgesMulti: empty userIds → return empty object', async () => {
+    const db = loadDb();
+    const result = await db.getMemberBadgesMulti('g1', []);
+    expect(result).toEqual({});
+  });
+
+  it('batchUpsertUserBadges: batch insert badges', async () => {
+    const upsert = vi.fn().mockResolvedValue({ error: null });
+    setClient({ from: vi.fn().mockReturnValue({ upsert }) });
+    const db = loadDb();
+    await db.batchUpsertUserBadges('g1', [
+      { user_id: 'u1', threshold: 5 },
+      { user_id: 'u2', threshold: 10 },
+    ]);
+    expect(upsert).toHaveBeenCalledWith(
+      [
+        { guild_id: 'g1', user_id: 'u1', threshold: 5 },
+        { guild_id: 'g1', user_id: 'u2', threshold: 10 },
+      ],
+      { onConflict: 'guild_id,user_id,threshold' }
+    );
+  });
+
+  it('batchUpsertUserBadges: empty badges → return early', async () => {
+    const upsert = vi.fn();
+    setClient({ from: vi.fn().mockReturnValue({ upsert }) });
+    const db = loadDb();
+    await db.batchUpsertUserBadges('g1', []);
+    expect(upsert).not.toHaveBeenCalled();
+  });
 });

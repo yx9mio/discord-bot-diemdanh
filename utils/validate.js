@@ -33,6 +33,7 @@ const SessionSchema = z.object({
   message_id:           z.string().nullable().optional(),
   eligible_member_ids:  z.array(z.string()).nullable().optional(),
   allowed_role_id:      z.string().nullable().optional(),
+  phai_role_ids:        z.array(z.string()).nullable().optional(), // [A3] Thêm field persist phai_role_ids
   auto_close_at:        z.string().datetime().nullable().optional(),
   created_at:           z.string().datetime().optional(),
   ended_at:             z.string().datetime().nullable().optional(),

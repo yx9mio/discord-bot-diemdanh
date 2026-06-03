@@ -32,8 +32,8 @@ mockModule('../db.js', {
 mockModule('../utils/embeds.js', {
   buildAttendanceButtons:  vi.fn().mockReturnValue({}),
   buildSummaryEmbed:       vi.fn().mockReturnValue({ data: {} }),
-  buildClosedSessionEmbed: vi.fn().mockResolvedValue({ data: {} }),
-  buildSessionEmbed:       vi.fn().mockResolvedValue({ data: {} }),
+  buildClosedSessionEmbed: vi.fn().mockReturnValue({ data: {} }),
+  buildSessionEmbed:       vi.fn().mockReturnValue({ embed: { data: {} }, components: [] }),
   FOOTER_DEFAULT:          'footer',
 });
 

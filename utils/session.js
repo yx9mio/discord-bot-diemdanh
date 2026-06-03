@@ -91,14 +91,19 @@ async function ketThucPhien(guild, session, attended) {
 /**
  * Thông báo huy hiệu mới.
  * Phase 1B fix: earnedSet null-safe — filter undefined threshold trước khi Set
+ * Optimized: Sử dụng batch queries thay vì sequential calls trong loop
  */
 async function thongBaoHuyHieu(guild, channel, guildId, sessionId, attended, statsMap) {
   const badges = await getBadgeList(guildId);
   if (!badges.length) return;
   const newBadges = [];
 
+  // Batch fetch all user badges at once instead of sequential calls
+  const userIds = Array.from(statsMap.keys());
+  const allUserBadges = await db.getMemberBadgesMulti(guildId, userIds);
+
   for (const [userId, stats] of statsMap.entries()) {
-    const existing  = await db.getMemberBadges(guildId, userId);
+    const existing = allUserBadges[userId] ?? [];
     // Fix null-safe: bỏ qua row có threshold undefined/null
     const earnedSet = new Set(
       existing.map(b => b.threshold).filter(t => t != null)

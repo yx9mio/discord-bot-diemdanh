@@ -17,6 +17,7 @@ require('@sapphire/plugin-logger/register');
 require('@sapphire/plugin-subcommands/register');
 const { GatewayIntentBits, Partials } = require('discord.js');
 const log = require('./utils/logger.js');
+const { startHealthServer } = require('./events/healthServer.js');
 
 if (!process.env.DISCORD_TOKEN) {
   log.error('SYSTEM', null, 'Thiếu DISCORD_TOKEN trong .env!');
@@ -44,6 +45,9 @@ client.stores.get('commands').registerPath(path.join(__dirname, 'src', 'commands
 client.stores.get('listeners').registerPath(path.join(__dirname, 'listeners'));
 client.stores.get('interaction-handlers').registerPath(path.join(__dirname, 'interaction-handlers'));
 client.stores.get('preconditions').registerPath(path.join(__dirname, 'preconditions'));
+
+// Health server cho Railway keepalive — phải start trước client.login()
+startHealthServer(client);
 
 process.on('unhandledRejection', (reason) => {
   log.error('SYSTEM', null, 'unhandledRejection: %s', reason?.stack ?? reason);

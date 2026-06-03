@@ -1,6 +1,6 @@
 // utils/embeds.js — Tất cả embed builders & button builders
 'use strict';
-const { EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder, MessageFlags } = require('discord.js');
+const { EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, MessageFlags } = require('discord.js');
 
 // ─── Palette & Icons ────────────────────────────────────────────────
 const COLORS = {
@@ -179,7 +179,9 @@ function buildPhaiStatsText(guild, phaiRoleIds, attended, eligibleArr) {
 }
 
 // ─── Session Embed (live + closed view) ─────────────────────────────────────
-function buildSessionEmbed(guild, session, attended, phaiRoleIds = [], isClosed = false) {
+function buildSessionEmbed(guild, session, attended, phaiRoleIds = [], isClosed = false, page = 1) {
+  // [B2] Pagination cho danh sách điểm danh (mỗi page 20 items)
+  const PAGE_SIZE = 20;
   const joined   = attended.filter(a => a.status === 'tham_gia');
   const late     = attended.filter(a => a.status === 'tre');
   const declined = attended.filter(a => a.status === 'khong_tham_gia');
@@ -219,14 +221,18 @@ function buildSessionEmbed(guild, session, attended, phaiRoleIds = [], isClosed 
       {
         name: `${ICONS.ATTEND_YES} Tham gia (${joined.length})`,
         value: joined.length
-          ? joined.slice(0, 10).map(a => `<@${a.user_id}>`).join(' ') + (joined.length > 10 ? ` *(+${joined.length - 10})*` : '')
+          ? joined.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map(a => `<@${a.user_id}>`).join(' ')
+            + (joined.length > page * PAGE_SIZE ? ` *(+${joined.length - page * PAGE_SIZE})*` : '')
+            + (page > 1 ? ` *(trang ${page}/${Math.ceil(joined.length / PAGE_SIZE)})*` : '')
           : '*Chưa có*',
         inline: true,
       },
       {
         name: `${ICONS.ATTEND_LATE} Đến trễ (${late.length})`,
         value: late.length
-          ? late.slice(0, 10).map(a => `<@${a.user_id}>`).join(' ') + (late.length > 10 ? ` *(+${late.length - 10})*` : '')
+          ? late.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map(a => `<@${a.user_id}>`).join(' ')
+            + (late.length > page * PAGE_SIZE ? ` *(+${late.length - page * PAGE_SIZE})*` : '')
+            + (page > 1 ? ` *(trang ${page}/${Math.ceil(late.length / PAGE_SIZE)})*` : '')
           : '*Chưa có*',
         inline: true,
       },
@@ -234,9 +240,11 @@ function buildSessionEmbed(guild, session, attended, phaiRoleIds = [], isClosed 
         name: `${ICONS.ATTEND_NO} Vắng (${declined.length + absentIds.length})`,
         value: (declined.length + absentIds.length)
           ? [
-              ...declined.slice(0, 5).map(a => `<@${a.user_id}>`),
-              ...absentIds.slice(0, 5).map(id => `<@${id}>`),
-            ].join(' ') + ((declined.length + absentIds.length) > 10 ? ` *(+${declined.length + absentIds.length - 10})*` : '')
+              ...declined.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map(a => `<@${a.user_id}>`),
+              ...absentIds.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map(id => `<@${id}>`),
+            ].join(' ')
+            + ((declined.length + absentIds.length) > page * PAGE_SIZE ? ` *(+${declined.length + absentIds.length - page * PAGE_SIZE})*` : '')
+            + (page > 1 ? ` *(trang ${page}/${Math.ceil((declined.length + absentIds.length) / PAGE_SIZE)})*` : '')
           : '*Không có*',
         inline: true,
       },
@@ -267,11 +275,34 @@ function buildSessionEmbed(guild, session, attended, phaiRoleIds = [], isClosed 
     embed.addFields({ name: `${ICONS.SWORD} 🎭 Thống kê phái`, value: phaiText, inline: false });
   }
 
-  return embed;
+  // [B2] Thêm pagination buttons nếu cần
+  const totalItems = Math.max(joined.length, late.length, declined.length + absentIds.length);
+  const totalPages = Math.ceil(totalItems / PAGE_SIZE);
+  const components = [];
+
+  if (totalPages > 1) {
+    const paginationRow = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`attend_view:prev:${page}`)
+        .setLabel('◀ Trước')
+        .setStyle(ButtonStyle.Secondary)
+        .setDisabled(page === 1),
+      new ButtonBuilder()
+        .setCustomId(`attend_view:next:${page}`)
+        .setLabel('Tiếp ▶')
+        .setStyle(ButtonStyle.Secondary)
+        .setDisabled(page === totalPages),
+    );
+    components.push(paginationRow);
+  }
+
+  return { embed, components };
 }
 
 function buildClosedSessionEmbed(session, attended, guild = null) {
-  return buildSessionEmbed(guild, session, attended ?? [], [], true);
+  const result = buildSessionEmbed(guild, session, attended ?? [], [], true);
+  // Closed session không cần pagination, chỉ trả embed
+  return result.embed ?? result;
 }
 
 // ─── Summary Embed ─────────────────────────────────────────────────────────────
@@ -458,25 +489,68 @@ function buildAdminOverrideSuccessEmbed(targetUserId, oldStatus, newStatus, admi
 function buildSessionActionRow(disabled = false) {
   const d = disabled;
   return [
+    // [B1] Thay 4 button điểm danh bằng StringSelectMenu
     new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId('attendance:join').setLabel('✅ Tham gia').setStyle(ButtonStyle.Success).setDisabled(d),
-      new ButtonBuilder().setCustomId('attendance:late').setLabel('🕐 Đến trễ').setStyle(ButtonStyle.Primary).setDisabled(d),
-      new ButtonBuilder().setCustomId('attendance:decline').setLabel('❌ Vắng').setStyle(ButtonStyle.Danger).setDisabled(d),
-      new ButtonBuilder().setCustomId('attendance:excuse').setLabel('📋 Có phép').setStyle(ButtonStyle.Secondary).setDisabled(d),
+      new StringSelectMenuBuilder()
+        .setCustomId('attendance:select')
+        .setPlaceholder('👆 Chọn trạng thái điểm danh...')
+        .setDisabled(d)
+        .addOptions(
+          new StringSelectMenuOptionBuilder()
+            .setLabel('✅ Tham gia')
+            .setDescription('Điểm danh đúng giờ')
+            .setValue('tham_gia'),
+          new StringSelectMenuOptionBuilder()
+            .setLabel('🕐 Đến trễ')
+            .setDescription('Điểm danh muộn')
+            .setValue('tre'),
+          new StringSelectMenuOptionBuilder()
+            .setLabel('❌ Vắng')
+            .setDescription('Báo vắng mặt')
+            .setValue('khong_tham_gia'),
+          new StringSelectMenuOptionBuilder()
+            .setLabel('📋 Có phép')
+            .setDescription('Vắng mặt có lý do')
+            .setValue('co_phep'),
+        )
     ),
+    // Row 2: Admin buttons
     new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId('session:view').setLabel('👁 Xem').setStyle(ButtonStyle.Secondary).setDisabled(d),
       new ButtonBuilder().setCustomId('session:refresh').setLabel('🔄 Làm mới').setStyle(ButtonStyle.Secondary).setDisabled(d),
+      new ButtonBuilder().setCustomId('admin:mark').setLabel('✏️ Điểm danh thay').setStyle(ButtonStyle.Primary).setDisabled(d),
+      new ButtonBuilder().setCustomId('session:export_csv').setLabel('📄 Xuất CSV').setStyle(ButtonStyle.Success).setDisabled(d),
+      new ButtonBuilder().setCustomId('session:cancel').setLabel('⛔ Hủy phiên').setStyle(ButtonStyle.Danger).setDisabled(d),
       new ButtonBuilder().setCustomId('session:close').setLabel('🔴 Đóng phiên').setStyle(ButtonStyle.Danger).setDisabled(d),
     ),
   ];
 }
 
+// [B1] Thay 3 button bằng StringSelectMenu (giống buildSessionActionRow row 1)
 function buildAttendanceButtons(disabled = false) {
   return new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId('attendance:join').setLabel('✅ Tham gia').setStyle(ButtonStyle.Success).setDisabled(disabled),
-    new ButtonBuilder().setCustomId('attendance:late').setLabel('🕐 Đến trễ').setStyle(ButtonStyle.Primary).setDisabled(disabled),
-    new ButtonBuilder().setCustomId('attendance:decline').setLabel('❌ Vắng').setStyle(ButtonStyle.Danger).setDisabled(disabled),
+    new StringSelectMenuBuilder()
+      .setCustomId('attendance:select')
+      .setPlaceholder('👆 Chọn trạng thái điểm danh...')
+      .setDisabled(disabled)
+      .addOptions(
+        new StringSelectMenuOptionBuilder()
+          .setLabel('✅ Tham gia')
+          .setDescription('Điểm danh đúng giờ')
+          .setValue('tham_gia'),
+        new StringSelectMenuOptionBuilder()
+          .setLabel('🕐 Đến trễ')
+          .setDescription('Điểm danh muộn')
+          .setValue('tre'),
+        new StringSelectMenuOptionBuilder()
+          .setLabel('❌ Vắng')
+          .setDescription('Báo vắng mặt')
+          .setValue('khong_tham_gia'),
+        new StringSelectMenuOptionBuilder()
+          .setLabel('📋 Có phép')
+          .setDescription('Vắng mặt có lý do')
+          .setValue('co_phep'),
+      )
   );
 }
 

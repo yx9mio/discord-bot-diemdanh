@@ -136,7 +136,7 @@ async function _moPhien(guild, lich) {
   }
 
   const { buildSessionEmbed } = require('./embeds.js');
-  const embed   = await buildSessionEmbed(guild, session, []);
+  const { embed } = await buildSessionEmbed(guild, session, []);
   const buttons = buildAttendanceButtons(false);
   const pingContent = lich.allowed_role_id ? `<@&${lich.allowed_role_id}>` : null;
 
@@ -180,10 +180,12 @@ async function _dongPhienVaThongKe(guild, session, ch, lich, client, silent = fa
 
   if (!silent) {
     const summaryEmbed = buildSummaryEmbed(session, attended, guild);
-    await ch.send({ embeds: [summaryEmbed] });
-
-    try { await guiCsvDinhKem(ch, session, attended); } catch (_e) { /* gửi CSV thất bại */ }
-    try { await thongBaoHuyHieu(guild, ch, guild.id, session.id, attended, statsMap); } catch (_e) { /* huy hiệu thất bại */ }
+    // Parallel execution: các operations này độc lập với nhau
+    await Promise.all([
+      ch.send({ embeds: [summaryEmbed] }),
+      guiCsvDinhKem(ch, session, attended).catch(_e => { /* gửi CSV thất bại */ }),
+      thongBaoHuyHieu(guild, ch, guild.id, session.id, attended, statsMap).catch(_e => { /* huy hiệu thất bại */ }),
+    ]);
   }
 
   log.info('SCHEDULER', guild.id, '%s — đã đóng%s: %s', guild.name, silent ? ' (silent)' : '', session.session_name);

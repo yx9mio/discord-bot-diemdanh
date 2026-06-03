@@ -1,10 +1,6 @@
-// interaction-handlers/attendanceButton.js
-// Handles: attendance:join, attendance:late, attendance:decline, attendance:excuse
-// BUG-1 fix: upsertAttendance gọi đúng signature object payload
-// BUG-6 fix: lock scope chặt hơn, không để race condition khi reply throw
-// Phase 1.5: truyền phai_role_ids vào buildSessionEmbed
-// Phase 2.6: thêm attendance:excuse → co_phep
-// Phase 2.12: dùng buildAttendConfirmEmbed cho reply
+// interaction-handlers/attendanceSelect.js
+// Handles: attendance:select (StringSelectMenu cho điểm danh)
+// [B1] Thay thế button bằng select menu
 'use strict';
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const db = require('../db.js');
@@ -14,43 +10,38 @@ const {
   buildAttendConfirmEmbed,
 } = require('../utils/embeds.js');
 
-const BUTTON_TO_STATUS = {
-  'attendance:join':    'tham_gia',
-  'attendance:late':   'tre',
-  'attendance:decline':'khong_tham_gia',
-  'attendance:excuse': 'co_phep',
+const SELECT_TO_STATUS = {
+  'tham_gia':       'tham_gia',
+  'tre':            'tre',
+  'khong_tham_gia': 'khong_tham_gia',
+  'co_phep':        'co_phep',
 };
 
-// BUG-6: Map thay Set để lưu promise, tránh race condition
-const _pendingLock = new Map();
-const LOCK_MS = 5_000;
-
-class AttendanceButtonHandler extends InteractionHandler {
+class AttendanceSelectHandler extends InteractionHandler {
   constructor(ctx, options) {
-    super(ctx, { ...options, interactionHandlerType: InteractionHandlerTypes.Button });
+    super(ctx, { ...options, interactionHandlerType: InteractionHandlerTypes.StringSelect });
   }
 
   parse(interaction) {
-    if (BUTTON_TO_STATUS[interaction.customId]) return this.some();
+    if (interaction.customId === 'attendance:select') return this.some();
     return this.none();
   }
 
   async run(interaction) {
-    const { customId, guild, member, user } = interaction;
-    const status = BUTTON_TO_STATUS[customId];
+    const { customId, guild, member, user, values } = interaction;
+    const statusValue = values[0]; // Select menu chỉ chọn 1 giá trị
+    const status = SELECT_TO_STATUS[statusValue];
 
     const session = await db.getActiveSession(guild.id);
     if (!session) {
       return interaction.reply({ content: '🚫 Không có phiên điểm danh nào đang mở.', ephemeral: true });
     }
 
-    // BUG-6 fix: kiểm tra lock trước deferReply, xóa lock chỉ sau khi xong
-    const lockKey = `${session.id}:${user.id}`;
-    if (_pendingLock.has(lockKey)) {
+    // [A2] Distributed lock thay vì in-memory Map
+    const acquired = await db.tryAcquireAttendanceLock(session.id, user.id);
+    if (!acquired) {
       return interaction.reply({ content: '⏳ Đang xử lý yêu cầu của bạn, vui lòng chờ...', ephemeral: true });
     }
-    _pendingLock.set(lockKey, Date.now());
-    const lockTimer = setTimeout(() => _pendingLock.delete(lockKey), LOCK_MS);
 
     try {
       await interaction.deferReply({ ephemeral: true });
@@ -66,7 +57,6 @@ class AttendanceButtonHandler extends InteractionHandler {
 
       const username = member.nickname ?? user.displayName ?? user.username;
 
-      // BUG-1 fix: dùng object payload thay vì positional args
       await db.upsertAttendance({
         session_id:    session.id,
         guild_id:      guild.id,
@@ -77,21 +67,18 @@ class AttendanceButtonHandler extends InteractionHandler {
         checked_in_at: new Date().toISOString(),
       });
 
-      // Lấy streak nếu DB hỗ trợ (best-effort)
       let streak;
       try {
         streak = await db.getStreak?.(guild.id, user.id);
       } catch (_) {}
 
-      // Cập nhật embed chính (best-effort, không throw nếu lỗi)
       try {
         const ch = guild.channels.cache.get(session.channel_id);
         if (ch && session.message_id) {
           const msg = await ch.messages.fetch(session.message_id).catch(() => null);
           if (msg) {
             const attended = await db.getAttendances(session.id);
-            // Phase 1.5: truyền phai_role_ids
-            const embed = await buildSessionEmbed(
+            const { embed } = await buildSessionEmbed(
               guild,
               session,
               attended,
@@ -105,7 +92,6 @@ class AttendanceButtonHandler extends InteractionHandler {
         }
       } catch (_) {}
 
-      // Phase 2.12: reply bằng buildAttendConfirmEmbed
       const confirmEmbed = buildAttendConfirmEmbed(
         member,
         status,
@@ -114,10 +100,9 @@ class AttendanceButtonHandler extends InteractionHandler {
       );
       return interaction.editReply(confirmEmbed);
     } finally {
-      clearTimeout(lockTimer);
-      _pendingLock.delete(lockKey);
+      await db.releaseAttendanceLock(session.id, user.id);
     }
   }
 }
 
-module.exports = { AttendanceButtonHandler };
+module.exports = { AttendanceSelectHandler };
