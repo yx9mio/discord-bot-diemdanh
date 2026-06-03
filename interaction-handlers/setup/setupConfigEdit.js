@@ -86,8 +86,8 @@ function openEditModal(interaction) {
 
 async function handleEditModal(interaction) {
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-  const { ok } = await requireAdmin(interaction, { context: 'chỉnh sửa cấu hình' });
-  if (!ok) return interaction.editReply({ content: '❌ Bạn không có quyền thực hiện hành động này.' });
+  const { ok } = await requireAdmin(interaction, { context: 'chỉnh sửa cấu hình', deferred: true });
+  if (!ok) return;
 
   const guildId = interaction.guildId;
   const modalId = interaction.customId;

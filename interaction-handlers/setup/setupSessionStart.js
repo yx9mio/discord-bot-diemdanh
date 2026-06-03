@@ -59,8 +59,8 @@ function openStartSessionModal(interaction) {
 
 async function handleStartSessionModal(interaction) {
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-  const { ok } = await requireAdmin(interaction, { context: 'mở phiên từ /setup' });
-  if (!ok) return interaction.editReply({ content: '❌ Bạn không có quyền thực hiện hành động này.' });
+  const { ok } = await requireAdmin(interaction, { context: 'mở phiên từ /setup', deferred: true });
+  if (!ok) return;
 
   const { guild, client } = interaction;
   const existing = await db.getActiveSession(guild.id);

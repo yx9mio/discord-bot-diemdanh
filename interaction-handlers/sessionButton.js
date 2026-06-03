@@ -40,7 +40,13 @@ class SessionButtonHandler extends InteractionHandler {
 
     if (customId === 'attend_view' || customId.startsWith('attend_view:')) {
       const session = await db.getActiveSession(guild.id);
-      if (!session) return interaction.reply({ content: '🚫 Không có phiên điểm danh nào đang mở.', flags: MessageFlags.Ephemeral });
+      if (!session) {
+        if (customId.startsWith('attend_view:')) {
+          await interaction.deferUpdate();
+          return interaction.editReply({ content: '🚫 Phiên đã kết thúc.', embeds: [], components: [] });
+        }
+        return interaction.reply({ content: '🚫 Không có phiên điểm danh nào đang mở.', flags: MessageFlags.Ephemeral });
+      }
       const attended = await db.getAttendances(session.id);
 
       if (customId.startsWith('attend_view:')) {
@@ -50,7 +56,7 @@ class SessionButtonHandler extends InteractionHandler {
         const currentPage = parseInt(parts[2], 10) || 1;
         const page = action === 'prev' ? Math.max(1, currentPage - 1) : currentPage + 1;
         const { embed, components } = await buildSessionEmbed(guild, session, attended, session.phai_role_ids ?? [], false, page);
-        return interaction.editReply({ embeds: [embed], components, flags: MessageFlags.Ephemeral });
+        return interaction.editReply({ embeds: [embed], components });
       }
 
       const { embed, components } = await buildSessionEmbed(guild, session, attended, session.phai_role_ids ?? [], false, 1);
@@ -85,7 +91,7 @@ class SessionButtonHandler extends InteractionHandler {
 
     if (customId === 'session:cancel') {
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-      const { ok } = await requireAdmin(interaction, { context: 'hủy phiên' });
+      const { ok } = await requireAdmin(interaction, { context: 'hủy phiên', deferred: true });
       if (!ok) return;
       const session = await db.getActiveSession(guild.id);
       if (!session) return interaction.editReply(replyErrEdit('🚫 Không có phiên nào đang mở.'));
@@ -114,12 +120,10 @@ class SessionButtonHandler extends InteractionHandler {
 
       xoaHenGio(guild.id);
       const attended = await db.getAttendances(session.id);
-      // Parallel execution: voHieuHoaNutDiemDanh và editReply có thể chạy song song
-      const [editResult] = await Promise.all([
+      await Promise.allSettled([
         interaction.editReply(replyOkEdit('✅ Phiên điểm danh đã được hủy thành công.')),
         voHieuHoaNutDiemDanh(interaction.client, channel, session, attended),
       ]);
-      return editResult;
     }
 
     if (customId === 'session:cancel_cancel') {
@@ -128,7 +132,7 @@ class SessionButtonHandler extends InteractionHandler {
 
     if (customId === 'session:export_csv') {
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-      const { ok } = await requireAdmin(interaction, { context: 'xuất CSV' });
+      const { ok } = await requireAdmin(interaction, { context: 'xuất CSV', deferred: true });
       if (!ok) return;
       const session = await db.getActiveSession(guild.id);
       if (!session) return interaction.editReply(replyErrEdit('🚫 Không có phiên nào đang mở.'));
@@ -152,7 +156,7 @@ class SessionButtonHandler extends InteractionHandler {
 
     if (customId === 'attend_close') {
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-      const { ok } = await requireAdmin(interaction, { context: 'đóng phiên' });
+      const { ok } = await requireAdmin(interaction, { context: 'đóng phiên', deferred: true });
       if (!ok) return;
       const session = await db.getActiveSession(guild.id);
       if (!session) return interaction.editReply(replyErrEdit('🚫 Không có phiên nào đang mở.'));
@@ -181,13 +185,13 @@ class SessionButtonHandler extends InteractionHandler {
 
       xoaHenGio(guild.id);
       const attended = await db.getAttendances(session.id);
-      // Parallel execution: ketThucPhien và voHieuHoaNutDiemDanh độc lập với nhau
-      const [statsMap] = await Promise.all([
+      const [settledKetThuc] = await Promise.allSettled([
         ketThucPhien(guild, session, attended),
         voHieuHoaNutDiemDanh(interaction.client, channel, session, attended),
       ]);
+      const statsMap = settledKetThuc.status === 'fulfilled' ? settledKetThuc.value : null;
       await channel.send({ embeds: [buildSummaryEmbed(session, attended, guild)] });
-      await thongBaoHuyHieu(guild, channel, guild.id, session.id, attended, statsMap);
+      await thongBaoHuyHieu(guild, channel, guild.id, session.id, attended, statsMap).catch(() => null);
       return interaction.editReply(replyOkEdit('✅ Phiên điểm danh đã được đóng thành công.'));
     }
 

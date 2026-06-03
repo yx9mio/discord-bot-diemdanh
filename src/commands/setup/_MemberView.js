@@ -6,11 +6,13 @@ const { COLORS, ICONS } = require('../../../utils/theme.js');
 const { FOOTER_DEFAULT } = require('../../../utils/embeds.js');
 
 const CUSTOM_ID = {
-  ADD:        'setup:mem:add',
-  PAGE_NEXT:  'setup:mem:page:next',
-  PAGE_PREV:  'setup:mem:page:prev',
-  DEL_PREFIX: 'setup:mem:del:',  // setup:mem:del:<userId>
-  BACK_HOME:  'setup:home',
+  ADD:         'setup:mem:add',
+  PAGE_NEXT:   'setup:mem:page:next',
+  PAGE_PREV:   'setup:mem:page:prev',
+  DEL_PREFIX:  'setup:mem:del:',   // setup:mem:del:<userId>
+  EDIT_PREFIX: 'setup:mem:edit:',  // setup:mem:edit:<userId>
+  RESET_PREFIX:'setup:mem:reset:', // setup:mem:reset:<userId>
+  BACK_HOME:   'setup:home',
 };
 
 const PAGE_SIZE = 10;
@@ -48,7 +50,18 @@ function render({ members, page = 0, guild }) {
     );
   }
 
-  // Row 2: add
+  // Row 2: edit buttons
+  const editRow = new ActionRowBuilder();
+  for (const m of slice.slice(0, 5)) {
+    editRow.addComponents(
+      new ButtonBuilder()
+        .setCustomId(`${CUSTOM_ID.EDIT_PREFIX}${m.user_id}`)
+        .setLabel(`✎ ${m.username ?? m.user_id.slice(0, 8)}`)
+        .setStyle(ButtonStyle.Secondary),
+    );
+  }
+
+  // Row 3: add + reset
   const actionRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(CUSTOM_ID.ADD)
@@ -56,8 +69,24 @@ function render({ members, page = 0, guild }) {
       .setEmoji(ICONS.PLUS)
       .setStyle(ButtonStyle.Success),
   );
+  if (slice.length > 0) {
+    actionRow.addComponents(
+      new ButtonBuilder()
+        .setCustomId(`${CUSTOM_ID.RESET_PREFIX}${slice[0].user_id}`)
+        .setLabel('Reset streak')
+        .setEmoji('🔄')
+        .setStyle(ButtonStyle.Danger),
+    );
+    actionRow.addComponents(
+      new ButtonBuilder()
+        .setCustomId('setup:mem:reset:all')
+        .setLabel('Reset all')
+        .setEmoji('⚠️')
+        .setStyle(ButtonStyle.Danger),
+    );
+  }
 
-  // Row 3: nav
+  // Row 4: nav
   const navRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(CUSTOM_ID.PAGE_PREV)
@@ -78,6 +107,7 @@ function render({ members, page = 0, guild }) {
 
   const components = [];
   if (delRow.components.length > 0) components.push(delRow);
+  if (editRow.components.length > 0) components.push(editRow);
   components.push(actionRow);
   components.push(navRow);
 

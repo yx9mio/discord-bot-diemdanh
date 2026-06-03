@@ -88,8 +88,8 @@ describe('HomeView.render()', () => {
     });
     const drillRow = view.components[0].toJSON();
     const sessRow  = view.components[1].toJSON();
-    expect(drillRow.components).toHaveLength(4);
-    expect(sessRow.components).toHaveLength(3);
+    expect(drillRow.components).toHaveLength(5);
+    expect(sessRow.components).toHaveLength(4);
     const closeBtn = sessRow.components.find(b => b.label.includes('Đóng'));
     expect(closeBtn.disabled).toBe(false);
     expect(closeBtn.style).toBe(4); // Danger

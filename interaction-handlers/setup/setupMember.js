@@ -47,9 +47,7 @@ class SetupMemberHandler extends InteractionHandler {
     const members = await db.getMembers(guild.id);
     const curPage = _extractPageFromEmbed(interaction);
 
-    let newPage = curPage;
-    if (customId === CUSTOM_ID.PAGE_NEXT) newPage = curPage + 1;
-    if (customId === CUSTOM_ID.PAGE_PREV) newPage = curPage - 1;
+    const newPage = Math.max(0, curPage + (customId === CUSTOM_ID.PAGE_NEXT ? 1 : -1));
 
     const view = MemberView.render({ members, page: newPage, guild });
     return interaction.editReply(view);

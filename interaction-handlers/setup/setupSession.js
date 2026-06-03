@@ -23,8 +23,8 @@ class SetupSessionHandler extends InteractionHandler {
 
   async run(interaction) {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-    const { ok } = await requireAdmin(interaction, { context: 'đóng phiên từ /setup' });
-    if (!ok) return interaction.editReply({ content: '❌ Bạn không có quyền thực hiện hành động này.' });
+    const { ok } = await requireAdmin(interaction, { context: 'đóng phiên từ /setup', deferred: true });
+    if (!ok) return;
     const { guild } = interaction;
     const session = await db.getActiveSession(guild.id);
     if (!session) {

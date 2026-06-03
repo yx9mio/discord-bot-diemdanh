@@ -40,8 +40,8 @@ function openAddMemberModal(interaction) {
 
 async function handleAddMemberModal(interaction) {
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-  const { ok } = await requireAdmin(interaction, { context: 'thêm thành viên' });
-  if (!ok) return interaction.editReply({ content: '❌ Bạn không có quyền thực hiện hành động này.' });
+  const { ok } = await requireAdmin(interaction, { context: 'thêm thành viên', deferred: true });
+  if (!ok) return;
 
   const { guild } = interaction;
   const rawId = interaction.fields.getTextInputValue('user_id').trim();

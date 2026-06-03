@@ -36,7 +36,7 @@ class AdminMarkModalHandler extends InteractionHandler {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const { guild, user } = interaction;
-    const { ok } = await requireAdmin(interaction, { context: 'điểm danh thay' });
+    const { ok } = await requireAdmin(interaction, { context: 'điểm danh thay', deferred: true });
     if (!ok) return;
 
     const session = await db.getActiveSession(guild.id);

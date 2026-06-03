@@ -52,10 +52,10 @@ function openRecurringDetailModal(interaction, prefill = {}, scheduleId = null) 
   const thuSelect = new StringSelectMenuBuilder()
     .setCustomId('thu')
     .setPlaceholder('Thứ trong tuần...')
-    .addOptions(DAY_LABELS.slice(1).map((lbl, i) => ({
+    .addOptions(DAY_LABELS.map((lbl, i) => ({
       label: lbl,
-      value: String(i + 1),
-      default: prefill.dayOfWeek === i + 1,
+      value: String(i),
+      default: prefill.dayOfWeek === i,
     })));
   modal.addComponents(new ActionRowBuilder().addComponents(thuSelect));
 

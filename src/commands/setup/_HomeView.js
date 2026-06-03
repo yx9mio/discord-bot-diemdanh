@@ -21,6 +21,7 @@ const CUSTOM_ID = {
   REFRESH:    'setup:home:refresh',
   HISTORY:    'setup:history',
   BROADCAST:  'setup:session:broadcast',
+  STATS:      'setup:stats',
 };
 
 function fmtSchedule(s) {
@@ -30,7 +31,7 @@ function fmtSchedule(s) {
 
 function renderLiveSessionSection(session, _guild) {
   if (!session) {
-    return `*${ICONS.SESSION} Chưa có phiên nào đang mở.*\n> Mở nhanh bằng \`/batdau <tên>\` hoặc chờ lịch cố định tự mở.`;
+    return `*${ICONS.SESSION} Chưa có phiên nào đang mở.*\n> Bấm **${ICONS.PLUS} Mở phiên mới** để bắt đầu hoặc chờ lịch cố định tự mở.`;
   }
   const ch = session.channel_id ? `<#${session.channel_id}>` : '_chưa có_';
   const startTs = Math.floor(new Date(session.created_at ?? Date.now()).getTime() / 1000);
@@ -113,6 +114,11 @@ function render({ guild, cfg, schedules, members, session }) {
       .setLabel('Nhật ký')
       .setEmoji(ICONS.CHART)
       .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId(CUSTOM_ID.STATS)
+      .setLabel('Thống kê')
+      .setEmoji('🏆')
+      .setStyle(ButtonStyle.Secondary),
   );
 
   // Row 2: session actions
@@ -134,6 +140,11 @@ function render({ guild, cfg, schedules, members, session }) {
       .setEmoji(ICONS.CLOSE)
       .setStyle(session ? ButtonStyle.Danger : ButtonStyle.Secondary)
       .setDisabled(!session),
+    new ButtonBuilder()
+      .setCustomId(CUSTOM_ID.BROADCAST)
+      .setLabel('Phát tin')
+      .setEmoji('📢')
+      .setStyle(ButtonStyle.Secondary),
   );
 
   return { embeds: [embed], components: [drilldown, sessionBtns] };
