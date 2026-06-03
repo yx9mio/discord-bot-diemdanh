@@ -6,6 +6,8 @@ const require = createRequire(import.meta.url);
 const mockGetAllMemberStats      = vi.fn();
 const mockBatchUpsertMemberStats = vi.fn();
 const mockGetMemberBadges        = vi.fn();
+const mockGetMemberBadgesMulti   = vi.fn();
+const mockBatchUpsertUserBadges  = vi.fn();
 const mockUpsertMemberBadge      = vi.fn();
 const mockGetBadges              = vi.fn();
 
@@ -21,11 +23,13 @@ function mockModule(modulePath, exports) {
 }
 
 mockModule('../../db.js', {
-  getAllMemberStats:      (...a) => mockGetAllMemberStats(...a),
-  batchUpsertMemberStats: (...a) => mockBatchUpsertMemberStats(...a),
-  getMemberBadges:        (...a) => mockGetMemberBadges(...a),
-  upsertMemberBadge:      (...a) => mockUpsertMemberBadge(...a),
-  getBadges:              (...a) => mockGetBadges(...a),
+  getAllMemberStats:         (...a) => mockGetAllMemberStats(...a),
+  batchUpsertMemberStats:    (...a) => mockBatchUpsertMemberStats(...a),
+  getMemberBadges:           (...a) => mockGetMemberBadges(...a),
+  getMemberBadgesMulti:      (...a) => mockGetMemberBadgesMulti(...a),
+  batchUpsertUserBadges:     (...a) => mockBatchUpsertUserBadges(...a),
+  upsertMemberBadge:         (...a) => mockUpsertMemberBadge(...a),
+  getBadges:                 (...a) => mockGetBadges(...a),
 });
 
 mockModule('../../utils/embeds.js', {
@@ -196,7 +200,7 @@ describe('thongBaoHuyHieu', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGetMemberBadges.mockResolvedValue([]);
+    mockGetMemberBadgesMulti.mockResolvedValue({});
     mockUpsertMemberBadge.mockResolvedValue(null);
     mockGetBadges.mockResolvedValue([]);
   });
@@ -208,14 +212,14 @@ describe('thongBaoHuyHieu', () => {
 
   it('không gửi badge khi chưa đạt ngưỡng nào', async () => {
     const statsMap = new Map([['u1', { total: 2, streak: 1, max: 1 }]]);
-    mockGetMemberBadges.mockResolvedValue([]);
+    mockGetMemberBadgesMulti.mockResolvedValue({});
     await thongBaoHuyHieu(guild, channel, 'g1', 's1', [], statsMap);
     expect(sendMock).not.toHaveBeenCalled();
   });
 
   it('gửi embed khi đạt ngưỡng badge đầu tiên', async () => {
     const statsMap = new Map([['u1', { total: 5, streak: 1, max: 1 }]]);
-    mockGetMemberBadges.mockResolvedValue([]);
+    mockGetMemberBadgesMulti.mockResolvedValue({});
     await thongBaoHuyHieu(guild, channel, 'g1', 's1', [], statsMap);
     expect(sendMock).toHaveBeenCalledOnce();
     const arg = sendMock.mock.calls[0][0];
@@ -224,14 +228,16 @@ describe('thongBaoHuyHieu', () => {
 
   it('không gửi badge nếu đã có trong getMemberBadges', async () => {
     const statsMap = new Map([['u1', { total: 10, streak: 1, max: 1 }]]);
-    mockGetMemberBadges.mockResolvedValue([{ threshold: 5 }, { threshold: 10 }]);
+    mockGetMemberBadgesMulti.mockResolvedValue({
+      'u1': [{ threshold: 5 }, { threshold: 10 }],
+    });
     await thongBaoHuyHieu(guild, channel, 'g1', 's1', [], statsMap);
     expect(sendMock).not.toHaveBeenCalled();
   });
 
   it('không throw khi upsertMemberBadge ném lỗi (best-effort)', async () => {
     const statsMap = new Map([['u1', { total: 5, streak: 1, max: 1 }]]);
-    mockGetMemberBadges.mockResolvedValue([]);
+    mockGetMemberBadgesMulti.mockResolvedValue({});
     mockUpsertMemberBadge.mockRejectedValue(new Error('DB error'));
     await expect(
       thongBaoHuyHieu(guild, channel, 'g1', 's1', [], statsMap)
