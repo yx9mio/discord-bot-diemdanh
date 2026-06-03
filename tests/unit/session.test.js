@@ -125,13 +125,15 @@ describe('ketThucPhien', () => {
     expect(patch.best_streak).toBe(5);
   });
 
-  it('người vắng có streak=0 → KHÔNG thêm vào patches', async () => {
+  it('người vắng có streak=0 → vẫn tăng total_sessions', async () => {
     mockGetAllMemberStats.mockResolvedValueOnce([
-      { user_id: 'no_streak', total_joined: 2, current_streak: 0, best_streak: 2 },
+      { user_id: 'no_streak', total_joined: 2, current_streak: 0, best_streak: 2, total_sessions: 5 },
     ]);
     const sess = { ...SESSION, eligible_member_ids: ['no_streak'] };
     await ketThucPhien(GUILD, sess, []);
-    expect(mockBatchUpsertMemberStats).not.toHaveBeenCalled();
+    expect(mockBatchUpsertMemberStats).toHaveBeenCalledWith('g1', [
+      expect.objectContaining({ user_id: 'no_streak', total_sessions: 6 }),
+    ]);
   });
 
   it('user không có stats trong DB → khởi tạo từ 0', async () => {

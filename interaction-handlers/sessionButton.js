@@ -11,6 +11,7 @@ const { buildCsvBuffer, buildCsvFilename } = require('../utils/csvHelper.js');
 const { requireAdmin } = require('../utils/permissions.js');
 const {
   buildSessionEmbed, buildSummaryEmbed, buildAttendanceButtons,
+  buildSessionActionRow,
   replyErr, replyErrEdit, replyOkEdit, replyConfirm,
 } = require('../utils/embeds.js');
 const { ketThucPhien, thongBaoHuyHieu, voHieuHoaNutDiemDanh } = require('../utils/session.js');
@@ -55,8 +56,8 @@ class SessionButtonHandler extends InteractionHandler {
         const action = parts[1];
         const currentPage = parseInt(parts[2], 10) || 1;
         const page = action === 'prev' ? Math.max(1, currentPage - 1) : currentPage + 1;
-        const { embed, components } = await buildSessionEmbed(guild, session, attended, session.phai_role_ids ?? [], false, page);
-        return interaction.editReply({ embeds: [embed], components });
+        const { embed, components: pagComponents } = await buildSessionEmbed(guild, session, attended, session.phai_role_ids ?? [], false, page);
+        return interaction.editReply({ embeds: [embed], components: [...buildSessionActionRow(false), ...pagComponents] });
       }
 
       const { embed, components } = await buildSessionEmbed(guild, session, attended, session.phai_role_ids ?? [], false, 1);
@@ -71,7 +72,7 @@ class SessionButtonHandler extends InteractionHandler {
         const attended = await db.getAttendances(session.id);
         await interaction.guild.members.fetch().catch(() => {});
         const { embed, components: paginationComponents } = await buildSessionEmbed(interaction.guild, session, attended, session.phai_role_ids ?? [], false);
-        await interaction.editReply({ embeds: [embed], components: [buildAttendanceButtons(false), ...paginationComponents] });
+        await interaction.editReply({ embeds: [embed], components: [...buildSessionActionRow(false), ...paginationComponents] });
         log.info('REFRESH', interaction.guildId, '%s làm mới embed điểm danh', interaction.user.tag);
       } catch (e) {
         log.error('REFRESH', interaction.guildId, 'Lỗi handleRefresh: %s', e.message);
@@ -111,14 +112,17 @@ class SessionButtonHandler extends InteractionHandler {
       if (!session) return interaction.editReply(replyErrEdit('🚫 Phiên đã được đóng hoặc hủy trước đó.'));
 
       try {
-        stopAutoRefresh(session.id); // [C3]
+        stopAutoRefresh(session.id);
         await db.cancelSession(session.id);
+        xoaHenGio(guild.id);
       } catch (e) {
         log.error('CANCEL', guild.id, 'cancelSession thất bại %s: %s', session.id, e.message);
+        const stillActive = await db.getActiveSession(guild.id).catch(() => null);
+        if (!stillActive) {
+          return interaction.editReply(replyOkEdit('✅ Phiên đã được hủy bởi người khác.'));
+        }
         return interaction.editReply(replyErrEdit('❌ Không thể hủy phiên do lỗi DB, thử lại sau.'));
       }
-
-      xoaHenGio(guild.id);
       const attended = await db.getAttendances(session.id);
       await Promise.allSettled([
         interaction.editReply(replyOkEdit('✅ Phiên điểm danh đã được hủy thành công.')),
@@ -176,21 +180,25 @@ class SessionButtonHandler extends InteractionHandler {
       if (!session) return interaction.editReply(replyErrEdit('🚫 Phiên đã được đóng trước đó.'));
 
       try {
-        stopAutoRefresh(session.id); // [C3]
+        stopAutoRefresh(session.id);
         await db.closeSession(session.id);
+        xoaHenGio(guild.id);
       } catch (e) {
         log.error('CLOSE', guild.id, 'closeSession thất bại %s: %s', session.id, e.message);
+        const stillActive = await db.getActiveSession(guild.id).catch(() => null);
+        if (!stillActive) {
+          return interaction.editReply(replyOkEdit('✅ Phiên đã được đóng bởi người khác.'));
+        }
         return interaction.editReply(replyErrEdit('❌ Không thể đóng phiên do lỗi DB, thử lại sau.'));
       }
 
-      xoaHenGio(guild.id);
       const attended = await db.getAttendances(session.id);
       const [settledKetThuc] = await Promise.allSettled([
         ketThucPhien(guild, session, attended),
         voHieuHoaNutDiemDanh(interaction.client, channel, session, attended),
       ]);
       const statsMap = settledKetThuc.status === 'fulfilled' ? settledKetThuc.value : null;
-      await channel.send({ embeds: [buildSummaryEmbed(session, attended, guild)] });
+      await channel.send({ embeds: [buildSummaryEmbed(session, attended, guild, session.phai_role_ids ?? [])] }).catch(() => null);
       await thongBaoHuyHieu(guild, channel, guild.id, session.id, attended, statsMap).catch(() => null);
       return interaction.editReply(replyOkEdit('✅ Phiên điểm danh đã được đóng thành công.'));
     }

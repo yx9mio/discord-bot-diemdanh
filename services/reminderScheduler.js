@@ -30,7 +30,7 @@ async function runReminders() {
 async function processGuildReminders(guild) {
   try {
     const cfg = await db.getConfig(guild.id);
-    if (!cfg?.notification_channel_id) return;
+    if (!cfg?.log_channel_id) return;
 
     const tz       = cfg.timezone ?? 'Asia/Ho_Chi_Minh';
     const now      = DateTime.now().setZone(tz);
@@ -61,7 +61,7 @@ async function processOneReminder(guild, cfg, sched, now, tz) {
       if (now < skipUntil) return;
     }
 
-    const ch = await guild.channels.fetch(cfg.notification_channel_id).catch(() => null);
+    const ch = await guild.channels.fetch(cfg.log_channel_id).catch(() => null);
     if (!ch) return;
 
     await ch.send(`⏰ **Nhắc lịch:** Phiên **${sched.session_name}** sẽ mở sau **${minsToOpen} phút**.`);
@@ -74,7 +74,7 @@ async function processOneReminder(guild, cfg, sched, now, tz) {
 function getMinutesToOpen(sched, now, _tz) {
   try {
     if (sched.hour == null) return null;
-    if (sched.day_of_week != null && now.weekday !== sched.day_of_week) return null;
+    if (sched.day_of_week != null && (now.weekday % 7) !== sched.day_of_week) return null;
     const target = now.set({ hour: sched.hour, minute: sched.minute ?? 0, second: 0, millisecond: 0 });
     const diffMin = Math.round(target.diff(now, 'minutes').minutes);
     return diffMin >= 0 ? diffMin : null;

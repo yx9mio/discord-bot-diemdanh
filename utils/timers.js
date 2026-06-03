@@ -74,7 +74,7 @@ function datHenGioDong(client, guild, session, channelId, ms) {
           .setColor(0x99AAB5)
           .setDescription('🔒 Phiên điểm danh đã tự động kết thúc.')
           .setFooter({ text: FOOTER_DEFAULT });
-        const summaryEmbed = buildSummaryEmbed(session, attended, guild);
+        const summaryEmbed = buildSummaryEmbed(session, attended, guild, session.phai_role_ids ?? []);
         await ch.send({ embeds: [thongBao, summaryEmbed] });
         await thongBaoHuyHieu(guild, ch, guild.id, session.id, attended, statsMap);
         await guiCsvDinhKem(ch, session, attended);

@@ -40,7 +40,7 @@ const PRESENT_STATUSES = new Set(['tham_gia', 'tre']);
  */
 async function ketThucPhien(guild, session, attended) {
   const statsMap = new Map();
-  const patches  = [];
+  const patchMap = new Map();
 
   const presentIds = new Set(
     attended.filter(r => PRESENT_STATUSES.has(r.status)).map(r => r.user_id)
@@ -49,63 +49,75 @@ async function ketThucPhien(guild, session, attended) {
   const allStats   = await db.getAllMemberStats(guild.id);
   const statsCache = new Map(allStats.map(s => [s.user_id, s]));
 
-  // Cập nhật stats cho người có mặt (kèm total_late cho trạng thái 'tre')
+  // Helper: gộp patch cho 1 user (tránh duplicate entry ghi đè nhau)
+  function mergePatch(uid, patch) {
+    const existing = patchMap.get(uid) ?? {};
+    patchMap.set(uid, { ...existing, ...patch, user_id: uid, last_session_id: session.id });
+  }
+
+  // Helper: lấy stats an toàn
+  function getStats(uid) {
+    return statsCache.get(uid) ?? {};
+  }
+
+  // 1. Cập nhật stats cho người có mặt
   for (const record of attended) {
     if (!PRESENT_STATUSES.has(record.status)) continue;
     const uid   = record.user_id;
-    const stats = statsCache.get(uid) ?? { total_joined: 0, current_streak: 0, best_streak: 0, total_late: 0, total_excused: 0, total_absent: 0 };
-    const total  = (stats.total_joined   ?? 0) + 1;
+    const stats = getStats(uid);
+    const total = (stats.total_joined   ?? 0) + 1;
     const streak = (stats.current_streak ?? 0) + 1;
     const maxS   = Math.max(stats.best_streak ?? 0, streak);
-    const lat    = (stats.total_late     ?? 0) + (record.status === 'tre' ? 1 : 0);
+    const lat    = (stats.total_late ?? 0) + (record.status === 'tre' ? 1 : 0);
     statsMap.set(uid, { total, streak, max: maxS });
-    patches.push({
-      user_id:          uid,
-      total_joined:     total,
-      current_streak:   streak,
-      best_streak:      maxS,
-      total_late:       lat,
-      last_session_id:  session.id,
+    mergePatch(uid, {
+      total_joined:   total,
+      current_streak: streak,
+      best_streak:    maxS,
+      total_late:     lat,
+      total_sessions: (stats.total_sessions ?? 0) + 1,
     });
   }
 
-  // Cập nhật total_excused/total_absent cho người không có mặt
+  // 2. Cập nhật absent/excused cho người không có mặt
   for (const record of attended) {
     if (PRESENT_STATUSES.has(record.status)) continue;
     const uid   = record.user_id;
-    const stats = statsCache.get(uid) ?? { total_excused: 0, total_absent: 0 };
+    const stats = getStats(uid);
     if (record.status === 'co_phep') {
-      patches.push({
-        user_id:          uid,
-        total_excused:    (stats.total_excused ?? 0) + 1,
-        last_session_id:  session.id,
+      mergePatch(uid, {
+        total_excused: (stats.total_excused ?? 0) + 1,
+        total_sessions: (stats.total_sessions ?? 0) + 1,
       });
     } else if (record.status === 'khong_tham_gia') {
-      patches.push({
-        user_id:          uid,
-        total_absent:     (stats.total_absent ?? 0) + 1,
-        last_session_id:  session.id,
+      mergePatch(uid, {
+        total_absent:   (stats.total_absent ?? 0) + 1,
+        total_sessions: (stats.total_sessions ?? 0) + 1,
       });
     }
   }
 
-  // Reset streak cho người eligible mà vắng — CHỈ khi eligible có data
+  // 3. Reset streak cho người eligible mà vắng — CHỈ khi eligible có data
   const eligibleIds = session.eligible_member_ids ?? [];
   if (eligibleIds.length > 0) {
     for (const uid of eligibleIds.filter(id => !presentIds.has(id))) {
-      const stats = statsCache.get(uid);
-      if (!stats || stats.current_streak === 0) continue;
-      patches.push({
-        user_id:          uid,
+      const stats = getStats(uid);
+      if (stats.current_streak === 0) {
+        // Vẫn tăng total_sessions cho eligible ngay cả khi streak = 0
+        mergePatch(uid, { total_sessions: (stats.total_sessions ?? 0) + 1 });
+        continue;
+      }
+      mergePatch(uid, {
         total_joined:     stats.total_joined   ?? 0,
         current_streak:   0,
         best_streak:      stats.best_streak    ?? 0,
-        last_session_id:  session.id,
+        total_sessions:   (stats.total_sessions ?? 0) + 1,
       });
       log.info('SESSION', guild.id, 'Reset streak: %s (vắng %s)', uid, session.session_name);
     }
   }
 
+  const patches = Array.from(patchMap.values());
   if (patches.length) await db.batchUpsertMemberStats(guild.id, patches);
   return statsMap;
 }
@@ -134,6 +146,10 @@ async function thongBaoStreakMilestone(guild, channel, userId, streak) {
 }
 
 async function thongBaoHuyHieu(guild, channel, guildId, sessionId, attended, statsMap) {
+  if (!statsMap || !(statsMap instanceof Map) || !statsMap.size) {
+    log.warn('BADGE', guildId, 'thongBaoHuyHieu: statsMap is null/empty, bỏ qua');
+    return;
+  }
   const badges = await getBadgeList(guildId);
   if (!badges.length) return;
   const newBadges = [];

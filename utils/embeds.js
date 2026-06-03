@@ -180,7 +180,6 @@ function buildPhaiStatsText(guild, phaiRoleIds, attended, eligibleArr) {
 
 // ─── Session Embed (live + closed view) ─────────────────────────────────────
 function buildSessionEmbed(guild, session, attended, phaiRoleIds = [], isClosed = false, page = 1) {
-  // [B2] Pagination cho danh sách điểm danh (mỗi page 20 items)
   const PAGE_SIZE = 20;
   const joined   = attended.filter(a => a.status === 'tham_gia');
   const late     = attended.filter(a => a.status === 'tre');
@@ -193,9 +192,6 @@ function buildSessionEmbed(guild, session, attended, phaiRoleIds = [], isClosed 
 
   const checkedIds = new Set(attended.map(a => a.user_id));
   const absentIds  = (session.eligible_member_ids ?? []).filter(id => !checkedIds.has(id));
-
-  const _startedAt = session.created_at ?? session.started_at;
-  void _startedAt;
 
   const roleDisplay = session.allowed_role_id
     ? `<@&${session.allowed_role_id}>`
@@ -213,6 +209,23 @@ function buildSessionEmbed(guild, session, attended, phaiRoleIds = [], isClosed 
 
   const statusLine = `${ICONS.SESSION_OPEN} **Đang mở** · ${roleDisplay} · ${eligible} thành viên${deadlineLine}`;
 
+  function fieldValue(items, emptyMsg) {
+    if (!items.length) return emptyMsg;
+    const start = (page - 1) * PAGE_SIZE;
+    const slice = items.slice(start, start + PAGE_SIZE);
+    const totalPagesCat = Math.ceil(items.length / PAGE_SIZE);
+    if (start >= items.length) return `*(${page > totalPagesCat ? 'hết' : 'trống'})*`;
+    let val = slice.join(' ');
+    if (items.length > start + PAGE_SIZE) val += ` *(+${items.length - start - PAGE_SIZE})*`;
+    if (totalPagesCat > 1) val += ` *(trang ${page}/${totalPagesCat})*`;
+    return val;
+  }
+
+  const absMentions = absentIds.map(id => `<@${id}>`);
+  const declMentions = declined.map(a => `<@${a.user_id}>`);
+  const joinedMentions = joined.map(a => `<@${a.user_id}>`);
+  const lateMentions = late.map(a => `<@${a.user_id}>`);
+
   const embed = new EmbedBuilder()
     .setColor(isClosed ? COLORS.RED : COLORS.GREEN)
     .setTitle(`${isClosed ? ICONS.SESSION_CLOSED : ICONS.SESSION_OPEN} ${session.session_name}`)
@@ -220,32 +233,17 @@ function buildSessionEmbed(guild, session, attended, phaiRoleIds = [], isClosed 
     .addFields(
       {
         name: `${ICONS.ATTEND_YES} Tham gia (${joined.length})`,
-        value: joined.length
-          ? joined.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map(a => `<@${a.user_id}>`).join(' ')
-            + (joined.length > page * PAGE_SIZE ? ` *(+${joined.length - page * PAGE_SIZE})*` : '')
-            + (page > 1 ? ` *(trang ${page}/${Math.ceil(joined.length / PAGE_SIZE)})*` : '')
-          : '*Chưa có*',
+        value: fieldValue(joinedMentions, '*Chưa có*'),
         inline: true,
       },
       {
         name: `${ICONS.ATTEND_LATE} Đến trễ (${late.length})`,
-        value: late.length
-          ? late.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map(a => `<@${a.user_id}>`).join(' ')
-            + (late.length > page * PAGE_SIZE ? ` *(+${late.length - page * PAGE_SIZE})*` : '')
-            + (page > 1 ? ` *(trang ${page}/${Math.ceil(late.length / PAGE_SIZE)})*` : '')
-          : '*Chưa có*',
+        value: fieldValue(lateMentions, '*Chưa có*'),
         inline: true,
       },
       {
         name: `${ICONS.ATTEND_NO} Vắng (${declined.length + absentIds.length})`,
-        value: (declined.length + absentIds.length)
-          ? [
-              ...declined.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map(a => `<@${a.user_id}>`),
-              ...absentIds.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map(id => `<@${id}>`),
-            ].join(' ')
-            + ((declined.length + absentIds.length) > page * PAGE_SIZE ? ` *(+${declined.length + absentIds.length - page * PAGE_SIZE})*` : '')
-            + (page > 1 ? ` *(trang ${page}/${Math.ceil((declined.length + absentIds.length) / PAGE_SIZE)})*` : '')
-          : '*Không có*',
+        value: fieldValue([...declMentions, ...absMentions], '*Không có*'),
         inline: true,
       },
     )
@@ -275,7 +273,6 @@ function buildSessionEmbed(guild, session, attended, phaiRoleIds = [], isClosed 
     embed.addFields({ name: `${ICONS.SWORD} 🎭 Thống kê phái`, value: phaiText, inline: false });
   }
 
-  // [B2] Thêm pagination buttons nếu cần
   const totalItems = Math.max(joined.length, late.length, declined.length + absentIds.length);
   const totalPages = Math.ceil(totalItems / PAGE_SIZE);
   const components = [];

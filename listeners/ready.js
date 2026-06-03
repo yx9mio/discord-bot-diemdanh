@@ -50,7 +50,7 @@ class ReadyListener extends Listener {
               if (ch2) {
                 const statsMap = await ketThucPhien(guild, session, attended);
                 await voHieuHoaNutDiemDanh(client, ch2, session, attended);
-                await ch2.send({ embeds: [buildSummaryEmbed(session, attended, guild)] });
+                await ch2.send({ embeds: [buildSummaryEmbed(session, attended, guild, session.phai_role_ids ?? [])] });
                 await thongBaoHuyHieu(guild, ch2, guild.id, session.id, attended, statsMap);
               }
             } catch (e) {

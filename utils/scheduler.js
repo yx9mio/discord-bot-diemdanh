@@ -84,13 +84,17 @@ async function scheduleLichCoDinh(client, guildId, lich) {
 
         log.info('SCHEDULER', guildId, '"%s" đóng sau %s phút', lich.session_name, Math.round(msClose / 60000));
         const tidC = setTimeout(async () => {
-          const g2 = client.guilds.cache.get(guildId);
-          if (!g2) return;
-          const sess2 = await db.getActiveSession(guildId);
-          if (!sess2) return;
-          const ch2 = await g2.channels.fetch(lich.channel_id).catch(() => null);
-          if (!ch2) return;
-          await _dongPhienVaThongKe(g2, sess2, ch2, lich, client, false);
+          try {
+            const g2 = client.guilds.cache.get(guildId);
+            if (!g2) return;
+            const sess2 = await db.getActiveSession(guildId);
+            if (!sess2) return;
+            const ch2 = await g2.channels.fetch(lich.channel_id).catch(() => null);
+            if (!ch2) return;
+            await _dongPhienVaThongKe(g2, sess2, ch2, lich, client, false);
+          } catch (e) {
+            log.error('SCHEDULER', guildId, '"%s" đóng lỗi: %s', lich.session_name, e.message);
+          }
         }, msClose);
         _setTimer(guildId, `${lich.id}_close`, tidC);
       } else if (!result.ok) {
@@ -179,7 +183,7 @@ async function _dongPhienVaThongKe(guild, session, ch, lich, client, silent = fa
   } catch (_e) { /* cập nhật message đã xóa — bỏ qua */ }
 
   if (!silent) {
-    const summaryEmbed = buildSummaryEmbed(session, attended, guild);
+    const summaryEmbed = buildSummaryEmbed(session, attended, guild, session.phai_role_ids ?? []);
     // Parallel execution: các operations này độc lập với nhau
     await Promise.all([
       ch.send({ embeds: [summaryEmbed] }),
@@ -232,6 +236,8 @@ async function khoiPhucScheduler(client) {
   for (const guild of client.guilds.cache.values()) {
     try {
       const rows = await db.getLichCoDinh(guild.id);
+      let guildCount = 0;
+      const validRows = [];
       for (const row of rows) {
         const v = safeParse(LichSchema, row);
         if (!v.ok) {
@@ -239,12 +245,14 @@ async function khoiPhucScheduler(client) {
           totalSkipped++;
           continue;
         }
+        validRows.push(v.data);
         await scheduleLichCoDinh(client, guild.id, v.data);
+        guildCount++;
         totalLich++;
       }
-      if (rows.length > 0) {
-        log.info('SCHEDULER', guild.id, '%s — khôi phục %s/%s lịch', guild.name, totalLich, rows.length);
-        await _khoiPhucCloseTimer(client, guild, rows.filter(r => safeParse(LichSchema, r).ok).map(r => safeParse(LichSchema, r).data));
+      if (validRows.length > 0) {
+        log.info('SCHEDULER', guild.id, '%s — khôi phục %s/%s lịch', guild.name, guildCount, rows.length);
+        await _khoiPhucCloseTimer(client, guild, validRows);
       }
     } catch (e) {
       log.error('SCHEDULER', guild.id, 'Lỗi khôi phục guild: %s', e.message);

@@ -106,7 +106,7 @@ describe('SessionButton confirm_close flow', () => {
     mockCloseSession.mockResolvedValue(SESSION);
     mockGetAttendances.mockResolvedValue([]);
     await handler.run(makeInteraction('session:confirm_close'));
-    expect(mockBuildSummaryEmbed).toHaveBeenCalledWith(SESSION, [], expect.any(Object));
+    expect(mockBuildSummaryEmbed).toHaveBeenCalledWith(SESSION, [], expect.any(Object), []);
   });
 
   it('cancel_close → update with cancelled message', async () => {

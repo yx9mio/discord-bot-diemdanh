@@ -2,6 +2,7 @@
 // [A4] Shared attendance logic cho cả slash command và SelectMenu
 'use strict';
 const { MessageFlags } = require('discord.js');
+const log = require('../utils/logger.js');
 const db = require('../db.js');
 const {
   buildSessionEmbed,
@@ -111,6 +112,13 @@ async function markAttendance({ guild, member, user, status, interaction, sessio
       displayStreak
     );
     return interaction.editReply(confirmEmbed);
+  } catch (e) {
+    log.error('ATTENDANCE', guild.id, 'markAttendance lỗi: %s', e?.message ?? e);
+    if (deferred || interaction.replied) {
+      await interaction.editReply({ content: '❌ Lỗi xử lý điểm danh, vui lòng thử lại.' }).catch(() => null);
+    } else {
+      await interaction.reply({ content: '❌ Lỗi xử lý điểm danh, vui lòng thử lại.', flags: MessageFlags.Ephemeral }).catch(() => null);
+    }
   } finally {
     await db.releaseAttendanceLock(session.id, user.id);
   }
