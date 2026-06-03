@@ -50,10 +50,7 @@ describe('utils/commands.js (registry)', () => {
 
   it('admin commands core đều có mặt', () => {
     const adminNames = byAudience('admin').map(c => c.name);
-    expect(adminNames).toContain('batdau');
-    expect(adminNames).toContain('ketthuc');
     expect(adminNames).toContain('setup');
-    expect(adminNames).toContain('admin');
   });
 
   it('user commands phổ biến đều có mặt', () => {
@@ -63,7 +60,7 @@ describe('utils/commands.js (registry)', () => {
     expect(userNames).toContain('help');
   });
 
-  it('đúng 7 commands (Q1=b + C1)', () => {
-    expect(COMMANDS).toHaveLength(7);
+  it('đúng 4 commands (diemdanh, status, help, setup)', () => {
+    expect(COMMANDS).toHaveLength(4);
   });
 });

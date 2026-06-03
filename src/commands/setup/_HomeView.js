@@ -17,6 +17,7 @@ const CUSTOM_ID = {
   SCH:        'setup:sch',
   MEM:        'setup:mem',
   SESSION:    'setup:session:close',
+  START:      'setup:session:start',
   REFRESH:    'setup:home:refresh',
   HISTORY:    'setup:history',
   BROADCAST:  'setup:session:broadcast',
@@ -117,13 +118,19 @@ function render({ guild, cfg, schedules, members, session }) {
   // Row 2: session actions
   const sessionBtns = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
+      .setCustomId(CUSTOM_ID.START)
+      .setLabel('Mở phiên mới')
+      .setEmoji(ICONS.PLUS)
+      .setStyle(ButtonStyle.Success)
+      .setDisabled(!!session),
+    new ButtonBuilder()
       .setCustomId(CUSTOM_ID.REFRESH)
       .setLabel('Làm mới')
       .setEmoji(ICONS.REFRESH)
       .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId(CUSTOM_ID.SESSION)
-      .setLabel(session ? 'Đóng phiên' : 'Đóng phiên (không có phiên)')
+      .setLabel(session ? 'Đóng phiên' : 'Đóng phiên')
       .setEmoji(ICONS.CLOSE)
       .setStyle(session ? ButtonStyle.Danger : ButtonStyle.Secondary)
       .setDisabled(!session),

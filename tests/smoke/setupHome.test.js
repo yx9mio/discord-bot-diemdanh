@@ -78,7 +78,7 @@ describe('HomeView.render()', () => {
     expect(view.components).toHaveLength(2);
   });
 
-  it('render có session active → drilldown row có 4 nút, session row có 2 nút', () => {
+  it('render có session active → drilldown row có 4 nút, session row có 3 nút', () => {
     const view = HomeView.render({
       guild,
       cfg: { log_channel_id: '123', timezone: 'Asia/Ho_Chi_Minh', phai_role_ids: ['r1'] },
@@ -89,16 +89,18 @@ describe('HomeView.render()', () => {
     const drillRow = view.components[0].toJSON();
     const sessRow  = view.components[1].toJSON();
     expect(drillRow.components).toHaveLength(4);
-    expect(sessRow.components).toHaveLength(2);
+    expect(sessRow.components).toHaveLength(3);
     const closeBtn = sessRow.components.find(b => b.label.includes('Đóng'));
     expect(closeBtn.disabled).toBe(false);
     expect(closeBtn.style).toBe(4); // Danger
   });
 
-  it('render không có session → nút Đóng phiên disabled', () => {
+  it('render không có session → nút Mở phiên enabled, nút Đóng phiên disabled', () => {
     const view = HomeView.render({ guild, cfg: {}, schedules: [], members: [], session: null });
     const sessRow = view.components[1].toJSON();
+    const startBtn = sessRow.components.find(b => b.label.includes('Mở'));
     const closeBtn = sessRow.components.find(b => b.label.includes('Đóng'));
+    expect(startBtn.disabled).toBe(false);
     expect(closeBtn.disabled).toBe(true);
   });
 

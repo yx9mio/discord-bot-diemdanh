@@ -42,10 +42,11 @@ function openTypeModal(interaction) {
 }
 
 // Mở Modal 2 cho Recurring: Thứ + Tên + Giờ + Phút + pre_close = 5 rows
-function openRecurringDetailModal(interaction, prefill = {}) {
+function openRecurringDetailModal(interaction, prefill = {}, scheduleId = null) {
+  const customId = scheduleId ? `setup:sch:edit:r:${scheduleId}` : CUSTOM_ID.DETAIL_R;
   const modal = new ModalBuilder()
-    .setCustomId(CUSTOM_ID.DETAIL_R)
-    .setTitle('➕ Lịch hằng tuần — Bước 2/2');
+    .setCustomId(customId)
+    .setTitle(scheduleId ? '✏️ Sửa lịch hằng tuần' : '➕ Lịch hằng tuần — Bước 2/2');
 
   // Row 1: Thứ (Select)
   const thuSelect = new StringSelectMenuBuilder()

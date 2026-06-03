@@ -13,6 +13,7 @@ const {
 const db = require('../../db.js');
 const log = require('../../utils/logger.js');
 const { ScheduleView: _ScheduleView } = require('../../src/commands/setup/_ScheduleView.js');
+const { HomeView } = require('../../src/commands/setup/_HomeView.js');
 const {
   CUSTOM_ID,
   openOneTimeTimeModal,
@@ -61,6 +62,7 @@ class SetupScheduleAddDetailModal extends InteractionHandler {
     if (id === CUSTOM_ID.DETAIL_R) return this.some();
     if (id === CUSTOM_ID.DETAIL_O_A) return this.some();
     if (id === CUSTOM_ID.TIME_O) return this.some();
+    if (id?.startsWith('setup:sch:edit:r:')) return this.some();
     return this.none();
   }
 
@@ -68,6 +70,9 @@ class SetupScheduleAddDetailModal extends InteractionHandler {
     const id = interaction.customId;
     if (id === CUSTOM_ID.DETAIL_R) {
       return this._handleRecurring(interaction);
+    }
+    if (id?.startsWith('setup:sch:edit:r:')) {
+      return this._handleEditRecurring(interaction);
     }
     if (id === CUSTOM_ID.DETAIL_O_A) {
       return this._handleOneTimeDate(interaction);
@@ -115,6 +120,47 @@ class SetupScheduleAddDetailModal extends InteractionHandler {
     }
     return interaction.editReply({
       content: `✅ Đã thêm lịch **${sessionName}** — hằng tuần vào lúc **${String(gio.hour).padStart(2,'0')}:${String(gio.minute).padStart(2,'0')}** (đóng DD trước ${preClose}p).`,
+    });
+  }
+
+  async _handleEditRecurring(interaction) {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    const scheduleId = interaction.customId.slice('setup:sch:edit:r:'.length);
+    const guildId = interaction.guildId;
+    const dayOfWeek = parseInt(interaction.fields.getStringSelectValues('thu')?.[0] ?? '0', 10);
+    const sessionName = interaction.fields.getTextInputValue('ten').trim();
+    const gio = parseGio(interaction.fields.getTextInputValue('gio'));
+    if (!gio) {
+      return interaction.editReply({ content: '❌ Giờ mở không hợp lệ. Dùng định dạng HH:MM (vd: 20:00).' });
+    }
+    const preClose = parsePreClose(interaction.fields.getStringSelectValues('pre_close')?.[0]);
+    const phutBu   = interaction.fields.getStringSelectValues('phut_bu')?.[0];
+    const cfg = await db.getGuildConfig(guildId);
+    const channelId = cfg?.log_channel_id ?? cfg?.channel_id;
+    if (!channelId) {
+      return interaction.editReply({
+        content: '❌ Chưa cấu hình **Kênh log**. Vào `/setup` → Cài đặt chung → Kênh log để cài trước.',
+      });
+    }
+    const close = parsePhutBu(gio.hour, gio.minute, phutBu, dayOfWeek);
+    try {
+      await db.suaLichCoDinh(guildId, scheduleId, {
+        dayOfWeek,
+        hour: gio.hour,
+        minute: gio.minute,
+        sessionName,
+        preCloseMinutes: preClose,
+        closeDayOfWeek: close.closeDayOfWeek,
+        closeHour:      close.closeHour,
+        closeMinute:    close.closeMinute,
+        channelId,
+      });
+    } catch (e) {
+      log.error('SETUP_SCH_EDIT', guildId, 'suaLichCoDinh thất bại: %s', e.message);
+      return interaction.editReply({ content: '❌ Không thể sửa lịch, thử lại sau.' });
+    }
+    return interaction.editReply({
+      content: `✅ Đã sửa lịch **${sessionName}** — hằng tuần vào lúc **${String(gio.hour).padStart(2,'0')}:${String(gio.minute).padStart(2,'0')}** (đóng DD trước ${preClose}p).`,
     });
   }
 

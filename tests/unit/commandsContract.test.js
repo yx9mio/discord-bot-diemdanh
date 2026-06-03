@@ -49,9 +49,9 @@ describe('Commands contract', () => {
     expect(missing, `Missing files: ${missing.join(', ')}`).toEqual([]);
   });
 
-  it('3 user commands và 4 admin commands (Commit 6 + C1)', () => {
+  it('3 user commands và 1 admin command (setup)', () => {
     expect(byAudience('user')).toHaveLength(3);
-    expect(byAudience('admin')).toHaveLength(4);
+    expect(byAudience('admin')).toHaveLength(1);
   });
 
   it('mỗi category trong CATEGORIES đều có ≥1 command', () => {

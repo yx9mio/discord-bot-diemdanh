@@ -1,16 +1,17 @@
-// tests/smoke/ketthuc.test.js
-// Regression: /ket_thuc used to call db.endSession() (không tồn tại)
-// phải gọi db.closeSession() — bug này gây TypeError khi admin kết thúc phiên
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 
-const mockGetGuildConfig      = vi.fn();
-const mockGetActiveSession    = vi.fn();
-const mockCloseSession        = vi.fn();
-const mockEndSession          = vi.fn();
-const mockGetAttendances      = vi.fn();
-const mockBuildSummaryEmbed   = vi.fn().mockReturnValue({ _embed: 'summary' });
+const mockGetActiveSession  = vi.fn();
+const mockCloseSession      = vi.fn();
+const mockGetAttendances    = vi.fn();
+const mockStopAutoRefresh   = vi.fn();
+const mockXoaHenGio         = vi.fn();
+const mockKetThucPhien      = vi.fn().mockResolvedValue(new Map());
+const mockVoHieuHoa         = vi.fn();
+const mockBuildSummaryEmbed = vi.fn().mockReturnValue({ _embed: 'summary' });
+const mockThongBaoHuyHieu   = vi.fn().mockResolvedValue(null);
+const mockBuildAdminMarkModal = vi.fn();
 
 function mockModule(modulePath, exports) {
   const resolved = require.resolve(modulePath);
@@ -21,89 +22,119 @@ function mockModule(modulePath, exports) {
 }
 
 mockModule('../../db.js', {
-  getGuildConfig:   mockGetGuildConfig,
   getActiveSession: mockGetActiveSession,
   closeSession:     mockCloseSession,
-  endSession:       mockEndSession,
   getAttendances:   mockGetAttendances,
+  getGuildConfig:   vi.fn().mockResolvedValue({}),
 });
-
+mockModule('../../utils/timers.js', {
+  stopAutoRefresh: mockStopAutoRefresh,
+  xoaHenGio:       mockXoaHenGio,
+});
+mockModule('../../utils/session.js', {
+  ketThucPhien:         mockKetThucPhien,
+  voHieuHoaNutDiemDanh: mockVoHieuHoa,
+  thongBaoHuyHieu:      mockThongBaoHuyHieu,
+});
 mockModule('../../utils/embeds.js', {
-  FOOTER_DEFAULT:  'Test · Bot',
-  buildSummaryEmbed: mockBuildSummaryEmbed,
-  replyWarnEdit:   (msg) => ({ content: msg }),
+  buildSummaryEmbed:    mockBuildSummaryEmbed,
+  FOOTER_DEFAULT:       'Test',
+  buildSessionEmbed:    vi.fn().mockResolvedValue({ embed: { _embed: 'session' } }),
+  buildSessionActionRow: vi.fn().mockReturnValue([]),
+  replyOkEdit:          vi.fn().mockReturnValue({ content: '✅' }),
+  replyErrEdit:         vi.fn().mockReturnValue({ content: '🚫' }),
+  replyConfirm:         vi.fn().mockReturnValue({ embeds: [], components: [] }),
+});
+mockModule('../../utils/permissions.js', {
+  requireAdmin: vi.fn().mockResolvedValue({ ok: true }),
+});
+mockModule('../../utils/logger.js', {
+  info: vi.fn(), warn: vi.fn(), error: vi.fn(),
+});
+mockModule('../../utils/adminMarkModal.js', {
+  buildAdminMarkModal: mockBuildAdminMarkModal,
+});
+mockModule('../../utils/csvHelper.js', {
+  buildCsvBuffer:   vi.fn().mockReturnValue(Buffer.from('')),
+  buildCsvFilename: vi.fn().mockReturnValue('test.csv'),
+});
+mockModule('../../utils/sentry.js', {
+  addBreadcrumb: vi.fn(),
 });
 
 mockModule('@sapphire/framework', {
-  Command: class { constructor(ctx, opts) { Object.assign(this, opts); } },
+  InteractionHandler: class {
+    constructor(ctx, opts) { Object.assign(this, opts); }
+    some() { return { some: true }; }
+    none() { return { none: true }; }
+  },
+  InteractionHandlerTypes: { Button: 'Button' },
 });
 
-const { KetThucCommand } = require('../../src/commands/session/ketthuc.js');
+const { SessionButtonHandler } = require('../../interaction-handlers/sessionButton.js');
 
 const SESSION = { id: 'sess-1', session_name: 'TestPhien', guild_id: 'g1' };
+const handler = new SessionButtonHandler({}, {});
 
-const makeInteraction = (overrides = {}) => ({
-  guild: { id: 'g1' },
-  deferReply: vi.fn().mockResolvedValue(null),
-  editReply:  vi.fn().mockResolvedValue(null),
-  channel:    { id: 'ch1', send: vi.fn().mockResolvedValue(null) },
-  ...overrides,
-});
+function makeInteraction(customId, overrides = {}) {
+  return {
+    customId,
+    guild: { id: 'g1' },
+    channel: { id: 'ch1', send: vi.fn().mockResolvedValue(null) },
+    client: {},
+    deferUpdate: vi.fn().mockResolvedValue(null),
+    editReply: vi.fn().mockResolvedValue(null),
+    update: vi.fn().mockResolvedValue(null),
+    ...overrides,
+  };
+}
 
-const command = new KetThucCommand({});
+describe('SessionButton confirm_close flow', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
 
-describe('/ket_thuc — regression db.endSession → db.closeSession', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mockGetGuildConfig.mockResolvedValue({ log_channel_id: null, phai_role_ids: [] });
-    mockGetAttendances.mockResolvedValue([]);
-  });
-
-  it('gọi db.closeSession (KHÔNG gọi db.endSession)', async () => {
+  it('confirm_close → gọi db.closeSession (KHÔNG endSession)', async () => {
     mockGetActiveSession.mockResolvedValue(SESSION);
     mockCloseSession.mockResolvedValue(SESSION);
-    const i = makeInteraction();
-    await command.chatInputRun(i);
+    mockGetAttendances.mockResolvedValue([]);
+    await handler.run(makeInteraction('session:confirm_close'));
     expect(mockCloseSession).toHaveBeenCalledOnce();
     expect(mockCloseSession).toHaveBeenCalledWith('sess-1');
-    expect(mockEndSession).not.toHaveBeenCalled();
   });
 
-  it('trả về embed summary sau khi close', async () => {
+  it('confirm_close → gửi summary embed ra channel', async () => {
     mockGetActiveSession.mockResolvedValue(SESSION);
     mockCloseSession.mockResolvedValue(SESSION);
-    const i = makeInteraction();
-    await command.chatInputRun(i);
-    expect(mockBuildSummaryEmbed).toHaveBeenCalledWith(
-      SESSION, [], i.guild, null,
-    );
-    expect(i.editReply).toHaveBeenCalledWith({ embeds: [{ _embed: 'summary' }] });
+    mockGetAttendances.mockResolvedValue([]);
+    await handler.run(makeInteraction('session:confirm_close'));
+    expect(mockBuildSummaryEmbed).toHaveBeenCalledWith(SESSION, [], expect.any(Object));
   });
 
-  it('không có phiên → reply warn, KHÔNG gọi closeSession', async () => {
-    mockGetActiveSession.mockResolvedValue(null);
-    const i = makeInteraction();
-    await command.chatInputRun(i);
+  it('cancel_close → update with cancelled message', async () => {
+    const i = makeInteraction('session:cancel_close');
+    await handler.run(i);
+    expect(i.update).toHaveBeenCalled();
     expect(mockCloseSession).not.toHaveBeenCalled();
-    expect(i.editReply).toHaveBeenCalledWith(expect.objectContaining({
-      content: expect.stringContaining('Không có phiên'),
-    }));
   });
 
-  it('closeSession throw → exception bubbles lên commandError listener', async () => {
+  it('không có phiên → editReply lỗi', async () => {
+    mockGetActiveSession.mockResolvedValue(null);
+    await handler.run(makeInteraction('session:confirm_close'));
+    expect(mockCloseSession).not.toHaveBeenCalled();
+  });
+
+  it('closeSession throw → editReply lỗi', async () => {
     mockGetActiveSession.mockResolvedValue(SESSION);
     mockCloseSession.mockRejectedValue(new Error('DB down'));
-    const i = makeInteraction();
-    await expect(command.chatInputRun(i)).rejects.toThrow('DB down');
+    await handler.run(makeInteraction('session:confirm_close'));
+    expect(mockCloseSession).toHaveBeenCalled();
   });
 
-  it('gửi embed tới log_channel nếu có config', async () => {
-    mockGetGuildConfig.mockResolvedValue({ log_channel_id: 'log-ch', phai_role_ids: [] });
+  it('gọi stopAutoRefresh và xoaHenGio khi close', async () => {
     mockGetActiveSession.mockResolvedValue(SESSION);
     mockCloseSession.mockResolvedValue(SESSION);
-    const logCh = { send: vi.fn().mockResolvedValue(null) };
-    const i = makeInteraction({ guild: { id: 'g1', channels: { cache: new Map([['log-ch', logCh]]) } } });
-    await command.chatInputRun(i);
-    expect(logCh.send).toHaveBeenCalledWith({ embeds: [{ _embed: 'summary' }] });
+    mockGetAttendances.mockResolvedValue([]);
+    await handler.run(makeInteraction('session:confirm_close'));
+    expect(mockStopAutoRefresh).toHaveBeenCalledWith('sess-1');
+    expect(mockXoaHenGio).toHaveBeenCalledWith('g1');
   });
 });

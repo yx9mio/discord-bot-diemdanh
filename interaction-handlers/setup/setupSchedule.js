@@ -10,7 +10,9 @@ const db = require('../../db.js');
 const log = require('../../utils/logger.js');
 const { ScheduleView } = require('../../src/commands/setup/_ScheduleView.js');
 const { CUSTOM_ID } = ScheduleView;
-const { openTypeModal } = require('./setupScheduleAddTypeModal.js');
+const { openTypeModal, openRecurringDetailModal, openOneTimeDateModal } = require('./setupScheduleAddTypeModal.js');
+
+const _editStore = new Map();
 
 class SetupScheduleHandler extends InteractionHandler {
   constructor(ctx, options) {
@@ -22,6 +24,7 @@ class SetupScheduleHandler extends InteractionHandler {
     if (id === 'setup:sch') return this.some();
     if (id === CUSTOM_ID.PAGE_NEXT || id === CUSTOM_ID.PAGE_PREV) return this.some();
     if (id?.startsWith(CUSTOM_ID.DEL_PREFIX)) return this.some();
+    if (id?.startsWith(CUSTOM_ID.EDIT_PREFIX)) return this.some();
     if (id === CUSTOM_ID.ADD) return this.some();
     return this.none();
   }
@@ -32,6 +35,26 @@ class SetupScheduleHandler extends InteractionHandler {
     // Thêm lịch → mở Modal 1 (Loại)
     if (customId === CUSTOM_ID.ADD) {
       return openTypeModal(interaction);
+    }
+
+    // Sửa lịch → mở Modal chi tiết với prefill
+    if (customId.startsWith(CUSTOM_ID.EDIT_PREFIX)) {
+      const scheduleId = customId.slice(CUSTOM_ID.EDIT_PREFIX.length);
+      const schedule = await db.getScheduledSessionById(scheduleId);
+      if (!schedule) {
+        await interaction.deferReply({ flags: require('discord.js').MessageFlags.Ephemeral });
+        return interaction.editReply({ content: '❌ Không tìm thấy lịch.' });
+      }
+      _editStore.set(scheduleId, true);
+      setTimeout(() => _editStore.delete(scheduleId), 15 * 60_000);
+      const prefill = {
+        dayOfWeek: schedule.day_of_week,
+        hour: schedule.hour,
+        minute: schedule.minute,
+        sessionName: schedule.session_name,
+        preCloseMinutes: schedule.pre_close_minutes,
+      };
+      return openRecurringDetailModal(interaction, prefill, scheduleId);
     }
 
     await interaction.deferUpdate();
