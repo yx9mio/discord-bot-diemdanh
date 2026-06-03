@@ -2,9 +2,11 @@
 // Handles:
 //   - setup:sch (mở Schedule view trang 0)
 //   - setup:sch:page:next / :prev (phân trang)
-//   - setup:sch:del:<scheduleId> (xoá 1 lịch)
-//   - setup:sch:add, setup:sch:edit:<id> → modal ở Commit 5
+//   - setup:sch:del:<scheduleId> → xác nhận xoá
+//   - setup:sch:del:yes:<scheduleId> / del:no:<scheduleId> (xác nhận / huỷ)
+//   - setup:sch:add, setup:sch:edit:<id> → modal
 'use strict';
+const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const db = require('../../db.js');
 const log = require('../../utils/logger.js');
@@ -21,7 +23,7 @@ class SetupScheduleHandler extends InteractionHandler {
     const id = interaction.customId;
     if (id === 'setup:sch') return this.some();
     if (id === CUSTOM_ID.PAGE_NEXT || id === CUSTOM_ID.PAGE_PREV) return this.some();
-    if (id?.startsWith(CUSTOM_ID.DEL_PREFIX)) return this.some();
+    if (id?.startsWith(CUSTOM_ID.DEL_PREFIX) || id?.startsWith(CUSTOM_ID.DEL_CONFIRM) || id?.startsWith(CUSTOM_ID.DEL_CANCEL)) return this.some();
     if (id?.startsWith(CUSTOM_ID.EDIT_PREFIX)) return this.some();
     if (id === CUSTOM_ID.ADD) return this.some();
     return this.none();
@@ -40,7 +42,7 @@ class SetupScheduleHandler extends InteractionHandler {
       const scheduleId = customId.slice(CUSTOM_ID.EDIT_PREFIX.length);
       const schedule = await db.getScheduledSessionById(scheduleId);
       if (!schedule) {
-        await interaction.deferReply({ flags: require('discord.js').MessageFlags.Ephemeral });
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         return interaction.editReply({ content: '❌ Không tìm thấy lịch.' });
       }
       const prefill = {
@@ -53,14 +55,19 @@ class SetupScheduleHandler extends InteractionHandler {
       return openRecurringDetailModal(interaction, prefill, scheduleId);
     }
 
-    await interaction.deferUpdate();
-
-    // Xoá 1 lịch
-    if (customId.startsWith(CUSTOM_ID.DEL_PREFIX)) {
-      const scheduleId = customId.slice(CUSTOM_ID.DEL_PREFIX.length);
+    // Xác nhận xoá → thực hiện xoá
+    if (customId.startsWith(CUSTOM_ID.DEL_CONFIRM)) {
+      await interaction.deferUpdate();
+      const scheduleId = customId.slice(CUSTOM_ID.DEL_CONFIRM.length);
+      const schedule = await db.getScheduledSessionById(scheduleId);
+      if (!schedule) {
+        const schedules = await db.getScheduledSessions(guild.id);
+        const curPage = _extractPageFromEmbed(interaction);
+        return interaction.editReply(ScheduleView.render({ schedules, page: curPage, guild }));
+      }
       try {
         await db.deleteScheduledSession(scheduleId);
-        log.info('SETUP_SCH', guild.id, 'Xoá lịch %s qua /setup', scheduleId);
+        log.info('SETUP_SCH', guild.id, 'Xoá lịch %s', scheduleId);
       } catch (e) {
         log.error('SETUP_SCH', guild.id, 'deleteScheduledSession thất bại: %s', e.message);
       }
@@ -68,6 +75,36 @@ class SetupScheduleHandler extends InteractionHandler {
       const curPage = _extractPageFromEmbed(interaction);
       const view = ScheduleView.render({ schedules, page: curPage, guild });
       return interaction.editReply(view);
+    }
+
+    // Huỷ xoá → quay về danh sách
+    if (customId.startsWith(CUSTOM_ID.DEL_CANCEL)) {
+      await interaction.deferUpdate();
+      const schedules = await db.getScheduledSessions(guild.id);
+      const curPage = _extractPageFromEmbed(interaction);
+      return interaction.editReply(ScheduleView.render({ schedules, page: curPage, guild }));
+    }
+
+    await interaction.deferUpdate();
+
+    // Xoá 1 lịch → hỏi xác nhận
+    if (customId.startsWith(CUSTOM_ID.DEL_PREFIX)) {
+      const scheduleId = customId.slice(CUSTOM_ID.DEL_PREFIX.length);
+      const schedule = await db.getScheduledSessionById(scheduleId);
+      if (!schedule) {
+        const schedules = await db.getScheduledSessions(guild.id);
+        const curPage = _extractPageFromEmbed(interaction);
+        return interaction.editReply(ScheduleView.render({ schedules, page: curPage, guild }));
+      }
+      const embed = new EmbedBuilder()
+        .setColor(0xF1C40F)
+        .setDescription(`⚠️ Bạn có chắc muốn xoá lịch cố định **${schedule.session_name}**?\n> Hành động này không thể hoàn tác.`)
+        .setFooter({ text: 'Bấm ✅ Xác nhận để xoá, ↩️ Hủy để quay lại' });
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(CUSTOM_ID.DEL_CONFIRM + scheduleId).setLabel('✅ Xác nhận').setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId(CUSTOM_ID.DEL_CANCEL + scheduleId).setLabel('↩️ Hủy').setStyle(ButtonStyle.Secondary),
+      );
+      return interaction.editReply({ embeds: [embed], components: [row] });
     }
 
     // Phân trang

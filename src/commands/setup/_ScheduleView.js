@@ -10,8 +10,10 @@ const CUSTOM_ID = {
   ADD:         'setup:sch:add',
   PAGE_NEXT:   'setup:sch:page:next',
   PAGE_PREV:   'setup:sch:page:prev',
-  DEL_PREFIX:  'setup:sch:del:',  // setup:sch:del:<scheduleId>
-  EDIT_PREFIX: 'setup:sch:edit:', // setup:sch:edit:<scheduleId>
+  DEL_PREFIX:  'setup:sch:del:',       // setup:sch:del:<scheduleId>
+  DEL_CONFIRM: 'setup:sch:del:yes:',   // setup:sch:del:yes:<scheduleId>
+  DEL_CANCEL:  'setup:sch:del:no:',    // setup:sch:del:no:<scheduleId>
+  EDIT_PREFIX: 'setup:sch:edit:',      // setup:sch:edit:<scheduleId>
   BACK_HOME:   'setup:home',
 };
 

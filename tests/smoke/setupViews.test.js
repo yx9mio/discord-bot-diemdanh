@@ -16,16 +16,18 @@ function mockModule(modulePath, exports) {
 
 const mockGetGuildConfig        = vi.fn().mockResolvedValue({});
 const mockGetScheduledSessions  = vi.fn().mockResolvedValue([]);
+const mockGetScheduledSessionById = vi.fn().mockResolvedValue({ id: 's1', session_name: 'Test' });
 const mockGetMembers            = vi.fn().mockResolvedValue([]);
 const mockDeleteScheduledSession = vi.fn().mockResolvedValue(null);
 const mockDeleteMember          = vi.fn().mockResolvedValue(null);
 
 mockModule('../../db.js', {
-  getGuildConfig:        (...a) => mockGetGuildConfig(...a),
-  getScheduledSessions:  (...a) => mockGetScheduledSessions(...a),
-  getMembers:            (...a) => mockGetMembers(...a),
-  deleteScheduledSession: (...a) => mockDeleteScheduledSession(...a),
-  deleteMember:          (...a) => mockDeleteMember(...a),
+  getGuildConfig:          (...a) => mockGetGuildConfig(...a),
+  getScheduledSessions:    (...a) => mockGetScheduledSessions(...a),
+  getScheduledSessionById: (...a) => mockGetScheduledSessionById(...a),
+  getMembers:              (...a) => mockGetMembers(...a),
+  deleteScheduledSession:  (...a) => mockDeleteScheduledSession(...a),
+  deleteMember:            (...a) => mockDeleteMember(...a),
 });
 mockModule('../../utils/logger.js', {
   info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn(),
@@ -203,11 +205,28 @@ describe('SetupScheduleHandler', () => {
     expect(h.parse({ customId: 'setup:cfg' })).toEqual({ none: true });
   });
 
-  it('run: del: → gọi deleteScheduledSession + render lại', async () => {
-    mockGetScheduledSessions.mockResolvedValue([]);
+  it('run: del: → hiện xác nhận, không xoá ngay', async () => {
+    mockGetScheduledSessionById.mockResolvedValue({ id: 's1', session_name: 'Ca sáng' });
     const h = new SetupScheduleHandler({}, {});
     const i = {
       customId: 'setup:sch:del:s1',
+      guild,
+      deferUpdate: vi.fn().mockResolvedValue(null),
+      editReply: vi.fn().mockResolvedValue(null),
+    };
+    await h.run(i);
+    expect(mockDeleteScheduledSession).not.toHaveBeenCalled();
+    expect(i.editReply).toHaveBeenCalledWith(
+      expect.objectContaining({ embeds: expect.any(Array), components: expect.any(Array) }),
+    );
+  });
+
+  it('run: del:yes: → xoá + render lại', async () => {
+    mockGetScheduledSessionById.mockResolvedValue({ id: 's1', session_name: 'Ca sáng' });
+    mockGetScheduledSessions.mockResolvedValue([]);
+    const h = new SetupScheduleHandler({}, {});
+    const i = {
+      customId: 'setup:sch:del:yes:s1',
       guild,
       deferUpdate: vi.fn().mockResolvedValue(null),
       editReply: vi.fn().mockResolvedValue(null),
