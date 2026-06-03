@@ -35,13 +35,17 @@ function parsePreClose(val) {
   return n;
 }
 
+// Temporary in-memory store for one-time date across modals (interaction token → {ngay,thang,nam})
+const _otDateStore = new Map();
+
 // ── Helper: parse phut_bu → closeHour/closeMinute ──────────────────────
-function parsePhutBu(openHour, openMinute, phutBuVal) {
+function parsePhutBu(openHour, openMinute, phutBuVal, dayOfWeek = 0) {
   if (!phutBuVal || phutBuVal === 'none') return { closeHour: null, closeMinute: null, closeDayOfWeek: null };
   const offset = parseInt(phutBuVal, 10);
   if (Number.isNaN(offset)) return { closeHour: null, closeMinute: null, closeDayOfWeek: null };
   const totalMin = openHour * 60 + openMinute + offset;
-  const closeDayOfWeek = Math.floor(totalMin / (24 * 60)) % 7;
+  const daysOffset = Math.floor(totalMin / (24 * 60));
+  const closeDayOfWeek = (dayOfWeek + daysOffset) % 7;
   const closeHour = Math.floor((totalMin % (24 * 60)) / 60);
   const closeMinute = totalMin % 60;
   return { closeDayOfWeek, closeHour, closeMinute };
@@ -76,14 +80,14 @@ class SetupScheduleAddDetailModal extends InteractionHandler {
   async _handleRecurring(interaction) {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const guildId = interaction.guildId;
-    const dayOfWeek = parseInt(interaction.fields.getStringSelectValue?.('thu') ?? interaction.fields.getSelect?.('thu') ?? '0', 10);
+    const dayOfWeek = parseInt(interaction.fields.getStringSelectValues('thu')?.[0] ?? '0', 10);
     const sessionName = interaction.fields.getTextInputValue('ten').trim();
     const gio = parseGio(interaction.fields.getTextInputValue('gio'));
     if (!gio) {
       return interaction.editReply({ content: '❌ Giờ mở không hợp lệ. Dùng định dạng HH:MM (vd: 20:00).' });
     }
-    const preClose = parsePreClose(interaction.fields.getStringSelectValue?.('pre_close') ?? interaction.fields.getSelect?.('pre_close'));
-    const phutBu   = interaction.fields.getStringSelectValue?.('phut_bu') ?? interaction.fields.getSelect?.('phut_bu');
+    const preClose = parsePreClose(interaction.fields.getStringSelectValues('pre_close')?.[0]);
+    const phutBu   = interaction.fields.getStringSelectValues('phut_bu')?.[0];
 
     const cfg = await db.getGuildConfig(guildId);
     const channelId = cfg?.log_channel_id ?? cfg?.channel_id;
@@ -92,7 +96,7 @@ class SetupScheduleAddDetailModal extends InteractionHandler {
         content: '❌ Chưa cấu hình **Kênh log**. Vào `/setup` → Cài đặt chung → Kênh log để cài trước.',
       });
     }
-    const close = parsePhutBu(gio.hour, gio.minute, phutBu);
+    const close = parsePhutBu(gio.hour, gio.minute, phutBu, dayOfWeek);
     try {
       await db.themLichCoDinh(guildId, {
         dayOfWeek,
@@ -115,32 +119,33 @@ class SetupScheduleAddDetailModal extends InteractionHandler {
   }
 
   _handleOneTimeDate(interaction) {
-    // Modal 2a: chỉ chọn Ngày/Tháng/Năm → mở Modal 2b
-    // (Lưu ý: Discord Modal API không cho truyền prefill giữa các modal. Người dùng
-    //  sẽ chọn lại Tên + Giờ ở Modal 2b. Cải tiến tương lai: dùng collector hoặc ephemeral state.)
+    const ngay  = parseInt(interaction.fields.getStringSelectValues('ngay')?.[0] ?? '0', 10);
+    const thang = parseInt(interaction.fields.getStringSelectValues('thang')?.[0] ?? '0', 10);
+    const nam   = parseInt(interaction.fields.getStringSelectValues('nam')?.[0] ?? '0', 10);
+    if (!ngay || !thang || !nam) {
+      return interaction.reply({ content: '❌ Thiếu ngày/tháng/năm.', flags: MessageFlags.Ephemeral });
+    }
+    _otDateStore.set(interaction.token, { ngay, thang, nam });
+    setTimeout(() => _otDateStore.delete(interaction.token), 15 * 60 * 1000);
     return openOneTimeTimeModal(interaction);
   }
 
   async _handleOneTimeTime(interaction) {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const guildId = interaction.guildId;
-    // Lấy date từ message gốc của Modal 2a — nhưng Discord không lưu. → bắt buộc user chọn lại.
-    // HACK: nếu muốn prefill, phải dùng collector. Tạm thời: yêu cầu user chọn lại date.
-    // (Commit 5 limitation: One-time cần 1 collector hoặc 1 extra modal.)
-    const ngay  = parseInt(interaction.fields.getStringSelectValue?.('ngay')  ?? interaction.fields.getSelect?.('ngay')  ?? '0', 10);
-    const thang = parseInt(interaction.fields.getStringSelectValue?.('thang') ?? interaction.fields.getSelect?.('thang') ?? '0', 10);
-    const nam   = parseInt(interaction.fields.getStringSelectValue?.('nam')   ?? interaction.fields.getSelect?.('nam')   ?? '0', 10);
+    const stored = _otDateStore.get(interaction.token);
+    _otDateStore.delete(interaction.token);
+    if (!stored) {
+      return interaction.editReply({ content: '❌ Hết hạn chọn ngày. Bấm lại "Thêm lịch" và chọn đầy đủ.' });
+    }
+    const { ngay, thang, nam } = stored;
     const sessionName = interaction.fields.getTextInputValue('ten').trim();
     const gio = parseGio(interaction.fields.getTextInputValue('gio'));
     if (!gio) {
       return interaction.editReply({ content: '❌ Giờ mở không hợp lệ. Dùng định dạng HH:MM (vd: 20:00).' });
     }
-    const preClose = parsePreClose(interaction.fields.getStringSelectValue?.('pre_close') ?? interaction.fields.getSelect?.('pre_close'));
-    const phutBu   = interaction.fields.getStringSelectValue?.('phut_bu') ?? interaction.fields.getSelect?.('phut_bu');
-    if (!ngay || !thang || !nam) {
-      return interaction.editReply({ content: '❌ Thiếu ngày/tháng/năm. Bấm lại "Thêm lịch" và chọn đầy đủ.' });
-    }
-    // Tính dayOfWeek từ ngày/tháng/năm
+    const preClose = parsePreClose(interaction.fields.getStringSelectValues('pre_close')?.[0]);
+    const phutBu   = interaction.fields.getStringSelectValues('phut_bu')?.[0];
     const date = new Date(nam, thang - 1, ngay);
     if (Number.isNaN(date.getTime()) || date.getDate() !== ngay) {
       return interaction.editReply({ content: `❌ Ngày ${ngay}/${thang}/${nam} không hợp lệ.` });
@@ -151,7 +156,7 @@ class SetupScheduleAddDetailModal extends InteractionHandler {
     if (!channelId) {
       return interaction.editReply({ content: '❌ Chưa cấu hình **Kênh log**. Vào `/setup` → Cài đặt chung → Kênh log.' });
     }
-    const close = parsePhutBu(gio.hour, gio.minute, phutBu);
+    const close = parsePhutBu(gio.hour, gio.minute, phutBu, dayOfWeek);
     try {
       await db.themLichCoDinh(guildId, {
         dayOfWeek,

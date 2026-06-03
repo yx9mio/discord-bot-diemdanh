@@ -36,7 +36,7 @@ function renderLiveSessionSection(session, _guild) {
   return [
     `${ICONS.SESSION} **${session.session_name}** đang mở`,
     `▸ Bắt đầu: <t:${startTs}:R>  ·  Kênh: ${ch}`,
-    `▸ Mở bởi: <@${session.started_by}>`,
+    `▸ Mở bởi: ${session.started_by ? `<@${session.started_by}>` : 'không rõ'}`,
   ].join('\n');
 }
 

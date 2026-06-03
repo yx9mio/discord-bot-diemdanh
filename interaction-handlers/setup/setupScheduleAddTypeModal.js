@@ -216,7 +216,7 @@ class SetupScheduleAddTypeModal extends InteractionHandler {
   }
 
   run(interaction) {
-    const loai = interaction.fields.getStringSelectValue?.('loai') ?? interaction.fields.getSelect?.('loai');
+    const loai = interaction.fields.getStringSelectValues('loai')?.[0];
     log.info('SETUP_SCH_TYPE', interaction.guildId, 'User chọn loại: %s', loai);
     if (loai === 'recurring') {
       return openRecurringDetailModal(interaction);
