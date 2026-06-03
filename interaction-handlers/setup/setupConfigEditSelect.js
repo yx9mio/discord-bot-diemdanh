@@ -6,6 +6,7 @@ const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/frame
 const db  = require('../../db.js');
 const log = require('../../utils/logger.js');
 const { requireAdmin } = require('../../utils/permissions.js');
+const { ConfigView } = require('../../src/commands/setup/_ConfigView.js');
 
 const SELECT_PREFIX = 'setup:cfg:select:';
 
@@ -27,56 +28,57 @@ async function handleSelect(interaction) {
   const selectId = interaction.customId;
   const cfg      = await db.getGuildConfig(guildId);
 
+  // [FIX] Hàm helper: refresh ConfigView message gốc sau khi lưu thành công
+  // interaction.message là ephemeral SelectMenu reply, không phải message gốc của ConfigView.
+  // ConfigView được gắn trên interaction.message.reference hoặc phải fetch qua channel.
+  // Cách đơn giản nhất: lấy message gốc qua interaction.message.interaction.message (followUp flow)
+  // Tuy nhiên với flow deferUpdate trên ephemeral reply, không có reference đáng tin cậy.
+  // → Dùng interaction.channel để fetch pinned/last message có ConfigView embed là không reliable.
+  // → Best approach: store messageId hoặc dùng interaction.message.reference.messageId nếu có.
+  // → Thực tế: ephemeral SelectMenu reply KHÔNG có .message trên interaction sau deferUpdate.
+  //   interaction.message ở đây là message chứa SelectMenu (ephemeral), không phải ConfigView.
+  // → Cách khả thi: sau lưu xong, editReply ephemeral thành ConfigView refreshed.
+  async function refreshView(newCfg) {
+    const view = ConfigView.render({ cfg: newCfg, guild: interaction.guild });
+    // Thay thế ephemeral message bằng ConfigView mới (user thấy ngay kết quả)
+    return interaction.editReply({ ...view, content: null });
+  }
+
   try {
     // --- Kênh thông báo (notification_channel_id) ---
     if (selectId === SELECT_PREFIX + 'channel') {
       const channelId = interaction.values[0];
-      await db.setGuildConfig(guildId, { ...cfg, notification_channel_id: channelId });
+      const newCfg = { ...cfg, notification_channel_id: channelId };
+      await db.setGuildConfig(guildId, newCfg);
       log.info('SETUP_CFG', guildId, 'Cập nhật notification_channel_id = %s', channelId);
-      return interaction.editReply({
-        content: `✅ Đã cập nhật kênh thông báo thành <#${channelId}>.`,
-        components: [],
-      });
+      return refreshView(newCfg);
     }
 
     // --- Phái (multi-role) ---
     if (selectId === SELECT_PREFIX + 'phai') {
-      const roleIds = interaction.values; // [] nếu bỏ trống
-      await db.setGuildConfig(guildId, { ...cfg, phai_role_ids: roleIds });
+      const roleIds = interaction.values;
+      const newCfg = { ...cfg, phai_role_ids: roleIds };
+      await db.setGuildConfig(guildId, newCfg);
       log.info('SETUP_CFG', guildId, 'Cập nhật phai_role_ids = %j', roleIds);
-      const label = roleIds.length > 0
-        ? roleIds.map(id => `<@&${id}>`).join(', ')
-        : '*(không có)*';
-      return interaction.editReply({
-        content: `✅ Đã cập nhật Phái: ${label}`,
-        components: [],
-      });
+      return refreshView(newCfg);
     }
 
     // --- Role Quản lý ---
     if (selectId === SELECT_PREFIX + 'admin_role') {
       const roleId = interaction.values[0] ?? null;
-      await db.setGuildConfig(guildId, { ...cfg, admin_role_id: roleId });
+      const newCfg = { ...cfg, admin_role_id: roleId };
+      await db.setGuildConfig(guildId, newCfg);
       log.info('SETUP_CFG', guildId, 'Cập nhật admin_role_id = %s', roleId);
-      return interaction.editReply({
-        content: roleId
-          ? `✅ Đã cập nhật Role Quản lý thành <@&${roleId}>.`
-          : '✅ Đã xoá Role Quản lý.',
-        components: [],
-      });
+      return refreshView(newCfg);
     }
 
     // --- Role Điểm danh ---
     if (selectId === SELECT_PREFIX + 'attendance_role') {
       const roleId = interaction.values[0] ?? null;
-      await db.setGuildConfig(guildId, { ...cfg, attendance_role_id: roleId });
+      const newCfg = { ...cfg, attendance_role_id: roleId };
+      await db.setGuildConfig(guildId, newCfg);
       log.info('SETUP_CFG', guildId, 'Cập nhật attendance_role_id = %s', roleId);
-      return interaction.editReply({
-        content: roleId
-          ? `✅ Đã cập nhật Role Điểm danh thành <@&${roleId}>.`
-          : '✅ Đã xoá Role Điểm danh.',
-        components: [],
-      });
+      return refreshView(newCfg);
     }
 
     return interaction.editReply({ content: '❌ Hành động không xác định.', components: [] });

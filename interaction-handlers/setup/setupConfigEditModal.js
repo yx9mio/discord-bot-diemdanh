@@ -1,7 +1,6 @@
 'use strict';
 // interaction-handlers/setup/setupConfigEditModal.js
 // ModalSubmit handler: xử lý submit form timezone & reminder
-// (channel/role đã chuyển sang setupConfigEditSelect.js dùng SelectMenu)
 const { MessageFlags } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const db  = require('../../db.js');
@@ -11,6 +10,8 @@ const { requireAdmin } = require('../../utils/permissions.js');
 const MODAL_PREFIX = 'setup:cfg:modal:';
 
 async function handleEditModal(interaction) {
+  // [FIX] ModalSubmit không có interaction.message → không thể edit ConfigView gốc trực tiếp.
+  // Dùng deferReply ephemeral + editReply với ConfigView đầy đủ để user thấy kết quả ngay.
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   const { ok } = await requireAdmin(interaction, { context: 'chỉnh sửa cấu hình', deferred: true });
@@ -29,9 +30,14 @@ async function handleEditModal(interaction) {
       } catch {
         return interaction.editReply({ content: `❌ Múi giờ \`${tz}\` không hợp lệ.` });
       }
-      await db.setGuildConfig(guildId, { ...cfg, timezone: tz });
+      const newCfg = { ...cfg, timezone: tz };
+      await db.setGuildConfig(guildId, newCfg);
       log.info('SETUP_CFG', guildId, 'Cập nhật timezone = %s', tz);
-      return interaction.editReply({ content: `✅ Đã cập nhật Timezone thành \`${tz}\`.` });
+      // [FIX] Thông báo rõ kết quả + nhắc bấm lại để xem ConfigView cập nhật
+      // (ModalSubmit không có message context để edit ConfigView gốc)
+      return interaction.editReply({
+        content: `✅ Đã cập nhật Timezone thành \`${tz}\`.\n> 🔄 Bấm **Cài đặt chung** để xem bảng cấu hình đã cập nhật.`,
+      });
     }
 
     // --- Nhắc nhở ---
@@ -41,16 +47,18 @@ async function handleEditModal(interaction) {
       if (isNaN(minutes) || minutes < 0) {
         return interaction.editReply({ content: '❌ Số phút không hợp lệ. Nhập số nguyên >= 0.' });
       }
-      await db.setGuildConfig(guildId, {
+      const newCfg = {
         ...cfg,
         reminder_enabled: minutes > 0,
         reminder_minutes: minutes,
-      });
+      };
+      await db.setGuildConfig(guildId, newCfg);
       log.info('SETUP_CFG', guildId, 'Cập nhật reminder = %d phút', minutes);
       return interaction.editReply({
-        content: minutes > 0
+        content: (minutes > 0
           ? `✅ Đã bật nhắc nhở **${minutes} phút** trước giờ mở.`
-          : '✅ Đã tắt nhắc nhở.',
+          : '✅ Đã tắt nhắc nhở.')
+          + '\n> 🔄 Bấm **Cài đặt chung** để xem bảng cấu hình đã cập nhật.',
       });
     }
 

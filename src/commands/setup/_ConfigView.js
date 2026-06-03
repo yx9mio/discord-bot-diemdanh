@@ -1,6 +1,5 @@
 // src/commands/setup/ConfigView.js
 // Render trang cài đặt chung: Kênh log / Role / Phái / Timezone / Nhắc nhở.
-// (Commit 4: hiển thị + nút edit cơ bản. Commit 5 sẽ thêm modal edit.)
 'use strict';
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { COLORS, ICONS } = require('../../../utils/theme.js');
@@ -17,14 +16,15 @@ const CUSTOM_ID = {
 };
 
 function renderConfigSection(cfg) {
-  const tz = cfg?.timezone ?? 'Asia/Ho_Chi_Minh';
-  const channel = cfg?.log_channel_id ? `<#${cfg.log_channel_id}>` : '_chưa cài_';
-  const phai = (cfg?.phai_role_ids ?? []).length
+  const tz      = cfg?.timezone ?? 'Asia/Ho_Chi_Minh';
+  // [FIX] dùng đúng column notification_channel_id thay vì log_channel_id
+  const channel = cfg?.notification_channel_id ? `<#${cfg.notification_channel_id}>` : '_chưa cài_';
+  const phai    = (cfg?.phai_role_ids ?? []).length
     ? cfg.phai_role_ids.map(r => `<@&${r}>`).join(' ')
     : '_Tất cả_';
   const adminRole = cfg?.admin_role_id ? `<@&${cfg.admin_role_id}>` : '_chưa cài_';
-  const attRole = cfg?.attendance_role_id ? `<@&${cfg.attendance_role_id}>` : '_chưa cài_';
-  const reminder = cfg?.reminder_enabled === false
+  const attRole   = cfg?.attendance_role_id ? `<@&${cfg.attendance_role_id}>` : '_chưa cài_';
+  const reminder  = cfg?.reminder_enabled === false
     ? '⛔ Tắt'
     : `✅ ${cfg?.reminder_minutes ?? 10} phút trước`;
   return [
