@@ -47,6 +47,8 @@ const client = new SapphireClient({
 client.stores.get('commands').registerPath(path.join(__dirname, 'src', 'commands'));
 client.stores.get('listeners').registerPath(path.join(__dirname, 'listeners'));
 client.stores.get('interaction-handlers').registerPath(path.join(__dirname, 'interaction-handlers'));
+// [FIX] Sapphire v3 không scan đệ quy — phải đăng ký sub-folder riêng
+client.stores.get('interaction-handlers').registerPath(path.join(__dirname, 'interaction-handlers', 'setup'));
 client.stores.get('preconditions').registerPath(path.join(__dirname, 'preconditions'));
 
 // Health server cho Railway keepalive — phải start trước client.login()
