@@ -1,11 +1,9 @@
 // interaction-handlers/setup/setupConfig.js
 // Handles: setup:cfg (mở Config view)
-// (Commit 4: chỉ render. Commit 5 sẽ thêm handlers cho 4 nút edit.)
 'use strict';
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const db = require('../../db.js');
 const { ConfigView } = require('../../src/commands/setup/_ConfigView.js');
-const { CUSTOM_ID } = ConfigView;
 
 class SetupConfigHandler extends InteractionHandler {
   constructor(ctx, options) {
@@ -13,11 +11,14 @@ class SetupConfigHandler extends InteractionHandler {
   }
 
   parse(interaction) {
+    // [DEBUG] log mọi button interaction để xác nhận handler nhận được
+    console.log('[DEBUG] setupConfig parse() called, customId:', interaction.customId);
     if (interaction.customId === 'setup:cfg') return this.some();
     return this.none();
   }
 
   async run(interaction) {
+    console.log('[DEBUG] setupConfig run() called');
     await interaction.deferUpdate();
     const { guild } = interaction;
     const cfg = await db.getGuildConfig(guild.id);
