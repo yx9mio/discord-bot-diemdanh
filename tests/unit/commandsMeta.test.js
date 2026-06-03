@@ -1,7 +1,6 @@
 // tests/unit/commandsMeta.test.js
 // Test: central registry utils/commands.js consistency.
-// Commit 6: 6 commands (Q1=b: /batdau, /ketthuc, /status, /diemdanh, /help, /setup).
-// [C1] Thêm /admin dashboard → 7 commands.
+// Chỉ giữ 2 commands cơ bản: /help, /setup. Mọi thao tác khác qua UI.
 
 import { describe, it, expect } from 'vitest';
 const {
@@ -38,14 +37,14 @@ describe('utils/commands.js (registry)', () => {
   });
 
   it('getCmd(name) tìm đúng command', () => {
-    expect(getCmd('diemdanh').desc).toMatch(/điểm danh/i);
+    expect(getCmd('help').desc).toMatch(/hướng dẫn/i);
     expect(getCmd('khong-co')).toBeUndefined();
   });
 
   it('byCategory trả về mảng con', () => {
-    const phien = byCategory('PHIEN');
-    expect(phien.length).toBeGreaterThan(0);
-    expect(phien.every(c => c.category === 'PHIEN')).toBe(true);
+    const tienIch = byCategory('TIEN_ICH');
+    expect(tienIch.length).toBeGreaterThan(0);
+    expect(tienIch.every(c => c.category === 'TIEN_ICH')).toBe(true);
   });
 
   it('admin commands core đều có mặt', () => {
@@ -55,12 +54,10 @@ describe('utils/commands.js (registry)', () => {
 
   it('user commands phổ biến đều có mặt', () => {
     const userNames = byAudience('user').map(c => c.name);
-    expect(userNames).toContain('diemdanh');
-    expect(userNames).toContain('status');
     expect(userNames).toContain('help');
   });
 
-  it('đúng 4 commands (diemdanh, status, help, setup)', () => {
-    expect(COMMANDS).toHaveLength(4);
+  it('đúng 2 commands (help, setup)', () => {
+    expect(COMMANDS).toHaveLength(2);
   });
 });

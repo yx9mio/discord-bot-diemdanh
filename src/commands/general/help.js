@@ -25,12 +25,13 @@ function buildQuickStart() {
   return [
     '**👋 Chào mừng đến với Quản Gia — Bot Điểm Danh!**',
     '',
-    '**🟢 Bắt đầu nhanh (chỉ cần 3 lệnh):**',
-    '1️⃣ `/bat_dau` — mở phiên điểm danh *(admin)*',
-    '2️⃣ `/diemdanh` — thành viên bấm để điểm danh',
-    '3️⃣ `/ket_thuc` — đóng phiên, xem báo cáo *(admin)*',
+    '**🟢 Bắt đầu nhanh:**',
+    '1️⃣ Admin mở **Bảng điều khiển** với `/setup`',
+    '2️⃣ Bấm **Mở phiên mới** → nhập tên → gửi embed điểm danh',
+    '3️⃣ Thành viên chọn trạng thái từ menu dropdown trong embed',
+    '4️⃣ Admin bấm **⏹️ Đóng phiên** để kết thúc và xem báo cáo',
     '',
-    '💡 *Gõ `/` rồi bắt đầu gõ tên lệnh để Discord tự gợi ý.*',
+    '💡 *Mọi thao tác quản trị (lịch, thành viên, cấu hình) đều làm trong `/setup`.*',
   ].join('\n');
 }
 

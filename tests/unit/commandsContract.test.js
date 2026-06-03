@@ -49,8 +49,8 @@ describe('Commands contract', () => {
     expect(missing, `Missing files: ${missing.join(', ')}`).toEqual([]);
   });
 
-  it('3 user commands và 1 admin command (setup)', () => {
-    expect(byAudience('user')).toHaveLength(3);
+  it('1 user command (help) và 1 admin command (setup)', () => {
+    expect(byAudience('user')).toHaveLength(1);
     expect(byAudience('admin')).toHaveLength(1);
   });
 

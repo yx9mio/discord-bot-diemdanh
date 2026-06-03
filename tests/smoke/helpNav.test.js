@@ -57,13 +57,13 @@ describe('HelpCommand (smoke)', () => {
     });
   });
 
-  it('render(user) hiển thị quickstart cho admin', () => {
+  it('render(admin) hiển thị quickstart hướng dẫn UI', () => {
     const target = { update: async (p) => p };
-    return HelpCommand.render('user', target).then(payload => {
+    return HelpCommand.render('admin', target).then(payload => {
       const embed = payload.embeds[0].toJSON();
-      expect(embed.title).toMatch(/mọi người/i);
+      expect(embed.title).toMatch(/admin/i);
       const flat = embed.fields.map(f => f.value).join('\n');
-      expect(flat).toMatch(/diemdanh/);
+      expect(embed.description).toMatch(/setup/);
     });
   });
 
