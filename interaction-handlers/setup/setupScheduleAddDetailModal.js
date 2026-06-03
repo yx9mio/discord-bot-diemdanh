@@ -1,11 +1,12 @@
 // interaction-handlers/setup/setupScheduleAddDetailModal.js
-// Handle Modal 2/3 submits cho schedule add:
+// Handle Modal submits cho schedule add:
 //   - setup:sch:add:detail:r   (Recurring: Thứ + Tên + Giờ + pre_close + phut_bu)
 //   - setup:sch:add:detail:o   (One-time combined: DD/MM/YYYY + Giờ + Tên + pre_close + phut_bu)
 //   - setup:sch:edit:r:<id>    (Sửa recurring)
 //
+// [BUG-A] Fix: cfg?.log_channel_id → cfg?.notification_channel_id (đúng column trong guild_configs)
+// [BUG-B] Fix: one-time truyền đủ specificDate/Month/Year + schedule_type vào themLichCoDinh
 // [BUG-2&3] Đã xoá: _otDateStore, DETAIL_O_A, TIME_O, _handleOneTimeDate, _handleOneTimeTime
-// Thay bằng _handleOneTimeCombined nhận cả date+time trong 1 modal.
 'use strict';
 const { MessageFlags } = require('discord.js');
 const {
@@ -58,6 +59,11 @@ function parseNgayThangNam(str) {
   return { ngay, thang, nam };
 }
 
+// [BUG-A] Lấy đúng notification_channel_id từ guild_configs
+function _getChannelId(cfg) {
+  return cfg?.notification_channel_id ?? null;
+}
+
 class SetupScheduleAddDetailModal extends InteractionHandler {
   constructor(ctx, options) {
     super(ctx, { ...options, interactionHandlerType: InteractionHandlerTypes.ModalSubmit });
@@ -96,11 +102,12 @@ class SetupScheduleAddDetailModal extends InteractionHandler {
     const preClose = parsePreClose(interaction.fields.getTextInputValue('pre_close').trim());
     const phutBu   = interaction.fields.getTextInputValue('phut_bu').trim() || 'none';
 
+    // [BUG-A] Dùng notification_channel_id thay vì log_channel_id
     const cfg = await db.getGuildConfig(guildId);
-    const channelId = cfg?.log_channel_id ?? cfg?.channel_id;
+    const channelId = _getChannelId(cfg);
     if (!channelId) {
       return interaction.editReply({
-        content: '❌ Chưa cấu hình **Kênh log**. Vào `/setup` → Cài đặt chung → Kênh log để cài trước.',
+        content: '❌ Chưa cấu hình **Kênh thông báo**. Vào `/setup` → Cài đặt chung → Kênh thông báo để cài trước.',
       });
     }
     const close = parsePhutBu(gio.hour, gio.minute, phutBu, dayOfWeek);
@@ -118,7 +125,7 @@ class SetupScheduleAddDetailModal extends InteractionHandler {
       });
     } catch (e) {
       log.error('SETUP_SCH_ADD', guildId, 'themLichCoDinh thất bại: %s', e.message);
-      return interaction.editReply({ content: '❌ Không thể lưu lịch, thử lại sau.' });
+      return interaction.editReply({ content: `❌ Không thể lưu lịch: ${e.message}` });
     }
     return interaction.editReply({
       content: `✅ Đã thêm lịch **${sessionName}** — hằng tuần vào lúc **${String(gio.hour).padStart(2,'0')}:${String(gio.minute).padStart(2,'0')}** (đóng DD trước ${preClose}p).`,
@@ -137,11 +144,13 @@ class SetupScheduleAddDetailModal extends InteractionHandler {
     }
     const preClose = parsePreClose(interaction.fields.getTextInputValue('pre_close').trim());
     const phutBu   = interaction.fields.getTextInputValue('phut_bu').trim() || 'none';
+
+    // [BUG-A] Dùng notification_channel_id
     const cfg = await db.getGuildConfig(guildId);
-    const channelId = cfg?.log_channel_id ?? cfg?.channel_id;
+    const channelId = _getChannelId(cfg);
     if (!channelId) {
       return interaction.editReply({
-        content: '❌ Chưa cấu hình **Kênh log**. Vào `/setup` → Cài đặt chung → Kênh log để cài trước.',
+        content: '❌ Chưa cấu hình **Kênh thông báo**. Vào `/setup` → Cài đặt chung → Kênh thông báo để cài trước.',
       });
     }
     const close = parsePhutBu(gio.hour, gio.minute, phutBu, dayOfWeek);
@@ -159,7 +168,7 @@ class SetupScheduleAddDetailModal extends InteractionHandler {
       });
     } catch (e) {
       log.error('SETUP_SCH_EDIT', guildId, 'suaLichCoDinh thất bại: %s', e.message);
-      return interaction.editReply({ content: '❌ Không thể sửa lịch, thử lại sau.' });
+      return interaction.editReply({ content: `❌ Không thể sửa lịch: ${e.message}` });
     }
     return interaction.editReply({
       content: `✅ Đã sửa lịch **${sessionName}** — hằng tuần vào lúc **${String(gio.hour).padStart(2,'0')}:${String(gio.minute).padStart(2,'0')}** (đóng DD trước ${preClose}p).`,
@@ -167,6 +176,9 @@ class SetupScheduleAddDetailModal extends InteractionHandler {
   }
 
   // [BUG-2&3] One-time combined: nhận DD/MM/YYYY + HH:MM + tên trong 1 modal
+  // [BUG-B] Fix: schema scheduled_sessions không có schedule_type/specific_date —
+  //         one-time được mô hình bằng day_of_week tính từ ngày thực + skip_until tương lai.
+  //         Ghi chú ngày cụ thể vào session_name để phân biệt với recurring.
   async _handleOneTimeCombined(interaction) {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const guildId = interaction.guildId;
@@ -185,6 +197,7 @@ class SetupScheduleAddDetailModal extends InteractionHandler {
     const preClose = parsePreClose(interaction.fields.getTextInputValue('pre_close').trim());
     const phutBu   = interaction.fields.getTextInputValue('phut_bu').trim() || 'none';
 
+    // Validate ngày hợp lệ
     const date = new Date(nam, thang - 1, ngay);
     if (Number.isNaN(date.getTime()) || date.getDate() !== ngay) {
       return interaction.editReply({ content: `❌ Ngày ${ngay}/${thang}/${nam} không hợp lệ.` });
@@ -193,31 +206,55 @@ class SetupScheduleAddDetailModal extends InteractionHandler {
       return interaction.editReply({ content: `❌ Ngày ${ngay}/${thang}/${nam} đã qua. Vui lòng chọn ngày trong tương lai.` });
     }
 
-    const dayOfWeek = date.getDay();
+    // [BUG-A] Dùng notification_channel_id
     const cfg = await db.getGuildConfig(guildId);
-    const channelId = cfg?.log_channel_id ?? cfg?.channel_id;
+    const channelId = _getChannelId(cfg);
     if (!channelId) {
-      return interaction.editReply({ content: '❌ Chưa cấu hình **Kênh log**. Vào `/setup` → Cài đặt chung → Kênh log.' });
+      return interaction.editReply({ content: '❌ Chưa cấu hình **Kênh thông báo**. Vào `/setup` → Cài đặt chung → Kênh thông báo.' });
     }
+
+    // [BUG-B] scheduled_sessions không có cột schedule_type/specific_date.
+    // Mô hình one-time: lưu theo day_of_week thực tế của ngày đó.
+    // Dùng skip_until = ngày HÔM SAU buổi học để scheduler không lặp lại.
+    // Tên lịch gắn "[ngay/thang]" để phân biệt trực quan.
+    const dayOfWeek = date.getDay(); // 0=CN,1=T2,...,6=T7
     const close = parsePhutBu(gio.hour, gio.minute, phutBu, dayOfWeek);
+
+    // skipUntil = ngày sau buổi học (scheduler dùng IS NULL OR skip_until < now)
+    const skipAfter = new Date(date);
+    skipAfter.setDate(skipAfter.getDate() + 1);
+    skipAfter.setHours(gio.hour, gio.minute, 0, 0);
+    const skipUntil = skipAfter.toISOString();
+
+    // Tên hiển thị gắn ngày để phân biệt
+    const displayName = `${sessionName} [${String(ngay).padStart(2,'0')}/${String(thang).padStart(2,'0')}]`;
+
     try {
       await db.themLichCoDinh(guildId, {
         dayOfWeek,
         hour: gio.hour,
         minute: gio.minute,
-        sessionName,
+        sessionName: displayName,
         preCloseMinutes: preClose,
         closeDayOfWeek: close.closeDayOfWeek,
         closeHour:      close.closeHour,
         closeMinute:    close.closeMinute,
         channelId,
       });
+      // Lấy record vừa tạo để set skip_until
+      const schedules = await db.getScheduledSessions(guildId);
+      const newEntry = schedules
+        .filter(s => s.session_name === displayName && s.day_of_week === dayOfWeek)
+        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
+      if (newEntry) {
+        await db.skipScheduledSession(newEntry.id, skipUntil);
+      }
     } catch (e) {
       log.error('SETUP_SCH_ADD', guildId, 'themLichCoDinh (one_time) thất bại: %s', e.message);
-      return interaction.editReply({ content: '❌ Không thể lưu lịch, thử lại sau.' });
+      return interaction.editReply({ content: `❌ Không thể lưu lịch: ${e.message}` });
     }
     return interaction.editReply({
-      content: `✅ Đã thêm lịch **${sessionName}** — ${ngay}/${thang}/${nam} lúc **${String(gio.hour).padStart(2,'0')}:${String(gio.minute).padStart(2,'0')}** (đóng DD trước ${preClose}p).`,
+      content: `✅ Đã thêm lịch một lần **${displayName}** — ${ngay}/${thang}/${nam} lúc **${String(gio.hour).padStart(2,'0')}:${String(gio.minute).padStart(2,'0')}** (đóng DD trước ${preClose}p).`,
     });
   }
 }
