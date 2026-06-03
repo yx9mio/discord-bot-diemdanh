@@ -4,20 +4,17 @@
 //
 // Modal submit handler: setup:sch:edit:ot:submit:<scheduleId>
 //   Nhận dữ liệu từ combined modal, cập nhật DB.
-//
-// [FIX] Thay openOneTimeDateModal (removed) bằng openOneTimeCombinedModal.
 'use strict';
-const { MessageFlags } = require('discord.js');
+const { MessageFlags, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const db = require('../../db.js');
 const log = require('../../utils/logger.js');
-const { openOneTimeCombinedModal } = require('./setupScheduleAddTypeModal.js');
 const { parseGio, parsePreClose, parsePhutBu } = require('./setupScheduleAddDetailModal.js');
 
 const EDIT_OT_PREFIX        = 'setup:sch:edit:ot:';
 const EDIT_OT_SUBMIT_PREFIX = 'setup:sch:edit:ot:submit:';
 
-// ── Helper: parse DD/MM/YYYY → { ngay, thang, nam } ──────────────────────
+// ── Helper: parse DD/MM/YYYY ──────────────────────────────────────────────
 function parseNgayThangNam(str) {
   const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec((str ?? '').trim());
   if (!m) return null;
@@ -36,36 +33,43 @@ class SetupScheduleEditOneTimeHandler extends InteractionHandler {
 
   parse(interaction) {
     const id = interaction.customId;
-    // chỉ match button (không match submit prefix)
     if (id?.startsWith(EDIT_OT_PREFIX) && !id.startsWith(EDIT_OT_SUBMIT_PREFIX)) return this.some();
     return this.none();
   }
 
   async run(interaction) {
     const scheduleId = interaction.customId.slice(EDIT_OT_PREFIX.length);
-    const schedule = await db.getScheduledSessionById(scheduleId);
 
-    // prefill nếu có data, không block nếu không tìm thấy
-    const prefill = {};
-    if (schedule) {
-      const date = schedule.date ? new Date(schedule.date) : null;
-      prefill.dayOfMonth  = date ? date.getDate()     : undefined;
-      prefill.month       = date ? date.getMonth() + 1 : undefined;
-      prefill.year        = date ? date.getFullYear()  : undefined;
-      prefill.hour        = schedule.hour;
-      prefill.minute      = schedule.minute;
-      prefill.sessionName = schedule.session_name;
-      prefill.preCloseMinutes = schedule.pre_close_minutes;
+    // [FIX] Không await DB trước showModal — nếu DB chậm sẽ timeout 3s.
+    // Prefill là UX nice-to-have; ưu tiên show modal đúng hạn, prefill rỗng nếu cần.
+    let prefill = {};
+    try {
+      const schedule = await Promise.race([
+        db.getScheduledSessionById(scheduleId),
+        new Promise(res => setTimeout(() => res(null), 1500)),
+      ]);
+      if (schedule) {
+        const date = schedule.date ? new Date(schedule.date) : null;
+        prefill = {
+          dayOfMonth:     date ? date.getDate()      : undefined,
+          month:          date ? date.getMonth() + 1  : undefined,
+          year:           date ? date.getFullYear()   : undefined,
+          hour:           schedule.hour,
+          minute:         schedule.minute,
+          sessionName:    schedule.session_name,
+          preCloseMinutes: schedule.pre_close_minutes,
+          closeHour:      schedule.close_hour,
+        };
+      }
+    } catch (e) {
+      log.warn('SETUP_SCH_EDIT_OT', interaction.guildId, 'Không thể prefill: %s', e.message);
     }
 
-    // Encode scheduleId vào customId của modal để submit handler biết cần sửa record nào
-    // Đổi customId modal thành EDIT_OT_SUBMIT_PREFIX + scheduleId
-    const modal = _buildCombinedModal(scheduleId, prefill);
-    return interaction.showModal(modal);
+    return interaction.showModal(_buildCombinedModal(scheduleId, prefill));
   }
 }
 
-// ── Modal submit handler: lưu DB ───────────────────────────────────────────────
+// ── Modal submit handler: lưu DB ──────────────────────────────────────────
 class SetupScheduleEditOneTimeModalHandler extends InteractionHandler {
   constructor(ctx, options) {
     super(ctx, { ...options, interactionHandlerType: InteractionHandlerTypes.ModalSubmit });
@@ -103,13 +107,14 @@ class SetupScheduleEditOneTimeModalHandler extends InteractionHandler {
       return interaction.editReply({ content: `❌ Ngày ${ngay}/${thang}/${nam} đã qua. Vui lòng chọn ngày trong tương lai.` });
     }
 
-    const dayOfWeek = date.getDay();
+    // [FIX] Dùng đúng column notification_channel_id thay vì log_channel_id / channel_id
     const cfg = await db.getGuildConfig(guildId);
-    const channelId = cfg?.log_channel_id ?? cfg?.channel_id;
+    const channelId = cfg?.notification_channel_id ?? null;
     if (!channelId) {
-      return interaction.editReply({ content: '❌ Chưa cấu hình Kênh log.' });
+      return interaction.editReply({ content: '❌ Chưa cấu hình **Kênh thông báo**. Vào `/setup` → Cài đặt chung → Kênh thông báo.' });
     }
 
+    const dayOfWeek = date.getDay();
     const close = parsePhutBu(gio.hour, gio.minute, phutBu, dayOfWeek);
     try {
       await db.suaLichCoDinh(guildId, scheduleId, {
@@ -119,8 +124,8 @@ class SetupScheduleEditOneTimeModalHandler extends InteractionHandler {
         sessionName,
         preCloseMinutes: preClose,
         closeDayOfWeek: close.closeDayOfWeek,
-        closeHour: close.closeHour,
-        closeMinute: close.closeMinute,
+        closeHour:      close.closeHour,
+        closeMinute:    close.closeMinute,
         channelId,
       });
     } catch (e) {
@@ -134,9 +139,7 @@ class SetupScheduleEditOneTimeModalHandler extends InteractionHandler {
   }
 }
 
-// ── Internal: build combined modal với customId chứa scheduleId ───────────────
-const { ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } = require('discord.js');
-
+// ── Internal: build combined modal với customId chứa scheduleId ──────────
 function _buildCombinedModal(scheduleId, prefill = {}) {
   const currentYear = new Date().getFullYear();
   const modal = new ModalBuilder()
@@ -196,7 +199,7 @@ function _buildCombinedModal(scheduleId, prefill = {}) {
       .setStyle(TextInputStyle.Short)
       .setRequired(false)
       .setPlaceholder('Để trống = đóng thủ công')
-      .setValue(prefill.closeHour ? '60' : ''),
+      .setValue(prefill.closeHour != null ? '60' : ''),
   ));
 
   return modal;
