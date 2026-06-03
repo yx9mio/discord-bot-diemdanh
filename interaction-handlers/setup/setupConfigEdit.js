@@ -12,12 +12,13 @@ const EDIT_REMINDER       = 'setup:cfg:edit:reminder';
 const EDIT_ADMIN_ROLE     = 'setup:cfg:edit:admin_role';
 const EDIT_ATTENDANCE_ROLE = 'setup:cfg:edit:attendance_role';
 
-export const MODAL_PREFIX = 'setup:cfg:modal:';
-
 const EDIT_IDS = new Set([
   EDIT_CHANNEL, EDIT_PHAI, EDIT_TZ,
   EDIT_REMINDER, EDIT_ADMIN_ROLE, EDIT_ATTENDANCE_ROLE,
 ]);
+
+// MODAL_PREFIX được define lại ở cả 2 file (setupConfigEditModal.js cũng có cùng giá trị)
+const MODAL_PREFIX = 'setup:cfg:modal:';
 
 function openEditModal(interaction) {
   const id = interaction.customId;
@@ -128,11 +129,11 @@ class SetupConfigEditHandler extends InteractionHandler {
     return this.none();
   }
 
-  // [FIX] Không cần async vì showModal là synchronous
+  // showModal là synchronous nên không cần async
   run(interaction) {
     return openEditModal(interaction);
   }
 }
 
-// [FIX] module.exports = Class (không phải object) — Sapphire v3 yêu cầu
+// [FIX] module.exports = Class — Sapphire v3 yêu cầu, không phải export object
 module.exports = SetupConfigEditHandler;
