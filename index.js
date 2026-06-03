@@ -1,5 +1,18 @@
 // index.js — Entry point (Sapphire JS Edition v3)
+// [DATADOG] dd-trace PHẢI là require đầu tiên — trước mọi import khác
 'use strict';
+if (process.env.DD_API_KEY) {
+  require('dd-trace').init({
+    service:     process.env.DD_SERVICE ?? 'discord-bot-diemdanh',
+    env:         process.env.DD_ENV     ?? process.env.NODE_ENV ?? 'production',
+    version:     process.env.npm_package_version,
+    hostname:    'intake.logs.' + (process.env.DD_SITE ?? 'ap1.datadoghq.com'),
+    logInjection: true, // inject trace_id vào Pino logs để correlate
+    runtimeMetrics: true,
+    profiling:   false, // bật nếu cần CPU/heap profiling
+  });
+}
+
 require('dotenv').config();
 const path = require('node:path');
 const Sentry = require('@sentry/node');
