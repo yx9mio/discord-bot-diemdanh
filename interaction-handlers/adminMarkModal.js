@@ -28,7 +28,7 @@ class AdminMarkModalHandler extends InteractionHandler {
   async run(interaction) {
     await interaction.deferReply({ ephemeral: true });
 
-    const { guild, member, user } = interaction;
+    const { guild, user } = interaction;
     const { ok } = await requireAdmin(interaction, { context: 'điểm danh thay' });
     if (!ok) return;
 

@@ -28,7 +28,7 @@ class AttendanceSelectHandler extends InteractionHandler {
   }
 
   async run(interaction) {
-    const { customId, guild, member, user, values } = interaction;
+    const { guild, member, user, values } = interaction;
     const statusValue = values[0]; // Select menu chỉ chọn 1 giá trị
     const status = SELECT_TO_STATUS[statusValue];
 
