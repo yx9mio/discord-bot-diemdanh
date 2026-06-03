@@ -1,5 +1,5 @@
 'use strict';
-const { MessageFlags, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, StringSelectMenuBuilder, EmbedBuilder, StringSelectMenuOptionBuilder } = require('discord.js');
+const { MessageFlags, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, EmbedBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const db = require('../../db.js');
 const log = require('../../utils/logger.js');
@@ -33,17 +33,12 @@ function openStartSessionModal(interaction) {
         .setRequired(false),
     ),
     new ActionRowBuilder().addComponents(
-      new StringSelectMenuBuilder()
+      new TextInputBuilder()
         .setCustomId('phut_dong')
-        .setPlaceholder('Tự động đóng sau... (mặc định: không tự đóng)')
-        .addOptions(
-          { label: 'Không tự đóng', value: '0', default: true },
-          { label: '15 phút', value: '15' },
-          { label: '30 phút', value: '30' },
-          { label: '60 phút (1 giờ)', value: '60' },
-          { label: '90 phút (1.5 giờ)', value: '90' },
-          { label: '120 phút (2 giờ)', value: '120' },
-        ),
+        .setLabel('Tự động đóng sau (phút) — 0 = không tự đóng')
+        .setStyle(TextInputStyle.Short)
+        .setRequired(false)
+        .setPlaceholder('15 / 30 / 60 / 90 / 120 (mặc định 0)'),
     ),
     new ActionRowBuilder().addComponents(
       new TextInputBuilder()
@@ -70,7 +65,7 @@ async function handleStartSessionModal(interaction) {
 
   const sessionName = interaction.fields.getTextInputValue('ten_phien').trim() || `Phiên ${fmtTs(new Date().toISOString())}`;
   const moTa = interaction.fields.getTextInputValue('mo_ta').trim() || null;
-  const phutVal = interaction.fields.getStringSelectValues('phut_dong')?.[0] ?? '0';
+  const phutVal = (interaction.fields.getTextInputValue('phut_dong') || '').trim() || '0';
   const phut = parseInt(phutVal, 10) || null;
   const phaiRoleId = interaction.fields.getTextInputValue('phai_role').trim() || null;
 
