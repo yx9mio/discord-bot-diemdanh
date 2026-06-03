@@ -483,17 +483,19 @@ const createLichCoDinh    = createScheduledSession;
 const updateLichCoDinh    = updateScheduledSession;
 const deleteLichCoDinh    = deleteScheduledSession;
 
-function themLichCoDinh(guildId, { dayOfWeek, hour, minute, sessionName, closeDayOfWeek, closeHour, closeMinute, preCloseMinutes, phaiRoleIds, channelId, allowedRoleId, reminder1Min, reminder2Min }) {
+// [FIX-DB] Xóa pre_close_minutes — cột không tồn tại trong scheduled_sessions.
+// Schema dùng close_hour/close_minute để auto-close, và reminder_1_min/reminder_2_min
+// để nhắc trước khi đóng (default 30 và 10 phút).
+function themLichCoDinh(guildId, { dayOfWeek, hour, minute, sessionName, closeDayOfWeek, closeHour, closeMinute, phaiRoleIds, channelId, allowedRoleId, reminder1Min, reminder2Min }) {
   return createScheduledSession({
     guild_id:           guildId,
     day_of_week:        dayOfWeek,
     hour,
     minute,
-    session_name:       sessionName ?? 'Diểm danh',
+    session_name:       sessionName ?? 'Điểm danh',
     close_day_of_week:  closeDayOfWeek ?? null,
     close_hour:         closeHour ?? null,
     close_minute:       closeMinute ?? null,
-    pre_close_minutes:  preCloseMinutes ?? 30,
     phai_role_ids:      phaiRoleIds ?? [],
     allowed_role_id:    allowedRoleId ?? null,
     channel_id:         channelId,
@@ -504,7 +506,8 @@ function themLichCoDinh(guildId, { dayOfWeek, hour, minute, sessionName, closeDa
   });
 }
 
-function suaLichCoDinh(guildId, id, { dayOfWeek, hour, minute, sessionName, closeDayOfWeek, closeHour, closeMinute, preCloseMinutes, channelId, allowedRoleId, reminder1Min, reminder2Min }) {
+// [FIX-DB] Xóa pre_close_minutes khỏi update payload.
+function suaLichCoDinh(guildId, id, { dayOfWeek, hour, minute, sessionName, closeDayOfWeek, closeHour, closeMinute, channelId, allowedRoleId, reminder1Min, reminder2Min }) {
   return updateScheduledSession(id, {
     day_of_week:       dayOfWeek,
     hour,
@@ -513,7 +516,6 @@ function suaLichCoDinh(guildId, id, { dayOfWeek, hour, minute, sessionName, clos
     close_day_of_week: closeDayOfWeek ?? null,
     close_hour:        closeHour ?? null,
     close_minute:      closeMinute ?? null,
-    pre_close_minutes: preCloseMinutes ?? undefined,
     channel_id:        channelId,
     allowed_role_id:   allowedRoleId ?? null,
     reminder_1_min:    reminder1Min ?? undefined,
