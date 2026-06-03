@@ -7,7 +7,8 @@ const { FOOTER_DEFAULT } = require('../../../utils/embeds.js');
 const { DAY_NAMES: DAY_VI } = require('../../../utils/format.js');
 
 const CUSTOM_ID = {
-  ADD:         'setup:sch:add',
+  ADD_R:       'setup:sch:add:r',      // [BUG-2&3] Thêm lịch hằng tuần (recurring) — Button trực tiếp
+  ADD_O:       'setup:sch:add:o',      // [BUG-2&3] Thêm lịch một lần (one-time) — Button trực tiếp
   PAGE_NEXT:   'setup:sch:page:next',
   PAGE_PREV:   'setup:sch:page:prev',
   DEL_PREFIX:  'setup:sch:del:',       // setup:sch:del:<scheduleId>
@@ -37,13 +38,13 @@ function render({ schedules, page = 0, guild }) {
     .setTitle(`${ICONS.CALENDAR} Lịch cố định — ${guild.name}`)
     .setDescription(
       total === 0
-        ? `*Chưa có lịch cố định nào.*\n> Bấm **${ICONS.PLUS} Thêm lịch** để tạo lịch mới.`
+        ? `*Chưa có lịch cố định nào.*\n> Bấm **+ Thêm hằng tuần** hoặc **+ Thêm một lần** để tạo lịch mới.`
         : slice.map((s, i) => `${start + i + 1}. ${fmtSchedule(s)}`).join('\n')
     )
     .setFooter({ text: `${FOOTER_DEFAULT} · Trang ${clampedPage + 1}/${totalPages} · Tổng ${total} lịch` })
     .setTimestamp();
 
-  // Row 1: 5 nút xoá (cho từng lịch trong trang)
+  // Row 1: nút xoá từng lịch trong trang
   const delRow = new ActionRowBuilder();
   if (total > 0) {
     for (const s of slice) {
@@ -56,13 +57,16 @@ function render({ schedules, page = 0, guild }) {
     }
   }
 
-  // Row 2: edit (1 lịch 1 nút) + add
+  // Row 2: [BUG-2&3] 2 nút thêm riêng biệt (recurring / one-time) + sửa lịch đầu
   const actionRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
-      .setCustomId(CUSTOM_ID.ADD)
-      .setLabel('Thêm lịch')
-      .setEmoji(ICONS.PLUS)
+      .setCustomId(CUSTOM_ID.ADD_R)
+      .setLabel('+ Hằng tuần')
       .setStyle(ButtonStyle.Success),
+    new ButtonBuilder()
+      .setCustomId(CUSTOM_ID.ADD_O)
+      .setLabel('+ Một lần')
+      .setStyle(ButtonStyle.Primary),
   );
   if (slice.length > 0) {
     actionRow.addComponents(

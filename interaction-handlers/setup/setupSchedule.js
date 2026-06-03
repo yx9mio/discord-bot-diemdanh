@@ -4,7 +4,9 @@
 //   - setup:sch:page:next / :prev (phân trang)
 //   - setup:sch:del:<scheduleId> → xác nhận xoá
 //   - setup:sch:del:yes:<scheduleId> / del:no:<scheduleId> (xác nhận / huỷ)
-//   - setup:sch:add, setup:sch:edit:<id> → modal
+//   - setup:sch:add:r → openRecurringDetailModal (Button trực tiếp, không qua Modal 1)
+//   - setup:sch:add:o → openOneTimeCombinedModal (Button trực tiếp, không qua Modal 1)
+//   - setup:sch:edit:<id> → modal
 'use strict';
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
@@ -12,7 +14,8 @@ const db = require('../../db.js');
 const log = require('../../utils/logger.js');
 const { ScheduleView } = require('../../src/commands/setup/_ScheduleView.js');
 const { CUSTOM_ID } = ScheduleView;
-const { openTypeModal, openRecurringDetailModal } = require('./setupScheduleAddTypeModal.js');
+// [BUG-2&3] Bỏ openTypeModal — không còn dùng Modal chain từ ModalSubmit
+const { openRecurringDetailModal, openOneTimeCombinedModal } = require('./setupScheduleAddTypeModal.js');
 
 class SetupScheduleHandler extends InteractionHandler {
   constructor(ctx, options) {
@@ -25,16 +28,22 @@ class SetupScheduleHandler extends InteractionHandler {
     if (id === CUSTOM_ID.PAGE_NEXT || id === CUSTOM_ID.PAGE_PREV) return this.some();
     if (id?.startsWith(CUSTOM_ID.DEL_PREFIX) || id?.startsWith(CUSTOM_ID.DEL_CONFIRM) || id?.startsWith(CUSTOM_ID.DEL_CANCEL)) return this.some();
     if (id?.startsWith(CUSTOM_ID.EDIT_PREFIX)) return this.some();
-    if (id === CUSTOM_ID.ADD) return this.some();
+    // [BUG-2&3] Match 2 nút ADD riêng thay vì ADD chung
+    if (id === CUSTOM_ID.ADD_R || id === CUSTOM_ID.ADD_O) return this.some();
     return this.none();
   }
 
   async run(interaction) {
     const { customId, guild } = interaction;
 
-    // Thêm lịch → mở Modal 1 (Loại)
-    if (customId === CUSTOM_ID.ADD) {
-      return openTypeModal(interaction);
+    // [BUG-2&3] Thêm lịch hằng tuần → showModal từ Button (an toàn)
+    if (customId === CUSTOM_ID.ADD_R) {
+      return openRecurringDetailModal(interaction);
+    }
+
+    // [BUG-2&3] Thêm lịch một lần → showModal từ Button (an toàn)
+    if (customId === CUSTOM_ID.ADD_O) {
+      return openOneTimeCombinedModal(interaction);
     }
 
     // [BUG-1] Sửa lịch → showModal ngay không prefill (tránh await trước showModal gây timeout)
@@ -98,16 +107,13 @@ class SetupScheduleHandler extends InteractionHandler {
     // Phân trang
     const schedules = await db.getScheduledSessions(guild.id);
     const curPage = _extractPageFromEmbed(interaction);
-
     const newPage = Math.max(0, curPage + (customId === CUSTOM_ID.PAGE_NEXT ? 1 : -1));
-
     const view = ScheduleView.render({ schedules, page: newPage, guild });
     return interaction.editReply(view);
   }
 }
 
 // Helper: lấy page hiện tại từ footer embed (parse số trang).
-// Fallback về 0 nếu không parse được.
 function _extractPageFromEmbed(interaction) {
   try {
     const embed = interaction.message?.embeds?.[0];
