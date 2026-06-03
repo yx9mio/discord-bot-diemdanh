@@ -53,10 +53,11 @@ const AttendanceSchema = z.object({
 
 // ─── Guild config ─────────────────────────────────────────────────────────────
 const ConfigSchema = z.object({
-  guild_id:        z.string().min(1),
-  log_channel_id:  z.string().nullable().optional(),
-  admin_role_id:   z.string().nullable().optional(),
-  default_role_id: z.string().nullable().optional(),
+  guild_id:           z.string().min(1),
+  log_channel_id:     z.string().nullable().optional(),
+  admin_role_id:      z.string().nullable().optional(),
+  attendance_role_id: z.string().nullable().optional(),
+  default_role_id:    z.string().nullable().optional(),
 });
 
 // ─── Slash command inputs ─────────────────────────────────────────────────────
@@ -67,9 +68,10 @@ const BatDauInputSchema = z.object({
 });
 
 const CaiDatInputSchema = z.object({
-  log_channel_id:  z.string().nullable().optional(),
-  admin_role_id:   z.string().nullable().optional(),
-  default_role_id: z.string().nullable().optional(),
+  log_channel_id:     z.string().nullable().optional(),
+  admin_role_id:      z.string().nullable().optional(),
+  attendance_role_id: z.string().nullable().optional(),
+  default_role_id:    z.string().nullable().optional(),
 });
 
 /**

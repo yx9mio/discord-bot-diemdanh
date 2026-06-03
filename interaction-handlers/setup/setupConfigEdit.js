@@ -5,12 +5,14 @@ const db = require('../../db.js');
 const log = require('../../utils/logger.js');
 const { requireAdmin } = require('../../utils/permissions.js');
 
-const EDIT_CHANNEL = 'setup:cfg:edit:channel';
-const EDIT_PHAI    = 'setup:cfg:edit:phai';
-const EDIT_TZ      = 'setup:cfg:edit:tz';
-const EDIT_REMINDER = 'setup:cfg:edit:reminder';
+const EDIT_CHANNEL       = 'setup:cfg:edit:channel';
+const EDIT_PHAI          = 'setup:cfg:edit:phai';
+const EDIT_TZ            = 'setup:cfg:edit:tz';
+const EDIT_REMINDER      = 'setup:cfg:edit:reminder';
+const EDIT_ADMIN_ROLE    = 'setup:cfg:edit:admin_role';
+const EDIT_ATTENDANCE_ROLE = 'setup:cfg:edit:attendance_role';
 
-const EDIT_IDS = new Set([EDIT_CHANNEL, EDIT_PHAI, EDIT_TZ, EDIT_REMINDER]);
+const EDIT_IDS = new Set([EDIT_CHANNEL, EDIT_PHAI, EDIT_TZ, EDIT_REMINDER, EDIT_ADMIN_ROLE, EDIT_ATTENDANCE_ROLE]);
 const MODAL_PREFIX = 'setup:cfg:modal:';
 
 function openEditModal(interaction) {
@@ -73,6 +75,34 @@ function openEditModal(interaction) {
             .setPlaceholder('5 / 10 / 15 / 30 / 60'),
         ),
       );
+  } else if (id === EDIT_ADMIN_ROLE) {
+    modal = new ModalBuilder()
+      .setCustomId(MODAL_PREFIX + 'admin_role')
+      .setTitle('Cài đặt Role Quản lý')
+      .addComponents(
+        new ActionRowBuilder().addComponents(
+          new TextInputBuilder()
+            .setCustomId('role_id')
+            .setLabel('Role ID')
+            .setStyle(TextInputStyle.Short)
+            .setPlaceholder('VD: 123456789012345678')
+            .setRequired(false),
+        ),
+      );
+  } else if (id === EDIT_ATTENDANCE_ROLE) {
+    modal = new ModalBuilder()
+      .setCustomId(MODAL_PREFIX + 'attendance_role')
+      .setTitle('Cài đặt Role Điểm danh')
+      .addComponents(
+        new ActionRowBuilder().addComponents(
+          new TextInputBuilder()
+            .setCustomId('role_id')
+            .setLabel('Role ID')
+            .setStyle(TextInputStyle.Short)
+            .setPlaceholder('VD: 123456789012345678')
+            .setRequired(false),
+        ),
+      );
   }
 
   if (!modal) return interaction.reply({ content: '❌ Hành động không xác định.', flags: MessageFlags.Ephemeral });
@@ -128,6 +158,26 @@ async function handleEditModal(interaction) {
       return interaction.editReply({ content: minutes > 0
         ? `✅ Đã bật nhắc nhở **${minutes} phút** trước giờ mở.`
         : '✅ Đã tắt nhắc nhở.' });
+    }
+
+    if (modalId === MODAL_PREFIX + 'admin_role') {
+      const raw = interaction.fields.getTextInputValue('role_id').trim();
+      const roleId = raw || null;
+      await db.setGuildConfig(guildId, { ...cfg, admin_role_id: roleId });
+      log.info('SETUP_CFG', guildId, 'Cập nhật admin_role_id = %s', roleId);
+      return interaction.editReply({ content: roleId
+        ? `✅ Đã cập nhật Role Quản lý thành <@&${roleId}>.`
+        : '✅ Đã xoá Role Quản lý.' });
+    }
+
+    if (modalId === MODAL_PREFIX + 'attendance_role') {
+      const raw = interaction.fields.getTextInputValue('role_id').trim();
+      const roleId = raw || null;
+      await db.setGuildConfig(guildId, { ...cfg, attendance_role_id: roleId });
+      log.info('SETUP_CFG', guildId, 'Cập nhật attendance_role_id = %s', roleId);
+      return interaction.editReply({ content: roleId
+        ? `✅ Đã cập nhật Role Điểm danh thành <@&${roleId}>.`
+        : '✅ Đã xoá Role Điểm danh.' });
     }
   } catch (e) {
     log.error('SETUP_CFG', guildId, 'Lỗi cập nhật config: %s', e.message);

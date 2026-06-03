@@ -56,20 +56,22 @@ const guild = { id: 'g1', name: 'Test Guild' };
 beforeEach(() => vi.clearAllMocks());
 
 describe('ConfigView.render()', () => {
-  it('render với cfg rỗng → 1 embed + 2 rows', () => {
+  it('render với cfg rỗng → 1 embed + 3 rows (edit + role + back)', () => {
     const v = ConfigView.render({ cfg: {}, guild });
     expect(v.embeds).toHaveLength(1);
-    expect(v.components).toHaveLength(2);
+    expect(v.components).toHaveLength(3);
   });
 
-  it('render với đầy đủ config → hiển thị channel + phai + tz + reminder', () => {
+  it('render với đầy đủ config → hiển thị channel + phai + adminRole + attRole + tz + reminder', () => {
     const v = ConfigView.render({
-      cfg: { log_channel_id: '123', phai_role_ids: ['r1'], timezone: 'Asia/Ho_Chi_Minh', reminder_enabled: true, reminder_minutes: 10 },
+      cfg: { log_channel_id: '123', phai_role_ids: ['r1'], admin_role_id: 'r2', attendance_role_id: 'r3', timezone: 'Asia/Ho_Chi_Minh', reminder_enabled: true, reminder_minutes: 10 },
       guild,
     });
     const desc = v.embeds[0].toJSON().description;
     expect(desc).toMatch(/<#123>/);
     expect(desc).toMatch(/<@&r1>/);
+    expect(desc).toMatch(/<@&r2>/);
+    expect(desc).toMatch(/<@&r3>/);
     expect(desc).toMatch(/Asia\/Ho_Chi_Minh/);
     expect(desc).toMatch(/10 phút trước/);
   });
@@ -80,10 +82,16 @@ describe('ConfigView.render()', () => {
     expect(desc).toMatch(/Tắt/);
   });
 
-  it('edit row có 4 nút', () => {
+  it('edit row 1 có 4 nút (channel, phai, tz, reminder)', () => {
     const v = ConfigView.render({ cfg: {}, guild });
     const editRow = v.components[0].toJSON();
     expect(editRow.components).toHaveLength(4);
+  });
+
+  it('edit row 2 có 2 nút (admin_role, attendance_role)', () => {
+    const v = ConfigView.render({ cfg: {}, guild });
+    const roleRow = v.components[1].toJSON();
+    expect(roleRow.components).toHaveLength(2);
   });
 });
 

@@ -3,6 +3,7 @@
 'use strict';
 const { MessageFlags, PermissionFlagsBits } = require('discord.js');
 const { replyErr, replyErrEdit } = require('./embeds.js');
+const db = require('../db.js');
 
 /**
  * Kiểm tra quyền admin cho interaction.
@@ -26,18 +27,22 @@ async function requireAdmin(interaction, opts = {}) {
     return { ok: false };
   }
 
-  const hasAdmin =
+  // Admin / ManageGuild luôn được quyền
+  const hasPermission =
     member.permissions?.has(PermissionFlagsBits.Administrator) ||
     member.permissions?.has(PermissionFlagsBits.ManageGuild);
+  if (hasPermission) return { ok: true };
 
-  if (!hasAdmin) {
-    const msg = `🔒 Bạn cần quyền **Administrator** hoặc **Manage Server** để ${context}.`;
-    if (deferred) await interaction.editReply(replyErrEdit(msg));
-    else          await interaction.reply({ ...replyErr(msg), flags: MessageFlags.Ephemeral });
-    return { ok: false };
-  }
+  // Kiểm tra admin_role_id từ config
+  try {
+    const cfg = await db.getGuildConfig(interaction.guildId);
+    if (cfg?.admin_role_id && member.roles.cache.has(cfg.admin_role_id)) return { ok: true };
+  } catch (_) { /* fallthrough */ }
 
-  return { ok: true };
+  const msg = `🔒 Bạn cần quyền **Administrator**, **Manage Server** hoặc role quản lý để ${context}.`;
+  if (deferred) await interaction.editReply(replyErrEdit(msg));
+  else          await interaction.reply({ ...replyErr(msg), flags: MessageFlags.Ephemeral });
+  return { ok: false };
 }
 
 module.exports = { requireAdmin };

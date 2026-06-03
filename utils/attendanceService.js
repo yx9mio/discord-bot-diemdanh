@@ -49,6 +49,15 @@ async function markAttendance({ guild, member, user, status, interaction, sessio
       return interaction.editReply({ content: `🔒 Bạn cần có role **${roleName}** để điểm danh.` });
     }
 
+    // Validate attendance_role_id từ guild config
+    try {
+      const cfg = await db.getGuildConfig(guild.id);
+      if (cfg?.attendance_role_id && !member.roles.cache.has(cfg.attendance_role_id)) {
+        const roleName = guild.roles.cache.get(cfg.attendance_role_id)?.name ?? 'role điểm danh';
+        return interaction.editReply({ content: `🔒 Bạn cần có role **${roleName}** để điểm danh.` });
+      }
+    } catch (_) { /* fallthrough */ }
+
     const username = member.nickname ?? user.displayName ?? user.username;
 
     // Upsert attendance với full payload
