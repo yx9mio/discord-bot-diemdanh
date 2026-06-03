@@ -1,5 +1,5 @@
 'use strict';
-const { MessageFlags, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, StringSelectMenuBuilder } = require('discord.js');
+const { MessageFlags } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const db = require('../../db.js');
 const log = require('../../utils/logger.js');
@@ -58,8 +58,8 @@ class SetupScheduleEditOneTimeModalHandler extends InteractionHandler {
       return interaction.editReply({ content: '❌ Giờ mở không hợp lệ. Dùng định dạng HH:MM (vd: 20:00).' });
     }
 
-    const preClose = parsePreClose(interaction.fields.getStringSelectValues('pre_close')?.[0]);
-    const phutBu = interaction.fields.getStringSelectValues('phut_bu')?.[0];
+    const preClose = parsePreClose(interaction.fields.getTextInputValue('pre_close').trim());
+    const phutBu = interaction.fields.getTextInputValue('phut_bu').trim() || 'none';
 
     const cfg = await db.getGuildConfig(guildId);
     const channelId = cfg?.log_channel_id ?? cfg?.channel_id;

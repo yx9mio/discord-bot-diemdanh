@@ -8,7 +8,7 @@
 const {
   InteractionHandler, InteractionHandlerTypes,
 } = require('@sapphire/framework');
-const { MessageFlags, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, StringSelectMenuBuilder } = require('discord.js');
+const { MessageFlags, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } = require('discord.js');
 const log = require('../../utils/logger.js');
 
 const CUSTOM_ID = {
@@ -28,16 +28,14 @@ function openTypeModal(interaction) {
     .setCustomId(CUSTOM_ID.TYPE)
     .setTitle('➕ Thêm lịch — Bước 1/2: Loại');
 
-  // StringSelect "Loại"
-  const typeSelect = new StringSelectMenuBuilder()
-    .setCustomId('loai')
-    .setPlaceholder('Chọn loại lịch...')
-    .addOptions([
-      { label: '🔁 Hằng tuần',  value: 'recurring', description: 'Lặp lại mỗi tuần theo thứ' },
-      { label: '📅 Một lần',     value: 'one_time',  description: 'Chạy đúng 1 lần vào ngày cụ thể' },
-    ]);
-  const row = new ActionRowBuilder().addComponents(typeSelect);
-  modal.addComponents(row);
+  modal.addComponents(new ActionRowBuilder().addComponents(
+    new TextInputBuilder()
+      .setCustomId('loai')
+      .setLabel('Loại lịch (recurring / one_time)')
+      .setStyle(TextInputStyle.Short)
+      .setRequired(true)
+      .setPlaceholder('Gõ "recurring" (hằng tuần) hoặc "one_time" (một lần)'),
+  ));
   return interaction.showModal(modal);
 }
 
@@ -48,18 +46,17 @@ function openRecurringDetailModal(interaction, prefill = {}, scheduleId = null) 
     .setCustomId(customId)
     .setTitle(scheduleId ? '✏️ Sửa lịch hằng tuần' : '➕ Lịch hằng tuần — Bước 2/2');
 
-  // Row 1: Thứ (Select)
-  const thuSelect = new StringSelectMenuBuilder()
-    .setCustomId('thu')
-    .setPlaceholder('Thứ trong tuần...')
-    .addOptions(DAY_LABELS.map((lbl, i) => ({
-      label: lbl,
-      value: String(i),
-      default: prefill.dayOfWeek === i,
-    })));
-  modal.addComponents(new ActionRowBuilder().addComponents(thuSelect));
+  modal.addComponents(new ActionRowBuilder().addComponents(
+    new TextInputBuilder()
+      .setCustomId('thu')
+      .setLabel('Thứ (0=CN,1=T2..6=T7)')
+      .setStyle(TextInputStyle.Short)
+      .setRequired(true)
+      .setMaxLength(1)
+      .setPlaceholder('VD: 2 cho thứ Ba')
+      .setValue(prefill.dayOfWeek != null ? String(prefill.dayOfWeek) : ''),
+  ));
 
-  // Row 2: Tên phiên (TextInput)
   modal.addComponents(new ActionRowBuilder().addComponents(
     new TextInputBuilder()
       .setCustomId('ten')
@@ -67,14 +64,13 @@ function openRecurringDetailModal(interaction, prefill = {}, scheduleId = null) 
       .setStyle(TextInputStyle.Short)
       .setMaxLength(100)
       .setRequired(true)
-      .setValue(prefill.sessionName ?? 'Diểm danh'),
+      .setValue(prefill.sessionName ?? 'Điểm danh'),
   ));
 
-  // Row 3: Giờ mở (TextInput HH:MM)
   modal.addComponents(new ActionRowBuilder().addComponents(
     new TextInputBuilder()
       .setCustomId('gio')
-      .setLabel('Giờ mở (HH:MM, 0-23:0-59)')
+      .setLabel('Giờ mở (HH:MM)')
       .setStyle(TextInputStyle.Short)
       .setPlaceholder('20:00')
       .setMaxLength(5)
@@ -82,34 +78,25 @@ function openRecurringDetailModal(interaction, prefill = {}, scheduleId = null) 
       .setValue(prefill.hour != null ? `${String(prefill.hour).padStart(2,'0')}:${String(prefill.minute ?? 0).padStart(2,'0')}` : '20:00'),
   ));
 
-  // Row 4: pre_close (Select)
-  const preCloseSelect = new StringSelectMenuBuilder()
-    .setCustomId('pre_close')
-    .setPlaceholder('Đóng điểm danh trước giờ mở...')
-    .addOptions(PRE_CLOSE_OPTIONS.map(p => ({
-      label: p === 0 ? '⏹️ Không tự đóng' : `⏱️ Trước ${p} phút`,
-      value: String(p),
-      description: p === 0
-        ? 'Phiên chỉ đóng khi admin dùng /ketthuc'
-        : p === 30
-          ? 'Mặc định — phù hợp giải đấu/sự kiện'
-          : `Đóng DD trước ${p} phút để chuẩn bị`,
-      default: (prefill.preCloseMinutes ?? 30) === p,
-    })));
-  modal.addComponents(new ActionRowBuilder().addComponents(preCloseSelect));
+  modal.addComponents(new ActionRowBuilder().addComponents(
+    new TextInputBuilder()
+      .setCustomId('pre_close')
+      .setLabel('Đóng DD trước X phút (mặc định 30)')
+      .setStyle(TextInputStyle.Short)
+      .setRequired(true)
+      .setPlaceholder('0 = không tự đóng')
+      .setValue(String(prefill.preCloseMinutes ?? 30)),
+  ));
 
-  // Row 5: Phút đóng (Select 0/15/30/45) — tuỳ chọn
-  const phutSelect = new StringSelectMenuBuilder()
-    .setCustomId('phut_bu')
-    .setPlaceholder('Phút đóng phiên (tuỳ chọn, mặc định = giờ mở + 60\')')
-    .addOptions([
-      { label: 'Không đặt (đóng thủ công)', value: 'none', default: !prefill.closeHour },
-      { label: '+30 phút sau giờ mở', value: '30' },
-      { label: '+60 phút (1 giờ)',       value: '60', default: !prefill.closeHour },
-      { label: '+90 phút (1.5 giờ)',     value: '90' },
-      { label: '+120 phút (2 giờ)',      value: '120' },
-    ]);
-  modal.addComponents(new ActionRowBuilder().addComponents(phutSelect));
+  modal.addComponents(new ActionRowBuilder().addComponents(
+    new TextInputBuilder()
+      .setCustomId('phut_bu')
+      .setLabel('Phút đóng sau giờ mở (VD: 60 / none)')
+      .setStyle(TextInputStyle.Short)
+      .setRequired(false)
+      .setPlaceholder('Để trống = đóng thủ công')
+      .setValue(prefill.closeHour ? '60' : ''),
+  ));
 
   return interaction.showModal(modal);
 }
@@ -120,36 +107,39 @@ function openOneTimeDateModal(interaction, prefill = {}) {
     .setCustomId(CUSTOM_ID.DETAIL_O_A)
     .setTitle('➕ Lịch một lần — Bước 2/3: Ngày');
 
-  // Row 1: Ngày (1-31)
-  const ngaySelect = new StringSelectMenuBuilder()
-    .setCustomId('ngay')
-    .setPlaceholder('Ngày (1-31)...')
-    .addOptions(Array.from({ length: 31 }, (_, i) => i + 1).map(d => ({
-      label: `Ngày ${d}`, value: String(d),
-      default: prefill.dayOfMonth === d,
-    })));
-  modal.addComponents(new ActionRowBuilder().addComponents(ngaySelect));
+  modal.addComponents(new ActionRowBuilder().addComponents(
+    new TextInputBuilder()
+      .setCustomId('ngay')
+      .setLabel('Ngày (1-31)')
+      .setStyle(TextInputStyle.Short)
+      .setRequired(true)
+      .setMaxLength(2)
+      .setPlaceholder('VD: 15')
+      .setValue(prefill.dayOfMonth ? String(prefill.dayOfMonth) : ''),
+  ));
 
-  // Row 2: Tháng (1-12)
-  const thangSelect = new StringSelectMenuBuilder()
-    .setCustomId('thang')
-    .setPlaceholder('Tháng (1-12)...')
-    .addOptions(Array.from({ length: 12 }, (_, i) => i + 1).map(t => ({
-      label: `Tháng ${t}`, value: String(t),
-      default: prefill.month === t,
-    })));
-  modal.addComponents(new ActionRowBuilder().addComponents(thangSelect));
+  modal.addComponents(new ActionRowBuilder().addComponents(
+    new TextInputBuilder()
+      .setCustomId('thang')
+      .setLabel('Tháng (1-12)')
+      .setStyle(TextInputStyle.Short)
+      .setRequired(true)
+      .setMaxLength(2)
+      .setPlaceholder('VD: 6')
+      .setValue(prefill.month ? String(prefill.month) : ''),
+  ));
 
-  // Row 3: Năm
   const currentYear = new Date().getFullYear();
-  const namSelect = new StringSelectMenuBuilder()
-    .setCustomId('nam')
-    .setPlaceholder('Năm...')
-    .addOptions([currentYear, currentYear + 1].map(y => ({
-      label: `Năm ${y}`, value: String(y),
-      default: prefill.year === y || (!prefill.year && y === currentYear),
-    })));
-  modal.addComponents(new ActionRowBuilder().addComponents(namSelect));
+  modal.addComponents(new ActionRowBuilder().addComponents(
+    new TextInputBuilder()
+      .setCustomId('nam')
+      .setLabel('Năm')
+      .setStyle(TextInputStyle.Short)
+      .setRequired(true)
+      .setMaxLength(4)
+      .setPlaceholder('VD: 2026')
+      .setValue(prefill.year ? String(prefill.year) : String(currentYear)),
+  ));
 
   return interaction.showModal(modal);
 }
@@ -167,7 +157,7 @@ function openOneTimeTimeModal(interaction, prefill = {}) {
       .setStyle(TextInputStyle.Short)
       .setMaxLength(100)
       .setRequired(true)
-      .setValue(prefill.sessionName ?? 'Diểm danh'),
+      .setValue(prefill.sessionName ?? 'Điểm danh'),
   ));
 
   modal.addComponents(new ActionRowBuilder().addComponents(
@@ -181,27 +171,25 @@ function openOneTimeTimeModal(interaction, prefill = {}) {
       .setValue(prefill.hour != null ? `${String(prefill.hour).padStart(2,'0')}:${String(prefill.minute ?? 0).padStart(2,'0')}` : '20:00'),
   ));
 
-  const preCloseSelect = new StringSelectMenuBuilder()
-    .setCustomId('pre_close')
-    .setPlaceholder('Đóng điểm danh trước giờ mở...')
-    .addOptions(PRE_CLOSE_OPTIONS.map(p => ({
-      label: p === 0 ? '⏹️ Không tự đóng' : `⏱️ Trước ${p} phút`,
-      value: String(p),
-      default: (prefill.preCloseMinutes ?? 30) === p,
-    })));
-  modal.addComponents(new ActionRowBuilder().addComponents(preCloseSelect));
+  modal.addComponents(new ActionRowBuilder().addComponents(
+    new TextInputBuilder()
+      .setCustomId('pre_close')
+      .setLabel('Đóng DD trước X phút (mặc định 30)')
+      .setStyle(TextInputStyle.Short)
+      .setRequired(true)
+      .setPlaceholder('0 = không tự đóng')
+      .setValue(String(prefill.preCloseMinutes ?? 30)),
+  ));
 
-  const phutSelect = new StringSelectMenuBuilder()
-    .setCustomId('phut_bu')
-    .setPlaceholder('Phút đóng phiên (tuỳ chọn)...')
-    .addOptions([
-      { label: 'Không đặt (đóng thủ công)', value: 'none', default: !prefill.closeHour },
-      { label: '+30 phút sau giờ mở', value: '30' },
-      { label: '+60 phút (1 giờ)',       value: '60', default: !prefill.closeHour },
-      { label: '+90 phút (1.5 giờ)',     value: '90' },
-      { label: '+120 phút (2 giờ)',      value: '120' },
-    ]);
-  modal.addComponents(new ActionRowBuilder().addComponents(phutSelect));
+  modal.addComponents(new ActionRowBuilder().addComponents(
+    new TextInputBuilder()
+      .setCustomId('phut_bu')
+      .setLabel('Phút đóng sau giờ mở (VD: 60 / none)')
+      .setStyle(TextInputStyle.Short)
+      .setRequired(false)
+      .setPlaceholder('Để trống = đóng thủ công')
+      .setValue(prefill.closeHour ? '60' : ''),
+  ));
 
   return interaction.showModal(modal);
 }
@@ -217,7 +205,7 @@ class SetupScheduleAddTypeModal extends InteractionHandler {
   }
 
   run(interaction) {
-    const loai = interaction.fields.getStringSelectValues('loai')?.[0];
+    const loai = (interaction.fields.getTextInputValue('loai') || '').trim().toLowerCase();
     log.info('SETUP_SCH_TYPE', interaction.guildId, 'User chọn loại: %s', loai);
     if (loai === 'recurring') {
       return openRecurringDetailModal(interaction);
@@ -225,7 +213,7 @@ class SetupScheduleAddTypeModal extends InteractionHandler {
     if (loai === 'one_time') {
       return openOneTimeDateModal(interaction);
     }
-    return interaction.reply({ content: '❌ Loại lịch không hợp lệ.', flags: MessageFlags.Ephemeral });
+    return interaction.reply({ content: '❌ Loại lịch không hợp lệ. Gõ "recurring" hoặc "one_time".', flags: MessageFlags.Ephemeral });
   }
 }
 

@@ -1,5 +1,5 @@
 'use strict';
-const { MessageFlags, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, StringSelectMenuBuilder } = require('discord.js');
+const { MessageFlags, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const db = require('../../db.js');
 const log = require('../../utils/logger.js');
@@ -65,17 +65,12 @@ function openEditModal(interaction) {
       .setTitle('Cài đặt Nhắc nhở')
       .addComponents(
         new ActionRowBuilder().addComponents(
-          new StringSelectMenuBuilder()
+          new TextInputBuilder()
             .setCustomId('reminder_minutes')
-            .setPlaceholder('Nhắc nhở trước giờ mở...')
-            .addOptions(
-              { label: 'Tắt nhắc nhở', value: '0' },
-              { label: '5 phút', value: '5' },
-              { label: '10 phút', value: '10', default: true },
-              { label: '15 phút', value: '15' },
-              { label: '30 phút', value: '30' },
-              { label: '60 phút (1 giờ)', value: '60' },
-            ),
+            .setLabel('Số phút nhắc trước giờ mở (0 = tắt)')
+            .setStyle(TextInputStyle.Short)
+            .setRequired(true)
+            .setPlaceholder('5 / 10 / 15 / 30 / 60'),
         ),
       );
   }
@@ -122,7 +117,7 @@ async function handleEditModal(interaction) {
     }
 
     if (modalId === MODAL_PREFIX + 'reminder') {
-      const val = interaction.fields.getStringSelectValues('reminder_minutes')?.[0] ?? '10';
+      const val = (interaction.fields.getTextInputValue('reminder_minutes') || '').trim();
       const minutes = parseInt(val, 10) || 0;
       await db.setGuildConfig(guildId, {
         ...cfg,

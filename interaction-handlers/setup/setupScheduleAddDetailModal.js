@@ -85,14 +85,14 @@ class SetupScheduleAddDetailModal extends InteractionHandler {
   async _handleRecurring(interaction) {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const guildId = interaction.guildId;
-    const dayOfWeek = parseInt(interaction.fields.getStringSelectValues('thu')?.[0] ?? '0', 10);
+    const dayOfWeek = parseInt(interaction.fields.getTextInputValue('thu').trim(), 10);
     const sessionName = interaction.fields.getTextInputValue('ten').trim();
     const gio = parseGio(interaction.fields.getTextInputValue('gio'));
     if (!gio) {
       return interaction.editReply({ content: '❌ Giờ mở không hợp lệ. Dùng định dạng HH:MM (vd: 20:00).' });
     }
-    const preClose = parsePreClose(interaction.fields.getStringSelectValues('pre_close')?.[0]);
-    const phutBu   = interaction.fields.getStringSelectValues('phut_bu')?.[0];
+    const preClose = parsePreClose(interaction.fields.getTextInputValue('pre_close').trim());
+    const phutBu   = interaction.fields.getTextInputValue('phut_bu').trim() || 'none';
 
     const cfg = await db.getGuildConfig(guildId);
     const channelId = cfg?.log_channel_id ?? cfg?.channel_id;
@@ -127,14 +127,14 @@ class SetupScheduleAddDetailModal extends InteractionHandler {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const scheduleId = interaction.customId.slice('setup:sch:edit:r:'.length);
     const guildId = interaction.guildId;
-    const dayOfWeek = parseInt(interaction.fields.getStringSelectValues('thu')?.[0] ?? '0', 10);
+    const dayOfWeek = parseInt(interaction.fields.getTextInputValue('thu').trim(), 10);
     const sessionName = interaction.fields.getTextInputValue('ten').trim();
     const gio = parseGio(interaction.fields.getTextInputValue('gio'));
     if (!gio) {
       return interaction.editReply({ content: '❌ Giờ mở không hợp lệ. Dùng định dạng HH:MM (vd: 20:00).' });
     }
-    const preClose = parsePreClose(interaction.fields.getStringSelectValues('pre_close')?.[0]);
-    const phutBu   = interaction.fields.getStringSelectValues('phut_bu')?.[0];
+    const preClose = parsePreClose(interaction.fields.getTextInputValue('pre_close').trim());
+    const phutBu   = interaction.fields.getTextInputValue('phut_bu').trim() || 'none';
     const cfg = await db.getGuildConfig(guildId);
     const channelId = cfg?.log_channel_id ?? cfg?.channel_id;
     if (!channelId) {
@@ -165,9 +165,9 @@ class SetupScheduleAddDetailModal extends InteractionHandler {
   }
 
   _handleOneTimeDate(interaction) {
-    const ngay  = parseInt(interaction.fields.getStringSelectValues('ngay')?.[0] ?? '0', 10);
-    const thang = parseInt(interaction.fields.getStringSelectValues('thang')?.[0] ?? '0', 10);
-    const nam   = parseInt(interaction.fields.getStringSelectValues('nam')?.[0] ?? '0', 10);
+    const ngay  = parseInt(interaction.fields.getTextInputValue('ngay').trim(), 10);
+    const thang = parseInt(interaction.fields.getTextInputValue('thang').trim(), 10);
+    const nam   = parseInt(interaction.fields.getTextInputValue('nam').trim(), 10);
     if (!ngay || !thang || !nam) {
       return interaction.reply({ content: '❌ Thiếu ngày/tháng/năm.', flags: MessageFlags.Ephemeral });
     }
@@ -190,8 +190,8 @@ class SetupScheduleAddDetailModal extends InteractionHandler {
     if (!gio) {
       return interaction.editReply({ content: '❌ Giờ mở không hợp lệ. Dùng định dạng HH:MM (vd: 20:00).' });
     }
-    const preClose = parsePreClose(interaction.fields.getStringSelectValues('pre_close')?.[0]);
-    const phutBu   = interaction.fields.getStringSelectValues('phut_bu')?.[0];
+    const preClose = parsePreClose(interaction.fields.getTextInputValue('pre_close').trim());
+    const phutBu   = interaction.fields.getTextInputValue('phut_bu').trim() || 'none';
     const date = new Date(nam, thang - 1, ngay);
     if (Number.isNaN(date.getTime()) || date.getDate() !== ngay) {
       return interaction.editReply({ content: `❌ Ngày ${ngay}/${thang}/${nam} không hợp lệ.` });

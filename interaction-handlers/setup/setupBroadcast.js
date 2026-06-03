@@ -66,8 +66,7 @@ class SetupBroadcastModalHandler extends InteractionHandler {
       .setFooter({ text: FOOTER_DEFAULT })
       .setTimestamp();
 
-    // Gửi vào kênh hiện tại
-    await channel.send({ embeds: [embed] });
+    await channel.send({ embeds: [embed] }).catch(e => log.warn('BROADCAST', guild.id, 'Gửi broadcast thất bại: %s', e.message));
 
     // Gửi vào log channel nếu có
     try {
