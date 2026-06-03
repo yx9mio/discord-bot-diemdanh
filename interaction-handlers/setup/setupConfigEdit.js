@@ -1,19 +1,23 @@
 'use strict';
+// interaction-handlers/setup/setupConfigEdit.js
+// Button handler: mở modal chỉnh sửa cài đặt chung (kênh log, phái, tz, reminder, role)
+// [FIX] Tách khỏi setupConfigEditModal.js — Sapphire v3 chỉ load 1 class per file
 const { MessageFlags, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
-const db = require('../../db.js');
-const log = require('../../utils/logger.js');
-const { requireAdmin } = require('../../utils/permissions.js');
 
-const EDIT_CHANNEL       = 'setup:cfg:edit:channel';
-const EDIT_PHAI          = 'setup:cfg:edit:phai';
-const EDIT_TZ            = 'setup:cfg:edit:tz';
-const EDIT_REMINDER      = 'setup:cfg:edit:reminder';
-const EDIT_ADMIN_ROLE    = 'setup:cfg:edit:admin_role';
+const EDIT_CHANNEL        = 'setup:cfg:edit:channel';
+const EDIT_PHAI           = 'setup:cfg:edit:phai';
+const EDIT_TZ             = 'setup:cfg:edit:tz';
+const EDIT_REMINDER       = 'setup:cfg:edit:reminder';
+const EDIT_ADMIN_ROLE     = 'setup:cfg:edit:admin_role';
 const EDIT_ATTENDANCE_ROLE = 'setup:cfg:edit:attendance_role';
 
-const EDIT_IDS = new Set([EDIT_CHANNEL, EDIT_PHAI, EDIT_TZ, EDIT_REMINDER, EDIT_ADMIN_ROLE, EDIT_ATTENDANCE_ROLE]);
-const MODAL_PREFIX = 'setup:cfg:modal:';
+export const MODAL_PREFIX = 'setup:cfg:modal:';
+
+const EDIT_IDS = new Set([
+  EDIT_CHANNEL, EDIT_PHAI, EDIT_TZ,
+  EDIT_REMINDER, EDIT_ADMIN_ROLE, EDIT_ATTENDANCE_ROLE,
+]);
 
 function openEditModal(interaction) {
   const id = interaction.customId;
@@ -105,86 +109,13 @@ function openEditModal(interaction) {
       );
   }
 
-  if (!modal) return interaction.reply({ content: '❌ Hành động không xác định.', flags: MessageFlags.Ephemeral });
-  return interaction.showModal(modal);
-}
-
-async function handleEditModal(interaction) {
-  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-  const { ok } = await requireAdmin(interaction, { context: 'chỉnh sửa cấu hình', deferred: true });
-  if (!ok) return;
-
-  const guildId = interaction.guildId;
-  const modalId = interaction.customId;
-  const cfg = await db.getGuildConfig(guildId);
-
-  try {
-    if (modalId === MODAL_PREFIX + 'channel') {
-      const channelId = interaction.fields.getTextInputValue('channel_id').trim();
-      await db.setGuildConfig(guildId, { ...cfg, log_channel_id: channelId });
-      log.info('SETUP_CFG', guildId, 'Cập nhật log_channel_id = %s', channelId);
-      return interaction.editReply({ content: `✅ Đã cập nhật Kênh log thành <#${channelId}>.` });
-    }
-
-    if (modalId === MODAL_PREFIX + 'phai') {
-      const raw = interaction.fields.getTextInputValue('role_ids').trim();
-      const roleIds = raw ? raw.split(',').map(s => s.trim()).filter(Boolean) : [];
-      await db.setGuildConfig(guildId, { ...cfg, phai_role_ids: roleIds });
-      log.info('SETUP_CFG', guildId, 'Cập nhật phai_role_ids = %s', roleIds);
-      return interaction.editReply({ content: `✅ Đã cập nhật Phái (${roleIds.length} role).` });
-    }
-
-    if (modalId === MODAL_PREFIX + 'tz') {
-      const tz = interaction.fields.getTextInputValue('timezone').trim();
-      try {
-        Intl.DateTimeFormat(undefined, { timeZone: tz });
-      } catch {
-        return interaction.editReply({ content: `❌ Múi giờ \`${tz}\` không hợp lệ.` });
-      }
-      await db.setGuildConfig(guildId, { ...cfg, timezone: tz });
-      log.info('SETUP_CFG', guildId, 'Cập nhật timezone = %s', tz);
-      return interaction.editReply({ content: `✅ Đã cập nhật Timezone thành \`${tz}\`.` });
-    }
-
-    if (modalId === MODAL_PREFIX + 'reminder') {
-      const val = (interaction.fields.getTextInputValue('reminder_minutes') || '').trim();
-      const minutes = parseInt(val, 10) || 0;
-      await db.setGuildConfig(guildId, {
-        ...cfg,
-        reminder_enabled: minutes > 0,
-        reminder_minutes: minutes,
-      });
-      log.info('SETUP_CFG', guildId, 'Cập nhật reminder = %d phút', minutes);
-      return interaction.editReply({ content: minutes > 0
-        ? `✅ Đã bật nhắc nhở **${minutes} phút** trước giờ mở.`
-        : '✅ Đã tắt nhắc nhở.' });
-    }
-
-    if (modalId === MODAL_PREFIX + 'admin_role') {
-      const raw = interaction.fields.getTextInputValue('role_id').trim();
-      const roleId = raw || null;
-      await db.setGuildConfig(guildId, { ...cfg, admin_role_id: roleId });
-      log.info('SETUP_CFG', guildId, 'Cập nhật admin_role_id = %s', roleId);
-      return interaction.editReply({ content: roleId
-        ? `✅ Đã cập nhật Role Quản lý thành <@&${roleId}>.`
-        : '✅ Đã xoá Role Quản lý.' });
-    }
-
-    if (modalId === MODAL_PREFIX + 'attendance_role') {
-      const raw = interaction.fields.getTextInputValue('role_id').trim();
-      const roleId = raw || null;
-      await db.setGuildConfig(guildId, { ...cfg, attendance_role_id: roleId });
-      log.info('SETUP_CFG', guildId, 'Cập nhật attendance_role_id = %s', roleId);
-      return interaction.editReply({ content: roleId
-        ? `✅ Đã cập nhật Role Điểm danh thành <@&${roleId}>.`
-        : '✅ Đã xoá Role Điểm danh.' });
-    }
-  } catch (e) {
-    log.error('SETUP_CFG', guildId, 'Lỗi cập nhật config: %s', e.message);
-    return interaction.editReply({ content: '❌ Không thể cập nhật cấu hình, thử lại sau.' });
+  if (!modal) {
+    return interaction.reply({
+      content: '❌ Hành động không xác định.',
+      flags: MessageFlags.Ephemeral,
+    });
   }
-
-  return interaction.editReply({ content: '❌ Hành động không xác định.' });
+  return interaction.showModal(modal);
 }
 
 class SetupConfigEditHandler extends InteractionHandler {
@@ -197,27 +128,11 @@ class SetupConfigEditHandler extends InteractionHandler {
     return this.none();
   }
 
+  // [FIX] Không cần async vì showModal là synchronous
   run(interaction) {
     return openEditModal(interaction);
   }
 }
 
-class SetupConfigEditModalHandler extends InteractionHandler {
-  constructor(ctx, options) {
-    super(ctx, { ...options, interactionHandlerType: InteractionHandlerTypes.ModalSubmit });
-  }
-
-  parse(interaction) {
-    if (interaction.customId.startsWith(MODAL_PREFIX)) return this.some();
-    return this.none();
-  }
-
-  run(interaction) {
-    return handleEditModal(interaction);
-  }
-}
-
-module.exports = {
-  SetupConfigEditHandler,
-  SetupConfigEditModalHandler,
-};
+// [FIX] module.exports = Class (không phải object) — Sapphire v3 yêu cầu
+module.exports = SetupConfigEditHandler;
