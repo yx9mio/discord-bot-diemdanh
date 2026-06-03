@@ -1,15 +1,23 @@
 'use strict';
 // interaction-handlers/setup/setupConfigEdit.js
-// Button handler: mở modal chỉnh sửa cài đặt chung (kênh log, phái, tz, reminder, role)
-// [FIX] Tách khỏi setupConfigEditModal.js — Sapphire v3 chỉ load 1 class per file
-const { MessageFlags, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } = require('discord.js');
+// Button handler: mở modal hoặc select menu chỉnh sửa cài đặt chung
+const {
+  MessageFlags,
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle,
+  ActionRowBuilder,
+  ChannelSelectMenuBuilder,
+  RoleSelectMenuBuilder,
+  ChannelType,
+} = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 
-const EDIT_CHANNEL        = 'setup:cfg:edit:channel';
-const EDIT_PHAI           = 'setup:cfg:edit:phai';
-const EDIT_TZ             = 'setup:cfg:edit:tz';
-const EDIT_REMINDER       = 'setup:cfg:edit:reminder';
-const EDIT_ADMIN_ROLE     = 'setup:cfg:edit:admin_role';
+const EDIT_CHANNEL         = 'setup:cfg:edit:channel';
+const EDIT_PHAI            = 'setup:cfg:edit:phai';
+const EDIT_TZ              = 'setup:cfg:edit:tz';
+const EDIT_REMINDER        = 'setup:cfg:edit:reminder';
+const EDIT_ADMIN_ROLE      = 'setup:cfg:edit:admin_role';
 const EDIT_ATTENDANCE_ROLE = 'setup:cfg:edit:attendance_role';
 
 const EDIT_IDS = new Set([
@@ -17,43 +25,72 @@ const EDIT_IDS = new Set([
   EDIT_REMINDER, EDIT_ADMIN_ROLE, EDIT_ATTENDANCE_ROLE,
 ]);
 
-// MODAL_PREFIX được define lại ở cả 2 file (setupConfigEditModal.js cũng có cùng giá trị)
-const MODAL_PREFIX = 'setup:cfg:modal:';
+const MODAL_PREFIX  = 'setup:cfg:modal:';
+const SELECT_PREFIX = 'setup:cfg:select:';
 
-function openEditModal(interaction) {
+function handleButton(interaction) {
   const id = interaction.customId;
-  let modal;
 
+  // --- Kênh log: ChannelSelectMenu (chỉ text channel) ---
   if (id === EDIT_CHANNEL) {
-    modal = new ModalBuilder()
-      .setCustomId(MODAL_PREFIX + 'channel')
-      .setTitle('Cài đặt Kênh log')
-      .addComponents(
-        new ActionRowBuilder().addComponents(
-          new TextInputBuilder()
-            .setCustomId('channel_id')
-            .setLabel('Channel ID')
-            .setStyle(TextInputStyle.Short)
-            .setPlaceholder('VD: 123456789012345678')
-            .setRequired(true),
-        ),
-      );
-  } else if (id === EDIT_PHAI) {
-    modal = new ModalBuilder()
-      .setCustomId(MODAL_PREFIX + 'phai')
-      .setTitle('Cài đặt Phái (Role)')
-      .addComponents(
-        new ActionRowBuilder().addComponents(
-          new TextInputBuilder()
-            .setCustomId('role_ids')
-            .setLabel('Role IDs (cách nhau bằng dấu phẩy)')
-            .setStyle(TextInputStyle.Paragraph)
-            .setPlaceholder('VD: 111111111111,222222222222')
-            .setRequired(false),
-        ),
-      );
-  } else if (id === EDIT_TZ) {
-    modal = new ModalBuilder()
+    const menu = new ChannelSelectMenuBuilder()
+      .setCustomId(SELECT_PREFIX + 'channel')
+      .setPlaceholder('Chọn kênh log...')
+      .addChannelTypes(ChannelType.GuildText)
+      .setMinValues(1)
+      .setMaxValues(1);
+    return interaction.reply({
+      content: '📢 Chọn kênh sẽ dùng làm **kênh log điểm danh**:',
+      components: [new ActionRowBuilder().addComponents(menu)],
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  // --- Phái: RoleSelectMenu (multi, max 20) ---
+  if (id === EDIT_PHAI) {
+    const menu = new RoleSelectMenuBuilder()
+      .setCustomId(SELECT_PREFIX + 'phai')
+      .setPlaceholder('Chọn các role phái...')
+      .setMinValues(0)
+      .setMaxValues(20);
+    return interaction.reply({
+      content: '⚔️ Chọn các **role phái** (có thể chọn nhiều, bỏ trống để xoá hết):',
+      components: [new ActionRowBuilder().addComponents(menu)],
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  // --- Role Quản lý: RoleSelectMenu (single) ---
+  if (id === EDIT_ADMIN_ROLE) {
+    const menu = new RoleSelectMenuBuilder()
+      .setCustomId(SELECT_PREFIX + 'admin_role')
+      .setPlaceholder('Chọn role quản lý...')
+      .setMinValues(0)
+      .setMaxValues(1);
+    return interaction.reply({
+      content: '🛡️ Chọn **role quản lý** (bỏ trống = xoá):',
+      components: [new ActionRowBuilder().addComponents(menu)],
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  // --- Role Điểm danh: RoleSelectMenu (single) ---
+  if (id === EDIT_ATTENDANCE_ROLE) {
+    const menu = new RoleSelectMenuBuilder()
+      .setCustomId(SELECT_PREFIX + 'attendance_role')
+      .setPlaceholder('Chọn role điểm danh...')
+      .setMinValues(0)
+      .setMaxValues(1);
+    return interaction.reply({
+      content: '✅ Chọn **role điểm danh** (bỏ trống = xoá):',
+      components: [new ActionRowBuilder().addComponents(menu)],
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  // --- Timezone: Modal (vẫn dùng text input) ---
+  if (id === EDIT_TZ) {
+    const modal = new ModalBuilder()
       .setCustomId(MODAL_PREFIX + 'tz')
       .setTitle('Cài đặt Timezone')
       .addComponents(
@@ -66,8 +103,12 @@ function openEditModal(interaction) {
             .setRequired(true),
         ),
       );
-  } else if (id === EDIT_REMINDER) {
-    modal = new ModalBuilder()
+    return interaction.showModal(modal);
+  }
+
+  // --- Nhắc nhở: Modal ---
+  if (id === EDIT_REMINDER) {
+    const modal = new ModalBuilder()
       .setCustomId(MODAL_PREFIX + 'reminder')
       .setTitle('Cài đặt Nhắc nhở')
       .addComponents(
@@ -80,43 +121,13 @@ function openEditModal(interaction) {
             .setPlaceholder('5 / 10 / 15 / 30 / 60'),
         ),
       );
-  } else if (id === EDIT_ADMIN_ROLE) {
-    modal = new ModalBuilder()
-      .setCustomId(MODAL_PREFIX + 'admin_role')
-      .setTitle('Cài đặt Role Quản lý')
-      .addComponents(
-        new ActionRowBuilder().addComponents(
-          new TextInputBuilder()
-            .setCustomId('role_id')
-            .setLabel('Role ID')
-            .setStyle(TextInputStyle.Short)
-            .setPlaceholder('VD: 123456789012345678')
-            .setRequired(false),
-        ),
-      );
-  } else if (id === EDIT_ATTENDANCE_ROLE) {
-    modal = new ModalBuilder()
-      .setCustomId(MODAL_PREFIX + 'attendance_role')
-      .setTitle('Cài đặt Role Điểm danh')
-      .addComponents(
-        new ActionRowBuilder().addComponents(
-          new TextInputBuilder()
-            .setCustomId('role_id')
-            .setLabel('Role ID')
-            .setStyle(TextInputStyle.Short)
-            .setPlaceholder('VD: 123456789012345678')
-            .setRequired(false),
-        ),
-      );
+    return interaction.showModal(modal);
   }
 
-  if (!modal) {
-    return interaction.reply({
-      content: '❌ Hành động không xác định.',
-      flags: MessageFlags.Ephemeral,
-    });
-  }
-  return interaction.showModal(modal);
+  return interaction.reply({
+    content: '❌ Hành động không xác định.',
+    flags: MessageFlags.Ephemeral,
+  });
 }
 
 class SetupConfigEditHandler extends InteractionHandler {
@@ -129,11 +140,9 @@ class SetupConfigEditHandler extends InteractionHandler {
     return this.none();
   }
 
-  // showModal là synchronous nên không cần async
   run(interaction) {
-    return openEditModal(interaction);
+    return handleButton(interaction);
   }
 }
 
-// [FIX] module.exports = Class — Sapphire v3 yêu cầu, không phải export object
 module.exports = SetupConfigEditHandler;
