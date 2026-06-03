@@ -37,22 +37,10 @@ class SetupScheduleHandler extends InteractionHandler {
       return openTypeModal(interaction);
     }
 
-    // Sửa lịch → mở Modal chi tiết với prefill
+    // [BUG-1] Sửa lịch → showModal ngay không prefill (tránh await trước showModal gây timeout)
     if (customId.startsWith(CUSTOM_ID.EDIT_PREFIX)) {
       const scheduleId = customId.slice(CUSTOM_ID.EDIT_PREFIX.length);
-      const schedule = await db.getScheduledSessionById(scheduleId);
-      if (!schedule) {
-        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-        return interaction.editReply({ content: '❌ Không tìm thấy lịch.' });
-      }
-      const prefill = {
-        dayOfWeek: schedule.day_of_week,
-        hour: schedule.hour,
-        minute: schedule.minute,
-        sessionName: schedule.session_name,
-        preCloseMinutes: schedule.pre_close_minutes,
-      };
-      return openRecurringDetailModal(interaction, prefill, scheduleId);
+      return openRecurringDetailModal(interaction, {}, scheduleId);
     }
 
     // Xác nhận xoá → thực hiện xoá

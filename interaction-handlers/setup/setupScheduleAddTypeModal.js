@@ -2,8 +2,8 @@
 // Modal 1 (Step 1): chọn LOẠI lịch (Recurring weekly / One-time).
 // Sau khi submit → show Modal 2 phù hợp.
 //
-// (Commit 5: Q7=a 2-step modal. Recurring fits 2 modals; One-time fits 3 modals
-//  vì Discord giới hạn 5 ActionRow / 1 component per row.)
+// [BUG-2&3] ONE-TIME gộp date+time thành 1 modal 5 fields:
+//   ngay, thang, nam, gio, ten (bỏ modal chain từ ModalSubmit)
 'use strict';
 const {
   InteractionHandler, InteractionHandlerTypes,
@@ -12,10 +12,9 @@ const { MessageFlags, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowB
 const log = require('../../utils/logger.js');
 
 const CUSTOM_ID = {
-  TYPE:  'setup:sch:add:type',           // Modal 1 submit
-  DETAIL_R: 'setup:sch:add:detail:r',    // Modal 2 (Recurring)
-  DETAIL_O_A: 'setup:sch:add:detail:o:a',// Modal 2a (One-time: Ngày/Tháng/Năm)
-  TIME_O: 'setup:sch:add:time:o',        // Modal 2b (One-time: Tên + Giờ + Phút + pre_close)
+  TYPE:       'setup:sch:add:type',         // Modal 1 submit
+  DETAIL_R:   'setup:sch:add:detail:r',     // Modal 2 (Recurring)
+  DETAIL_O:   'setup:sch:add:detail:o',     // Modal 2 (One-time combined, thay DETAIL_O_A + TIME_O)
 };
 
 const PRE_CLOSE_OPTIONS = [0, 15, 30, 45, 60, 90];
@@ -39,7 +38,7 @@ function openTypeModal(interaction) {
   return interaction.showModal(modal);
 }
 
-// Mở Modal 2 cho Recurring: Thứ + Tên + Giờ + Phút + pre_close = 5 rows
+// Mở Modal 2 cho Recurring: Thứ + Tên + Giờ + pre_close + phut_bu = 5 rows
 function openRecurringDetailModal(interaction, prefill = {}, scheduleId = null) {
   const customId = scheduleId ? `setup:sch:edit:r:${scheduleId}` : CUSTOM_ID.DETAIL_R;
   const modal = new ModalBuilder()
@@ -101,63 +100,27 @@ function openRecurringDetailModal(interaction, prefill = {}, scheduleId = null) 
   return interaction.showModal(modal);
 }
 
-// Mở Modal 2a cho One-time: Ngày + Tháng + Năm
-function openOneTimeDateModal(interaction, prefill = {}) {
-  const modal = new ModalBuilder()
-    .setCustomId(CUSTOM_ID.DETAIL_O_A)
-    .setTitle('➕ Lịch một lần — Bước 2/3: Ngày');
-
-  modal.addComponents(new ActionRowBuilder().addComponents(
-    new TextInputBuilder()
-      .setCustomId('ngay')
-      .setLabel('Ngày (1-31)')
-      .setStyle(TextInputStyle.Short)
-      .setRequired(true)
-      .setMaxLength(2)
-      .setPlaceholder('VD: 15')
-      .setValue(prefill.dayOfMonth ? String(prefill.dayOfMonth) : ''),
-  ));
-
-  modal.addComponents(new ActionRowBuilder().addComponents(
-    new TextInputBuilder()
-      .setCustomId('thang')
-      .setLabel('Tháng (1-12)')
-      .setStyle(TextInputStyle.Short)
-      .setRequired(true)
-      .setMaxLength(2)
-      .setPlaceholder('VD: 6')
-      .setValue(prefill.month ? String(prefill.month) : ''),
-  ));
-
+// [BUG-2&3] Mở Modal 2 cho One-time: gộp Ngày+Tháng+Năm+Giờ+Tên vào 1 modal
+// Không còn modal chain từ ModalSubmit → tránh lỗi Discord
+function openOneTimeCombinedModal(interaction, prefill = {}) {
   const currentYear = new Date().getFullYear();
-  modal.addComponents(new ActionRowBuilder().addComponents(
-    new TextInputBuilder()
-      .setCustomId('nam')
-      .setLabel('Năm')
-      .setStyle(TextInputStyle.Short)
-      .setRequired(true)
-      .setMaxLength(4)
-      .setPlaceholder('VD: 2026')
-      .setValue(prefill.year ? String(prefill.year) : String(currentYear)),
-  ));
-
-  return interaction.showModal(modal);
-}
-
-// Mở Modal 2b cho One-time: Tên + Giờ + Phút + pre_close
-function openOneTimeTimeModal(interaction, prefill = {}) {
   const modal = new ModalBuilder()
-    .setCustomId(CUSTOM_ID.TIME_O)
-    .setTitle('➕ Lịch một lần — Bước 3/3: Giờ');
+    .setCustomId(CUSTOM_ID.DETAIL_O)
+    .setTitle('➕ Lịch một lần — Bước 2/2');
 
   modal.addComponents(new ActionRowBuilder().addComponents(
     new TextInputBuilder()
-      .setCustomId('ten')
-      .setLabel('Tên phiên')
+      .setCustomId('ngay_thang_nam')
+      .setLabel('Ngày tháng năm (DD/MM/YYYY)')
       .setStyle(TextInputStyle.Short)
-      .setMaxLength(100)
       .setRequired(true)
-      .setValue(prefill.sessionName ?? 'Điểm danh'),
+      .setMaxLength(10)
+      .setPlaceholder('VD: 15/06/2026')
+      .setValue(
+        prefill.dayOfMonth
+          ? `${String(prefill.dayOfMonth).padStart(2,'0')}/${String(prefill.month).padStart(2,'0')}/${prefill.year ?? currentYear}`
+          : '',
+      ),
   ));
 
   modal.addComponents(new ActionRowBuilder().addComponents(
@@ -169,6 +132,16 @@ function openOneTimeTimeModal(interaction, prefill = {}) {
       .setMaxLength(5)
       .setRequired(true)
       .setValue(prefill.hour != null ? `${String(prefill.hour).padStart(2,'0')}:${String(prefill.minute ?? 0).padStart(2,'0')}` : '20:00'),
+  ));
+
+  modal.addComponents(new ActionRowBuilder().addComponents(
+    new TextInputBuilder()
+      .setCustomId('ten')
+      .setLabel('Tên phiên')
+      .setStyle(TextInputStyle.Short)
+      .setMaxLength(100)
+      .setRequired(true)
+      .setValue(prefill.sessionName ?? 'Điểm danh'),
   ));
 
   modal.addComponents(new ActionRowBuilder().addComponents(
@@ -211,7 +184,9 @@ class SetupScheduleAddTypeModal extends InteractionHandler {
       return openRecurringDetailModal(interaction);
     }
     if (loai === 'one_time') {
-      return openOneTimeDateModal(interaction);
+      // [BUG-2&3] Gọi combined modal trực tiếp từ ModalSubmit của Modal 1
+      // Discord cho phép showModal từ ModalSubmit (chỉ không cho chain quá 1 lần)
+      return openOneTimeCombinedModal(interaction);
     }
     return interaction.reply({ content: '❌ Loại lịch không hợp lệ. Gõ "recurring" hoặc "one_time".', flags: MessageFlags.Ephemeral });
   }
@@ -221,8 +196,8 @@ module.exports = {
   SetupScheduleAddTypeModal,
   CUSTOM_ID,
   PRE_CLOSE_OPTIONS,
+  DAY_LABELS,
   openTypeModal,
   openRecurringDetailModal,
-  openOneTimeDateModal,
-  openOneTimeTimeModal,
+  openOneTimeCombinedModal,
 };
