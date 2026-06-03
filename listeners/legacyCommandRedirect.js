@@ -6,6 +6,7 @@
 // cho user click vào lệnh cũ trong cache. Sau khi cache refresh, lệnh cũ
 // biến mất hoàn toàn.
 'use strict';
+const { MessageFlags } = require('discord.js');
 const { Listener, Events } = require('@sapphire/framework');
 
 // Các tên slash command đã bị xoá ở Commit 6 (Q1=b: chỉ giữ 6 commands)
@@ -38,7 +39,7 @@ class LegacyCommandRedirectListener extends Listener {
         content: `🚚 Lệnh \`/${interaction.commandName}\` đã được gộp vào \`/setup\` (Bảng điều khiển).`
           + `\n> Bấm \`/setup\` để truy cập lịch, thành viên, phiên, cài đặt.`
           + `\n> _Lệnh cũ sẽ tự biến mất sau khi Discord refresh cache (khoảng 1 giờ)._`,
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     } catch (_e) {
       // Đã reply hoặc token expired — bỏ qua

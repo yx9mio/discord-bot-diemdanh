@@ -65,7 +65,7 @@ describe('run() — không có session', () => {
     const interaction = makeInteraction();
     await handler.run(interaction);
     expect(interaction.reply).toHaveBeenCalledWith(
-      expect.objectContaining({ ephemeral: true, content: expect.stringContaining('Không có phiên') }),
+      expect.objectContaining({ flags: 64, content: expect.stringContaining('Không có phiên') }),
     );
     expect(mockMarkAttendance).not.toHaveBeenCalled();
   });
@@ -162,7 +162,7 @@ describe('attendanceService lock (db mock)', () => {
     expect(db.tryAcquireAttendanceLock).toHaveBeenCalled();
     expect(db.upsertAttendance).not.toHaveBeenCalled();
     expect(reply).toHaveBeenCalledWith(
-      expect.objectContaining({ content: expect.stringContaining('Đang xử lý'), ephemeral: true }),
+      expect.objectContaining({ content: expect.stringContaining('Đang xử lý'), flags: 64 }),
     );
   });
 });

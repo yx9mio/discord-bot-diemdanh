@@ -3,6 +3,7 @@
 // Refactored ở Commit 6: đã bỏ các branch liên quan tới handlers/ cũ
 // (admin:override, upgrade:confirm, setup:dashboard, lichsu:*, setup_help, setup_config).
 'use strict';
+const { MessageFlags } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes, AttachmentBuilder } = require('@sapphire/framework');
 const db  = require('../db.js');
 const log = require('../utils/logger.js');
@@ -39,7 +40,7 @@ class SessionButtonHandler extends InteractionHandler {
 
     if (customId === 'attend_view' || customId.startsWith('attend_view:')) {
       const session = await db.getActiveSession(guild.id);
-      if (!session) return interaction.reply({ content: '🚫 Không có phiên điểm danh nào đang mở.', ephemeral: true });
+      if (!session) return interaction.reply({ content: '🚫 Không có phiên điểm danh nào đang mở.', flags: MessageFlags.Ephemeral });
       const attended = await db.getAttendances(session.id);
 
       // [B2] Parse page từ customId (attend_view:prev:N hoặc attend_view:next:N)
@@ -53,14 +54,14 @@ class SessionButtonHandler extends InteractionHandler {
 
       const { embed, components } = await buildSessionEmbed(guild, session, attended, session.phai_role_ids ?? [], false, page);
       const method = customId.startsWith('attend_view:') ? 'editReply' : 'reply';
-      return interaction[method]({ embeds: [embed], components, ephemeral: true });
+      return interaction[method]({ embeds: [embed], components, flags: MessageFlags.Ephemeral });
     }
 
     if (customId === 'attend_refresh') {
       await interaction.deferUpdate();
       try {
         const session = await db.getActiveSession(interaction.guildId);
-        if (!session) return interaction.followUp({ ...replyErr('Không có phiên điểm danh đang mở.'), ephemeral: true });
+        if (!session) return interaction.followUp({ ...replyErr('Không có phiên điểm danh đang mở.'), flags: MessageFlags.Ephemeral });
         const attended = await db.getAttendances(session.id);
         await interaction.guild.members.fetch().catch(() => {});
         const { embed, components: paginationComponents } = await buildSessionEmbed(interaction.guild, session, attended, session.phai_role_ids ?? [], false);
@@ -68,7 +69,7 @@ class SessionButtonHandler extends InteractionHandler {
         log.info('REFRESH', interaction.guildId, '%s làm mới embed điểm danh', interaction.user.tag);
       } catch (e) {
         log.error('REFRESH', interaction.guildId, 'Lỗi handleRefresh: %s', e.message);
-        await interaction.followUp({ ...replyErr('Không thể làm mới, thử lại sau.'), ephemeral: true });
+        await interaction.followUp({ ...replyErr('Không thể làm mới, thử lại sau.'), flags: MessageFlags.Ephemeral });
       }
       return;
     }
@@ -77,13 +78,13 @@ class SessionButtonHandler extends InteractionHandler {
       const { ok } = await requireAdmin(interaction, { context: 'điểm danh thay' });
       if (!ok) return;
       const session = await db.getActiveSession(guild.id);
-      if (!session) return interaction.reply({ content: '🚫 Không có phiên điểm danh nào đang mở.', ephemeral: true });
+      if (!session) return interaction.reply({ content: '🚫 Không có phiên điểm danh nào đang mở.', flags: MessageFlags.Ephemeral });
 
       return interaction.showModal(buildAdminMarkModal()); // [C1]
     }
 
     if (customId === 'session:cancel') {
-      await interaction.deferReply({ ephemeral: true });
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       const { ok } = await requireAdmin(interaction, { context: 'hủy phiên' });
       if (!ok) return;
       const session = await db.getActiveSession(guild.id);
@@ -126,7 +127,7 @@ class SessionButtonHandler extends InteractionHandler {
     }
 
     if (customId === 'session:export_csv') {
-      await interaction.deferReply({ ephemeral: true });
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       const { ok } = await requireAdmin(interaction, { context: 'xuất CSV' });
       if (!ok) return;
       const session = await db.getActiveSession(guild.id);
@@ -150,7 +151,7 @@ class SessionButtonHandler extends InteractionHandler {
     }
 
     if (customId === 'attend_close') {
-      await interaction.deferReply({ ephemeral: true });
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       const { ok } = await requireAdmin(interaction, { context: 'đóng phiên' });
       if (!ok) return;
       const session = await db.getActiveSession(guild.id);

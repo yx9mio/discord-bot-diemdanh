@@ -13,7 +13,6 @@ class SetupConfigHandler extends InteractionHandler {
   }
 
   parse(interaction) {
-    if (interaction.customId === CUSTOM_ID.BACK_HOME) return this.some();
     if (interaction.customId === 'setup:cfg') return this.some();
     return this.none();
   }

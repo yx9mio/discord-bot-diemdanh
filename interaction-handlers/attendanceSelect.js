@@ -4,6 +4,7 @@
 // [A4] Refactor để dùng attendanceService.markAttendance()
 'use strict';
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
+const { MessageFlags } = require('discord.js');
 const db = require('../db.js');
 const { markAttendance } = require('../utils/attendanceService.js');
 const { addBreadcrumb } = require('../utils/sentry.js');
@@ -37,7 +38,7 @@ class AttendanceSelectHandler extends InteractionHandler {
 
     const session = await db.getActiveSession(guild.id);
     if (!session) {
-      return interaction.reply({ content: '🚫 Không có phiên điểm danh nào đang mở.', ephemeral: true });
+      return interaction.reply({ content: '🚫 Không có phiên điểm danh nào đang mở.', flags: MessageFlags.Ephemeral });
     }
 
     // [A4] Dùng shared service logic

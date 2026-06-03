@@ -6,6 +6,7 @@
 //
 // Validate + parse + lưu DB. Kênh lấy từ guild_configs.log_channel_id.
 'use strict';
+const { MessageFlags } = require('discord.js');
 const {
   InteractionHandler, InteractionHandlerTypes,
 } = require('@sapphire/framework');
@@ -73,7 +74,7 @@ class SetupScheduleAddDetailModal extends InteractionHandler {
   }
 
   async _handleRecurring(interaction) {
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const guildId = interaction.guildId;
     const dayOfWeek = parseInt(interaction.fields.getStringSelectValue?.('thu') ?? interaction.fields.getSelect?.('thu') ?? '0', 10);
     const sessionName = interaction.fields.getTextInputValue('ten').trim();
@@ -121,7 +122,7 @@ class SetupScheduleAddDetailModal extends InteractionHandler {
   }
 
   async _handleOneTimeTime(interaction) {
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const guildId = interaction.guildId;
     // Lấy date từ message gốc của Modal 2a — nhưng Discord không lưu. → bắt buộc user chọn lại.
     // HACK: nếu muốn prefill, phải dùng collector. Tạm thời: yêu cầu user chọn lại date.

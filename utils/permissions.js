@@ -1,7 +1,7 @@
 // utils/permissions.js
 // BUG-7 fix: nhận option { deferred } để dùng editReply thay reply khi đã defer
 'use strict';
-const { PermissionFlagsBits } = require('discord.js');
+const { MessageFlags, PermissionFlagsBits } = require('discord.js');
 const { replyErr, replyErrEdit } = require('./embeds.js');
 
 /**
@@ -22,7 +22,7 @@ async function requireAdmin(interaction, opts = {}) {
   if (!member) {
     const msg = `🚫 Lệnh này chỉ dùng trong server.`;
     if (deferred) await interaction.editReply(replyErrEdit(msg));
-    else          await interaction.reply({ ...replyErr(msg), ephemeral: true });
+    else          await interaction.reply({ ...replyErr(msg), flags: MessageFlags.Ephemeral });
     return { ok: false };
   }
 
@@ -33,7 +33,7 @@ async function requireAdmin(interaction, opts = {}) {
   if (!hasAdmin) {
     const msg = `🔒 Bạn cần quyền **Administrator** hoặc **Manage Server** để ${context}.`;
     if (deferred) await interaction.editReply(replyErrEdit(msg));
-    else          await interaction.reply({ ...replyErr(msg), ephemeral: true });
+    else          await interaction.reply({ ...replyErr(msg), flags: MessageFlags.Ephemeral });
     return { ok: false };
   }
 

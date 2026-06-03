@@ -1,6 +1,7 @@
 // interaction-handlers/adminMarkModal.js
 // [B3] Modal cho admin điểm danh thay cho member khác
 'use strict';
+const { MessageFlags } = require('discord.js');
 const {
   InteractionHandler, InteractionHandlerTypes,
 } = require('@sapphire/framework');
@@ -32,7 +33,7 @@ class AdminMarkModalHandler extends InteractionHandler {
       customId: interaction.customId,
       userId: interaction.user?.id,
     });
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const { guild, user } = interaction;
     const { ok } = await requireAdmin(interaction, { context: 'điểm danh thay' });

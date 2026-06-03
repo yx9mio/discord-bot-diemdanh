@@ -1,6 +1,6 @@
 // utils/helpers.js — shared utilities
 'use strict';
-const { EmbedBuilder } = require('discord.js');
+const { MessageFlags, EmbedBuilder } = require('discord.js');
 const db  = require('../db.js');
 const log = require('./logger.js');
 const { FOOTER_DEFAULT } = require('./embeds.js');
@@ -42,8 +42,8 @@ function timKenhThongBao(guild) {
 async function safeReply(interaction, options) {
   try {
     if (interaction.deferred)     return await interaction.editReply(options);
-    if (interaction.replied)      return await interaction.followUp({ ...options, ephemeral: true });
-    return await interaction.reply({ ...options, ephemeral: true });
+    if (interaction.replied)      return await interaction.followUp({ ...options, flags: MessageFlags.Ephemeral });
+    return await interaction.reply({ ...options, flags: MessageFlags.Ephemeral });
   } catch (e) {
     log.error('HELPERS', interaction.guild?.id, 'safeReply failed: %s', e.message);
   }

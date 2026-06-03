@@ -2,7 +2,7 @@
 // [C1] Dashboard Admin tập trung với StringSelectMenu
 'use strict';
 const { Command } = require('@sapphire/framework');
-const { SlashCommandBuilder, PermissionFlagsBits, ActionRowBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder } = require('discord.js');
+const { MessageFlags, SlashCommandBuilder, PermissionFlagsBits, ActionRowBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder } = require('discord.js');
 const db = require('../../../db.js');
 const { requireAdmin } = require('../../../utils/permissions.js');
 
@@ -21,7 +21,7 @@ class AdminCommand extends Command {
   }
 
   async chatInputRun(interaction) {
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const { ok } = await requireAdmin(interaction, { context: 'admin dashboard', deferred: true });
     if (!ok) return;
 

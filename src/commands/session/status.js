@@ -1,7 +1,7 @@
 // src/commands/session/status.js
 'use strict';
 const { Command } = require('@sapphire/framework');
-const { SlashCommandBuilder } = require('discord.js');
+const { MessageFlags, SlashCommandBuilder } = require('discord.js');
 const db = require('../../../db.js');
 const { buildSessionEmbed, buildSessionActionRow } = require('../../../utils/embeds.js');
 
@@ -17,7 +17,7 @@ class StatusCommand extends Command {
   }
 
   async chatInputRun(interaction) {
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const { guild } = interaction;
     const session = await db.getActiveSession(guild.id);
     if (!session) return interaction.editReply({ content: '📭 Không có phiên nào đang mở.' });

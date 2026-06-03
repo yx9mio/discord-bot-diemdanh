@@ -1,6 +1,7 @@
 // utils/attendanceService.js
 // [A4] Shared attendance logic cho cả slash command và SelectMenu
 'use strict';
+const { MessageFlags } = require('discord.js');
 const db = require('../db.js');
 const {
   buildSessionEmbed,
@@ -28,12 +29,12 @@ async function markAttendance({ guild, member, user, status, interaction, sessio
     if (deferred) {
       return interaction.editReply({ content: msg });
     }
-    return interaction.reply({ content: msg, ephemeral: true });
+    return interaction.reply({ content: msg, flags: MessageFlags.Ephemeral });
   }
 
   try {
     if (!deferred) {
-      await interaction.deferReply({ ephemeral: true });
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     }
 
     // Validate eligible_member_ids

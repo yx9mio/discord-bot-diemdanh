@@ -1,6 +1,7 @@
 // interaction-handlers/adminSelect.js
 // [C1] Handler cho admin dashboard StringSelectMenu + Button actions
 'use strict';
+const { MessageFlags } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const db = require('../db.js');
 const log = require('../utils/logger.js');
@@ -67,27 +68,27 @@ class AdminSelectHandler extends InteractionHandler {
 
     if (action === 'view_attendance') {
       const session = await db.getActiveSession(guild.id);
-      if (!session) return interaction.reply({ content: '🚫 Không có phiên điểm danh nào đang mở.', ephemeral: true });
+      if (!session) return interaction.reply({ content: '🚫 Không có phiên điểm danh nào đang mở.', flags: MessageFlags.Ephemeral });
       const attended = await db.getAttendances(session.id);
       const { embed } = await buildSessionEmbed(guild, session, attended, session.phai_role_ids ?? []);
-      return interaction.reply({ embeds: [embed], ephemeral: true });
+      return interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
     }
 
     if (action === 'mark_attendance') {
       const { ok } = await requireAdmin(interaction, { context: 'điểm danh thay' });
       if (!ok) return;
       const session = await db.getActiveSession(guild.id);
-      if (!session) return interaction.reply({ content: '🚫 Không có phiên điểm danh nào đang mở.', ephemeral: true });
+      if (!session) return interaction.reply({ content: '🚫 Không có phiên điểm danh nào đang mở.', flags: MessageFlags.Ephemeral });
       // [C1] Mở modal điểm danh thay (dùng chung builder với sessionButton)
       return interaction.showModal(buildAdminMarkModal());
     }
 
     if (action === 'export_csv') {
       const session = await db.getActiveSession(guild.id);
-      if (!session) return interaction.reply({ content: '🚫 Không có phiên điểm danh nào đang mở.', ephemeral: true });
+      if (!session) return interaction.reply({ content: '🚫 Không có phiên điểm danh nào đang mở.', flags: MessageFlags.Ephemeral });
 
       const attended = await db.getAttendances(session.id);
-      if (!attended.length) return interaction.reply({ content: '🚫 Chưa có ai điểm danh trong phiên này.', ephemeral: true });
+      if (!attended.length) return interaction.reply({ content: '🚫 Chưa có ai điểm danh trong phiên này.', flags: MessageFlags.Ephemeral });
 
       try {
         const csvBuffer = buildCsvBuffer(attended);
@@ -95,17 +96,17 @@ class AdminSelectHandler extends InteractionHandler {
         return interaction.reply({
           content: `📄 File CSV điểm danh phiên **${session.session_name}** (${attended.length} bản ghi)`,
           files: [{ attachment: csvBuffer, name: filename }],
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
       } catch (e) {
         log.error('ADMIN_EXPORT_CSV', guild.id, 'Lỗi tạo CSV: %s', e.message);
-        return interaction.reply({ content: '❌ Không thể tạo file CSV, thử lại sau.', ephemeral: true });
+        return interaction.reply({ content: '❌ Không thể tạo file CSV, thử lại sau.', flags: MessageFlags.Ephemeral });
       }
     }
 
     if (action === 'refresh_embed') {
       const session = await db.getActiveSession(guild.id);
-      if (!session) return interaction.reply({ content: '🚫 Không có phiên điểm danh nào đang mở.', ephemeral: true });
+      if (!session) return interaction.reply({ content: '🚫 Không có phiên điểm danh nào đang mở.', flags: MessageFlags.Ephemeral });
 
       try {
         const attended = await db.getAttendances(session.id);
@@ -122,16 +123,16 @@ class AdminSelectHandler extends InteractionHandler {
             }
           }
         }
-        return interaction.reply({ content: '✅ Embed đã được làm mới.', ephemeral: true });
+        return interaction.reply({ content: '✅ Embed đã được làm mới.', flags: MessageFlags.Ephemeral });
       } catch (e) {
         log.error('ADMIN_REFRESH', guild.id, 'Lỗi làm mới embed: %s', e.message);
-        return interaction.reply({ content: '❌ Không thể làm mới embed, thử lại sau.', ephemeral: true });
+        return interaction.reply({ content: '❌ Không thể làm mới embed, thử lại sau.', flags: MessageFlags.Ephemeral });
       }
     }
 
     if (action === 'close_session') {
       const session = await db.getActiveSession(guild.id);
-      if (!session) return interaction.reply({ content: '🚫 Không có phiên điểm danh nào đang mở.', ephemeral: true });
+      if (!session) return interaction.reply({ content: '🚫 Không có phiên điểm danh nào đang mở.', flags: MessageFlags.Ephemeral });
       return interaction.reply(
         replyConfirm(
           `Bạn có chắc muốn đóng phiên **"${session.session_name}"**?\n> Hành động này không thể hoàn tác.`,
@@ -141,7 +142,7 @@ class AdminSelectHandler extends InteractionHandler {
       );
     }
 
-    return interaction.reply({ content: `❌ Hành động không xác định: ${action}`, ephemeral: true });
+    return interaction.reply({ content: `❌ Hành động không xác định: ${action}`, flags: MessageFlags.Ephemeral });
   }
 }
 

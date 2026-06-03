@@ -3,6 +3,7 @@
 // Mở confirm dialog đóng phiên hiện tại từ Home dashboard.
 // (Commit 3: chỉ xử lý close. Commit 4+ sẽ thêm broadcast, refresh nâng cao.)
 'use strict';
+const { MessageFlags } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const db = require('../../db.js');
 const { requireAdmin } = require('../../utils/permissions.js');
@@ -21,7 +22,7 @@ class SetupSessionHandler extends InteractionHandler {
   }
 
   async run(interaction) {
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const { ok } = await requireAdmin(interaction, { context: 'đóng phiên từ /setup' });
     if (!ok) return;
     const { guild } = interaction;

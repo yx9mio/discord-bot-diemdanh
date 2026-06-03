@@ -8,7 +8,7 @@
 const {
   InteractionHandler, InteractionHandlerTypes,
 } = require('@sapphire/framework');
-const { ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, StringSelectMenuBuilder } = require('discord.js');
+const { MessageFlags, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, StringSelectMenuBuilder } = require('discord.js');
 const log = require('../../utils/logger.js');
 
 const CUSTOM_ID = {
@@ -224,7 +224,7 @@ class SetupScheduleAddTypeModal extends InteractionHandler {
     if (loai === 'one_time') {
       return openOneTimeDateModal(interaction);
     }
-    return interaction.reply({ content: '❌ Loại lịch không hợp lệ.', ephemeral: true });
+    return interaction.reply({ content: '❌ Loại lịch không hợp lệ.', flags: MessageFlags.Ephemeral });
   }
 }
 

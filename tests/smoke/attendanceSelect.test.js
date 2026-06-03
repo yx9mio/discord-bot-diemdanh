@@ -97,7 +97,7 @@ describe('run() — không có session active', () => {
     await handler.run(interaction);
     expect(interaction.reply).toHaveBeenCalledOnce();
     const arg = interaction.reply.mock.calls[0][0];
-    expect(arg.ephemeral).toBe(true);
+    expect(arg.flags).toBe(64);
     expect(arg.content).toContain('Không có phiên');
   });
 
@@ -148,7 +148,7 @@ describe('run() — điểm danh thành công', () => {
   it('gọi deferReply ephemeral trước khi xử lý', async () => {
     const interaction = makeInteraction('attendance:select');
     await handler.run(interaction);
-    expect(interaction.deferReply).toHaveBeenCalledWith({ ephemeral: true });
+    expect(interaction.deferReply).toHaveBeenCalledWith({ flags: 64 });
   });
 
   it('gọi editReply sau khi xong', async () => {

@@ -4,7 +4,7 @@
 // Q1=b: thay thế toàn bộ admin slash commands.
 'use strict';
 const { Command } = require('@sapphire/framework');
-const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
+const { MessageFlags, SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
 const db = require('../../../db.js');
 const { HomeView } = require('./_HomeView.js');
 
@@ -27,7 +27,7 @@ class SetupCommand extends Command {
   }
 
   async chatInputRun(interaction) {
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const { guild } = interaction;
     const [cfg, schedules, members, session] = await Promise.all([
       db.getGuildConfig(guild.id),

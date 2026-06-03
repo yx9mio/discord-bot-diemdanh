@@ -60,7 +60,7 @@ describe('legacyCommandRedirect listener', () => {
     await listener.run(i);
     expect(mockReply).toHaveBeenCalledTimes(1);
     const arg = mockReply.mock.calls[0][0];
-    expect(arg.ephemeral).toBe(true);
+    expect(arg.flags).toBe(64);
     expect(arg.content).toMatch(/\/setup/);
     expect(arg.content).toMatch(/caidat/);
   });

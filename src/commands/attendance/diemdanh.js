@@ -2,7 +2,7 @@
 // [A4] Refactor để dùng attendanceService.markAttendance()
 'use strict';
 const { Command } = require('@sapphire/framework');
-const { SlashCommandBuilder } = require('discord.js');
+const { MessageFlags, SlashCommandBuilder } = require('discord.js');
 const db = require('../../../db.js');
 const { replyErr } = require('../../../utils/embeds.js');
 const { markAttendance } = require('../../../utils/attendanceService.js');
@@ -34,7 +34,7 @@ class DiemDanhCommand extends Command {
     const status = interaction.options.getString('trang_thai') ?? 'tham_gia';
 
     const session = await db.getActiveSession(guild.id);
-    if (!session) return interaction.reply({ ...replyErr('Không có phiên nào đang mở.'), ephemeral: true });
+    if (!session) return interaction.reply({ ...replyErr('Không có phiên nào đang mở.'), flags: MessageFlags.Ephemeral });
 
     // [A4] Dùng shared service logic - đồng bộ với SelectMenu flow
     return markAttendance({ guild, member, user, status, interaction, session, deferred: false });
