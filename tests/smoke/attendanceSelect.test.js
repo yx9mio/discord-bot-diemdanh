@@ -20,7 +20,7 @@ mockModule('../../db.js', {
   getActiveSession:           (...a) => mockGetActiveSession(...a),
   upsertAttendance:           (...a) => mockUpsertAttendance(...a),
   getAttendances:             (...a) => mockGetAttendances(...a),
-  getStreak:                  vi.fn().mockResolvedValue(null),
+  getMemberStats:             vi.fn().mockResolvedValue({ current_streak: 0 }),
   tryAcquireAttendanceLock:   vi.fn().mockResolvedValue(true),
   releaseAttendanceLock:      vi.fn().mockResolvedValue(true),
 });

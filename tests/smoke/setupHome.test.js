@@ -29,7 +29,7 @@ mockModule('../../db.js', {
   getMembers:            (...a) => mockGetMembers(...a),
   getActiveSession:      (...a) => mockGetActiveSession(...a),
   getConfig:             (...a) => mockGetGuildConfig(...a),
-  getStreak:             vi.fn().mockResolvedValue(null),
+  getMemberStats:        vi.fn().mockResolvedValue({ current_streak: 0 }),
 });
 mockModule('../../utils/logger.js', {
   info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn(),

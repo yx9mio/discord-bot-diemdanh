@@ -59,11 +59,14 @@ async function markAttendance({ guild, member, user, status, interaction, sessio
       checked_in_at: new Date().toISOString(),
     });
 
-    // Fetch streak (best-effort)
+    // [C2] Fetch streak from member_stats (best-effort)
     let streak;
     try {
-      streak = await db.getStreak?.(guild.id, user.id);
-    } catch (_) {}
+      const stats = await db.getMemberStats(guild.id, user.id);
+      streak = stats?.current_streak ?? 0;
+    } catch (_) {
+      streak = 0;
+    }
 
     // Cập nhật embed chính
     try {

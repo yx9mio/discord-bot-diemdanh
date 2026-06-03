@@ -450,7 +450,14 @@ function buildAttendConfirmEmbed(member, status, sessionName, streak) {
   }
 
   if (streak != null && streak > 0 && ['tham_gia', 'tre'].includes(status)) {
-    embed.addFields({ name: `${ICONS.FIRE} Streak`, value: `**${streak}** phiên liên tiếp`, inline: true });
+    // [C2] Streak display with special messages
+    if (streak >= 3) {
+      embed.addFields({ name: `${ICONS.FIRE} Streak`, value: `**${streak}** phiên liên tiếp`, inline: true });
+    } else if (streak === 1) {
+      embed.addFields({ name: `${ICONS.SPARKLE} Streak`, value: `Bắt đầu chuỗi mới!`, inline: true });
+    } else {
+      embed.addFields({ name: `${ICONS.FIRE} Streak`, value: `**${streak}** phiên liên tiếp`, inline: true });
+    }
   }
 
   return { embeds: [embed], flags: MessageFlags.Ephemeral };

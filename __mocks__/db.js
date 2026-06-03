@@ -33,7 +33,7 @@ const db = {
   getAttendanceStats:       vi.fn().mockResolvedValue([]),
 
   // Member stats
-  getMemberStats:           vi.fn().mockResolvedValue(null),
+  getMemberStats:           vi.fn().mockResolvedValue({ current_streak: 0, best_streak: 0, total_joined: 0 }),
   getMemberStatsMulti:      vi.fn().mockResolvedValue([]),
   getAllMemberStats:         vi.fn().mockResolvedValue([]),
   upsertMemberStats:        vi.fn().mockResolvedValue(null),
@@ -46,7 +46,8 @@ const db = {
   getBadges:                vi.fn().mockResolvedValue([]),
   getMemberBadges:          vi.fn().mockResolvedValue([]),
   upsertMemberBadge:        vi.fn().mockResolvedValue(null),
-  getStreak:                vi.fn().mockResolvedValue(null),
+  getMemberBadgesMulti:     vi.fn().mockResolvedValue({}),
+  batchUpsertUserBadges:    vi.fn().mockResolvedValue(null),
 
   // Members (danh sách thành viên được quản lý)
   getMembers:               vi.fn().mockResolvedValue([]),
