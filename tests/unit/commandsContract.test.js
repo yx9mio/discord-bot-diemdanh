@@ -1,5 +1,6 @@
 // tests/unit/commandsContract.test.js
 // Commit 6: chỉ còn 6 commands. Categories giảm xuống 3 (PHIEN, DIEM_DANH, TIEN_ICH).
+// [C1] Thêm /admin dashboard → 7 commands (4 user, 3 admin).
 
 import { describe, it, expect } from 'vitest';
 import { readdirSync, statSync } from 'node:fs';
@@ -48,9 +49,9 @@ describe('Commands contract', () => {
     expect(missing, `Missing files: ${missing.join(', ')}`).toEqual([]);
   });
 
-  it('3 user commands và 3 admin commands (Commit 6)', () => {
+  it('3 user commands và 4 admin commands (Commit 6 + C1)', () => {
     expect(byAudience('user')).toHaveLength(3);
-    expect(byAudience('admin')).toHaveLength(3);
+    expect(byAudience('admin')).toHaveLength(4);
   });
 
   it('mỗi category trong CATEGORIES đều có ≥1 command', () => {

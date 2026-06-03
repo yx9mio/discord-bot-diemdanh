@@ -1,6 +1,7 @@
 // tests/unit/commandsMeta.test.js
 // Test: central registry utils/commands.js consistency.
 // Commit 6: 6 commands (Q1=b: /batdau, /ketthuc, /status, /diemdanh, /help, /setup).
+// [C1] Thêm /admin dashboard → 7 commands.
 
 import { describe, it, expect } from 'vitest';
 const {
@@ -52,6 +53,7 @@ describe('utils/commands.js (registry)', () => {
     expect(adminNames).toContain('batdau');
     expect(adminNames).toContain('ketthuc');
     expect(adminNames).toContain('setup');
+    expect(adminNames).toContain('admin');
   });
 
   it('user commands phổ biến đều có mặt', () => {
@@ -61,7 +63,7 @@ describe('utils/commands.js (registry)', () => {
     expect(userNames).toContain('help');
   });
 
-  it('đúng 6 commands (Q1=b)', () => {
-    expect(COMMANDS).toHaveLength(6);
+  it('đúng 7 commands (Q1=b + C1)', () => {
+    expect(COMMANDS).toHaveLength(7);
   });
 });

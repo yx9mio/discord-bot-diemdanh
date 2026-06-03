@@ -1,5 +1,6 @@
 // utils/commands.js — Central registry cho toàn bộ slash commands
 // Commit 6: chỉ giữ 6 commands (Q1=b: /batdau, /ketthuc, /status, /diemdanh, /help, /setup).
+// [C1] Thêm /admin dashboard
 // Đã xoá toàn bộ lệnh admin/user cũ; cấu hình/lịch/thành viên giờ làm qua /setup wizard.
 
 'use strict';
@@ -43,6 +44,12 @@ const COMMANDS = [
     desc: 'Bảng điều khiển — quản lý lịch, thành viên, phiên, cài đặt', ephemeral: true,
     detail: 'Smart Home dashboard với 4 sections: Phiên đang mở, Cài đặt chung, Lịch cố định, Thành viên.\n'
       + 'Đây là hub duy nhất cho mọi thao tác quản trị — không cần nhớ subcommand.' },
+
+  // ───── ADMIN DASHBOARD (admin) ─────
+  { name: 'admin',   category: 'TIEN_ICH',  audience: 'admin',
+    desc: 'Dashboard Admin — quản lý phiên điểm danh tập trung', ephemeral: true,
+    detail: 'StringSelectMenu tập trung: xem danh sách, điểm danh thay, xuất CSV, làm mới embed, đóng phiên.\n'
+      + 'Tất cả reply đều ephemeral. Chỉ admin (ManageGuild) mới dùng được.' },
 ];
 
 const COMMANDS_BY_NAME = new Map(COMMANDS.map(c => [c.name, c]));
