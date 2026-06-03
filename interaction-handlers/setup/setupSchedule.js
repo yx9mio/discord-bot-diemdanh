@@ -8,7 +8,7 @@
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const db = require('../../db.js');
 const log = require('../../utils/logger.js');
-const { ScheduleView } = require('../../src/commands/setup/ScheduleView.js');
+const { ScheduleView } = require('../../src/commands/setup/_ScheduleView.js');
 const { CUSTOM_ID } = ScheduleView;
 const { openTypeModal } = require('./setupScheduleAddTypeModal.js');
 

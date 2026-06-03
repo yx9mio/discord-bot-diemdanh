@@ -6,7 +6,7 @@
 const { Command } = require('@sapphire/framework');
 const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
 const db = require('../../../db.js');
-const { HomeView } = require('./HomeView.js');
+const { HomeView } = require('./_HomeView.js');
 
 class SetupCommand extends Command {
   constructor(context) {

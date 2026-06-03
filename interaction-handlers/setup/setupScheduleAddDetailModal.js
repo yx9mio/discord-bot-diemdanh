@@ -11,7 +11,7 @@ const {
 } = require('@sapphire/framework');
 const db = require('../../db.js');
 const log = require('../../utils/logger.js');
-const { ScheduleView: _ScheduleView } = require('../../src/commands/setup/ScheduleView.js');
+const { ScheduleView: _ScheduleView } = require('../../src/commands/setup/_ScheduleView.js');
 const {
   CUSTOM_ID,
   openOneTimeTimeModal,

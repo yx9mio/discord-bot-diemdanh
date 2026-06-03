@@ -55,7 +55,7 @@ mockModule('@sapphire/framework', {
 });
 
 // ─── Sources (require SAU khi mock đã set) ──────────────────────────────
-const HomeViewModule  = require('../../src/commands/setup/HomeView.js');
+const HomeViewModule  = require('../../src/commands/setup/_HomeView.js');
 const HomeView        = HomeViewModule.HomeView;
 const CUSTOM_ID       = HomeView.CUSTOM_ID;
 const { SetupHomeHandler }   = require('../../interaction-handlers/setup/setupHome.js');

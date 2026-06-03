@@ -4,7 +4,7 @@
 'use strict';
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const db = require('../../db.js');
-const { ConfigView } = require('../../src/commands/setup/ConfigView.js');
+const { ConfigView } = require('../../src/commands/setup/_ConfigView.js');
 const { CUSTOM_ID } = ConfigView;
 
 class SetupConfigHandler extends InteractionHandler {

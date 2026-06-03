@@ -3,7 +3,7 @@
 
 'use strict';
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
-const { HelpCommand, CUSTOM_ID } = require('../commands/general/help.js');
+const { HelpCommand, CUSTOM_ID } = require('../src/commands/general/help.js');
 
 class HelpPageHandler extends InteractionHandler {
   constructor(ctx) {

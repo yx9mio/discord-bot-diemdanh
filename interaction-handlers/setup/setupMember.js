@@ -8,7 +8,7 @@
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const db = require('../../db.js');
 const log = require('../../utils/logger.js');
-const { MemberView } = require('../../src/commands/setup/MemberView.js');
+const { MemberView } = require('../../src/commands/setup/_MemberView.js');
 const { CUSTOM_ID } = MemberView;
 
 class SetupMemberHandler extends InteractionHandler {

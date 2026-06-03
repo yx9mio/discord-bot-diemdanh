@@ -7,7 +7,7 @@
 'use strict';
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const db = require('../../db.js');
-const { HomeView } = require('../../src/commands/setup/HomeView.js');
+const { HomeView } = require('../../src/commands/setup/_HomeView.js');
 const { CUSTOM_ID } = HomeView;
 
 const KNOWN_IDS = new Set([

@@ -42,9 +42,9 @@ mockModule('@sapphire/framework', {
   InteractionHandlerTypes: { Button: 'Button' },
 });
 
-const { ConfigView }  = require('../../src/commands/setup/ConfigView.js');
-const { ScheduleView } = require('../../src/commands/setup/ScheduleView.js');
-const { MemberView }   = require('../../src/commands/setup/MemberView.js');
+const { ConfigView }  = require('../../src/commands/setup/_ConfigView.js');
+const { ScheduleView } = require('../../src/commands/setup/_ScheduleView.js');
+const { MemberView }   = require('../../src/commands/setup/_MemberView.js');
 const { SetupConfigHandler }  = require('../../interaction-handlers/setup/setupConfig.js');
 const { SetupScheduleHandler } = require('../../interaction-handlers/setup/setupSchedule.js');
 const { SetupMemberHandler }   = require('../../interaction-handlers/setup/setupMember.js');
