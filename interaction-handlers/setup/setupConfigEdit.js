@@ -96,7 +96,7 @@ async function handleEditModal(interaction) {
   try {
     if (modalId === MODAL_PREFIX + 'channel') {
       const channelId = interaction.fields.getTextInputValue('channel_id').trim();
-      await db.upsertGuildConfig(guildId, { ...cfg, log_channel_id: channelId });
+      await db.setGuildConfig(guildId, { ...cfg, log_channel_id: channelId });
       log.info('SETUP_CFG', guildId, 'Cập nhật log_channel_id = %s', channelId);
       return interaction.editReply({ content: `✅ Đã cập nhật Kênh log thành <#${channelId}>.` });
     }
@@ -104,7 +104,7 @@ async function handleEditModal(interaction) {
     if (modalId === MODAL_PREFIX + 'phai') {
       const raw = interaction.fields.getTextInputValue('role_ids').trim();
       const roleIds = raw ? raw.split(',').map(s => s.trim()).filter(Boolean) : [];
-      await db.upsertGuildConfig(guildId, { ...cfg, phai_role_ids: roleIds });
+      await db.setGuildConfig(guildId, { ...cfg, phai_role_ids: roleIds });
       log.info('SETUP_CFG', guildId, 'Cập nhật phai_role_ids = %s', roleIds);
       return interaction.editReply({ content: `✅ Đã cập nhật Phái (${roleIds.length} role).` });
     }
@@ -116,7 +116,7 @@ async function handleEditModal(interaction) {
       } catch {
         return interaction.editReply({ content: `❌ Múi giờ \`${tz}\` không hợp lệ.` });
       }
-      await db.upsertGuildConfig(guildId, { ...cfg, timezone: tz });
+      await db.setGuildConfig(guildId, { ...cfg, timezone: tz });
       log.info('SETUP_CFG', guildId, 'Cập nhật timezone = %s', tz);
       return interaction.editReply({ content: `✅ Đã cập nhật Timezone thành \`${tz}\`.` });
     }
@@ -124,7 +124,7 @@ async function handleEditModal(interaction) {
     if (modalId === MODAL_PREFIX + 'reminder') {
       const val = interaction.fields.getStringSelectValues('reminder_minutes')?.[0] ?? '10';
       const minutes = parseInt(val, 10) || 0;
-      await db.upsertGuildConfig(guildId, {
+      await db.setGuildConfig(guildId, {
         ...cfg,
         reminder_enabled: minutes > 0,
         reminder_minutes: minutes,
