@@ -7,6 +7,7 @@ const {
 const db = require('../db.js');
 const log = require('../utils/logger.js');
 const { requireAdmin } = require('../utils/permissions.js');
+const { addBreadcrumb } = require('../utils/sentry.js');
 
 const STATUS_LABELS = {
   'tham_gia': '✅ Điểm danh',
@@ -26,6 +27,11 @@ class AdminMarkModalHandler extends InteractionHandler {
   }
 
   async run(interaction) {
+    // [D1]
+    addBreadcrumb('interaction', 'adminMarkModal', {
+      customId: interaction.customId,
+      userId: interaction.user?.id,
+    });
     await interaction.deferReply({ ephemeral: true });
 
     const { guild, user } = interaction;

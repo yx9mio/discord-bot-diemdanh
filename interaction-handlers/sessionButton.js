@@ -3,7 +3,7 @@
 // Refactored ở Commit 6: đã bỏ các branch liên quan tới handlers/ cũ
 // (admin:override, upgrade:confirm, setup:dashboard, lichsu:*, setup_help, setup_config).
 'use strict';
-const { InteractionHandler, InteractionHandlerTypes, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, AttachmentBuilder } = require('@sapphire/framework');
+const { InteractionHandler, InteractionHandlerTypes, AttachmentBuilder } = require('@sapphire/framework');
 const db  = require('../db.js');
 const log = require('../utils/logger.js');
 const { buildCsvBuffer, buildCsvFilename } = require('../utils/csvHelper.js');
@@ -13,7 +13,8 @@ const {
   replyErr, replyErrEdit, replyOkEdit, replyConfirm,
 } = require('../utils/embeds.js');
 const { ketThucPhien, thongBaoHuyHieu, voHieuHoaNutDiemDanh } = require('../utils/session.js');
-const { xoaHenGio } = require('../utils/timers.js');
+const { xoaHenGio, stopAutoRefresh } = require('../utils/timers.js');
+const { buildAdminMarkModal } = require('../utils/adminMarkModal.js');
 
 const SESSION_BUTTON_IDS = new Set([
   'attend_view', 'attend_close', 'attend_refresh', 'admin:mark',
@@ -78,28 +79,7 @@ class SessionButtonHandler extends InteractionHandler {
       const session = await db.getActiveSession(guild.id);
       if (!session) return interaction.reply({ content: '🚫 Không có phiên điểm danh nào đang mở.', ephemeral: true });
 
-      const modal = new ModalBuilder()
-        .setCustomId('admin:mark:modal')
-        .setTitle('Điểm danh thay')
-        .addComponents(
-          new ActionRowBuilder().addComponents(
-            new TextInputBuilder()
-              .setCustomId('user_id')
-              .setLabel('User ID hoặc @mention')
-              .setStyle(TextInputStyle.Short)
-              .setPlaceholder('VD: 123456789012345678 hoặc @user')
-              .setRequired(true),
-          ),
-          new ActionRowBuilder().addComponents(
-            new TextInputBuilder()
-              .setCustomId('status')
-              .setLabel('Trạng thái')
-              .setStyle(TextInputStyle.Short)
-              .setPlaceholder('tham_gia / tre / khong_tham_gia / co_phep')
-              .setRequired(true),
-          ),
-        );
-      return interaction.showModal(modal);
+      return interaction.showModal(buildAdminMarkModal()); // [C1]
     }
 
     if (customId === 'session:cancel') {
@@ -124,6 +104,7 @@ class SessionButtonHandler extends InteractionHandler {
       if (!session) return interaction.editReply(replyErrEdit('🚫 Phiên đã được đóng hoặc hủy trước đó.'));
 
       try {
+        stopAutoRefresh(session.id); // [C3]
         await db.cancelSession(session.id);
       } catch (e) {
         log.error('CANCEL', guild.id, 'cancelSession thất bại %s: %s', session.id, e.message);
@@ -190,6 +171,7 @@ class SessionButtonHandler extends InteractionHandler {
       if (!session) return interaction.editReply(replyErrEdit('🚫 Phiên đã được đóng trước đó.'));
 
       try {
+        stopAutoRefresh(session.id); // [C3]
         await db.closeSession(session.id);
       } catch (e) {
         log.error('CLOSE', guild.id, 'closeSession thất bại %s: %s', session.id, e.message);

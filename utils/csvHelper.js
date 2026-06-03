@@ -32,7 +32,7 @@ function buildCsvBuffer(records) {
     },
   });
 
-  return Buffer.from(csv, 'utf-8');
+  return Buffer.from('\uFEFF' + csv, 'utf-8');
 }
 
 /**

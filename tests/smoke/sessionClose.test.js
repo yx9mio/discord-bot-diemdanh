@@ -41,7 +41,10 @@ mockModule('../../utils/embeds.js', {
   buildAttendanceButtons: vi.fn().mockReturnValue([]),
   buildConfigEmbed:      vi.fn().mockReturnValue({}),
 });
-mockModule('../../utils/timers.js', { xoaHenGio: mockXoaHenGio });
+mockModule('../../utils/timers.js', {
+  xoaHenGio: mockXoaHenGio,
+  stopAutoRefresh: vi.fn(), // [C3]
+});
 mockModule('../../utils/permissions.js', { requireAdmin: mockRequireAdmin });
 
 const { SessionButtonHandler } = require('../../interaction-handlers/sessionButton.js');

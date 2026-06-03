@@ -521,14 +521,17 @@ function buildSessionActionRow(disabled = false) {
             .setValue('co_phep'),
         )
     ),
-    // Row 2: Admin buttons
+    // Row 2: View & Admin actions (tối đa 5 buttons/row)
     new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId('session:view').setLabel('👁 Xem').setStyle(ButtonStyle.Secondary).setDisabled(d),
-      new ButtonBuilder().setCustomId('session:refresh').setLabel('🔄 Làm mới').setStyle(ButtonStyle.Secondary).setDisabled(d),
+      new ButtonBuilder().setCustomId('attend_view').setLabel('👁 Xem').setStyle(ButtonStyle.Secondary).setDisabled(d),
+      new ButtonBuilder().setCustomId('attend_refresh').setLabel('🔄 Làm mới').setStyle(ButtonStyle.Secondary).setDisabled(d),
       new ButtonBuilder().setCustomId('admin:mark').setLabel('✏️ Điểm danh thay').setStyle(ButtonStyle.Primary).setDisabled(d),
       new ButtonBuilder().setCustomId('session:export_csv').setLabel('📄 Xuất CSV').setStyle(ButtonStyle.Success).setDisabled(d),
       new ButtonBuilder().setCustomId('session:cancel').setLabel('⛔ Hủy phiên').setStyle(ButtonStyle.Danger).setDisabled(d),
-      new ButtonBuilder().setCustomId('session:close').setLabel('🔴 Đóng phiên').setStyle(ButtonStyle.Danger).setDisabled(d),
+    ),
+    // Row 3: Danger actions (riêng để không vượt quá 5 buttons/row)
+    new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId('attend_close').setLabel('🔴 Đóng phiên').setStyle(ButtonStyle.Danger).setDisabled(d),
     ),
   ];
 }

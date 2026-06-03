@@ -3,9 +3,10 @@ const { EmbedBuilder } = require('discord.js');
 const db  = require('../db.js');
 const log = require('./logger.js');
 const { ketThucPhien, thongBaoHuyHieu, voHieuHoaNutDiemDanh, guiCsvDinhKem } = require('./session.js');
-const { buildSummaryEmbed, FOOTER_DEFAULT } = require('./embeds.js');
+const { buildSummaryEmbed, FOOTER_DEFAULT, buildSessionEmbed, buildSessionActionRow } = require('./embeds.js');
 
 const timers = new Map(); // guildId → { remind15, remind5, autoClose }
+const refreshTimers = new Map(); // sessionId → intervalId
 
 function datHenGioDong(client, guild, session, channelId, ms) {
   huyHenGio(guild.id);
@@ -81,6 +82,7 @@ function datHenGioDong(client, guild, session, channelId, ms) {
         log.warn('TIMER', guild.id, 'autoClose: channel %s không tồn tại, bỏ qua gửi embed', channelId);
       }
 
+      stopAutoRefresh(session.id); // [C3]
       timers.delete(guild.id);
     } catch (e) { log.error('TIMER', guild.id, 'Tự đóng lỗi: %s', e.message); }
   }, ms);
@@ -101,4 +103,71 @@ function coHenGio(guildId) {
   return timers.has(guildId);
 }
 
-module.exports = { datHenGioDong, huyHenGio, coHenGio, xoaHenGio: huyHenGio };
+// ─── Auto-refresh embed (C3) ─────────────────────────────────────────────────────
+function startAutoRefresh(sessionId, channelId, messageId, client) {
+  stopAutoRefresh(sessionId); // Đảm bảo không duplicate
+
+  const intervalId = setInterval(async () => {
+    try {
+      const session = await db.getSessionById(sessionId);
+      if (!session?.is_active || session.id !== sessionId) {
+        stopAutoRefresh(sessionId);
+        return;
+      }
+
+      const attended = await db.getAttendances(sessionId);
+      const guild = await client.guilds.fetch(session.guild_id).catch(() => null);
+      if (!guild) {
+        stopAutoRefresh(sessionId);
+        return;
+      }
+
+      const { embed } = await buildSessionEmbed(guild, session, attended, session.phai_role_ids ?? []);
+      const components = buildSessionActionRow(false);
+
+      const ch = await guild.channels.fetch(channelId).catch(() => null);
+      if (!ch) {
+        stopAutoRefresh(sessionId);
+        return;
+      }
+
+      const msg = await ch.messages.fetch(messageId).catch(() => null);
+      if (!msg) {
+        stopAutoRefresh(sessionId);
+        return;
+      }
+
+      await msg.edit({ embeds: [embed], components }).catch(() => {
+        stopAutoRefresh(sessionId);
+      });
+    } catch (e) {
+      log.error('AUTO_REFRESH', sessionId, 'Lỗi refresh embed: %s', e.message);
+      stopAutoRefresh(sessionId);
+    }
+  }, 60_000); // 60 giây
+
+  refreshTimers.set(sessionId, intervalId);
+  log.info('AUTO_REFRESH', sessionId, 'Đã bật auto-refresh mỗi 60s');
+}
+
+function stopAutoRefresh(sessionId) {
+  const intervalId = refreshTimers.get(sessionId);
+  if (!intervalId) return;
+
+  clearInterval(intervalId);
+  refreshTimers.delete(sessionId);
+  log.info('AUTO_REFRESH', sessionId, 'Đã tắt auto-refresh');
+}
+
+function stopAllAutoRefresh() {
+  for (const [, intervalId] of refreshTimers) {
+    clearInterval(intervalId);
+  }
+  refreshTimers.clear();
+  log.info('AUTO_REFRESH', null, 'Đã tắt tất cả auto-refresh');
+}
+
+module.exports = {
+  datHenGioDong, huyHenGio, coHenGio, xoaHenGio: huyHenGio,
+  startAutoRefresh, stopAutoRefresh, stopAllAutoRefresh, // [BUG-8]
+};

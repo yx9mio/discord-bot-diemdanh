@@ -14,7 +14,9 @@ const {
   replyConfirm,
 } = require('../utils/embeds.js');
 const { ketThucPhien, thongBaoHuyHieu, voHieuHoaNutDiemDanh } = require('../utils/session.js');
-const { xoaHenGio } = require('../utils/timers.js');
+const { xoaHenGio, stopAutoRefresh } = require('../utils/timers.js');
+const { buildAdminMarkModal } = require('../utils/adminMarkModal.js');
+const { requireAdmin } = require('../utils/permissions.js');
 
 const ADMIN_BUTTON_IDS = new Set(['admin:confirm_close', 'admin:cancel_close']);
 
@@ -40,6 +42,7 @@ class AdminSelectHandler extends InteractionHandler {
       if (!session) return interaction.editReply(replyErrEdit('🚫 Phiên đã được đóng trước đó.'));
 
       try {
+        stopAutoRefresh(session.id); // [C3]
         await db.closeSession(session.id);
       } catch (e) {
         log.error('ADMIN_CLOSE', guild.id, 'closeSession thất bại %s: %s', session.id, e.message);
@@ -71,15 +74,12 @@ class AdminSelectHandler extends InteractionHandler {
     }
 
     if (action === 'mark_attendance') {
+      const { ok } = await requireAdmin(interaction, { context: 'điểm danh thay' });
+      if (!ok) return;
       const session = await db.getActiveSession(guild.id);
       if (!session) return interaction.reply({ content: '🚫 Không có phiên điểm danh nào đang mở.', ephemeral: true });
-
-      // [C1] Re-use modal logic from adminMarkModal.js
-      // Để đơn giản, ta sẽ yêu cầu user dùng admin mark modal riêng
-      return interaction.reply({
-        content: '✏️ Để điểm danh thay, hãy click nút Điểm danh trên embed chính hoặc dùng admin mark modal.',
-        ephemeral: true,
-      });
+      // [C1] Mở modal điểm danh thay (dùng chung builder với sessionButton)
+      return interaction.showModal(buildAdminMarkModal());
     }
 
     if (action === 'export_csv') {

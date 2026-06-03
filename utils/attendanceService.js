@@ -7,6 +7,7 @@ const {
   buildSessionActionRow,
   buildAttendConfirmEmbed,
 } = require('./embeds.js');
+const { thongBaoStreakMilestone, STREAK_MILESTONES } = require('./session.js');
 
 /**
  * Shared attendance logic - tái dùng cho cả slash command và SelectMenu
@@ -60,12 +61,15 @@ async function markAttendance({ guild, member, user, status, interaction, sessio
     });
 
     // [C2] Fetch streak from member_stats (best-effort)
-    let streak;
+    let streak = 0;
+    let projectedStreak = 0;
     try {
       const stats = await db.getMemberStats(guild.id, user.id);
       streak = stats?.current_streak ?? 0;
+      projectedStreak = ['tham_gia', 'tre'].includes(status) ? streak + 1 : streak;
     } catch (_) {
       streak = 0;
+      projectedStreak = 0;
     }
 
     // Cập nhật embed chính
@@ -89,12 +93,21 @@ async function markAttendance({ guild, member, user, status, interaction, sessio
       }
     } catch (_) {}
 
-    // Return confirm embed
+    // [C2] Streak milestone notification (projected streak sau phiên hiện tại)
+    if (STREAK_MILESTONES.includes(projectedStreak) && ['tham_gia', 'tre'].includes(status)) {
+      try {
+        const ch = guild.channels.cache.get(session.channel_id);
+        if (ch) await thongBaoStreakMilestone(guild, ch, user.id, projectedStreak);
+      } catch (_) {}
+    }
+
+    // Return confirm embed — hiển thị projected streak khi tham gia/trễ
+    const displayStreak = ['tham_gia', 'tre'].includes(status) ? projectedStreak : streak;
     const confirmEmbed = buildAttendConfirmEmbed(
       member,
       status,
       session.session_name ?? 'Phiên điểm danh',
-      streak
+      displayStreak
     );
     return interaction.editReply(confirmEmbed);
   } finally {

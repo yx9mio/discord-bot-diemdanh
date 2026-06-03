@@ -2,7 +2,9 @@
 'use strict';
 require('dotenv').config();
 const { createClient } = require('@supabase/supabase-js');
+const crypto = require('crypto');
 const log = require('./utils/logger.js');
+const { addBreadcrumb } = require('./utils/sentry.js');
 const { SessionSchema, AttendanceSchema, safeParse } = require('./utils/validate.js');
 
 // ─── Lazy-init Supabase client ─────────────────────────────────────────────────
@@ -100,6 +102,11 @@ async function createSession(payload) {
     .select()
     .single();
   _throwSupabase(error, 'createSession');
+  // [D1]
+  addBreadcrumb('session', 'createSession', {
+    guildId: row.guild_id,
+    sessionName: row.session_name,
+  });
   return _validateSession(data, 'createSession');
 }
 
@@ -143,6 +150,8 @@ async function closeSession(sessionId) {
     .select()
     .single();
   _throwSupabase(error, 'closeSession');
+  // [D1]
+  addBreadcrumb('session', 'closeSession', { sessionId });
   return _validateSession(data, 'closeSession');
 }
 
@@ -234,6 +243,11 @@ async function upsertAttendance(payload) {
     .select()
     .single();
   _throwSupabase(error, 'upsertAttendance');
+  // [D1]
+  addBreadcrumb('attendance', 'upsertAttendance', {
+    userId: payload.user_id,
+    status: payload.status,
+  });
   return data;
 }
 
@@ -659,9 +673,9 @@ async function getAllAttendances(guildId, limit = 5000) {
 // Key: hash(session_id) + hash(user_id) → 2 params cho pg_try_advisory_lock(key1, key2)
 
 function _hashString(str) {
-  // Simple hash: loại bỏ non-alphanumeric, lấy prefix 8 ký tự, parse as base-36
-  const cleaned = str.replace(/[^a-zA-Z0-9]/g, '').slice(0, 8);
-  return parseInt(cleaned, 36);
+  // MD5 → first 4 bytes as unsigned 32-bit int (phân bố đều, collision ~1/4e9)
+  const hash = crypto.createHash('md5').update(str).digest();
+  return hash.readUInt32BE(0);
 }
 
 async function tryAcquireAttendanceLock(sessionId, userId) {

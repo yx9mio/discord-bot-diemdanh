@@ -6,6 +6,7 @@
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const db = require('../db.js');
 const { markAttendance } = require('../utils/attendanceService.js');
+const { addBreadcrumb } = require('../utils/sentry.js');
 
 const SELECT_TO_STATUS = {
   'tham_gia':       'tham_gia',
@@ -25,6 +26,11 @@ class AttendanceSelectHandler extends InteractionHandler {
   }
 
   async run(interaction) {
+    // [D1]
+    addBreadcrumb('interaction', 'attendanceSelect', {
+      customId: interaction.customId,
+      userId: interaction.user?.id,
+    });
     const { guild, member, user, values } = interaction;
     const statusValue = values[0];
     const status = SELECT_TO_STATUS[statusValue];

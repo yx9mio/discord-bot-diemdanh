@@ -4,7 +4,7 @@
 const { Command } = require('@sapphire/framework');
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder } = require('discord.js');
 const db = require('../../../db.js');
-const { datHenGioDong } = require('../../../utils/timers.js');
+const { datHenGioDong, startAutoRefresh } = require('../../../utils/timers.js');
 const { FOOTER_DEFAULT } = require('../../../utils/embeds.js');
 const { fmtTs } = require('../../../utils/format.js');
 
@@ -96,6 +96,9 @@ class BatDauCommand extends Command {
 
     const msg = await interaction.editReply({ embeds: [embed], components: [row] });
     await db.updateSessionMessage(session.id, { messageId: msg.id, channelId: interaction.channel.id });
+
+    // [C3] Auto-refresh embed mỗi 60s
+    startAutoRefresh(session.id, interaction.channel.id, msg.id, client);
 
     if (phut) {
       datHenGioDong(client, guild, session, interaction.channel.id, phut * 60_000);

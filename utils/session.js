@@ -49,22 +49,44 @@ async function ketThucPhien(guild, session, attended) {
   const allStats   = await db.getAllMemberStats(guild.id);
   const statsCache = new Map(allStats.map(s => [s.user_id, s]));
 
-  // Cập nhật stats cho người có mặt
+  // Cập nhật stats cho người có mặt (kèm total_late cho trạng thái 'tre')
   for (const record of attended) {
     if (!PRESENT_STATUSES.has(record.status)) continue;
     const uid   = record.user_id;
-    const stats = statsCache.get(uid) ?? { total_joined: 0, current_streak: 0, best_streak: 0 };
+    const stats = statsCache.get(uid) ?? { total_joined: 0, current_streak: 0, best_streak: 0, total_late: 0, total_excused: 0, total_absent: 0 };
     const total  = (stats.total_joined   ?? 0) + 1;
     const streak = (stats.current_streak ?? 0) + 1;
     const maxS   = Math.max(stats.best_streak ?? 0, streak);
+    const lat    = (stats.total_late     ?? 0) + (record.status === 'tre' ? 1 : 0);
     statsMap.set(uid, { total, streak, max: maxS });
     patches.push({
       user_id:          uid,
       total_joined:     total,
       current_streak:   streak,
       best_streak:      maxS,
+      total_late:       lat,
       last_session_id:  session.id,
     });
+  }
+
+  // Cập nhật total_excused/total_absent cho người không có mặt
+  for (const record of attended) {
+    if (PRESENT_STATUSES.has(record.status)) continue;
+    const uid   = record.user_id;
+    const stats = statsCache.get(uid) ?? { total_excused: 0, total_absent: 0 };
+    if (record.status === 'co_phep') {
+      patches.push({
+        user_id:          uid,
+        total_excused:    (stats.total_excused ?? 0) + 1,
+        last_session_id:  session.id,
+      });
+    } else if (record.status === 'khong_tham_gia') {
+      patches.push({
+        user_id:          uid,
+        total_absent:     (stats.total_absent ?? 0) + 1,
+        last_session_id:  session.id,
+      });
+    }
   }
 
   // Reset streak cho người eligible mà vắng — CHỈ khi eligible có data
@@ -93,6 +115,24 @@ async function ketThucPhien(guild, session, attended) {
  * Phase 1B fix: earnedSet null-safe — filter undefined threshold trước khi Set
  * Optimized: Sử dụng batch queries thay vì sequential calls trong loop
  */
+const STREAK_MILESTONES = [5, 10, 20, 50]; // [C2]
+
+/**
+ * Thông báo milestone streak trong channel phiên (best-effort).
+ */
+async function thongBaoStreakMilestone(guild, channel, userId, streak) {
+  if (!STREAK_MILESTONES.includes(streak)) return;
+  const embed = new EmbedBuilder()
+    .setTitle('🔥 Chuỗi điểm danh mới!')
+    .setColor(0xe67e22)
+    .setDescription(`<@${userId}> đạt **${streak}** phiên liên tiếp!`)
+    .setFooter({ text: FOOTER_DEFAULT })
+    .setTimestamp();
+  await channel.send({ embeds: [embed] }).catch(e => {
+    log.warn('STREAK', guild.id, 'thongBaoStreakMilestone lỗi: %s', e.message);
+  });
+}
+
 async function thongBaoHuyHieu(guild, channel, guildId, sessionId, attended, statsMap) {
   const badges = await getBadgeList(guildId);
   if (!badges.length) return;
@@ -168,4 +208,7 @@ async function guiCsvDinhKem(channel, session, attended) {
   }
 }
 
-module.exports = { ketThucPhien, thongBaoHuyHieu, voHieuHoaNutDiemDanh, getBadgeList, guiCsvDinhKem };
+module.exports = {
+  ketThucPhien, thongBaoHuyHieu, thongBaoStreakMilestone, voHieuHoaNutDiemDanh,
+  getBadgeList, guiCsvDinhKem, STREAK_MILESTONES,
+};

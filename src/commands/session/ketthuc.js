@@ -4,6 +4,7 @@ const { Command } = require('@sapphire/framework');
 const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
 const db = require('../../../db.js');
 const { buildSummaryEmbed, replyWarnEdit } = require('../../../utils/embeds.js');
+const { stopAutoRefresh } = require('../../../utils/timers.js');
 
 class KetThucCommand extends Command {
   constructor(context) {
@@ -27,6 +28,7 @@ class KetThucCommand extends Command {
     const session = await db.getActiveSession(guild.id);
     if (!session) return interaction.editReply(replyWarnEdit('⚠️ Không có phiên nào đang mở.'));
 
+    stopAutoRefresh(session.id); // [C3]
     await db.closeSession(session.id);
     const attended    = await db.getAttendances(session.id);
     const phaiRoleIds = cfg.phai_role_ids ?? [];

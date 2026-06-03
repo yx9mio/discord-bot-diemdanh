@@ -46,31 +46,6 @@ async function scheduleLichCoDinh(client, guildId, lich) {
   const msOpen    = Math.max(msOpenRaw, MIN_RESCHEDULE_MS);
   log.info('SCHEDULER', guildId, '"%s" — mở sau %s phút', lich.session_name, Math.round(msOpen / 60000));
 
-  // Schedule pre-close timer (nếu pre_close_minutes > 0): chạy TRƯỚC giờ mở
-  // để đóng điểm danh sớm. VD: lịch 20:00 với pre_close=30 → timer chạy 19:30.
-  const msPreClose = msToPreCloseFromNow(lich);
-  if (msPreClose != null) {
-    log.info('SCHEDULER', guildId, '"%s" — pre-close (đóng DD) sau %s phút', lich.session_name, Math.round(msPreClose / 60000));
-    const tidPC = setTimeout(async () => {
-      try {
-        const gPC = client.guilds.cache.get(guildId);
-        if (!gPC) return;
-        const sessPC = await db.getActiveSession(guildId);
-        if (!sessPC) {
-          log.info('SCHEDULER', guildId, '"%s" pre-close: chưa có phiên active, bỏ qua', lich.session_name);
-          return;
-        }
-        const chPC = await gPC.channels.fetch(lich.channel_id).catch(() => null);
-        if (!chPC) return;
-        await _dongPhienVaThongKe(gPC, sessPC, chPC, lich, client, false);
-        log.info('SCHEDULER', guildId, '"%s" pre-close: đã đóng phiên sớm %d phút trước giờ mở', lich.session_name, lich.pre_close_minutes);
-      } catch (e) {
-        log.error('SCHEDULER', guildId, '"%s" pre-close lỗi: %s', lich.session_name, e.message);
-      }
-    }, msPreClose);
-    _setTimer(guildId, `${lich.id}_preclose`, tidPC);
-  }
-
   const tidO = setTimeout(async () => {
     try {
       const g = client.guilds.cache.get(guildId);
@@ -84,6 +59,29 @@ async function scheduleLichCoDinh(client, guildId, lich) {
           lich.day_of_week, lich.hour, lich.minute,
           lich.close_day_of_week, lich.close_hour, lich.close_minute
         );
+
+        // [BUG-2] Pre-close timer: đóng DD sớm hơn close_time một khoảng pre_close_minutes
+        // Chỉ schedule khi close_day_of_week được cấu hình (có thời gian đóng cụ thể).
+        if (lich.pre_close_minutes > 0) {
+          const msPreClose = Math.max(msClose - lich.pre_close_minutes * 60_000, 5_000);
+          log.info('SCHEDULER', guildId, '"%s" pre-close sau %s phút', lich.session_name, Math.round(msPreClose / 60000));
+          const tidPC = setTimeout(async () => {
+            try {
+              const gPC = client.guilds.cache.get(guildId);
+              if (!gPC) return;
+              const sessPC = await db.getActiveSession(guildId);
+              if (!sessPC) return;
+              const chPC = await gPC.channels.fetch(lich.channel_id).catch(() => null);
+              if (!chPC) return;
+              await _dongPhienVaThongKe(gPC, sessPC, chPC, lich, client, false);
+              log.info('SCHEDULER', guildId, '"%s" pre-close: đã đóng phiên sớm %d phút', lich.session_name, lich.pre_close_minutes);
+            } catch (e) {
+              log.error('SCHEDULER', guildId, '"%s" pre-close lỗi: %s', lich.session_name, e.message);
+            }
+          }, msPreClose);
+          _setTimer(guildId, `${lich.id}_preclose`, tidPC);
+        }
+
         log.info('SCHEDULER', guildId, '"%s" đóng sau %s phút', lich.session_name, Math.round(msClose / 60000));
         const tidC = setTimeout(async () => {
           const g2 = client.guilds.cache.get(guildId);
@@ -158,6 +156,8 @@ async function runDongLich(client, guildId, lich, silent = false) {
 }
 
 async function _dongPhienVaThongKe(guild, session, ch, lich, client, silent = false) {
+  const { stopAutoRefresh } = require('./timers.js'); // [C3]
+  stopAutoRefresh(session.id);
   try {
     await db.closeSession(session.id);
   } catch (e) {
@@ -279,6 +279,23 @@ async function runLichNgay(client, guildId, lich) {
       v.data.day_of_week, v.data.hour, v.data.minute,
       v.data.close_day_of_week, v.data.close_hour, v.data.close_minute
     );
+
+    // [BUG-2] Pre-close timer: đóng DD sớm hơn close_time
+    if (v.data.pre_close_minutes > 0) {
+      const msPreClose = Math.max(msClose - v.data.pre_close_minutes * 60_000, 5_000);
+      log.info('SCHEDULER', guildId, '"%s" pre-close sau %s phút (manual)', v.data.session_name, Math.round(msPreClose / 60000));
+      const tidPC = setTimeout(async () => {
+        const gPC = client.guilds.cache.get(guildId);
+        if (!gPC) return;
+        const sessPC = await db.getActiveSession(guildId);
+        if (!sessPC) return;
+        const chPC = await gPC.channels.fetch(v.data.channel_id).catch(() => null);
+        if (!chPC) return;
+        await _dongPhienVaThongKe(gPC, sessPC, chPC, v.data, client, false);
+      }, msPreClose);
+      _setTimer(guildId, `${v.data.id}_preclose`, tidPC);
+    }
+
     log.info('SCHEDULER', guildId, '"%s" đóng sau %s phút (manual)', v.data.session_name, Math.round(msClose / 60000));
     const tidC = setTimeout(async () => {
       const g2 = client.guilds.cache.get(guildId);
@@ -290,21 +307,6 @@ async function runLichNgay(client, guildId, lich) {
       await _dongPhienVaThongKe(g2, sess2, ch2, v.data, client, false);
     }, msClose);
     _setTimer(guildId, `${v.data.id}_close`, tidC);
-  }
-  // Pre-close timer cho manual run: nếu pre_close_minutes > 0 và chưa qua mốc
-  const msPreClose = msToPreCloseFromNow(v.data);
-  if (msPreClose != null) {
-    log.info('SCHEDULER', guildId, '"%s" pre-close sau %s phút (manual)', v.data.session_name, Math.round(msPreClose / 60000));
-    const tidPC = setTimeout(async () => {
-      const gPC = client.guilds.cache.get(guildId);
-      if (!gPC) return;
-      const sessPC = await db.getActiveSession(guildId);
-      if (!sessPC) return;
-      const chPC = await gPC.channels.fetch(v.data.channel_id).catch(() => null);
-      if (!chPC) return;
-      await _dongPhienVaThongKe(gPC, sessPC, chPC, v.data, client, false);
-    }, msPreClose);
-    _setTimer(guildId, `${v.data.id}_preclose`, tidPC);
   }
   return result;
 }
