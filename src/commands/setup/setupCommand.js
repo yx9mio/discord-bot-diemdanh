@@ -2,6 +2,7 @@
 // /setup — mở Bảng điều khiển (Smart Home dashboard).
 // Đây là hub duy nhất cho mọi thao tác admin (Commit 3+4+5+6).
 // Q1=b: thay thế toàn bộ admin slash commands.
+// [FIX] module.exports = Class (không phải { Class }) để Sapphire load đúng
 'use strict';
 const { Command } = require('@sapphire/framework');
 const { MessageFlags, SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
@@ -40,4 +41,5 @@ class SetupCommand extends Command {
   }
 }
 
-module.exports = { SetupCommand };
+// [FIX] Export trực tiếp class — Sapphire yêu cầu module.exports = Class
+module.exports = SetupCommand;
