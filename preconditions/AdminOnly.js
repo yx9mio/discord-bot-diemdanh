@@ -10,4 +10,6 @@ class AdminOnlyPrecondition extends Precondition {
     return this.error({ message: '❌ Bạn cần quyền **Quản lý Server** để dùng lệnh này.' });
   }
 }
-module.exports = { AdminOnlyPrecondition };
+
+// [FIX] Export trực tiếp class — Sapphire yêu cầu module.exports = Class
+module.exports = AdminOnlyPrecondition;
