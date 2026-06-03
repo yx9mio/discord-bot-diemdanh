@@ -82,12 +82,11 @@ class SessionButtonHandler extends InteractionHandler {
     }
 
     if (customId === 'admin:mark') {
+      // [BUG-F] Fix: Bỏ db.getActiveSession trước showModal để tránh timeout.
+      // Session check đã có trong adminMarkModal.js:run() sau khi modal submit.
       const { ok } = await requireAdmin(interaction, { context: 'điểm danh thay' });
       if (!ok) return;
-      const session = await db.getActiveSession(guild.id);
-      if (!session) return interaction.reply({ content: '🚫 Không có phiên điểm danh nào đang mở.', flags: MessageFlags.Ephemeral });
-
-      return interaction.showModal(buildAdminMarkModal()); // [C1]
+      return interaction.showModal(buildAdminMarkModal());
     }
 
     if (customId === 'session:cancel') {
