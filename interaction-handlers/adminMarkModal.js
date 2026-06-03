@@ -65,11 +65,7 @@ class AdminMarkModalHandler extends InteractionHandler {
     try {
       targetMember = await guild.members.fetch(targetUserId);
     } catch {
-      try {
-        targetMember = await guild.members.fetch(targetUserId);
-      } catch {
-        return interaction.editReply({ content: `❌ Không tìm thấy user với ID: ${targetUserId}` });
-      }
+      return interaction.editReply({ content: `❌ Không tìm thấy user với ID: ${targetUserId}` });
     }
 
     if (targetMember.user.bot) {

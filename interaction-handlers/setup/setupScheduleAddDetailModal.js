@@ -196,6 +196,9 @@ class SetupScheduleAddDetailModal extends InteractionHandler {
     if (Number.isNaN(date.getTime()) || date.getDate() !== ngay) {
       return interaction.editReply({ content: `❌ Ngày ${ngay}/${thang}/${nam} không hợp lệ.` });
     }
+    if (date.getTime() <= Date.now()) {
+      return interaction.editReply({ content: `❌ Ngày ${ngay}/${thang}/${nam} đã qua. Vui lòng chọn ngày trong tương lai.` });
+    }
     const dayOfWeek = date.getDay();
     const cfg = await db.getGuildConfig(guildId);
     const channelId = cfg?.log_channel_id ?? cfg?.channel_id;

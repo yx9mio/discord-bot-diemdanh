@@ -3,8 +3,8 @@
 // Refactored ở Commit 6: đã bỏ các branch liên quan tới handlers/ cũ
 // (admin:override, upgrade:confirm, setup:dashboard, lichsu:*, setup_help, setup_config).
 'use strict';
-const { MessageFlags } = require('discord.js');
-const { InteractionHandler, InteractionHandlerTypes, AttachmentBuilder } = require('@sapphire/framework');
+const { MessageFlags, AttachmentBuilder } = require('discord.js');
+const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const db  = require('../db.js');
 const log = require('../utils/logger.js');
 const { buildCsvBuffer, buildCsvFilename } = require('../utils/csvHelper.js');
@@ -43,18 +43,18 @@ class SessionButtonHandler extends InteractionHandler {
       if (!session) return interaction.reply({ content: '🚫 Không có phiên điểm danh nào đang mở.', flags: MessageFlags.Ephemeral });
       const attended = await db.getAttendances(session.id);
 
-      // [B2] Parse page từ customId (attend_view:prev:N hoặc attend_view:next:N)
-      let page = 1;
       if (customId.startsWith('attend_view:')) {
+        await interaction.deferUpdate();
         const parts = customId.split(':');
         const action = parts[1];
         const currentPage = parseInt(parts[2], 10) || 1;
-        page = action === 'prev' ? Math.max(1, currentPage - 1) : currentPage + 1;
+        const page = action === 'prev' ? Math.max(1, currentPage - 1) : currentPage + 1;
+        const { embed, components } = await buildSessionEmbed(guild, session, attended, session.phai_role_ids ?? [], false, page);
+        return interaction.editReply({ embeds: [embed], components, flags: MessageFlags.Ephemeral });
       }
 
-      const { embed, components } = await buildSessionEmbed(guild, session, attended, session.phai_role_ids ?? [], false, page);
-      const method = customId.startsWith('attend_view:') ? 'editReply' : 'reply';
-      return interaction[method]({ embeds: [embed], components, flags: MessageFlags.Ephemeral });
+      const { embed, components } = await buildSessionEmbed(guild, session, attended, session.phai_role_ids ?? [], false, 1);
+      return interaction.reply({ embeds: [embed], components, flags: MessageFlags.Ephemeral });
     }
 
     if (customId === 'attend_refresh') {

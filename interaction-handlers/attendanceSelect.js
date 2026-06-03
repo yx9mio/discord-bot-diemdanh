@@ -35,6 +35,9 @@ class AttendanceSelectHandler extends InteractionHandler {
     const { guild, member, user, values } = interaction;
     const statusValue = values[0];
     const status = SELECT_TO_STATUS[statusValue];
+    if (!status) {
+      return interaction.reply({ content: '❌ Trạng thái điểm danh không hợp lệ.', flags: MessageFlags.Ephemeral });
+    }
 
     const session = await db.getActiveSession(guild.id);
     if (!session) {

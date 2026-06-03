@@ -38,7 +38,8 @@ class SetupMemberHandler extends InteractionHandler {
         log.error('SETUP_MEM', guild.id, 'deleteMember thất bại: %s', e.message);
       }
       const members = await db.getMembers(guild.id);
-      const view = MemberView.render({ members, page: 0, guild });
+      const currentPage = _extractPageFromEmbed(interaction);
+      const view = MemberView.render({ members, page: currentPage, guild });
       return interaction.editReply(view);
     }
 
