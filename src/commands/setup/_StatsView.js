@@ -1,8 +1,8 @@
 'use strict';
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const { COLORS, ICONS } = require('../../utils/theme.js');
-const { FOOTER_DEFAULT, buildRichProgressBar, pctEmoji, pctLabel } = require('../../utils/embeds.js');
-const { fmtTs } = require('../../utils/format.js');
+const { COLORS, ICONS } = require('../../../utils/theme.js');
+const { FOOTER_DEFAULT, buildRichProgressBar, pctEmoji, pctLabel } = require('../../../utils/embeds.js');
+const { fmtTs } = require('../../../utils/format.js');
 
 const CUSTOM_ID = {
   TOI:      'setup:stats:toi',
