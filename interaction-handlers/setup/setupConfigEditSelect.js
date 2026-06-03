@@ -17,6 +17,7 @@ const SELECT_IDS = new Set([
 ]);
 
 async function handleSelect(interaction) {
+  // deferUpdate() để giữ ephemeral message, sau đó editReply để xóa component
   await interaction.deferUpdate();
 
   const { ok } = await requireAdmin(interaction, { context: 'chỉnh sửa cấu hình', deferred: true });
@@ -27,13 +28,13 @@ async function handleSelect(interaction) {
   const cfg      = await db.getGuildConfig(guildId);
 
   try {
-    // --- Kênh log ---
+    // --- Kênh thông báo (notification_channel_id) ---
     if (selectId === SELECT_PREFIX + 'channel') {
       const channelId = interaction.values[0];
-      await db.setGuildConfig(guildId, { ...cfg, log_channel_id: channelId });
-      log.info('SETUP_CFG', guildId, 'Cập nhật log_channel_id = %s', channelId);
+      await db.setGuildConfig(guildId, { ...cfg, notification_channel_id: channelId });
+      log.info('SETUP_CFG', guildId, 'Cập nhật notification_channel_id = %s', channelId);
       return interaction.editReply({
-        content: `✅ Đã cập nhật kênh log thành <#${channelId}>.`,
+        content: `✅ Đã cập nhật kênh thông báo thành <#${channelId}>.`,
         components: [],
       });
     }
@@ -81,7 +82,7 @@ async function handleSelect(interaction) {
     return interaction.editReply({ content: '❌ Hành động không xác định.', components: [] });
   } catch (e) {
     log.error('SETUP_CFG', guildId, 'Lỗi cập nhật config qua select: %s', e.message);
-    return interaction.editReply({ content: '❌ Không thể cập nhật, thử lại sau.', components: [] });
+    return interaction.editReply({ content: `❌ Không thể cập nhật: ${e.message}`, components: [] });
   }
 }
 
