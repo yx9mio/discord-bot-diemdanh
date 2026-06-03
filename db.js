@@ -51,6 +51,10 @@ function _validateAttendances(rows, ctx) {
   });
 }
 
+// [BUG-HISTORY] public.sessions thực tế không có created_at, chỉ có started_at.
+// Dùng started_at làm mốc thời gian chuẩn cho lịch sử/attendances để khớp schema hiện tại.
+const SESSION_TIME_COLUMN = 'started_at';
+
 // ─── Guild config ───────────────────────────────────────────────────────────────────────────────────────
 function getGuildConfig(guildId) {
   return getClient()
@@ -71,15 +75,11 @@ async function upsertGuildConfig(config) {
   return data;
 }
 
-// Alias tiện dụng: setGuildConfig(guildId, patch) → upsert patch kèm guild_id.
-// Tránh caller phải tự truyền guild_id (dễ quên).
 function setGuildConfig(guildId, patch) {
   return upsertGuildConfig({ ...patch, guild_id: guildId });
 }
 
 const getConfig = getGuildConfig;
-
-// ─── Sessions ───────────────────────────────────────────────────────────────────────────────────────────
 
 async function createSession(payload) {
   const row = {
@@ -87,7 +87,7 @@ async function createSession(payload) {
     guild_id:            payload.guild_id            ?? payload.guildId,
     session_name:        payload.session_name        ?? payload.sessionName,
     eligible_member_ids: payload.eligible_member_ids ?? payload.eligibleMemberIds ?? null,
-    phai_role_ids:       payload.phai_role_ids       ?? payload.phaiRoleIds ?? null, // [A3] Persist phai_role_ids
+    phai_role_ids:       payload.phai_role_ids       ?? payload.phaiRoleIds ?? null,
     description:         payload.description         ?? null,
     is_active:           payload.is_active           ?? true,
     cancelled:           payload.cancelled           ?? false,
@@ -102,7 +102,6 @@ async function createSession(payload) {
     .select()
     .single();
   _throwSupabase(error, 'createSession');
-  // [D1]
   addBreadcrumb('session', 'createSession', {
     guildId: row.guild_id,
     sessionName: row.session_name,
@@ -150,7 +149,6 @@ async function closeSession(sessionId) {
     .select()
     .single();
   _throwSupabase(error, 'closeSession');
-  // [D1]
   addBreadcrumb('session', 'closeSession', { sessionId });
   return _validateSession(data, 'closeSession');
 }
@@ -211,7 +209,7 @@ async function getRecentSessions(guildId, limit = 10) {
     .select('*')
     .eq('guild_id', guildId)
     .eq('cancelled', false)
-    .order('created_at', { ascending: false })
+    .order(SESSION_TIME_COLUMN, { ascending: false })
     .limit(limit);
   _throwSupabase(error, 'getRecentSessions');
   if (!data) return [];
@@ -225,7 +223,7 @@ async function getAllSessions(guildId) {
     .select('*')
     .eq('guild_id', guildId)
     .eq('cancelled', false)
-    .order('created_at', { ascending: false });
+    .order(SESSION_TIME_COLUMN, { ascending: false });
   _throwSupabase(error, 'getAllSessions');
   if (!data) return [];
   data.forEach(row => _validateSession(row, 'getAllSessions'));
@@ -234,8 +232,6 @@ async function getAllSessions(guildId) {
 
 const getSessionHistory = getRecentSessions;
 
-// ─── Attendances ─────────────────────────────────────────────────────────────────────────────────────────
-
 async function upsertAttendance(payload) {
   const { data, error } = await getClient()
     .from('attendances')
@@ -243,7 +239,6 @@ async function upsertAttendance(payload) {
     .select()
     .single();
   _throwSupabase(error, 'upsertAttendance');
-  // [D1]
   addBreadcrumb('attendance', 'upsertAttendance', {
     userId: payload.user_id,
     status: payload.status,
@@ -276,7 +271,7 @@ async function getAttendances(sessionId) {
 async function getAttendancesByUser(guildId, userId, limit = 50) {
   const { data, error } = await getClient()
     .from('attendances')
-    .select('session_id, status, checked_in_at, sessions!inner(session_name, created_at, cancelled)')
+    .select('session_id, status, checked_in_at, sessions!inner(session_name, started_at, cancelled)')
     .eq('guild_id', guildId)
     .eq('user_id', userId)
     .eq('sessions.cancelled', false)
@@ -296,8 +291,6 @@ async function getAttendanceStats(guildId, userId) {
   _throwSupabase(error, 'getAttendanceStats');
   return data ?? [];
 }
-
-// ─── Member stats ──────────────────────────────────────────────────────────────────────────────────────────
 
 async function getMemberStats(guildId, userId) {
   const { data, error } = await getClient()
@@ -350,8 +343,6 @@ async function batchUpsertMemberStats(guildId, patches) {
   _throwSupabase(error, 'batchUpsertMemberStats');
 }
 
-// ─── Badges ─────────────────────────────────────────────────────────────────────────────────────────────────
-
 async function getBadgeDefinitions(guildId) {
   const { data, error } = await getClient()
     .from('badges')
@@ -395,8 +386,6 @@ function upsertMemberBadge(guildId, userId, threshold) {
   return upsertUserBadge({ guild_id: guildId, user_id: userId, threshold });
 }
 
-// ─── Batch badge operations (parallel execution optimization) ─────────────────────────────────────────
-
 async function getMemberBadgesMulti(guildId, userIds) {
   if (!userIds?.length) return {};
   const { data, error } = await getClient()
@@ -405,8 +394,7 @@ async function getMemberBadgesMulti(guildId, userIds) {
     .eq('guild_id', guildId)
     .in('user_id', userIds);
   _throwSupabase(error, 'getMemberBadgesMulti');
-  
-  // Group by user_id for easy lookup
+
   const result = {};
   for (const row of data ?? []) {
     if (!result[row.user_id]) {
@@ -428,8 +416,6 @@ async function batchUpsertUserBadges(guildId, badges) {
     .upsert(rows, { onConflict: 'guild_id,user_id,threshold' });
   _throwSupabase(error, 'batchUpsertUserBadges');
 }
-
-// ─── Scheduled sessions ──────────────────────────────────────────────────────────────────────────────────
 
 async function getScheduledSessions(guildId) {
   const { data, error } = await getClient()
@@ -539,7 +525,6 @@ function xoaLichCoDinh(_guildId, id) {
   return deleteScheduledSession(id);
 }
 
-// ─── Members (danh sách thành viên được quản lý) ────────────────────────
 async function getMembers(guildId) {
   const { data, error } = await getClient()
     .from('members')
@@ -578,9 +563,6 @@ async function resetStreak(guildId, userId) {
   _throwSupabase(error, 'resetStreak');
 }
 
-// ─── Đảm bảo guild_configs tồn tại (idempotent) ──────────────────────────────────────────────────────
-// INSERT ON CONFLICT DO NOTHING — gọi khi guild join hoặc trước khi đọc config
-// Trả về row hiện tại (mới tạo hoặc đã tồn tại).
 async function ensureGuildConfig(guildId) {
   const { data, error } = await getClient()
     .from('guild_configs')
@@ -591,9 +573,6 @@ async function ensureGuildConfig(guildId) {
   return data;
 }
 
-// ─── Upsert member với aliases hợp nhất (guildId/userId/phongBan/ghiChu) ─────────────────────
-// Wrapper cho addMember — chấp nhận camelCase + chuẩn hoá sang snake_case.
-// Tránh caller phải nhớ cấu trúc cột.
 function upsertMember({ guildId, userId, phongBan = null, ghiChu = null, username = null }) {
   return addMember({
     guild_id:    guildId,
@@ -604,7 +583,6 @@ function upsertMember({ guildId, userId, phongBan = null, ghiChu = null, usernam
   });
 }
 
-// ─── Lấy session kèm filter guild (chống IDOR khi admin dùng chéo server) ─────────────────────
 async function getSessionByIdRaw(sessionId, guildId) {
   const { data, error } = await getClient()
     .from('sessions')
@@ -616,8 +594,6 @@ async function getSessionByIdRaw(sessionId, guildId) {
   return _validateSession(data, 'getSessionByIdRaw');
 }
 
-// ─── Top N members theo total_joined (cho /rank dashboard) ──────────────────────────────────────
-// Lấy từ member_stats, sort desc, limit N.
 async function getTopMembers(guildId, limit = 10) {
   const { data, error } = await getClient()
     .from('member_stats')
@@ -629,8 +605,6 @@ async function getTopMembers(guildId, limit = 10) {
   return data ?? [];
 }
 
-// ─── Thống kê tổng quan cho dashboard server ──────────────────────────────────────────────
-// Trả về: total_sessions (chưa huỷ), total_members, total_attendances, rate_present.
 async function getServerStats(guildId) {
   const [sessionsRes, membersRes, attRes] = await Promise.all([
     getClient().from('sessions').select('id, cancelled', { count: 'exact', head: false })
@@ -655,12 +629,10 @@ async function getServerStats(guildId) {
   };
 }
 
-// ─── Tất cả attendances của guild (cho export CSV / bulk) ──────────────────────────────
-// Trả về tối đa `limit` rows (default 5000), mới nhất trước.
 async function getAllAttendances(guildId, limit = 5000) {
   const { data, error } = await getClient()
     .from('attendances')
-    .select('user_id, username, status, session_id, checked_in_at, marked_by, sessions!inner(session_name, created_at, cancelled)')
+    .select('user_id, username, status, session_id, checked_in_at, marked_by, sessions!inner(session_name, started_at, cancelled)')
     .eq('guild_id', guildId)
     .order('checked_in_at', { ascending: false })
     .limit(limit);
@@ -668,12 +640,7 @@ async function getAllAttendances(guildId, limit = 5000) {
   return _validateAttendances(data ?? [], 'getAllAttendances');
 }
 
-// ─── Distributed Lock (PostgreSQL Advisory Locks) ─────────────────────────────────────────────────
-// [A2] Thay thế in-memory _pendingLock bằng distributed lock
-// Key: hash(session_id) + hash(user_id) → 2 params cho pg_try_advisory_lock(key1, key2)
-
 function _hashString(str) {
-  // MD5 → first 4 bytes as unsigned 32-bit int (phân bố đều, collision ~1/4e9)
   const hash = crypto.createHash('md5').update(str).digest();
   return hash.readUInt32BE(0);
 }
@@ -694,52 +661,33 @@ async function releaseAttendanceLock(sessionId, userId) {
   return data === true;
 }
 
-// ─── Exports ─────────────────────────────────────────────────────────────────────────────────────────────
-
 module.exports = {
-  // Guild config
   getGuildConfig, upsertGuildConfig, setGuildConfig,
   getConfig,
-
-  // Sessions
   createSession, getActiveSession, getSessionById, getSessionByMessageId,
   closeSession, cancelSession,
   updateSessionMessage, updateSessionName, updateSessionEligible,
   getRecentSessions, getAllSessions,
   getSessionHistory,
-
-  // Attendances
   upsertAttendance, upsertAttendanceNoTime,
   getAttendances, getAttendancesByUser, getAttendanceStats,
-
-  // Members
   getMembers, addMember, deleteMember, resetStreak, upsertMember,
   ensureGuildConfig,
   getSessionByIdRaw,
   getTopMembers,
   getServerStats,
   getAllAttendances,
-
-  // Distributed lock
   tryAcquireAttendanceLock,
   releaseAttendanceLock,
-
-  // Member stats
   getMemberStats, getMemberStatsMulti, getAllMemberStats,
   upsertMemberStats, batchUpsertMemberStats,
-
-  // Badges
   getBadgeDefinitions, getUserBadges, upsertUserBadge,
   getBadges,
   getMemberBadges, upsertMemberBadge,
   getMemberBadgesMulti, batchUpsertUserBadges,
-
-  // Scheduled sessions
   getScheduledSessions, getScheduledSessionById,
   createScheduledSession, updateScheduledSession,
   deleteScheduledSession, skipScheduledSession,
-
-  // Aliases
   getLichCoDinh, getLichCoDinhById,
   createLichCoDinh, updateLichCoDinh, deleteLichCoDinh,
   themLichCoDinh, suaLichCoDinh, xoaLichCoDinh,
