@@ -1,7 +1,8 @@
 'use strict';
 const { MessageFlags, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, EmbedBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
-const db = require('../../db.js');
+const sessionService = require('../../services/sessionService.js');
+const configService  = require('../../services/configService.js');
 const log = require('../../utils/logger.js');
 const { requireAdmin } = require('../../utils/permissions.js');
 const { FOOTER_DEFAULT } = require('../../utils/embeds.js');
@@ -58,7 +59,7 @@ async function handleStartSessionModal(interaction) {
   if (!ok) return;
 
   const { guild, client } = interaction;
-  const existing = await db.getActiveSession(guild.id);
+  const existing = await sessionService.getActiveSession(guild.id);
   if (existing) {
     return interaction.editReply({ content: `⚠️ Đang có phiên **${existing.session_name}** đang mở.` });
   }
@@ -69,7 +70,7 @@ async function handleStartSessionModal(interaction) {
   const phut = parseInt(phutVal, 10) || null;
   const phaiRoleId = interaction.fields.getTextInputValue('phai_role').trim() || null;
 
-  const cfg = await db.getGuildConfig(guild.id);
+  const cfg = await configService.getGuildConfig(guild.id);
   const phaiRoleIds = phaiRoleId ? [phaiRoleId] : (cfg.phai_role_ids ?? []);
   let eligibleIds = null;
   if (phaiRoleIds.length) {
@@ -79,7 +80,7 @@ async function handleStartSessionModal(interaction) {
       .map(m => m.id);
   }
 
-  const session = await db.createSession({
+  const session = await sessionService.createSession({
     guildId: guild.id, sessionName, description: moTa, eligibleMemberIds: eligibleIds, phaiRoleIds,
   });
 
@@ -112,7 +113,7 @@ async function handleStartSessionModal(interaction) {
   const msg = await interaction.editReply({ embeds: [embed], components: [row] });
 
   const channel = interaction.channel;
-  await db.updateSessionMessage(session.id, { messageId: msg.id, channelId: channel.id });
+  await sessionService.updateSessionMessage(session.id, { messageId: msg.id, channelId: channel.id });
 
   startAutoRefresh(session.id, channel.id, msg.id, client);
 

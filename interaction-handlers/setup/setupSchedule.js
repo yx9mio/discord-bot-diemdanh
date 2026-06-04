@@ -1,16 +1,9 @@
 // interaction-handlers/setup/setupSchedule.js
-// Handles:
-//   - setup:sch (mở Schedule view trang 0)
-//   - setup:sch:page:next / :prev (phân trang)
-//   - setup:sch:del:<scheduleId> → xác nhận xoà
-//   - setup:sch:del:yes:<scheduleId> / del:no:<scheduleId>
-//   - setup:sch:add:r → openRecurringDetailModal (Button, không qua Modal 1)
-//   - setup:sch:add:o → openOneTimeCombinedModal (Button, không qua Modal 1)
-//   - setup:sch:edit:<id> → modal (routing theo schedule_type)
+// [FIX-DB] Thay db.js → scheduledService
 'use strict';
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
-const db = require('../../db.js');
+const scheduledService = require('../../services/scheduledService.js');
 const log = require('../../utils/logger.js');
 const { ScheduleView } = require('../../src/commands/setup/_ScheduleView.js');
 const { CUSTOM_ID } = ScheduleView;
@@ -30,7 +23,6 @@ class SetupScheduleHandler extends InteractionHandler {
     if (id === 'setup:sch') return this.some();
     if (id === CUSTOM_ID.PAGE_NEXT || id === CUSTOM_ID.PAGE_PREV) return this.some();
     if (id?.startsWith(CUSTOM_ID.DEL_PREFIX) || id?.startsWith(CUSTOM_ID.DEL_CONFIRM) || id?.startsWith(CUSTOM_ID.DEL_CANCEL)) return this.some();
-    // EDIT_PREFIX = 'setup:sch:edit:' — match cả recurring và one-time
     if (id?.startsWith(CUSTOM_ID.EDIT_PREFIX) &&
         !id.startsWith(CUSTOM_ID.DEL_PREFIX) &&
         !id.startsWith(CUSTOM_ID.PAGE_NEXT) &&
@@ -42,23 +34,20 @@ class SetupScheduleHandler extends InteractionHandler {
   async run(interaction) {
     const { customId, guild } = interaction;
 
-    // [BUG-2&3] Thêm lịch hằng tuần → showModal từ Button (an toàn)
     if (customId === CUSTOM_ID.ADD_R) {
       return openRecurringDetailModal(interaction);
     }
 
-    // [BUG-2&3] Thêm lịch một lần → showModal từ Button (an toàn)
     if (customId === CUSTOM_ID.ADD_O) {
       return openOneTimeCombinedModal(interaction);
     }
 
-    // [BUG-1] Sửa lịch → query DB tối đa 1.5s, fallback to recurring
     if (customId.startsWith(CUSTOM_ID.EDIT_PREFIX)) {
       const scheduleId = customId.slice(CUSTOM_ID.EDIT_PREFIX.length);
       let scheduleType = null;
       try {
         const schedule = await Promise.race([
-          db.getScheduledSessionById(scheduleId),
+          scheduledService.getScheduledSessionById(scheduleId),
           new Promise(res => setTimeout(() => res(null), 1500)),
         ]);
         scheduleType = schedule?.schedule_type ?? null;
@@ -67,52 +56,47 @@ class SetupScheduleHandler extends InteractionHandler {
       }
 
       if (scheduleType === 'one_time') {
-        // EDIT one-time: dùng combined modal với customId trỏ về edit:ot:submit handler
         return interaction.showModal(
           _buildOneTimeCombinedModal({ submitCustomId: `setup:sch:edit:ot:submit:${scheduleId}` }),
         );
       }
-      // EDIT recurring (hoặc không xác định): modal không prefill
       return openRecurringDetailModal(interaction, {}, scheduleId);
     }
 
-    // Xác nhận xoà
     if (customId.startsWith(CUSTOM_ID.DEL_CONFIRM)) {
       await interaction.deferUpdate();
       const scheduleId = customId.slice(CUSTOM_ID.DEL_CONFIRM.length);
-      const schedule = await db.getScheduledSessionById(scheduleId);
+      const schedule = await scheduledService.getScheduledSessionById(scheduleId);
       if (!schedule) {
-        const schedules = await db.getScheduledSessions(guild.id);
+        const schedules = await scheduledService.getScheduledSessions(guild.id);
         const curPage = _extractPageFromEmbed(interaction);
         return interaction.editReply(ScheduleView.render({ schedules, page: curPage, guild }));
       }
       try {
-        await db.deleteScheduledSession(scheduleId);
+        await scheduledService.deleteScheduledSession(scheduleId);
         log.info('SETUP_SCH', guild.id, 'Xoà lịch %s', scheduleId);
       } catch (e) {
         log.error('SETUP_SCH', guild.id, 'deleteScheduledSession thất bại: %s', e.message);
       }
-      const schedules = await db.getScheduledSessions(guild.id);
+      const schedules = await scheduledService.getScheduledSessions(guild.id);
       const curPage = _extractPageFromEmbed(interaction);
       return interaction.editReply(ScheduleView.render({ schedules, page: curPage, guild }));
     }
 
-    // Huỷ xoà
     if (customId.startsWith(CUSTOM_ID.DEL_CANCEL)) {
       await interaction.deferUpdate();
-      const schedules = await db.getScheduledSessions(guild.id);
+      const schedules = await scheduledService.getScheduledSessions(guild.id);
       const curPage = _extractPageFromEmbed(interaction);
       return interaction.editReply(ScheduleView.render({ schedules, page: curPage, guild }));
     }
 
     await interaction.deferUpdate();
 
-    // Xoà 1 lịch → hỏi xác nhận
     if (customId.startsWith(CUSTOM_ID.DEL_PREFIX)) {
       const scheduleId = customId.slice(CUSTOM_ID.DEL_PREFIX.length);
-      const schedule = await db.getScheduledSessionById(scheduleId);
+      const schedule = await scheduledService.getScheduledSessionById(scheduleId);
       if (!schedule) {
-        const schedules = await db.getScheduledSessions(guild.id);
+        const schedules = await scheduledService.getScheduledSessions(guild.id);
         const curPage = _extractPageFromEmbed(interaction);
         return interaction.editReply(ScheduleView.render({ schedules, page: curPage, guild }));
       }
@@ -127,8 +111,7 @@ class SetupScheduleHandler extends InteractionHandler {
       return interaction.editReply({ embeds: [embed], components: [row] });
     }
 
-    // Phân trang
-    const schedules = await db.getScheduledSessions(guild.id);
+    const schedules = await scheduledService.getScheduledSessions(guild.id);
     const curPage = _extractPageFromEmbed(interaction);
     const newPage = Math.max(0, curPage + (customId === CUSTOM_ID.PAGE_NEXT ? 1 : -1));
     return interaction.editReply(ScheduleView.render({ schedules, page: newPage, guild }));

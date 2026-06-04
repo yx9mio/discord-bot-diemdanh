@@ -1,7 +1,7 @@
 'use strict';
 const { MessageFlags, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
-const db = require('../../db.js');
+const memberService = require('../../services/memberService.js');
 const log = require('../../utils/logger.js');
 const { requireAdmin } = require('../../utils/permissions.js');
 
@@ -65,7 +65,7 @@ async function handleAddMemberModal(interaction) {
   }
 
   try {
-    await db.upsertMember({
+    await memberService.upsertMember({
       guildId: guild.id,
       userId,
       phongBan,
