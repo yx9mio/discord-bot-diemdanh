@@ -207,7 +207,8 @@ class SessionButtonHandler extends InteractionHandler {
       metrics.sessionClosed(guild.id, { cancelled: false });
       metrics.sessionMemberCount(guild.id, attended.length);
 
-      await channel.send({ embeds: [buildSummaryEmbed(session, attended, guild, session.phai_role_ids ?? [])] }).catch(() => null);
+      // [#5-D1] await buildSummaryEmbed vì đã thành async (resolveDisplayNameAsync)
+      await channel.send({ embeds: [await buildSummaryEmbed(session, attended, guild, session.phai_role_ids ?? [])] }).catch(() => null);
       await thongBaoHuyHieu(guild, channel, guild.id, session.id, attended, statsMap).catch(() => null);
       return interaction.editReply(replyOkEdit('✅ Phiên điểm danh đã được đóng thành công.'));
     }
