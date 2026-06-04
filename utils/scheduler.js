@@ -2,6 +2,7 @@
 // utils/scheduler.js
 const db  = require('../db.js');
 const log = require('./logger.js');
+const metrics = require('./metrics.js'); // [Phase C]
 const { msToNextWeekday, msFromOpenToClose, msToCloseFromNow } = require('./timeCalc.js');
 const { buildAttendanceButtons, buildSummaryEmbed, buildClosedSessionEmbed } = require('./embeds.js');
 const { ketThucPhien, thongBaoHuyHieu, guiCsvDinhKem } = require('./session.js');
@@ -149,6 +150,10 @@ async function _moPhien(guild, lich) {
   const msg = await ch.send({ content: pingContent, embeds: [embed], components: [buttons] });
   await db.updateSessionMessage(session.id, msg.id);
   log.info('SCHEDULER', guild.id, '%s — đã mở phiên: %s', guild.name, lich.session_name);
+
+  // [Phase C] Metric: session mở bởi scheduler
+  metrics.sessionOpened(guild.id, { scheduled: true });
+
   return { ok: true, session };
 }
 
@@ -173,6 +178,10 @@ async function _dongPhienVaThongKe(guild, session, ch, lich, client, silent = fa
 
   const attended = await db.getAttendances(session.id);
   const statsMap = await ketThucPhien(guild, session, attended);
+
+  // [Phase C] Metrics: session đóng + số lượng member
+  metrics.sessionClosed(guild.id, { cancelled: false });
+  metrics.sessionMemberCount(guild.id, attended.length);
 
   try {
     if (session.message_id) {

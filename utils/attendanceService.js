@@ -4,6 +4,7 @@
 const { MessageFlags } = require('discord.js');
 const log = require('../utils/logger.js');
 const db = require('../db.js');
+const metrics = require('../utils/metrics.js'); // [Phase C]
 const {
   buildSessionEmbed,
   buildSessionActionRow,
@@ -70,6 +71,9 @@ async function markAttendance({ guild, member, user, status, interaction, sessio
       marked_by:     user.id,
       checked_in_at: new Date().toISOString(),
     });
+
+    // [Phase C] Metric: điểm danh được ghi nhận
+    metrics.attendanceMarked(guild.id, status, { markedBy: 'self' });
 
     // [C2] Fetch streak from member_stats (best-effort)
     let streak = 0;
