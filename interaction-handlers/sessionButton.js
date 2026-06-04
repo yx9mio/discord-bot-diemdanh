@@ -7,6 +7,7 @@ const { MessageFlags, AttachmentBuilder } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const db  = require('../db.js');
 const log = require('../utils/logger.js');
+const metrics = require('../utils/metrics.js'); // [Phase C]
 const { buildCsvBuffer, buildCsvFilename } = require('../utils/csvHelper.js');
 const { requireAdmin } = require('../utils/permissions.js');
 const {
@@ -122,6 +123,10 @@ class SessionButtonHandler extends InteractionHandler {
         }
         return interaction.editReply(replyErrEdit('❌ Không thể hủy phiên do lỗi DB, thử lại sau.'));
       }
+
+      // [Phase C] Metric: session bị hủy (cancelled)
+      metrics.sessionClosed(guild.id, { cancelled: true });
+
       const attended = await db.getAttendances(session.id);
       await Promise.allSettled([
         interaction.editReply(replyOkEdit('✅ Phiên điểm danh đã được hủy thành công.')),
@@ -197,6 +202,11 @@ class SessionButtonHandler extends InteractionHandler {
         voHieuHoaNutDiemDanh(interaction.client, channel, session, attended),
       ]);
       const statsMap = settledKetThuc.status === 'fulfilled' ? settledKetThuc.value : null;
+
+      // [Phase C] Metrics: session đóng thủ công (normal) + member count
+      metrics.sessionClosed(guild.id, { cancelled: false });
+      metrics.sessionMemberCount(guild.id, attended.length);
+
       await channel.send({ embeds: [buildSummaryEmbed(session, attended, guild, session.phai_role_ids ?? [])] }).catch(() => null);
       await thongBaoHuyHieu(guild, channel, guild.id, session.id, attended, statsMap).catch(() => null);
       return interaction.editReply(replyOkEdit('✅ Phiên điểm danh đã được đóng thành công.'));
