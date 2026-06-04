@@ -2,10 +2,13 @@
 // [Phase B] Renamed from attendanceService.js → attendanceHandler.js
 //           để tránh conflict với services/attendanceService.js (data layer)
 // [A4] Shared attendance logic cho cả slash command và SelectMenu
+// [B-3] Migrate từ db.js → services layer
 'use strict';
 const { MessageFlags } = require('discord.js');
 const log = require('../utils/logger.js');
-const db = require('../db.js');
+const attendanceService = require('../services/attendanceService.js');
+const memberService     = require('../services/memberService.js');
+const configService     = require('../services/configService.js');
 const metrics = require('../utils/metrics.js'); // [Phase C]
 const {
   buildSessionEmbed,
@@ -22,12 +25,12 @@ const { thongBaoStreakMilestone, STREAK_MILESTONES } = require('./session.js');
  * @param {import('discord.js').User} params.user
  * @param {string} params.status - 'tham_gia' | 'tre' | 'khong_tham_gia' | 'co_phep'
  * @param {import('discord.js').BaseInteraction} params.interaction
- * @param {Object} params.session - Session object from db.getActiveSession
+ * @param {Object} params.session - Session object from sessionService.getActiveSession
  * @param {boolean} params.deferred - true nếu interaction đã defer
  */
 async function markAttendance({ guild, member, user, status, interaction, session, deferred = false }) {
   // [A2] Distributed lock thay vì in-memory Map
-  const acquired = await db.tryAcquireAttendanceLock(session.id, user.id);
+  const acquired = await attendanceService.tryAcquireAttendanceLock(session.id, user.id);
   if (!acquired) {
     const msg = '⏳ Đang xử lý yêu cầu của bạn, vui lòng chờ...';
     if (deferred) {
@@ -54,7 +57,7 @@ async function markAttendance({ guild, member, user, status, interaction, sessio
 
     // Validate attendance_role_id từ guild config
     try {
-      const cfg = await db.getGuildConfig(guild.id);
+      const cfg = await configService.getGuildConfig(guild.id);
       if (cfg?.attendance_role_id && !member.roles.cache.has(cfg.attendance_role_id)) {
         const roleName = guild.roles.cache.get(cfg.attendance_role_id)?.name ?? 'role điểm danh';
         return interaction.editReply({ content: `🔒 Bạn cần có role **${roleName}** để điểm danh.` });
@@ -64,7 +67,7 @@ async function markAttendance({ guild, member, user, status, interaction, sessio
     const username = member.nickname ?? user.displayName ?? user.username;
 
     // Upsert attendance với full payload
-    await db.upsertAttendance({
+    await attendanceService.upsertAttendance({
       session_id:    session.id,
       guild_id:      guild.id,
       user_id:       user.id,
@@ -81,7 +84,7 @@ async function markAttendance({ guild, member, user, status, interaction, sessio
     let streak = 0;
     let projectedStreak = 0;
     try {
-      const stats = await db.getMemberStats(guild.id, user.id);
+      const stats = await memberService.getMemberStats(guild.id, user.id);
       streak = stats?.current_streak ?? 0;
       projectedStreak = ['tham_gia', 'tre'].includes(status) ? streak + 1 : streak;
     } catch (_) {
@@ -95,7 +98,7 @@ async function markAttendance({ guild, member, user, status, interaction, sessio
       if (ch && session.message_id) {
         const msg = await ch.messages.fetch(session.message_id).catch(() => null);
         if (msg) {
-          const attended = await db.getAttendances(session.id);
+          const attended = await attendanceService.getAttendances(session.id);
           // [#6] Destructure cả components (pagination) từ buildSessionEmbed
           const { embed, components: pagComponents } = buildSessionEmbed(
             guild,
@@ -139,7 +142,7 @@ async function markAttendance({ guild, member, user, status, interaction, sessio
       await interaction.reply({ content: '❌ Lỗi xử lý điểm danh, vui lòng thử lại.', flags: MessageFlags.Ephemeral }).catch(() => null);
     }
   } finally {
-    await db.releaseAttendanceLock(session.id, user.id);
+    await attendanceService.releaseAttendanceLock(session.id, user.id);
   }
 }
 

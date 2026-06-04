@@ -1,6 +1,9 @@
 'use strict';
 // utils/scheduler.js
-const db  = require('../db.js');
+// [B-3] Migrate từ db.js → services layer
+const sessionService    = require('../services/sessionService.js');
+const attendanceService = require('../services/attendanceService.js');
+const scheduledService  = require('../services/scheduledService.js');
 const log = require('./logger.js');
 const metrics = require('./metrics.js'); // [Phase C]
 const { msToNextWeekday, msFromOpenToClose, msToCloseFromNow } = require('./timeCalc.js');
@@ -63,7 +66,7 @@ async function scheduleLichCoDinh(client, guildId, lich) {
             try {
               const gPC = client.guilds.cache.get(guildId);
               if (!gPC) return;
-              const sessPC = await db.getActiveSession(guildId);
+              const sessPC = await sessionService.getActiveSession(guildId);
               if (!sessPC) return;
               // [BUG-J] Chỉ đóng đúng phiên của lịch này, tránh đóng nhầm phiên khác
               if (sessPC.session_name !== lich.session_name) {
@@ -86,7 +89,7 @@ async function scheduleLichCoDinh(client, guildId, lich) {
           try {
             const g2 = client.guilds.cache.get(guildId);
             if (!g2) return;
-            const sess2 = await db.getActiveSession(guildId);
+            const sess2 = await sessionService.getActiveSession(guildId);
             if (!sess2) return;
             // [BUG-J] Guard close timer cũng kiểm tra session_name
             if (sess2.session_name !== lich.session_name) {
@@ -114,7 +117,7 @@ async function scheduleLichCoDinh(client, guildId, lich) {
 }
 
 async function _moPhien(guild, lich) {
-  const existing = await db.getActiveSession(guild.id);
+  const existing = await sessionService.getActiveSession(guild.id);
   if (existing) {
     log.info('SCHEDULER', guild.id, '%s — bỏ qua mở "%s": đã có phiên đang mở', guild.name, lich.session_name);
     return { ok: false, reason: 'already_open' };
@@ -127,7 +130,7 @@ async function _moPhien(guild, lich) {
   }
 
   // [BUG-I] Thêm phai_role_ids vào createSession — trước đây bị thiếu, làm embed không hiển thị danh sách bắt buộc
-  const session = await db.createSession({
+  const session = await sessionService.createSession({
     guild_id:            guild.id,
     channel_id:          lich.channel_id,
     session_name:        lich.session_name,
@@ -148,7 +151,7 @@ async function _moPhien(guild, lich) {
   const pingContent = lich.allowed_role_id ? `<@&${lich.allowed_role_id}>` : null;
 
   const msg = await ch.send({ content: pingContent, embeds: [embed], components: [buttons] });
-  await db.updateSessionMessage(session.id, msg.id);
+  await sessionService.updateSessionMessage(session.id, msg.id);
   log.info('SCHEDULER', guild.id, '%s — đã mở phiên: %s', guild.name, lich.session_name);
 
   // [Phase C] Metric: session mở bởi scheduler
@@ -160,7 +163,7 @@ async function _moPhien(guild, lich) {
 async function runDongLich(client, guildId, lich, silent = false) {
   const g = client.guilds.cache.get(guildId);
   if (!g) return;
-  const session = await db.getActiveSession(guildId);
+  const session = await sessionService.getActiveSession(guildId);
   if (!session) return;
   const ch = await g.channels.fetch(lich.channel_id).catch(() => null);
   if (!ch) return;
@@ -171,12 +174,12 @@ async function _dongPhienVaThongKe(guild, session, ch, lich, client, silent = fa
   const { stopAutoRefresh } = require('./timers.js');
   stopAutoRefresh(session.id);
   try {
-    await db.closeSession(session.id);
+    await sessionService.closeSession(session.id);
   } catch (e) {
     log.error('SCHEDULER', guild.id, 'closeSession thất bại %s: %s', session.id, e.message);
   }
 
-  const attended = await db.getAttendances(session.id);
+  const attended = await attendanceService.getAttendances(session.id);
   const statsMap = await ketThucPhien(guild, session, attended);
 
   // [Phase C] Metrics: session đóng + số lượng member
@@ -207,7 +210,7 @@ async function _dongPhienVaThongKe(guild, session, ch, lich, client, silent = fa
 }
 
 async function _khoiPhucCloseTimer(client, guild, danhSach) {
-  const session = await db.getActiveSession(guild.id);
+  const session = await sessionService.getActiveSession(guild.id);
   if (!session || session.started_by !== 'scheduler' || session.auto_close_at != null) return;
 
   const lich = danhSach.find(
@@ -244,7 +247,7 @@ async function khoiPhucScheduler(client) {
   let totalSkipped = 0;
   for (const guild of client.guilds.cache.values()) {
     try {
-      const rows = await db.getLichCoDinh(guild.id);
+      const rows = await scheduledService.getLichCoDinh(guild.id);
       let guildCount = 0;
       const validRows = [];
       for (const row of rows) {
@@ -301,7 +304,7 @@ async function runLichNgay(client, guildId, lich) {
       const tidPC = setTimeout(async () => {
         const gPC = client.guilds.cache.get(guildId);
         if (!gPC) return;
-        const sessPC = await db.getActiveSession(guildId);
+        const sessPC = await sessionService.getActiveSession(guildId);
         if (!sessPC) return;
         // [BUG-J] Guard cho manual run cũng
         if (sessPC.session_name !== v.data.session_name) {
@@ -319,7 +322,7 @@ async function runLichNgay(client, guildId, lich) {
     const tidC = setTimeout(async () => {
       const g2 = client.guilds.cache.get(guildId);
       if (!g2) return;
-      const sess2 = await db.getActiveSession(guildId);
+      const sess2 = await sessionService.getActiveSession(guildId);
       if (!sess2) return;
       // [BUG-J] Guard cho manual run cũng
       if (sess2.session_name !== v.data.session_name) {
@@ -338,7 +341,7 @@ async function runLichNgay(client, guildId, lich) {
 async function runDongLichNgay(client, guildId, lich) {
   const g = client.guilds.cache.get(guildId);
   if (!g) throw new Error('Guild không tìm thấy');
-  const session = await db.getActiveSession(guildId);
+  const session = await sessionService.getActiveSession(guildId);
   if (!session) throw new Error('Không có phiên đang mở');
   const ch = await g.channels.fetch(lich.channel_id).catch(() => null);
   if (!ch) throw new Error('Không tìm thấy kênh');
