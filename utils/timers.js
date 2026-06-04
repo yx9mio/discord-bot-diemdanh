@@ -63,6 +63,12 @@ function datHenGioDong(client, guild, session, channelId, ms) {
         await db.closeSession(session.id);
       } catch (e) {
         log.error('TIMER', guild.id, 'closeSession thất bại %s: %s', session.id, e.message);
+        // [#14] Fix: nếu session vẫn active → thực sự thất bại, dừng để tránh double-count
+        const stillActive = await db.getActiveSession(guild.id).catch(() => null);
+        if (stillActive?.id === session.id) {
+          log.error('TIMER', guild.id, 'Session %s vẫn active sau lỗi closeSession, bỏ qua thống kê', session.id);
+          return;
+        }
       }
 
       const attended = await db.getAttendances(session.id);
@@ -122,8 +128,9 @@ function startAutoRefresh(sessionId, channelId, messageId, client) {
         return;
       }
 
-      const { embed } = await buildSessionEmbed(guild, session, attended, session.phai_role_ids ?? []);
-      const components = buildSessionActionRow(false);
+      // [#15] Fix: merge buildSessionActionRow + pagination components
+      const { embed, components: pagComponents } = await buildSessionEmbed(guild, session, attended, session.phai_role_ids ?? []);
+      const components = [...buildSessionActionRow(false), ...pagComponents];
 
       const ch = await guild.channels.fetch(channelId).catch(() => null);
       if (!ch) {

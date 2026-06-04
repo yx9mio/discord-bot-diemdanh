@@ -75,13 +75,13 @@ async function markAttendance({ guild, member, user, status, interaction, sessio
     // [Phase C] Metric: điểm danh được ghi nhận
     metrics.attendanceMarked(guild.id, status, { markedBy: 'self' });
 
-    // [C2] Fetch streak from member_stats (best-effort)
     let streak = 0;
     let projectedStreak = 0;
     try {
+      // [#16] Fix: đọc streak SAU upsert — trigger DB đã cập nhật current_streak, không +1 thủ công
       const stats = await db.getMemberStats(guild.id, user.id);
       streak = stats?.current_streak ?? 0;
-      projectedStreak = ['tham_gia', 'tre'].includes(status) ? streak + 1 : streak;
+      projectedStreak = streak;
     } catch (_) {
       streak = 0;
       projectedStreak = 0;
@@ -94,7 +94,8 @@ async function markAttendance({ guild, member, user, status, interaction, sessio
         const msg = await ch.messages.fetch(session.message_id).catch(() => null);
         if (msg) {
           const attended = await db.getAttendances(session.id);
-          const { embed } = await buildSessionEmbed(
+          // [#13][#15] Fix: merge buildSessionActionRow + pagination components
+          const { embed, components: pagComponents } = await buildSessionEmbed(
             guild,
             session,
             attended,
@@ -102,13 +103,13 @@ async function markAttendance({ guild, member, user, status, interaction, sessio
           );
           await msg.edit({
             embeds: [embed],
-            components: buildSessionActionRow(false),
+            components: [...buildSessionActionRow(false), ...pagComponents],
           }).catch(() => null);
         }
       }
     } catch (_) {}
 
-    // [C2] Streak milestone notification (projected streak sau phiên hiện tại)
+    // [C2] Streak milestone notification
     if (STREAK_MILESTONES.includes(projectedStreak) && ['tham_gia', 'tre'].includes(status)) {
       try {
         const ch = guild.channels.cache.get(session.channel_id);
@@ -116,13 +117,12 @@ async function markAttendance({ guild, member, user, status, interaction, sessio
       } catch (_) {}
     }
 
-    // Return confirm embed — hiển thị projected streak khi tham gia/trễ
-    const displayStreak = ['tham_gia', 'tre'].includes(status) ? projectedStreak : streak;
+    // [#16] Fix: dùng streak trực tiếp từ DB (projectedStreak === streak sau trigger)
     const confirmEmbed = buildAttendConfirmEmbed(
       member,
       status,
       session.session_name ?? 'Phiên điểm danh',
-      displayStreak
+      streak
     );
     return interaction.editReply(confirmEmbed);
   } catch (e) {
