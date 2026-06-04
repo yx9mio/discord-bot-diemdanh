@@ -73,7 +73,8 @@ class AdminMarkModalHandler extends InteractionHandler {
       return interaction.editReply({ content: '❌ Không thể điểm danh cho bot.' });
     }
 
-    const username = targetMember.nickname ?? targetMember.displayName ?? targetMember.user.username;
+    // [#11] Đồng bộ với attendanceService.js: member.nickname ?? user.displayName ?? user.username
+    const username = targetMember.nickname ?? targetMember.user.displayName ?? targetMember.user.username;
 
     try {
       await db.upsertAttendance({
