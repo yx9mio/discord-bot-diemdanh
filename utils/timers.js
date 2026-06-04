@@ -126,8 +126,10 @@ function startAutoRefresh(sessionId, channelId, messageId, client) {
         return;
       }
 
-      const { embed } = await buildSessionEmbed(guild, session, attended, session.phai_role_ids ?? []);
-      const components = buildSessionActionRow(false);
+      // [#6] Destructure đủ cả embed lẫn paginationComponents từ buildSessionEmbed
+      const { embed, components: paginationComponents } = await buildSessionEmbed(guild, session, attended, session.phai_role_ids ?? []);
+      // [#6] Spread đủ: ActionRow chính (disabled=false) + pagination rows
+      const components = [...buildSessionActionRow(false), ...paginationComponents];
 
       const ch = await guild.channels.fetch(channelId).catch(() => null);
       if (!ch) {
