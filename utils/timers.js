@@ -63,6 +63,8 @@ function datHenGioDong(client, guild, session, channelId, ms) {
         await db.closeSession(session.id);
       } catch (e) {
         log.error('TIMER', guild.id, 'closeSession thất bại %s: %s', session.id, e.message);
+        // [#9] Dừng lại khi closeSession lỗi — không tiếp tục xử lý với session chưa đóng được
+        return;
       }
 
       const attended = await db.getAttendances(session.id);
