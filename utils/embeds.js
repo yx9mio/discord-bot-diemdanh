@@ -85,9 +85,6 @@ function replyOkEdit(msg = 'Thành công.') {
   };
 }
 
-/**
- * replyConfirm — Embed xác nhận hành động (Phase 1.2)
- */
 function replyConfirm(description, yesId, noId) {
   return {
     embeds: [
@@ -140,7 +137,6 @@ function formatDuration(seconds) {
 
 function resolveDisplayName(guild, userId, fallback) {
   if (!guild) return fallback;
-  // Guard: members.cache phải tồn tại và có phương thức get
   const cache = guild.members?.cache;
   if (!cache || typeof cache.get !== 'function') return fallback;
   const member = cache.get(userId);
@@ -221,31 +217,19 @@ function buildSessionEmbed(guild, session, attended, phaiRoleIds = [], isClosed 
     return val;
   }
 
-  const absMentions = absentIds.map(id => `<@${id}>`);
+  const absMentions  = absentIds.map(id => `<@${id}>`);
   const declMentions = declined.map(a => `<@${a.user_id}>`);
   const joinedMentions = joined.map(a => `<@${a.user_id}>`);
-  const lateMentions = late.map(a => `<@${a.user_id}>`);
+  const lateMentions   = late.map(a => `<@${a.user_id}>`);
 
   const embed = new EmbedBuilder()
     .setColor(isClosed ? COLORS.RED : COLORS.GREEN)
     .setTitle(`${isClosed ? ICONS.SESSION_CLOSED : ICONS.SESSION_OPEN} ${session.session_name}`)
     .setDescription(isClosed ? `${ICONS.SESSION_CLOSED} **Phiên đã kết thúc**` : statusLine)
     .addFields(
-      {
-        name: `${ICONS.ATTEND_YES} Tham gia (${joined.length})`,
-        value: fieldValue(joinedMentions, '*Chưa có*'),
-        inline: true,
-      },
-      {
-        name: `${ICONS.ATTEND_LATE} Đến trễ (${late.length})`,
-        value: fieldValue(lateMentions, '*Chưa có*'),
-        inline: true,
-      },
-      {
-        name: `${ICONS.ATTEND_NO} Vắng (${declined.length + absentIds.length})`,
-        value: fieldValue([...declMentions, ...absMentions], '*Không có*'),
-        inline: true,
-      },
+      { name: `${ICONS.ATTEND_YES} Tham gia (${joined.length})`,  value: fieldValue(joinedMentions, '*Chưa có*'), inline: true },
+      { name: `${ICONS.ATTEND_LATE} Đến trễ (${late.length})`,    value: fieldValue(lateMentions,   '*Chưa có*'), inline: true },
+      { name: `${ICONS.ATTEND_NO} Vắng (${declined.length + absentIds.length})`, value: fieldValue([...declMentions, ...absMentions], '*Không có*'), inline: true },
     )
     .setFooter({ text: FOOTER_DEFAULT })
     .setTimestamp();
@@ -296,10 +280,19 @@ function buildSessionEmbed(guild, session, attended, phaiRoleIds = [], isClosed 
   return { embed, components };
 }
 
+/**
+ * buildClosedSessionEmbed — trả về { embed, components } nhất quán với buildSessionEmbed.
+ * [#4/#7] Fix: không trả raw embed nữa để caller không phải xử lý 2 dạng khác nhau.
+ * components luôn là [] khi đóng (không có pagination cho closed session).
+ *
+ * @param {Object} session
+ * @param {Array}  attended
+ * @param {import('discord.js').Guild|null} guild
+ * @returns {{ embed: EmbedBuilder, components: [] }}
+ */
 function buildClosedSessionEmbed(session, attended, guild = null) {
-  const result = buildSessionEmbed(guild, session, attended ?? [], [], true);
-  // Closed session không cần pagination, chỉ trả embed
-  return result.embed ?? result;
+  const { embed } = buildSessionEmbed(guild, session, attended ?? [], [], true);
+  return { embed, components: [] };
 }
 
 // ─── Summary Embed ─────────────────────────────────────────────────────────────
@@ -356,8 +349,7 @@ function buildSummaryEmbed(session, attended, guild = null, phaiRoleIds = null) 
 
   if (joined.length > 0) {
     const MAX = 25;
-    const names = joined.slice(0, MAX)
-      .map((a, i) => `\`${String(i + 1).padStart(2)}.\` ${resolveDisplayName(guild, a.user_id, `<@${a.user_id}>`)}`);
+    const names = joined.slice(0, MAX).map((a, i) => `\`${String(i + 1).padStart(2)}.\` ${resolveDisplayName(guild, a.user_id, `<@${a.user_id}>`)}`);
     const extra = joined.length > MAX ? `\n*(+${joined.length - MAX} nữa)*` : '';
     chunkLines(names).slice(0, 1).forEach(chunk =>
       embed.addFields({ name: `${ICONS.ATTEND_YES} Tham Gia (${joined.length})`, value: chunk + extra, inline: true })
@@ -366,8 +358,7 @@ function buildSummaryEmbed(session, attended, guild = null, phaiRoleIds = null) 
 
   if (late.length > 0) {
     const MAX = 25;
-    const names = late.slice(0, MAX)
-      .map((a, i) => `\`${String(i + 1).padStart(2)}.\` ${resolveDisplayName(guild, a.user_id, `<@${a.user_id}>`)}`);
+    const names = late.slice(0, MAX).map((a, i) => `\`${String(i + 1).padStart(2)}.\` ${resolveDisplayName(guild, a.user_id, `<@${a.user_id}>`)}`);
     const extra = late.length > MAX ? `\n*(+${late.length - MAX} nữa)*` : '';
     chunkLines(names).slice(0, 1).forEach(chunk =>
       embed.addFields({ name: `${ICONS.ATTEND_LATE} Đến Trễ (${late.length})`, value: chunk + extra, inline: true })
@@ -379,8 +370,7 @@ function buildSummaryEmbed(session, attended, guild = null, phaiRoleIds = null) 
   );
   if (absentIds2.length > 0) {
     const MAX2   = 25;
-    const names2 = absentIds2.slice(0, MAX2)
-      .map((id, i) => `\`${String(i + 1).padStart(2)}.\` ${resolveDisplayName(guild, id, `<@${id}>`)}`);
+    const names2 = absentIds2.slice(0, MAX2).map((id, i) => `\`${String(i + 1).padStart(2)}.\` ${resolveDisplayName(guild, id, `<@${id}>`)}`);
     const extra2 = absentIds2.length > MAX2 ? `\n*(+${absentIds2.length - MAX2} nữa)*` : '';
     chunkLines(names2).slice(0, 1).forEach(chunk =>
       embed.addFields({ name: `${ICONS.ATTEND_ABSENT} Vắng Mặt (${absentIds2.length})`, value: chunk + extra2, inline: false })
@@ -418,16 +408,16 @@ function buildConfirmRow(yesId, noId, yesLabel = '✅ Xác nhận', noLabel = '�
 // ─── Attendance Confirm Embed ──────────────────────────────────────────────────
 function buildAttendConfirmEmbed(member, status, sessionName, streak) {
   const colorMap = {
-    tham_gia:         COLORS.GREEN,
-    tre:              COLORS.YELLOW,
-    khong_tham_gia:   COLORS.RED,
-    co_phep:          COLORS.BLUE,
+    tham_gia:       COLORS.GREEN,
+    tre:            COLORS.YELLOW,
+    khong_tham_gia: COLORS.RED,
+    co_phep:        COLORS.BLUE,
   };
   const labelMap = {
-    tham_gia:         `${ICONS.ATTEND_YES} Đã điểm danh`,
-    tre:              `${ICONS.ATTEND_LATE} Điểm danh trễ`,
-    khong_tham_gia:   `${ICONS.ATTEND_NO} Đã đăng ký vắng`,
-    co_phep:          `${ICONS.ATTEND_EXCUSE} Nghỉ có phép`,
+    tham_gia:       `${ICONS.ATTEND_YES} Đã điểm danh`,
+    tre:            `${ICONS.ATTEND_LATE} Điểm danh trễ`,
+    khong_tham_gia: `${ICONS.ATTEND_NO} Đã đăng ký vắng`,
+    co_phep:        `${ICONS.ATTEND_EXCUSE} Nghỉ có phép`,
   };
 
   const nowTs = Math.floor(Date.now() / 1000);
@@ -447,7 +437,6 @@ function buildAttendConfirmEmbed(member, status, sessionName, streak) {
   }
 
   if (streak != null && streak > 0 && ['tham_gia', 'tre'].includes(status)) {
-    // [C2] Streak display with special messages
     if (streak >= 3) {
       embed.addFields({ name: `${ICONS.FIRE} Streak`, value: `**${streak}** phiên liên tiếp`, inline: true });
     } else if (streak === 1) {
@@ -490,35 +479,29 @@ function buildAdminOverrideSuccessEmbed(targetUserId, oldStatus, newStatus, admi
 }
 
 // ─── Session Action Rows ───────────────────────────────────────────────────────
+/**
+ * buildSessionActionRow — Tạo toàn bộ 3 ActionRow cho phiên điểm danh.
+ * [#2] Đây là hàm DRY duy nhất — buildAttendanceButtons đã bị xoá.
+ * @param {boolean} disabled — true khi phiên đã đóng (disable tất cả controls)
+ * @returns {ActionRowBuilder[]}
+ */
 function buildSessionActionRow(disabled = false) {
   const d = disabled;
   return [
-    // [B1] Thay 4 button điểm danh bằng StringSelectMenu
+    // Row 1: StringSelectMenu điểm danh
     new ActionRowBuilder().addComponents(
       new StringSelectMenuBuilder()
         .setCustomId('attendance:select')
         .setPlaceholder('👆 Chọn trạng thái điểm danh...')
         .setDisabled(d)
         .addOptions(
-          new StringSelectMenuOptionBuilder()
-            .setLabel('✅ Tham gia')
-            .setDescription('Điểm danh đúng giờ')
-            .setValue('tham_gia'),
-          new StringSelectMenuOptionBuilder()
-            .setLabel('🕐 Đến trễ')
-            .setDescription('Điểm danh muộn')
-            .setValue('tre'),
-          new StringSelectMenuOptionBuilder()
-            .setLabel('❌ Vắng')
-            .setDescription('Báo vắng mặt')
-            .setValue('khong_tham_gia'),
-          new StringSelectMenuOptionBuilder()
-            .setLabel('📋 Có phép')
-            .setDescription('Vắng mặt có lý do')
-            .setValue('co_phep'),
+          new StringSelectMenuOptionBuilder().setLabel('✅ Tham gia').setDescription('Điểm danh đúng giờ').setValue('tham_gia'),
+          new StringSelectMenuOptionBuilder().setLabel('🕐 Đến trễ').setDescription('Điểm danh muộn').setValue('tre'),
+          new StringSelectMenuOptionBuilder().setLabel('❌ Vắng').setDescription('Báo vắng mặt').setValue('khong_tham_gia'),
+          new StringSelectMenuOptionBuilder().setLabel('📋 Có phép').setDescription('Vắng mặt có lý do').setValue('co_phep'),
         )
     ),
-    // Row 2: View & Admin actions (tối đa 5 buttons/row)
+    // Row 2: View & Admin actions
     new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId('attend_view').setLabel('👁 Xem').setStyle(ButtonStyle.Secondary).setDisabled(d),
       new ButtonBuilder().setCustomId('attend_refresh').setLabel('🔄 Làm mới').setStyle(ButtonStyle.Secondary).setDisabled(d),
@@ -526,65 +509,25 @@ function buildSessionActionRow(disabled = false) {
       new ButtonBuilder().setCustomId('session:export_csv').setLabel('📄 Xuất CSV').setStyle(ButtonStyle.Success).setDisabled(d),
       new ButtonBuilder().setCustomId('session:cancel').setLabel('⛔ Hủy phiên').setStyle(ButtonStyle.Danger).setDisabled(d),
     ),
-    // Row 3: Danger actions (riêng để không vượt quá 5 buttons/row)
+    // Row 3: Danger actions
     new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId('attend_close').setLabel('🔴 Đóng phiên').setStyle(ButtonStyle.Danger).setDisabled(d),
     ),
   ];
 }
 
-// [B1] Thay 3 button bằng StringSelectMenu (giống buildSessionActionRow row 1)
-function buildAttendanceButtons(disabled = false) {
-  return new ActionRowBuilder().addComponents(
-    new StringSelectMenuBuilder()
-      .setCustomId('attendance:select')
-      .setPlaceholder('👆 Chọn trạng thái điểm danh...')
-      .setDisabled(disabled)
-      .addOptions(
-        new StringSelectMenuOptionBuilder()
-          .setLabel('✅ Tham gia')
-          .setDescription('Điểm danh đúng giờ')
-          .setValue('tham_gia'),
-        new StringSelectMenuOptionBuilder()
-          .setLabel('🕐 Đến trễ')
-          .setDescription('Điểm danh muộn')
-          .setValue('tre'),
-        new StringSelectMenuOptionBuilder()
-          .setLabel('❌ Vắng')
-          .setDescription('Báo vắng mặt')
-          .setValue('khong_tham_gia'),
-        new StringSelectMenuOptionBuilder()
-          .setLabel('📋 Có phép')
-          .setDescription('Vắng mặt có lý do')
-          .setValue('co_phep'),
-      )
-  );
-}
-
 function buildHistoryNavRow(currentPage, totalPages) {
   return new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId('history:prev')
-      .setLabel('← Trước')
-      .setStyle(ButtonStyle.Secondary)
-      .setDisabled(currentPage <= 1),
-    new ButtonBuilder()
-      .setCustomId('history:page')
-      .setLabel(`Trang ${currentPage}/${totalPages}`)
-      .setStyle(ButtonStyle.Secondary)
-      .setDisabled(true),
-    new ButtonBuilder()
-      .setCustomId('history:next')
-      .setLabel('Tiếp →')
-      .setStyle(ButtonStyle.Secondary)
-      .setDisabled(currentPage >= totalPages),
+    new ButtonBuilder().setCustomId('history:prev').setLabel('← Trước').setStyle(ButtonStyle.Secondary).setDisabled(currentPage <= 1),
+    new ButtonBuilder().setCustomId('history:page').setLabel(`Trang ${currentPage}/${totalPages}`).setStyle(ButtonStyle.Secondary).setDisabled(true),
+    new ButtonBuilder().setCustomId('history:next').setLabel('Tiếp →').setStyle(ButtonStyle.Secondary).setDisabled(currentPage >= totalPages),
   );
 }
 
 function buildConfigEmbed(cfg) {
-  const val = v => (v ? `<@&${v}>` : '*(chưa cài)*');
-  const ch  = v => (v ? `<#${v}>` : '*(chưa cài)*');
-  const num = v => (v != null ? `\`${v}\`` : '*(chưa cài)*');
+  const val  = v => (v ? `<@&${v}>` : '*(chưa cài)*');
+  const ch   = v => (v ? `<#${v}>` : '*(chưa cài)*');
+  const num  = v => (v != null ? `\`${v}\`` : '*(chưa cài)*');
   const bool = v => (v ? '✅ Bật' : '⛔ Tắt');
 
   return {
@@ -593,12 +536,12 @@ function buildConfigEmbed(cfg) {
         .setColor(COLORS.BLUE)
         .setTitle(`${ICONS.GEAR} Cấu hình Server`)
         .addFields(
-          { name: '👮 Role Admin',       value: val(cfg?.admin_role_id),       inline: true },
-          { name: '📋 Role Điểm danh',   value: val(cfg?.attendance_role_id),  inline: true },
+          { name: '👮 Role Admin',        value: val(cfg?.admin_role_id),       inline: true },
+          { name: '📋 Role Điểm danh',    value: val(cfg?.attendance_role_id),  inline: true },
           { name: `${ICONS.SWORD} Role Phái`, value: val(cfg?.phai_role_id),   inline: true },
           { name: '📢 Channel thông báo', value: ch(cfg?.notify_channel_id),   inline: true },
-          { name: '📅 Lịch cố định',     value: num(cfg?.fixed_schedule_count ?? cfg?.schedule_count), inline: true },
-          { name: '🗂 Preset',           value: bool(cfg?.preset_active ?? cfg?.preset_enabled),       inline: true },
+          { name: '📅 Lịch cố định',      value: num(cfg?.fixed_schedule_count ?? cfg?.schedule_count), inline: true },
+          { name: '🗂 Preset',            value: bool(cfg?.preset_active ?? cfg?.preset_enabled),       inline: true },
         )
         .setFooter({ text: FOOTER_DEFAULT })
         .setTimestamp(),
@@ -619,8 +562,8 @@ function buildRankEmbed(rows, guild, topN) {
       .setTimestamp();
   }
   const lines = rows.slice(0, topN ?? 10).map((r, i) => {
-    const medal = medals[i] ?? `\`${String(i + 1).padStart(2)}.\``;
-    const name  = resolveDisplayName(guild, r.user_id, `<@${r.user_id}>`);
+    const medal  = medals[i] ?? `\`${String(i + 1).padStart(2)}.\``;
+    const name   = resolveDisplayName(guild, r.user_id, `<@${r.user_id}>`);
     const joined = r.total_joined ?? r.tham_gia ?? 0;
     const total  = r.total_sessions ?? 0;
     const streak = r.current_streak ?? r.streak ?? 0;
@@ -648,7 +591,7 @@ module.exports = {
   buildAttendConfirmEmbed,
   buildAdminOverrideSuccessEmbed,
   buildSessionActionRow,
-  buildAttendanceButtons,
+  // [#2] buildAttendanceButtons đã bị xoá — dùng buildSessionActionRow(disabled) thay thế
   buildHistoryNavRow,
   buildConfigEmbed,
   buildRankEmbed,
