@@ -12,6 +12,7 @@ const mockUpdateSessionMessage  = vi.fn().mockResolvedValue(null);
 
 // Pre-populate require.cache cho SUT (CJS). Workaround vì vi.mock() không
 // intercept require() trong module CJS khi test file là ESM.
+// [B-4a] Đổi từ ../db.js → từng service module (B-3 đã migrate caller)
 function mockModule(modulePath, exports) {
   const resolved = require.resolve(modulePath);
   require.cache[resolved] = {
@@ -20,13 +21,19 @@ function mockModule(modulePath, exports) {
   };
 }
 
-mockModule('../db.js', {
+mockModule('../services/sessionService.js', {
   getActiveSession:     (...a) => mockGetActiveSession(...a),
   createSession:        (...a) => mockCreateSession(...a),
   closeSession:         (...a) => mockCloseSession(...a),
-  getAttendances:       (...a) => mockGetAttendances(...a),
-  getLichCoDinh:        (...a) => mockGetLichCoDinh(...a),
   updateSessionMessage: (...a) => mockUpdateSessionMessage(...a),
+});
+
+mockModule('../services/attendanceService.js', {
+  getAttendances: (...a) => mockGetAttendances(...a),
+});
+
+mockModule('../services/scheduledService.js', {
+  getLichCoDinh: (...a) => mockGetLichCoDinh(...a),
 });
 
 mockModule('../utils/embeds.js', {
@@ -106,7 +113,7 @@ describe('runLichNgay — _moPhien guards', () => {
 
   it('guard: createSession trả về null → { ok: false, reason: db_error }', async () => {
     mockGetActiveSession.mockResolvedValueOnce(null);
-    mockCreateSession.mockResolvedValueOnce(null); // simulate DB fail
+    mockCreateSession.mockResolvedValueOnce(null);
     const result = await runLichNgay(client, 'g1', validLich);
     expect(result.ok).toBe(false);
     expect(result.reason).toBe('db_error');
@@ -141,13 +148,11 @@ describe('khoiPhucScheduler', () => {
 
   it('bỏ qua lịch corrupt, tiếp tục các lịch hợp lệ khác', async () => {
     mockGetLichCoDinh.mockResolvedValue([
-      { id: 'bad-uuid', day_of_week: 99 }, // invalid
-      validLich,                           // hợp lệ
+      { id: 'bad-uuid', day_of_week: 99 },
+      validLich,
     ]);
     const client = { guilds: { cache: new Map([['g1', { id: 'g1', name: 'G' }]]) } };
     await expect(khoiPhucScheduler(client)).resolves.toBeUndefined();
-    // valid lich phải tạo 1 setTimeout (open timer)
-    // không throw là thành công
   });
 
   it('mỗi guild lỗi DB không làm crash toàn bộ', async () => {
@@ -156,7 +161,6 @@ describe('khoiPhucScheduler', () => {
       ['g1', { id: 'g1', name: 'G1' }],
       ['g2', { id: 'g2', name: 'G2' }],
     ]) } };
-    // Cả 2 guild đều lỗi — nhưng không throw
     await expect(khoiPhucScheduler(client)).resolves.toBeUndefined();
   });
 });

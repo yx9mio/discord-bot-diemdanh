@@ -1,6 +1,8 @@
 'use strict';
+// [B-3] Migrate từ db.js → sessionService + attendanceService
 const { EmbedBuilder } = require('discord.js');
-const db  = require('../db.js');
+const sessionService    = require('../services/sessionService.js');
+const attendanceService = require('../services/attendanceService.js');
 const log = require('./logger.js');
 const { ketThucPhien, thongBaoHuyHieu, voHieuHoaNutDiemDanh, guiCsvDinhKem } = require('./session.js');
 const { buildSummaryEmbed, FOOTER_DEFAULT, buildSessionEmbed, buildSessionActionRow } = require('./embeds.js');
@@ -20,7 +22,7 @@ function datHenGioDong(client, guild, session, channelId, ms) {
       try {
         const ch = await guild.channels.fetch(channelId).catch(() => null);
         if (!ch) return;
-        const cur = await db.getActiveSession(guild.id);
+        const cur = await sessionService.getActiveSession(guild.id);
         if (!cur || cur.id !== session.id) return;
         await ch.send({ embeds: [
           new EmbedBuilder()
@@ -39,7 +41,7 @@ function datHenGioDong(client, guild, session, channelId, ms) {
       try {
         const ch = await guild.channels.fetch(channelId).catch(() => null);
         if (!ch) return;
-        const cur = await db.getActiveSession(guild.id);
+        const cur = await sessionService.getActiveSession(guild.id);
         if (!cur || cur.id !== session.id) return;
         await ch.send({ embeds: [
           new EmbedBuilder()
@@ -54,20 +56,20 @@ function datHenGioDong(client, guild, session, channelId, ms) {
   // ── Tự đóng ──────────────────────────────────────────────────────────────
   t.autoClose = setTimeout(async () => {
     try {
-      const cur = await db.getActiveSession(guild.id);
+      const cur = await sessionService.getActiveSession(guild.id);
       if (!cur || cur.id !== session.id) return;
 
       const ch = await guild.channels.fetch(channelId).catch(() => null);
 
       try {
-        await db.closeSession(session.id);
+        await sessionService.closeSession(session.id);
       } catch (e) {
         log.error('TIMER', guild.id, 'closeSession thất bại %s: %s', session.id, e.message);
         // [#9] Dừng lại khi closeSession lỗi — không tiếp tục xử lý với session chưa đóng được
         return;
       }
 
-      const attended = await db.getAttendances(session.id);
+      const attended = await attendanceService.getAttendances(session.id);
       const statsMap = await ketThucPhien(guild, session, attended);
 
       if (ch) {
@@ -111,13 +113,13 @@ function startAutoRefresh(sessionId, channelId, messageId, client) {
 
   const intervalId = setInterval(async () => {
     try {
-      const session = await db.getSessionById(sessionId);
+      const session = await sessionService.getSessionById(sessionId);
       if (!session?.is_active || session.id !== sessionId) {
         stopAutoRefresh(sessionId);
         return;
       }
 
-      const attended = await db.getAttendances(sessionId);
+      const attended = await attendanceService.getAttendances(sessionId);
       const guild = await client.guilds.fetch(session.guild_id).catch(() => null);
       if (!guild) {
         stopAutoRefresh(sessionId);

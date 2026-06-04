@@ -4,8 +4,9 @@
 //   - badge earnedSet null-safe: filter out undefined threshold trước khi đưa vào Set
 //   - eligible_member_ids === [] (rỗng): streak reset KHÔNG chạy (đúng semantic)
 //     → chỉ reset streak khi eligible có data (admin đã set danh sách)
+// [B-3] Migrate từ db.js → services layer
 const { EmbedBuilder } = require('discord.js');
-const db  = require('../db.js');
+const memberService = require('../services/memberService.js');
 const log = require('./logger.js');
 const { FOOTER_DEFAULT, buildAttendanceButtons, buildClosedSessionEmbed, buildSessionActionRow } = require('./embeds.js');
 
@@ -20,7 +21,7 @@ const DEFAULT_BADGES = [
 
 async function getBadgeList(guildId) {
   try {
-    const rows = await db.getBadges(guildId);
+    const rows = await memberService.getBadges(guildId);
     return rows.length ? rows : DEFAULT_BADGES;
   } catch {
     return DEFAULT_BADGES;
@@ -46,7 +47,7 @@ async function ketThucPhien(guild, session, attended) {
     attended.filter(r => PRESENT_STATUSES.has(r.status)).map(r => r.user_id)
   );
 
-  const allStats   = await db.getAllMemberStats(guild.id);
+  const allStats   = await memberService.getAllMemberStats(guild.id);
   const statsCache = new Map(allStats.map(s => [s.user_id, s]));
 
   // Helper: gộp patch cho 1 user (tránh duplicate entry ghi đè nhau)
@@ -118,7 +119,7 @@ async function ketThucPhien(guild, session, attended) {
   }
 
   const patches = Array.from(patchMap.values());
-  if (patches.length) await db.batchUpsertMemberStats(guild.id, patches);
+  if (patches.length) await memberService.batchUpsertMemberStats(guild.id, patches);
   return statsMap;
 }
 
@@ -156,7 +157,7 @@ async function thongBaoHuyHieu(guild, channel, guildId, sessionId, attended, sta
 
   // Batch fetch all user badges at once instead of sequential calls
   const userIds = Array.from(statsMap.keys());
-  const allUserBadges = await db.getMemberBadgesMulti(guildId, userIds);
+  const allUserBadges = await memberService.getMemberBadgesMulti(guildId, userIds);
 
   for (const [userId, stats] of statsMap.entries()) {
     const existing = allUserBadges[userId] ?? [];
@@ -168,7 +169,7 @@ async function thongBaoHuyHieu(guild, channel, guildId, sessionId, attended, sta
       if (badge.threshold == null) continue; // skip badge definition lỗi
       if (stats.total >= badge.threshold && !earnedSet.has(badge.threshold)) {
         try {
-          await db.upsertMemberBadge(guildId, userId, badge.threshold);
+          await memberService.upsertMemberBadge(guildId, userId, badge.threshold);
           newBadges.push({ userId, badge });
         } catch (e) {
           log.warn('BADGE', guildId, 'upsertMemberBadge lỗi uid=%s th=%d: %s', userId, badge.threshold, e.message);
