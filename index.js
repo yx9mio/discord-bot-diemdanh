@@ -1,16 +1,19 @@
 // index.js — Entry point (Sapphire JS Edition v3)
 // [DATADOG] dd-trace PHẢI là require đầu tiên — trước mọi import khác
 'use strict';
-if (process.env.DD_API_KEY) {
+if (process.env.DD_TRACE_ENABLED !== 'false' && process.env.DD_API_KEY) {
   try {
     require('dd-trace').init({
-      service:     process.env.DD_SERVICE ?? 'discord-bot-diemdanh',
-      env:         process.env.DD_ENV     ?? process.env.NODE_ENV ?? 'production',
-      version:     process.env.npm_package_version,
-      hostname:    'intake.logs.' + (process.env.DD_SITE ?? 'ap1.datadoghq.com'),
-      logInjection: true,
+      service:        process.env.DD_SERVICE ?? 'discord-bot-diemdanh',
+      env:            process.env.DD_ENV     ?? process.env.NODE_ENV ?? 'production',
+      version:        process.env.DD_VERSION ?? process.env.npm_package_version,
+      // [FIX-DD-A] Bỏ hostname — Railway không có DD Agent cục bộ.
+      // dd-trace sẽ graceful fail khi không kết nối được agent (không crash).
+      logInjection:   true,
       runtimeMetrics: true,
-      profiling:   false,
+      profiling:      false,
+      // [FIX-DD-A] Tắt StatsD sink để tránh noise khi không có agent
+      dogstatsd:      { enabled: false },
     });
   } catch (e) {
     console.error('[BOOT] dd-trace init failed (module missing?):', e.message);
