@@ -42,6 +42,19 @@ const FOOTER_DEFAULT = 'Quản Gia · Bot Điểm Danh';
 const AUTHOR_DEFAULT = { name: 'Quản Gia · Bot Điểm Danh' };
 const COLOR_GOLD = COLORS.GOLD;
 
+// ─── [#2] Attendance status options — single source of truth ──────────────────
+/**
+ * ATTENDANCE_OPTIONS — Danh sách trạng thái điểm danh.
+ * Dùng trong buildSessionActionRow và để validate status value ở các file khác.
+ * Thêm/đổi status chỉ cần sửa đây.
+ */
+const ATTENDANCE_OPTIONS = [
+  { label: '✅ Tham gia', description: 'Điểm danh đúng giờ', value: 'tham_gia'        },
+  { label: '🕐 Đến trễ', description: 'Điểm danh muộn',      value: 'tre'             },
+  { label: '❌ Vắng',    description: 'Báo vắng mặt',         value: 'khong_tham_gia' },
+  { label: '📋 Có phép', description: 'Vắng mặt có lý do',   value: 'co_phep'        },
+];
+
 // ─── Error / Success / Confirm reply helpers ──────────────────────────────────
 function replyErr(msg = 'Có lỗi xảy ra. Vui lòng thử lại.') {
   return {
@@ -480,40 +493,57 @@ function buildAdminOverrideSuccessEmbed(targetUserId, oldStatus, newStatus, admi
 
 // ─── Session Action Rows ───────────────────────────────────────────────────────
 /**
- * buildSessionActionRow — Tạo toàn bộ 3 ActionRow cho phiên điểm danh.
- * [#2] Đây là hàm DRY duy nhất — buildAttendanceButtons đã bị xoá.
- * @param {boolean} disabled — true khi phiên đã đóng (disable tất cả controls)
+ * buildSessionActionRow — Tạo ActionRow cho phiên điểm danh.
+ * [#2] Dùng ATTENDANCE_OPTIONS constant thay vì hardcode inline.
+ * [#12] Param isAdmin: khi false chỉ trả Row 1 (select menu) — user thường
+ *       không thấy nút admin trong ephemeral view.
+ *       Default isAdmin=true để không breaking các caller hiện tại.
+ *
+ * @param {boolean} disabled  — true khi phiên đã đóng (disable tất cả controls)
+ * @param {boolean} isAdmin   — false để ẩn Row 2 & 3 (admin buttons)
  * @returns {ActionRowBuilder[]}
  */
-function buildSessionActionRow(disabled = false) {
+function buildSessionActionRow(disabled = false, isAdmin = true) {
   const d = disabled;
-  return [
-    // Row 1: StringSelectMenu điểm danh
+
+  // Row 1: StringSelectMenu điểm danh — hiện cho tất cả
+  const rows = [
     new ActionRowBuilder().addComponents(
       new StringSelectMenuBuilder()
         .setCustomId('attendance:select')
         .setPlaceholder('👆 Chọn trạng thái điểm danh...')
         .setDisabled(d)
+        // [#2] Dùng ATTENDANCE_OPTIONS thay vì hardcode
         .addOptions(
-          new StringSelectMenuOptionBuilder().setLabel('✅ Tham gia').setDescription('Điểm danh đúng giờ').setValue('tham_gia'),
-          new StringSelectMenuOptionBuilder().setLabel('🕐 Đến trễ').setDescription('Điểm danh muộn').setValue('tre'),
-          new StringSelectMenuOptionBuilder().setLabel('❌ Vắng').setDescription('Báo vắng mặt').setValue('khong_tham_gia'),
-          new StringSelectMenuOptionBuilder().setLabel('📋 Có phép').setDescription('Vắng mặt có lý do').setValue('co_phep'),
+          ATTENDANCE_OPTIONS.map(o =>
+            new StringSelectMenuOptionBuilder()
+              .setLabel(o.label)
+              .setDescription(o.description)
+              .setValue(o.value)
+          )
         )
     ),
-    // Row 2: View & Admin actions
-    new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId('attend_view').setLabel('👁 Xem').setStyle(ButtonStyle.Secondary).setDisabled(d),
-      new ButtonBuilder().setCustomId('attend_refresh').setLabel('🔄 Làm mới').setStyle(ButtonStyle.Secondary).setDisabled(d),
-      new ButtonBuilder().setCustomId('admin:mark').setLabel('✏️ Điểm danh thay').setStyle(ButtonStyle.Primary).setDisabled(d),
-      new ButtonBuilder().setCustomId('session:export_csv').setLabel('📄 Xuất CSV').setStyle(ButtonStyle.Success).setDisabled(d),
-      new ButtonBuilder().setCustomId('session:cancel').setLabel('⛔ Hủy phiên').setStyle(ButtonStyle.Danger).setDisabled(d),
-    ),
-    // Row 3: Danger actions
-    new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId('attend_close').setLabel('🔴 Đóng phiên').setStyle(ButtonStyle.Danger).setDisabled(d),
-    ),
   ];
+
+  // [#12] Row 2 & 3: Admin buttons — chỉ hiện khi isAdmin = true
+  if (isAdmin) {
+    rows.push(
+      // Row 2: View & Admin actions
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('attend_view').setLabel('👁 Xem').setStyle(ButtonStyle.Secondary).setDisabled(d),
+        new ButtonBuilder().setCustomId('attend_refresh').setLabel('🔄 Làm mới').setStyle(ButtonStyle.Secondary).setDisabled(d),
+        new ButtonBuilder().setCustomId('admin:mark').setLabel('✏️ Điểm danh thay').setStyle(ButtonStyle.Primary).setDisabled(d),
+        new ButtonBuilder().setCustomId('session:export_csv').setLabel('📄 Xuất CSV').setStyle(ButtonStyle.Success).setDisabled(d),
+        new ButtonBuilder().setCustomId('session:cancel').setLabel('⛔ Hủy phiên').setStyle(ButtonStyle.Danger).setDisabled(d),
+      ),
+      // Row 3: Danger actions
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('attend_close').setLabel('🔴 Đóng phiên').setStyle(ButtonStyle.Danger).setDisabled(d),
+      ),
+    );
+  }
+
+  return rows;
 }
 
 function buildHistoryNavRow(currentPage, totalPages) {
@@ -580,6 +610,8 @@ function buildRankEmbed(rows, guild, topN) {
 
 module.exports = {
   COLORS, ICONS, FOOTER_DEFAULT, AUTHOR_DEFAULT, COLOR_GOLD,
+  // [#2] Export ATTENDANCE_OPTIONS để các file khác validate status value
+  ATTENDANCE_OPTIONS,
   replyErr, replyOk, replyLoading, replyErrEdit, replyWarnEdit, replyOkEdit, replyConfirm,
   pctColor, pctLabel, pctEmoji,
   buildRichProgressBar, buildProgressBar,
@@ -591,7 +623,7 @@ module.exports = {
   buildAttendConfirmEmbed,
   buildAdminOverrideSuccessEmbed,
   buildSessionActionRow,
-  // [#2] buildAttendanceButtons đã bị xoá — dùng buildSessionActionRow(disabled) thay thế
+  // [#2] buildAttendanceButtons đã bị xoá — dùng buildSessionActionRow(disabled, isAdmin) thay thế
   buildHistoryNavRow,
   buildConfigEmbed,
   buildRankEmbed,
