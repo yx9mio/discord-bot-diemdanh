@@ -1,17 +1,16 @@
 'use strict';
 // interaction-handlers/setup/setupConfigEditModal.js
 // ModalSubmit handler: xử lý submit form timezone & reminder
+// [FIX-DB] Thay db.js → configService
 const { MessageFlags } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
-const db  = require('../../db.js');
+const configService = require('../../services/configService.js');
 const log = require('../../utils/logger.js');
 const { requireAdmin } = require('../../utils/permissions.js');
 
 const MODAL_PREFIX = 'setup:cfg:modal:';
 
 async function handleEditModal(interaction) {
-  // [FIX] ModalSubmit không có interaction.message → không thể edit ConfigView gốc trực tiếp.
-  // Dùng deferReply ephemeral + editReply với ConfigView đầy đủ để user thấy kết quả ngay.
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   const { ok } = await requireAdmin(interaction, { context: 'chỉnh sửa cấu hình', deferred: true });
@@ -19,10 +18,9 @@ async function handleEditModal(interaction) {
 
   const guildId = interaction.guildId;
   const modalId = interaction.customId;
-  const cfg     = await db.getGuildConfig(guildId);
+  const cfg     = await configService.getGuildConfig(guildId);
 
   try {
-    // --- Timezone ---
     if (modalId === MODAL_PREFIX + 'tz') {
       const tz = interaction.fields.getTextInputValue('timezone').trim();
       try {
@@ -31,16 +29,13 @@ async function handleEditModal(interaction) {
         return interaction.editReply({ content: `❌ Múi giờ \`${tz}\` không hợp lệ.` });
       }
       const newCfg = { ...cfg, timezone: tz };
-      await db.setGuildConfig(guildId, newCfg);
+      await configService.setGuildConfig(guildId, newCfg);
       log.info('SETUP_CFG', guildId, 'Cập nhật timezone = %s', tz);
-      // [FIX] Thông báo rõ kết quả + nhắc bấm lại để xem ConfigView cập nhật
-      // (ModalSubmit không có message context để edit ConfigView gốc)
       return interaction.editReply({
         content: `✅ Đã cập nhật Timezone thành \`${tz}\`.\n> 🔄 Bấm **Cài đặt chung** để xem bảng cấu hình đã cập nhật.`,
       });
     }
 
-    // --- Nhắc nhở ---
     if (modalId === MODAL_PREFIX + 'reminder') {
       const val     = (interaction.fields.getTextInputValue('reminder_minutes') || '').trim();
       const minutes = parseInt(val, 10);
@@ -52,7 +47,7 @@ async function handleEditModal(interaction) {
         reminder_enabled: minutes > 0,
         reminder_minutes: minutes,
       };
-      await db.setGuildConfig(guildId, newCfg);
+      await configService.setGuildConfig(guildId, newCfg);
       log.info('SETUP_CFG', guildId, 'Cập nhật reminder = %d phút', minutes);
       return interaction.editReply({
         content: (minutes > 0

@@ -1,7 +1,8 @@
 'use strict';
+// [FIX-DB] Thay db.js → memberService
 const { MessageFlags, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
-const db = require('../../db.js');
+const memberService = require('../../services/memberService.js');
 const log = require('../../utils/logger.js');
 const { requireAdmin } = require('../../utils/permissions.js');
 
@@ -11,7 +12,7 @@ async function openEditMemberModal(interaction) {
   const userId = interaction.customId.slice('setup:mem:edit:'.length);
   const guildId = interaction.guildId;
 
-  const members = await db.getMembers(guildId);
+  const members = await memberService.getMembers(guildId);
   const member = members.find(m => m.user_id === userId);
   if (!member) {
     return interaction.reply({ content: '❌ Không tìm thấy thành viên này.', flags: MessageFlags.Ephemeral });
@@ -52,7 +53,7 @@ async function handleEditMemberModal(interaction) {
   const ghiChu = interaction.fields.getTextInputValue('ghi_chu').trim() || null;
 
   try {
-    await db.upsertMember({ guildId, userId, phongBan, ghiChu });
+    await memberService.upsertMember({ guildId, userId, phongBan, ghiChu });
     log.info('SETUP_MEM_EDIT', guildId, 'Sửa thành viên %s: phong_ban=%s, ghi_chu=%s', userId, phongBan, ghiChu);
     return interaction.editReply({ content: `✅ Đã cập nhật thông tin <@${userId}>.` });
   } catch (e) {

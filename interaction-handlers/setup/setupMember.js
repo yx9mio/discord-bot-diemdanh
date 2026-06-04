@@ -1,12 +1,8 @@
 // interaction-handlers/setup/setupMember.js
-// Handles:
-//   - setup:mem (mở Member view trang 0)
-//   - setup:mem:page:next / :prev (phân trang)
-//   - setup:mem:del:<userId> (xoá 1 thành viên)
-//   - setup:mem:add → modal ở Commit 5
+// [FIX-DB] Thay db.js → memberService
 'use strict';
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
-const db = require('../../db.js');
+const memberService = require('../../services/memberService.js');
 const log = require('../../utils/logger.js');
 const { MemberView } = require('../../src/commands/setup/_MemberView.js');
 const { CUSTOM_ID } = MemberView;
@@ -28,27 +24,23 @@ class SetupMemberHandler extends InteractionHandler {
     const { customId, guild } = interaction;
     await interaction.deferUpdate();
 
-    // Xoá 1 thành viên
     if (customId.startsWith(CUSTOM_ID.DEL_PREFIX)) {
       const userId = customId.slice(CUSTOM_ID.DEL_PREFIX.length);
       try {
-        await db.deleteMember(guild.id, userId);
+        await memberService.deleteMember(guild.id, userId);
         log.info('SETUP_MEM', guild.id, 'Xoá thành viên %s qua /setup', userId);
       } catch (e) {
         log.error('SETUP_MEM', guild.id, 'deleteMember thất bại: %s', e.message);
       }
-      const members = await db.getMembers(guild.id);
+      const members = await memberService.getMembers(guild.id);
       const currentPage = _extractPageFromEmbed(interaction);
       const view = MemberView.render({ members, page: currentPage, guild });
       return interaction.editReply(view);
     }
 
-    // Phân trang
-    const members = await db.getMembers(guild.id);
+    const members = await memberService.getMembers(guild.id);
     const curPage = _extractPageFromEmbed(interaction);
-
     const newPage = Math.max(0, curPage + (customId === CUSTOM_ID.PAGE_NEXT ? 1 : -1));
-
     const view = MemberView.render({ members, page: newPage, guild });
     return interaction.editReply(view);
   }

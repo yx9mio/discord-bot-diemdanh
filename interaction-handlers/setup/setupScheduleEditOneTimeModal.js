@@ -1,20 +1,16 @@
 // interaction-handlers/setup/setupScheduleEditOneTimeModal.js
-// Button handler: setup:sch:edit:ot:<scheduleId>
-//   Mở Combined Modal (DD/MM/YYYY + Giờ + Tên) để sửa lịch one-time.
-//
-// Modal submit handler: setup:sch:edit:ot:submit:<scheduleId>
-//   Nhận dữ liệu từ combined modal, cập nhật DB.
+// [FIX-DB] Thay db.js → scheduledService + configService
 'use strict';
 const { MessageFlags, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
-const db = require('../../db.js');
+const scheduledService = require('../../services/scheduledService.js');
+const configService    = require('../../services/configService.js');
 const log = require('../../utils/logger.js');
 const { parseGio, parsePreClose, parsePhutBu } = require('./setupScheduleAddDetailModal.js');
 
 const EDIT_OT_PREFIX        = 'setup:sch:edit:ot:';
 const EDIT_OT_SUBMIT_PREFIX = 'setup:sch:edit:ot:submit:';
 
-// ── Helper: parse DD/MM/YYYY ──────────────────────────────────────────────
 function parseNgayThangNam(str) {
   const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec((str ?? '').trim());
   if (!m) return null;
@@ -25,7 +21,6 @@ function parseNgayThangNam(str) {
   return { ngay, thang, nam };
 }
 
-// ── Button handler: mở combined modal ─────────────────────────────────────
 class SetupScheduleEditOneTimeHandler extends InteractionHandler {
   constructor(ctx, options) {
     super(ctx, { ...options, interactionHandlerType: InteractionHandlerTypes.Button });
@@ -40,25 +35,23 @@ class SetupScheduleEditOneTimeHandler extends InteractionHandler {
   async run(interaction) {
     const scheduleId = interaction.customId.slice(EDIT_OT_PREFIX.length);
 
-    // [FIX] Không await DB trước showModal — nếu DB chậm sẽ timeout 3s.
-    // Prefill là UX nice-to-have; ưu tiên show modal đúng hạn, prefill rỗng nếu cần.
     let prefill = {};
     try {
       const schedule = await Promise.race([
-        db.getScheduledSessionById(scheduleId),
+        scheduledService.getScheduledSessionById(scheduleId),
         new Promise(res => setTimeout(() => res(null), 1500)),
       ]);
       if (schedule) {
         const date = schedule.date ? new Date(schedule.date) : null;
         prefill = {
-          dayOfMonth:     date ? date.getDate()      : undefined,
-          month:          date ? date.getMonth() + 1  : undefined,
-          year:           date ? date.getFullYear()   : undefined,
-          hour:           schedule.hour,
-          minute:         schedule.minute,
-          sessionName:    schedule.session_name,
+          dayOfMonth:      date ? date.getDate()      : undefined,
+          month:           date ? date.getMonth() + 1  : undefined,
+          year:            date ? date.getFullYear()   : undefined,
+          hour:            schedule.hour,
+          minute:          schedule.minute,
+          sessionName:     schedule.session_name,
           preCloseMinutes: schedule.pre_close_minutes,
-          closeHour:      schedule.close_hour,
+          closeHour:       schedule.close_hour,
         };
       }
     } catch (e) {
@@ -69,7 +62,6 @@ class SetupScheduleEditOneTimeHandler extends InteractionHandler {
   }
 }
 
-// ── Modal submit handler: lưu DB ──────────────────────────────────────────
 class SetupScheduleEditOneTimeModalHandler extends InteractionHandler {
   constructor(ctx, options) {
     super(ctx, { ...options, interactionHandlerType: InteractionHandlerTypes.ModalSubmit });
@@ -107,8 +99,7 @@ class SetupScheduleEditOneTimeModalHandler extends InteractionHandler {
       return interaction.editReply({ content: `❌ Ngày ${ngay}/${thang}/${nam} đã qua. Vui lòng chọn ngày trong tương lai.` });
     }
 
-    // [FIX] Dùng đúng column notification_channel_id thay vì log_channel_id / channel_id
-    const cfg = await db.getGuildConfig(guildId);
+    const cfg = await configService.getGuildConfig(guildId);
     const channelId = cfg?.notification_channel_id ?? null;
     if (!channelId) {
       return interaction.editReply({ content: '❌ Chưa cấu hình **Kênh thông báo**. Vào `/setup` → Cài đặt chung → Kênh thông báo.' });
@@ -117,7 +108,7 @@ class SetupScheduleEditOneTimeModalHandler extends InteractionHandler {
     const dayOfWeek = date.getDay();
     const close = parsePhutBu(gio.hour, gio.minute, phutBu, dayOfWeek);
     try {
-      await db.suaLichCoDinh(guildId, scheduleId, {
+      await scheduledService.suaLichCoDinh(guildId, scheduleId, {
         dayOfWeek,
         hour: gio.hour,
         minute: gio.minute,
@@ -139,7 +130,6 @@ class SetupScheduleEditOneTimeModalHandler extends InteractionHandler {
   }
 }
 
-// ── Internal: build combined modal với customId chứa scheduleId ──────────
 function _buildCombinedModal(scheduleId, prefill = {}) {
   const currentYear = new Date().getFullYear();
   const modal = new ModalBuilder()

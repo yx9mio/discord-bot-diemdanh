@@ -1,7 +1,7 @@
 'use strict';
 const { MessageFlags } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
-const db = require('../../db.js');
+const memberService = require('../../services/memberService.js');
 const log = require('../../utils/logger.js');
 const { requireAdmin } = require('../../utils/permissions.js');
 
@@ -23,9 +23,6 @@ class SetupResetStreakHandler extends InteractionHandler {
   async run(interaction) {
     const { customId, guild } = interaction;
 
-    // ===== Exact-match branches first (tránh prefix collision) =====
-
-    // Reset tất cả — prompt
     if (customId === 'setup:mem:reset:all') {
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       const { ok } = await requireAdmin(interaction, { context: 'reset tất cả streak', deferred: true });
@@ -48,16 +45,15 @@ class SetupResetStreakHandler extends InteractionHandler {
       });
     }
 
-    // Xác nhận reset tất cả
     if (customId === 'setup:mem:reset:all:confirm') {
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       const { ok } = await requireAdmin(interaction, { context: 'reset tất cả streak', deferred: true });
       if (!ok) return;
 
       try {
-        const members = await db.getMembers(guild.id);
+        const members = await memberService.getMembers(guild.id);
         for (const m of members) {
-          await db.resetStreak(guild.id, m.user_id).catch(() => null);
+          await memberService.resetStreak(guild.id, m.user_id).catch(() => null);
         }
         log.info('SETUP_RESET_STREAK_ALL', guild.id, 'Reset streak tất cả %d thành viên', members.length);
         return interaction.editReply({ content: `✅ Đã reset streak của **${members.length}** thành viên về 0.` });
@@ -67,15 +63,11 @@ class SetupResetStreakHandler extends InteractionHandler {
       }
     }
 
-    // Hủy reset tất cả
     if (customId === 'setup:mem:reset:all:cancel') {
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       return interaction.editReply({ content: '↩️ Đã hủy.' });
     }
 
-    // ===== Prefix-based branches =====
-
-    // Reset 1 thành viên — prompt
     if (customId.startsWith(RESET_PREFIX) && !customId.startsWith(CONFIRM_PREFIX) && !customId.startsWith(CANCEL_PREFIX)) {
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       const { ok } = await requireAdmin(interaction, { context: 'reset streak', deferred: true });
@@ -102,7 +94,6 @@ class SetupResetStreakHandler extends InteractionHandler {
       });
     }
 
-    // Xác nhận reset 1 người
     if (customId.startsWith(CONFIRM_PREFIX)) {
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       const { ok } = await requireAdmin(interaction, { context: 'reset streak', deferred: true });
@@ -110,7 +101,7 @@ class SetupResetStreakHandler extends InteractionHandler {
 
       const userId = customId.slice(CONFIRM_PREFIX.length);
       try {
-        await db.resetStreak(guild.id, userId);
+        await memberService.resetStreak(guild.id, userId);
         log.info('SETUP_RESET_STREAK', guild.id, 'Reset streak %s', userId);
         return interaction.editReply({ content: `✅ Đã reset streak của <@${userId}> về 0.` });
       } catch (e) {
@@ -119,7 +110,6 @@ class SetupResetStreakHandler extends InteractionHandler {
       }
     }
 
-    // Hủy reset 1 người
     if (customId.startsWith(CANCEL_PREFIX)) {
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       return interaction.editReply({ content: '↩️ Đã hủy.' });
