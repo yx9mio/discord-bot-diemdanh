@@ -94,15 +94,19 @@ async function markAttendance({ guild, member, user, status, interaction, sessio
         const msg = await ch.messages.fetch(session.message_id).catch(() => null);
         if (msg) {
           const attended = await db.getAttendances(session.id);
-          const { embed } = await buildSessionEmbed(
+          // [#6] Destructure cả components (pagination) từ buildSessionEmbed
+          const { embed, components: pagComponents } = buildSessionEmbed(
             guild,
             session,
             attended,
             session.phai_role_ids ?? []
           );
+          // [#6] Merge admin rows + pagination rows; tổng ≤ 5 rows (Discord limit)
+          const adminRows = buildSessionActionRow(false);
+          const allComponents = [...adminRows, ...pagComponents].slice(0, 5);
           await msg.edit({
             embeds: [embed],
-            components: buildSessionActionRow(false),
+            components: allComponents,
           }).catch(() => null);
         }
       }
