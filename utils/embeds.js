@@ -297,9 +297,8 @@ function buildSessionEmbed(guild, session, attended, phaiRoleIds = [], isClosed 
 }
 
 function buildClosedSessionEmbed(session, attended, guild = null) {
-  const result = buildSessionEmbed(guild, session, attended ?? [], [], true);
-  // Closed session không cần pagination, chỉ trả embed
-  return result.embed ?? result;
+  const { embed } = buildSessionEmbed(guild, session, attended ?? [], [], true);
+  return embed;
 }
 
 // ─── Summary Embed ─────────────────────────────────────────────────────────────
@@ -490,50 +489,77 @@ function buildAdminOverrideSuccessEmbed(targetUserId, oldStatus, newStatus, admi
 }
 
 // ─── Session Action Rows ───────────────────────────────────────────────────────
-function buildSessionActionRow(disabled = false) {
+/**
+ * Build các action rows cho session embed.
+ *
+ * [#12] Fix: thêm param `isAdmin` để filter admin-only buttons.
+ *   - isAdmin=true  → hiển thị đầy đủ (admin: mark, export, cancel, close)
+ *   - isAdmin=false → chỉ hiển thị: select menu + View + Refresh
+ *   - disabled=true → disable tất cả (dùng khi đóng phiên)
+ *
+ * @param {boolean} disabled - Disable tất cả components
+ * @param {boolean} isAdmin  - Hiển thị admin-only buttons (default: false)
+ * @returns {ActionRowBuilder[]} Mảng rows (1–3 tùy isAdmin)
+ */
+function buildSessionActionRow(disabled = false, isAdmin = false) {
   const d = disabled;
-  return [
-    // [B1] Thay 4 button điểm danh bằng StringSelectMenu
-    new ActionRowBuilder().addComponents(
-      new StringSelectMenuBuilder()
-        .setCustomId('attendance:select')
-        .setPlaceholder('👆 Chọn trạng thái điểm danh...')
-        .setDisabled(d)
-        .addOptions(
-          new StringSelectMenuOptionBuilder()
-            .setLabel('✅ Tham gia')
-            .setDescription('Điểm danh đúng giờ')
-            .setValue('tham_gia'),
-          new StringSelectMenuOptionBuilder()
-            .setLabel('🕐 Đến trễ')
-            .setDescription('Điểm danh muộn')
-            .setValue('tre'),
-          new StringSelectMenuOptionBuilder()
-            .setLabel('❌ Vắng')
-            .setDescription('Báo vắng mặt')
-            .setValue('khong_tham_gia'),
-          new StringSelectMenuOptionBuilder()
-            .setLabel('📋 Có phép')
-            .setDescription('Vắng mặt có lý do')
-            .setValue('co_phep'),
-        )
-    ),
-    // Row 2: View & Admin actions (tối đa 5 buttons/row)
-    new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId('attend_view').setLabel('👁 Xem').setStyle(ButtonStyle.Secondary).setDisabled(d),
-      new ButtonBuilder().setCustomId('attend_refresh').setLabel('🔄 Làm mới').setStyle(ButtonStyle.Secondary).setDisabled(d),
-      new ButtonBuilder().setCustomId('admin:mark').setLabel('✏️ Điểm danh thay').setStyle(ButtonStyle.Primary).setDisabled(d),
-      new ButtonBuilder().setCustomId('session:export_csv').setLabel('📄 Xuất CSV').setStyle(ButtonStyle.Success).setDisabled(d),
-      new ButtonBuilder().setCustomId('session:cancel').setLabel('⛔ Hủy phiên').setStyle(ButtonStyle.Danger).setDisabled(d),
-    ),
-    // Row 3: Danger actions (riêng để không vượt quá 5 buttons/row)
-    new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId('attend_close').setLabel('🔴 Đóng phiên').setStyle(ButtonStyle.Danger).setDisabled(d),
-    ),
-  ];
+
+  // Row 1: Select menu điểm danh (tất cả user)
+  const selectRow = new ActionRowBuilder().addComponents(
+    new StringSelectMenuBuilder()
+      .setCustomId('attendance:select')
+      .setPlaceholder('👆 Chọn trạng thái điểm danh...')
+      .setDisabled(d)
+      .addOptions(
+        new StringSelectMenuOptionBuilder()
+          .setLabel('✅ Tham gia')
+          .setDescription('Điểm danh đúng giờ')
+          .setValue('tham_gia'),
+        new StringSelectMenuOptionBuilder()
+          .setLabel('🕐 Đến trễ')
+          .setDescription('Điểm danh muộn')
+          .setValue('tre'),
+        new StringSelectMenuOptionBuilder()
+          .setLabel('❌ Vắng')
+          .setDescription('Báo vắng mặt')
+          .setValue('khong_tham_gia'),
+        new StringSelectMenuOptionBuilder()
+          .setLabel('📋 Có phép')
+          .setDescription('Vắng mặt có lý do')
+          .setValue('co_phep'),
+      )
+  );
+
+  // Row 2 (view only): View + Refresh — hiển thị cho tất cả user
+  const viewRow = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId('attend_view').setLabel('👁 Xem').setStyle(ButtonStyle.Secondary).setDisabled(d),
+    new ButtonBuilder().setCustomId('attend_refresh').setLabel('🔄 Làm mới').setStyle(ButtonStyle.Secondary).setDisabled(d),
+  );
+
+  if (!isAdmin) {
+    // User thường: chỉ select menu + view/refresh
+    return [selectRow, viewRow];
+  }
+
+  // Row 2 (admin): thêm admin buttons vào cùng row với view/refresh
+  const adminViewRow = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId('attend_view').setLabel('👁 Xem').setStyle(ButtonStyle.Secondary).setDisabled(d),
+    new ButtonBuilder().setCustomId('attend_refresh').setLabel('🔄 Làm mới').setStyle(ButtonStyle.Secondary).setDisabled(d),
+    new ButtonBuilder().setCustomId('admin:mark').setLabel('✏️ Điểm danh thay').setStyle(ButtonStyle.Primary).setDisabled(d),
+    new ButtonBuilder().setCustomId('session:export_csv').setLabel('📄 Xuất CSV').setStyle(ButtonStyle.Success).setDisabled(d),
+    new ButtonBuilder().setCustomId('session:cancel').setLabel('⛔ Hủy phiên').setStyle(ButtonStyle.Danger).setDisabled(d),
+  );
+
+  // Row 3 (admin only): Đóng phiên
+  const closeRow = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId('attend_close').setLabel('🔴 Đóng phiên').setStyle(ButtonStyle.Danger).setDisabled(d),
+  );
+
+  return [selectRow, adminViewRow, closeRow];
 }
 
-// [B1] Thay 3 button bằng StringSelectMenu (giống buildSessionActionRow row 1)
+// [B1] buildAttendanceButtons — deprecated, delegate sang buildSessionActionRow row 1
+// Giữ lại để không break caller cũ trong thời gian chuyển tiếp
 function buildAttendanceButtons(disabled = false) {
   return new ActionRowBuilder().addComponents(
     new StringSelectMenuBuilder()

@@ -7,7 +7,7 @@
 const { EmbedBuilder } = require('discord.js');
 const db  = require('../db.js');
 const log = require('./logger.js');
-const { FOOTER_DEFAULT, buildAttendanceButtons, buildClosedSessionEmbed } = require('./embeds.js');
+const { FOOTER_DEFAULT, buildClosedSessionEmbed, buildSessionActionRow } = require('./embeds.js');
 
 const DEFAULT_BADGES = [
   { threshold:   5, emoji: '🌱', label: 'Lính Mới'     },
@@ -189,15 +189,20 @@ async function thongBaoHuyHieu(guild, channel, guildId, sessionId, attended, sta
   await channel.send({ embeds: [embed] });
 }
 
-/** Vô hiệu hoá nút điểm danh, cập nhật embed → đã đóng. */
+/**
+ * Vô hiệu hoá nút điểm danh, cập nhật embed → đã đóng.
+ * [#10] Fix: dùng buildSessionActionRow(true) thay vì buildAttendanceButtons(true)
+ *       để disabled đúng tất cả rows (select menu + action buttons).
+ */
 async function voHieuHoaNutDiemDanh(client, channel, session, attended = []) {
   if (!session.message_id) return;
   try {
     const msg = await channel.messages.fetch(session.message_id);
     if (!msg) return;
-    const closedEmbed     = await buildClosedSessionEmbed(session, attended, channel.guild ?? null);
-    const disabledButtons = buildAttendanceButtons(true);
-    await msg.edit({ embeds: [closedEmbed], components: [disabledButtons] });
+    const closedEmbed  = await buildClosedSessionEmbed(session, attended, channel.guild ?? null);
+    // [#10] Fix: buildSessionActionRow(true) trả mảng rows đầy đủ, tất cả disabled
+    const disabledRows = buildSessionActionRow(true);
+    await msg.edit({ embeds: [closedEmbed], components: disabledRows });
   } catch (e) {
     log.warn('SESSION', session.guild_id, 'Không vô hiệu hoá được nút: %s', e.message);
   }
