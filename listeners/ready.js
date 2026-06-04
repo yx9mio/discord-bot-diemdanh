@@ -3,8 +3,8 @@
 // Phase 2 fix: restore active-session timers khi bot restart
 // + khởi động reminder scheduler
 const { Listener, Events } = require('@sapphire/framework');
-const { getActiveSession, closeSession, getAttendances } = require('../services/sessionService.js'); // [B-5] migrate db.js → services
-const { getAttendances: getAtts } = require('../services/attendanceService.js'); // [B-5]
+const { getActiveSession, closeSession } = require('../services/sessionService.js'); // [B-5] migrate db.js → services
+const { getAttendances } = require('../services/attendanceService.js'); // [B-5] migrate db.js → services
 const log = require('../utils/logger.js');
 const { datHenGioDong, startAutoRefresh } = require('../utils/timers.js');
 const { startReminderScheduler } = require('../services/reminderScheduler.js');
@@ -44,7 +44,7 @@ class ReadyListener extends Listener {
               const { stopAutoRefresh } = require('../utils/timers.js');
               stopAutoRefresh(session.id);
               await closeSession(session.id);
-              const attended = await getAtts(session.id);
+              const attended = await getAttendances(session.id);
               const ch2 = session.channel_id
                 ? await guild.channels.fetch(session.channel_id).catch(() => null)
                 : null;
