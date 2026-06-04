@@ -7,6 +7,7 @@ const {
 } = require('@sapphire/framework');
 const db = require('../db.js');
 const log = require('../utils/logger.js');
+const metrics = require('../utils/metrics.js'); // [Phase C]
 const { requireAdmin } = require('../utils/permissions.js');
 const { addBreadcrumb } = require('../utils/sentry.js');
 
@@ -88,6 +89,9 @@ class AdminMarkModalHandler extends InteractionHandler {
       log.error('ADMIN_MARK', guild.id, 'upsertAttendance thất bại: %s', e.message);
       return interaction.editReply({ content: '❌ Không thể lưu điểm danh, thử lại sau.' });
     }
+
+    // [Phase C] Metric: điểm danh được ghi bởi admin
+    metrics.attendanceMarked(guild.id, status, { markedBy: 'admin' });
 
     log.info('ADMIN_MARK', guild.id, '%s điểm danh thay cho %s: %s', user.tag, targetUserId, status);
     return interaction.editReply({
