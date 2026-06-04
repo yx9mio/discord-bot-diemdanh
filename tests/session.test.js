@@ -11,9 +11,10 @@ const mockBatchUpsertUserBadges  = vi.fn().mockResolvedValue(null);
 const mockUpsertMemberBadge      = vi.fn().mockResolvedValue(null);
 const mockGetBadges              = vi.fn().mockResolvedValue([]);
 
-// Pre-populate require.cache cho db + embeds (CJS). Workaround vì vi.mock()
+// Pre-populate require.cache cho deps (CJS). Workaround vì vi.mock()
 // không intercept require() trong module CJS khi test file là ESM.
 // KHÔNG mock session.js — đây là file đang được test.
+// [B-4a] Đổi từ ../db.js → ../services/memberService (B-3 đã migrate caller)
 function mockModule(modulePath, exports) {
   const resolved = require.resolve(modulePath);
   require.cache[resolved] = {
@@ -22,14 +23,14 @@ function mockModule(modulePath, exports) {
   };
 }
 
-mockModule('../db.js', {
+mockModule('../services/memberService.js', {
   getAllMemberStats:        (...a) => mockGetAllMemberStats(...a),
-  batchUpsertMemberStats:   (...a) => mockBatchUpsertMemberStats(...a),
-  getMemberBadges:          (...a) => mockGetMemberBadges(...a),
-  getMemberBadgesMulti:     (...a) => mockGetMemberBadgesMulti(...a),
-  batchUpsertUserBadges:    (...a) => mockBatchUpsertUserBadges(...a),
-  upsertMemberBadge:        (...a) => mockUpsertMemberBadge(...a),
-  getBadges:                (...a) => mockGetBadges(...a),
+  batchUpsertMemberStats:  (...a) => mockBatchUpsertMemberStats(...a),
+  getMemberBadges:         (...a) => mockGetMemberBadges(...a),
+  getMemberBadgesMulti:    (...a) => mockGetMemberBadgesMulti(...a),
+  batchUpsertUserBadges:   (...a) => mockBatchUpsertUserBadges(...a),
+  upsertMemberBadge:       (...a) => mockUpsertMemberBadge(...a),
+  getBadges:               (...a) => mockGetBadges(...a),
 });
 
 mockModule('../utils/embeds.js', {
