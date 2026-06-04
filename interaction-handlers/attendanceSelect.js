@@ -1,12 +1,12 @@
 // interaction-handlers/attendanceSelect.js
 // Handles: attendance:select (StringSelectMenu cho điểm danh)
 // [B1] Thay thế button bằng select menu
-// [A4] Refactor để dùng attendanceService.markAttendance()
+// [A4] Refactor để dùng attendanceHandler.markAttendance()
 'use strict';
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const { MessageFlags } = require('discord.js');
 const db = require('../db.js');
-const { markAttendance } = require('../utils/attendanceService.js');
+const { markAttendance } = require('../utils/attendanceHandler.js'); // [Phase B] renamed
 const { addBreadcrumb } = require('../utils/sentry.js');
 
 const SELECT_TO_STATUS = {
@@ -44,7 +44,7 @@ class AttendanceSelectHandler extends InteractionHandler {
       return interaction.reply({ content: '🚫 Không có phiên điểm danh nào đang mở.', flags: MessageFlags.Ephemeral });
     }
 
-    // [A4] Dùng shared service logic
+    // [A4] Dùng shared handler logic
     return markAttendance({ guild, member, user, status, interaction, session });
   }
 }
