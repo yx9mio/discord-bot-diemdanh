@@ -1,15 +1,14 @@
 'use strict';
 const { MessageFlags, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
-const { getMemberStats, getMemberBadges, getTopMembers } = require('../../services/memberService.js'); // [FIX] db.js → memberService
-const { getAttendancesByUser } = require('../../services/attendanceService.js');                       // [FIX] db.js → attendanceService
+const { getMemberStats, getMemberBadges, getTopMembers, getServerStats } = require('../../services/memberService.js');
+const { getAttendancesByUser } = require('../../services/attendanceService.js');
 const log = require('../../utils/logger.js');
 const { requireAdmin } = require('../../utils/permissions.js');
 const { StatsView } = require('../../src/commands/setup/_StatsView.js');
 const { CUSTOM_ID } = StatsView;
 
 const XEM_MODAL_ID = 'setup:stats:xem:modal';
-const LICHSU_PAGE_PREFIX = 'setup:stats:lichsu';
 const LICHSU_PAGE_NEXT = 'setup:stats:lichsu:next';
 const LICHSU_PAGE_PREV = 'setup:stats:lichsu:prev';
 
@@ -51,6 +50,13 @@ class SetupStatsHandler extends InteractionHandler {
       return interaction.editReply(StatsView.renderRank(rows, guild, 10));
     }
 
+    // [FIX-A] Block SERVER bị thiếu — đây là nguyên nhân "tương tác không thành công"
+    if (customId === CUSTOM_ID.SERVER) {
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+      const stats = await getServerStats(guild.id);
+      return interaction.editReply(StatsView.renderServerStats(stats));
+    }
+
     if (customId === CUSTOM_ID.LICHSU || customId === LICHSU_PAGE_NEXT || customId === LICHSU_PAGE_PREV) {
       const isPageNav = customId === LICHSU_PAGE_NEXT || customId === LICHSU_PAGE_PREV;
       if (isPageNav) {
@@ -58,13 +64,10 @@ class SetupStatsHandler extends InteractionHandler {
       } else {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       }
-
       const curPage = isPageNav ? _extractPageFromEmbed(interaction) : 0;
       const newPage = Math.max(0, curPage + (customId === LICHSU_PAGE_NEXT ? 1 : -1));
-
       const records = await getAttendancesByUser(guild.id, user.id, 100);
       const view = StatsView.renderLichSu(records, user.id, guild, newPage);
-
       return interaction.editReply(view);
     }
 
@@ -106,19 +109,16 @@ class SetupStatsXemModalHandler extends InteractionHandler {
     if (rawId.startsWith('<@') && rawId.endsWith('>')) {
       rawId = rawId.slice(2, -1).replace('!', '');
     }
-
     let member;
     try {
       member = await guild.members.fetch(rawId);
     } catch {
       return interaction.editReply({ content: `❌ Không tìm thấy thành viên với ID: ${rawId}.` });
     }
-
     const [stats, badges] = await Promise.all([
       getMemberStats(guild.id, member.id),
       getMemberBadges(guild.id, member.id),
     ]);
-
     return interaction.editReply(StatsView.renderToi(stats, member, guild, badges));
   }
 }
