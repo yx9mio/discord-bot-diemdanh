@@ -2,9 +2,9 @@
 // Render trang cài đặt chung: Kênh thông báo / Role / Phái / Timezone / Nhắc nhở.
 'use strict';
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const { COLORS, ICONS } = require('../../../../utils/theme.js');
-const { FOOTER_DEFAULT } = require('../../../../utils/embeds.js');
-const configService = require('../../../../services/configService.js');
+const { COLORS, ICONS } = require('../../../utils/theme.js'); // [PATH] fix: 4→3 levels
+const { FOOTER_DEFAULT } = require('../../../utils/embeds.js'); // [PATH] fix: 4→3 levels
+const configService = require('../../../services/configService.js'); // [PATH] fix: 4→3 levels
 
 const CUSTOM_ID = {
   EDIT_CHANNEL:         'setup:cfg:edit:channel',

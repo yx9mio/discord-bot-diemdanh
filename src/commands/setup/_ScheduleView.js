@@ -2,10 +2,10 @@
 // Render trang quản lý lịch cố định với danh sách + nút thêm/sửa/xoá từng dòng.
 'use strict';
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const { COLORS, ICONS } = require('../../../../utils/theme.js');
-const { FOOTER_DEFAULT } = require('../../../../utils/embeds.js');
-const { DAY_NAMES: DAY_VI } = require('../../../../utils/format.js');
-const scheduledService = require('../../../../services/scheduledService.js');
+const { COLORS, ICONS } = require('../../../utils/theme.js'); // [PATH] fix: 4→3 levels
+const { FOOTER_DEFAULT } = require('../../../utils/embeds.js'); // [PATH] fix: 4→3 levels
+const { DAY_NAMES: DAY_VI } = require('../../../utils/format.js'); // [PATH] fix: 4→3 levels
+const scheduledService = require('../../../services/scheduledService.js'); // [PATH] fix: 4→3 levels
 
 const CUSTOM_ID = {
   ADD_R:       'setup:sch:add:r',

@@ -1,9 +1,9 @@
 'use strict';
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const { COLORS, ICONS } = require('../../../../utils/theme.js');
-const { FOOTER_DEFAULT } = require('../../../../utils/embeds.js');
-const { fmtTs, durationStr } = require('../../../../utils/format.js');
-const sessionService = require('../../../../services/sessionService.js');
+const { COLORS, ICONS } = require('../../../utils/theme.js'); // [PATH] fix: 4→3 levels
+const { FOOTER_DEFAULT } = require('../../../utils/embeds.js'); // [PATH] fix: 4→3 levels
+const { fmtTs, durationStr } = require('../../../utils/format.js'); // [PATH] fix: 4→3 levels
+const sessionService = require('../../../services/sessionService.js'); // [PATH] fix: 4→3 levels
 
 const CUSTOM_ID = {
   PAGE_NEXT: 'setup:history:page:next',
