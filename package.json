@@ -4,7 +4,8 @@
   "description": "Bot Discord điểm danh — Sapphire JS Edition",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js",
+    "start": "node --require dd-trace/init index.js",
+    "start:notrace": "node index.js",
     "dev": "nodemon index.js",
     "test": "vitest run --config vitest.config.mjs",
     "test:watch": "vitest --config vitest.config.mjs",

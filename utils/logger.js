@@ -3,10 +3,14 @@
 // Prod: JSON lines stdout + Datadog transport (nếu DD_API_KEY có mặt)
 'use strict';
 const pino = require('pino');
+const os   = require('node:os');
 
 const IS_DEV  = process.env.NODE_ENV !== 'production';
 const HAS_DD  = !IS_DEV && !!process.env.DD_API_KEY;
 const DD_SITE = process.env.DD_SITE ?? 'ap1.datadoghq.com';
+const SERVICE = process.env.DD_SERVICE ?? 'discord-bot-diemdanh';
+const VERSION = process.env.DD_VERSION ?? process.env.npm_package_version ?? '0';
+const ENV     = process.env.DD_ENV     ?? process.env.NODE_ENV ?? 'production';
 
 // ── Build transport targets ───────────────────────────────────────────────
 function buildTransport() {
@@ -17,26 +21,29 @@ function buildTransport() {
     };
   }
 
-  // Prod: stdout (Railway logs) + Datadog nếu có API key
+  // Prod: stdout (Railway logs) luôn có
   const targets = [
-    { target: 'pino/file', options: { destination: 1 }, level: process.env.LOG_LEVEL ?? 'info' },
+    {
+      target:  'pino/file',
+      options: { destination: 1 },
+      level:   process.env.LOG_LEVEL ?? 'info',
+    },
   ];
 
+  // Datadog transport — chỉ khi có DD_API_KEY
   if (HAS_DD) {
     targets.push({
-      target:  'pino-datadog-transport',
+      target: 'pino-datadog-transport',
       options: {
         ddClientConf: {
-          authMethods: {
-            apiKeyAuth: process.env.DD_API_KEY,
-          },
+          authMethods: { apiKeyAuth: process.env.DD_API_KEY },
         },
-        ddServerConf: {
-          site: DD_SITE,
-        },
-        ddsource:  'nodejs',
-        service:   process.env.DD_SERVICE ?? 'discord-bot-diemdanh',
-        ddtags:    `env:${process.env.DD_ENV ?? 'production'},version:${process.env.npm_package_version ?? '0'}`,
+        ddServerConf: { site: DD_SITE },
+        // [DD-MCP] Các field này giúp Datadog MCP filter chính xác
+        ddsource: 'nodejs',
+        service:  SERVICE,
+        // ddtags chuẩn cho Datadog MCP query: env:production, version:3.0.0, host:...
+        ddtags:   `env:${ENV},version:${VERSION},host:${os.hostname()}`,
       },
       level: process.env.LOG_LEVEL ?? 'info',
     });
@@ -48,8 +55,15 @@ function buildTransport() {
 const _root = pino(
   {
     level: process.env.LOG_LEVEL ?? 'info',
-    // [DATADOG] dd-trace injects trace_id/span_id khi logInjection: true
-    // Pino tự động include chúng nếu format là JSON
+    // Base fields xuất hiện trong mọi log line — Datadog MCP có thể filter theo đây
+    base: {
+      service: SERVICE,
+      env:     ENV,
+      version: VERSION,
+      host:    os.hostname(),
+    },
+    // [DATADOG] dd-trace inject trace_id/span_id tự động khi DD_LOG_INJECTION=true
+    // Pino format JSON → Datadog tự correlate logs ↔ traces
   },
   pino.transport(buildTransport()),
 );

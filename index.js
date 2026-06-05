@@ -1,24 +1,7 @@
 // index.js — Entry point (Sapphire JS Edition v3)
-// [DATADOG] dd-trace PHẢI là require đầu tiên — trước mọi import khác
+// [DATADOG] dd-trace được load qua --require dd-trace/init trong package.json
+// KHÔNG require thủ công ở đây — tránh DeprecationWarning từ dd-trace hook discord.js
 'use strict';
-if (process.env.DD_TRACE_ENABLED !== 'false' && process.env.DD_API_KEY) {
-  try {
-    require('dd-trace').init({
-      service:        process.env.DD_SERVICE ?? 'discord-bot-diemdanh',
-      env:            process.env.DD_ENV     ?? process.env.NODE_ENV ?? 'production',
-      version:        process.env.DD_VERSION ?? process.env.npm_package_version,
-      // [FIX-DD-A] Bỏ hostname — Railway không có DD Agent cục bộ.
-      // dd-trace sẽ graceful fail khi không kết nối được agent (không crash).
-      logInjection:   true,
-      runtimeMetrics: true,
-      profiling:      false,
-      // [FIX-DD-A] Tắt StatsD sink để tránh noise khi không có agent
-      dogstatsd:      { enabled: false },
-    });
-  } catch (e) {
-    console.error('[BOOT] dd-trace init failed (module missing?):', e.message);
-  }
-}
 
 require('dotenv').config();
 const path = require('node:path');
@@ -64,32 +47,21 @@ const client = new SapphireClient({
   logger: { level: process.env.NODE_ENV === 'production' ? 30 : 20 },
 });
 
-// [FIX] Chỉ register src/commands/ — Sapphire v3 scan đệ quy tự động
-// KHÔNG register src/commands/setup/ riêng: sẽ khiến Sapphire load _views/*.js
-// như Command và crash với "Cannot find module" hoặc "not a valid Command"
 client.stores.get('commands').registerPath(path.join(__dirname, 'src', 'commands'));
 client.stores.get('listeners').registerPath(path.join(__dirname, 'listeners'));
-// [FIX-BOOT] Chỉ register thư mục gốc — Sapphire v3 scan đệ quy tự động vào setup/
-// Đăng ký thêm interaction-handlers/setup/ là DUPLICATE → handlers bị load 2 lần → crash
 client.stores.get('interaction-handlers').registerPath(path.join(__dirname, 'interaction-handlers'));
 client.stores.get('preconditions').registerPath(path.join(__dirname, 'preconditions'));
 
-// Health server cho Railway keepalive — phải start trước client.login()
 startHealthServer(client);
 
-// [DEBUG] Log số handlers được load sau khi client ready
-// [FIX] đổi 'ready' → 'clientReady' — discord.js v14 DeprecationWarning, bị xóa trong v15
 client.once('clientReady', () => {
   const handlerStore = client.stores.get('interaction-handlers');
-  console.log(`[BOOT] interaction-handlers loaded: ${handlerStore.size}`);
-  for (const [name] of handlerStore) {
-    console.log(`  - ${name}`);
-  }
+  log.info('BOOT', null, 'interaction-handlers loaded: %d', handlerStore.size);
+  for (const [name] of handlerStore) log.info('BOOT', null, '  handler: %s', name);
+
   const commandStore = client.stores.get('commands');
-  console.log(`[BOOT] commands loaded: ${commandStore.size}`);
-  for (const [name] of commandStore) {
-    console.log(`  - /${name}`);
-  }
+  log.info('BOOT', null, 'commands loaded: %d', commandStore.size);
+  for (const [name] of commandStore) log.info('BOOT', null, '  command: /%s', name);
 });
 
 process.on('unhandledRejection', (reason) => {
