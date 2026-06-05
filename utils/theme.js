@@ -1,60 +1,50 @@
-// utils/theme.js — 8 màu semantic + emoji icon library
-// Commit 3: chuẩn hoá màu sắc xuyên suốt bot. Mọi embed builder mới
-// NÊN dùng COLORS từ đây thay vì hardcode hex.
+// utils/theme.js — Source of truth duy nhất cho COLORS + ICONS
+// [FIX-THEME] Merge từ src/utils/theme.js: dùng màu Teal thống nhất, bổ sung keys còn thiếu
+// src/utils/theme.js sẽ re-export từ đây — không cần thay đổi import path ở bất kỳ file nào
 'use strict';
 
+/** Màu embed chuẩn — palette Teal (Nexus Design System) */
 const COLORS = {
-  PRIMARY:  0x5865f2, // Blurple — thương hiệu Discord, dùng cho header
-  SUCCESS:  0x57f287, // Xanh lá — thành công, phiên active
-  DANGER:   0xed4245, // Đỏ — lỗi, hủy, xóa
-  WARNING:  0xfee75c, // Vàng — cảnh báo, pre-close
-  INFO:     0x5865f2, // Blurple nhạt — thông tin thường
-  GOLD:     0xffd700, // Vàng kim — streak, top rank
-  NEUTRAL:  0x36393e, // Xám than — embed phụ, footer text
-  ACCENT:   0x9b59b6, // Tím — highlight đặc biệt
-  // [FIX-THEME] Alias ngắn gọn cho _StatsView.js và các View dùng màu trực tiếp
-  GREEN:    0x57f287, // = SUCCESS
-  RED:      0xed4245, // = DANGER
-  YELLOW:   0xfee75c, // = WARNING
-  ORANGE:   0xf0a500, // Cam — trung bình
+  PRIMARY:  0x01696f,  // Teal — màu chính xuyên suốt bot
+  SUCCESS:  0x437a22,  // Xanh lá — thành công, phiên active
+  WARNING:  0x964219,  // Nâu cam — cảnh báo
+  ERROR:    0xa12c7b,  // Đỏ tím — lỗi, hủy, xóa
+  NEUTRAL:  0x7a7974,  // Xám — embed phụ, footer
+  // Aliases dùng trong _StatsView.js và các embed màu trực tiếp
+  GREEN:    0x437a22,  // = SUCCESS
+  YELLOW:   0xd19900,  // Vàng — trung bình
+  GOLD:     0xd19900,  // = YELLOW — streak, top rank
+  RED:      0xa13544,  // Đỏ — cảnh báo mạnh
 };
 
+/** Emoji icon dùng trong button label, embed title, description */
 const ICONS = {
-  SESSION:    '🟢',
-  CONFIG:     '⚙️',
-  SCHEDULE:   '📅',
-  MEMBER:     '👥',
-  LOG:        '📊',
-  HOME:       '🏠',
-  CLOCK:      '🕒',
-  FIRE:       '🔥',
-  BELL:       '🔔',
-  CALENDAR:   '📅',
-  TROPHY:     '🏆',
-  STAR:       '⭐',
-  CHART:      '📊',
-  SHIELD:     '🛡️',
-  GEAR:       '⚙️',
-  SPARKLE:    '✨',
-  PERSON:     '👤',
-  CHANNEL:    '📢',
-  ROLE:       '🎭',
-  GLOBE:      '🌐',
-  PARTY:      '🎉',
-  WARN:       '⚠️',
-  CHECK:      '✅',
-  CROSS:      '❌',
-  PLUS:       '➕',
-  REFRESH:    '🔄',
-  CLOSE:      '⏹️',
-  EDIT:       '✏️',
-  TRASH:      '🗑️',
-  // [FIX-THEME] Attendance icons dùng bởi _StatsView.js, _HistoryView.js...
-  ATTEND_YES:    '✅',
-  ATTEND_LATE:   '🕐',
-  ATTEND_NO:     '❌',
-  ATTEND_ABSENT: '📭',
-  ATTEND_EXCUSE: '📋',
+  HOME:         '🏠',
+  GEAR:         '⚙️',
+  CALENDAR:     '📅',
+  MEMBER:       '👥',
+  CHANNEL:      '#️⃣',
+  ROLE:         '🏷️',
+  GLOBE:        '🌐',
+  BELL:         '🔔',
+  CHECK:        '✅',
+  PLUS:         '➕',
+  REFRESH:      '🔄',
+  CLOSE:        '✖️',
+  SESSION:      '🟢',
+  CHART:        '📊',
+  PERSON:       '👤',
+  TROPHY:       '🏆',
+  STAR:         '⭐',
+  FIRE:         '🔥',
+  EDIT:         '✏️',
+  TRASH:        '🗑️',
+  WARN:         '⚠️',
+  // Attendance icons
+  ATTEND_YES:   '✅',
+  ATTEND_NO:    '❌',
+  ATTEND_LATE:  '⏰',
+  ATTEND_EXCUSE:'📋',
 };
 
 // ─── Helper: lấy color theo context ──────────────────────────────────
