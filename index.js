@@ -66,11 +66,12 @@ const client = new SapphireClient({
 
 // [FIX] Chỉ register src/commands/ — Sapphire v3 scan đệ quy tự động
 // KHÔNG register src/commands/setup/ riêng: sẽ khiến Sapphire load _views/*.js
-// như Command và crash với error "Cannot find module" hoặc "not a valid Command"
+// như Command và crash với "Cannot find module" hoặc "not a valid Command"
 client.stores.get('commands').registerPath(path.join(__dirname, 'src', 'commands'));
 client.stores.get('listeners').registerPath(path.join(__dirname, 'listeners'));
+// [FIX-BOOT] Chỉ register thư mục gốc — Sapphire v3 scan đệ quy tự động vào setup/
+// Đăng ký thêm interaction-handlers/setup/ là DUPLICATE → handlers bị load 2 lần → crash
 client.stores.get('interaction-handlers').registerPath(path.join(__dirname, 'interaction-handlers'));
-client.stores.get('interaction-handlers').registerPath(path.join(__dirname, 'interaction-handlers', 'setup'));
 client.stores.get('preconditions').registerPath(path.join(__dirname, 'preconditions'));
 
 // Health server cho Railway keepalive — phải start trước client.login()
