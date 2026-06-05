@@ -5,7 +5,7 @@ const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/frame
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } = require('discord.js');
 const memberService = require('../../services/memberService.js');
 const log = require('../../utils/logger.js');
-const { MemberView } = require('../../src/commands/setup/_MemberView.js');
+const { MemberView } = require('../../src/commands/setup/_views/_MemberView.js'); // [FIX-SETUP]
 const { CUSTOM_ID } = MemberView;
 
 const DEL_CONFIRM_PREFIX = 'setup:mem:del:confirm:';

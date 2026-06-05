@@ -3,7 +3,7 @@
 'use strict';
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const { getGuildConfig } = require('../../services/configService.js');
-const { ConfigView } = require('../../src/commands/setup/_ConfigView.js');
+const { ConfigView } = require('../../src/commands/setup/_views/_ConfigView.js'); // [FIX-SETUP]
 const { CUSTOM_ID } = ConfigView;
 
 class SetupConfigHandler extends InteractionHandler {

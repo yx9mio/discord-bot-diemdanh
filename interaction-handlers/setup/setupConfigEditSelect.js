@@ -6,7 +6,7 @@ const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/frame
 const configService = require('../../services/configService.js');
 const log = require('../../utils/logger.js');
 const { requireAdmin } = require('../../utils/permissions.js');
-const { ConfigView } = require('../../src/commands/setup/_ConfigView.js');
+const { ConfigView } = require('../../src/commands/setup/_views/_ConfigView.js'); // [FIX-SETUP]
 
 const SELECT_PREFIX = 'setup:cfg:select:';
 

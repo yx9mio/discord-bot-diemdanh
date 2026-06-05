@@ -7,7 +7,7 @@ const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/frame
 const { getActiveSession } = require('../../services/sessionService.js'); // [FIX] db.js → sessionService
 const { requireAdmin } = require('../../utils/permissions.js');
 const { replyConfirm, replyErrEdit } = require('../../utils/embeds.js');
-const HomeView = require('../../src/commands/setup/_HomeView.js').HomeView;
+const HomeView = require('../../src/commands/setup/_views/_HomeView.js').HomeView; // [FIX-SETUP]
 const { CUSTOM_ID } = HomeView;
 
 class SetupSessionHandler extends InteractionHandler {

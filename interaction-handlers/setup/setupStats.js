@@ -5,7 +5,7 @@ const { getMemberStats, getMemberBadges, getTopMembers, getServerStats } = requi
 const { getAttendancesByUser } = require('../../services/attendanceService.js');
 const log = require('../../utils/logger.js');
 const { requireAdmin } = require('../../utils/permissions.js');
-const { StatsView } = require('../../src/commands/setup/_StatsView.js');
+const { StatsView } = require('../../src/commands/setup/_views/_StatsView.js'); // [FIX-SETUP]
 const { CUSTOM_ID } = StatsView;
 
 const XEM_MODAL_ID = 'setup:stats:xem:modal';

@@ -5,7 +5,7 @@ const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/frame
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } = require('discord.js');
 const scheduledService = require('../../services/scheduledService.js');
 const log = require('../../utils/logger.js');
-const { ScheduleView } = require('../../src/commands/setup/_ScheduleView.js');
+const { ScheduleView } = require('../../src/commands/setup/_views/_ScheduleView.js'); // [FIX-SETUP]
 const { CUSTOM_ID } = ScheduleView;
 
 class SetupScheduleHandler extends InteractionHandler {

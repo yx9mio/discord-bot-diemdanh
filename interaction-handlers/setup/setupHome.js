@@ -7,7 +7,7 @@ const { getGuildConfig } = require('../../services/configService.js');       // 
 const { getScheduledSessions } = require('../../services/scheduledService.js'); // [FIX]
 const { getMembers } = require('../../services/memberService.js');           // [FIX]
 const { getActiveSession } = require('../../services/sessionService.js');    // [FIX]
-const { HomeView } = require('../../src/commands/setup/_HomeView.js');
+const { HomeView } = require('../../src/commands/setup/_views/_HomeView.js'); // [FIX-SETUP]
 const { CUSTOM_ID } = HomeView;
 
 const KNOWN_IDS = new Set([

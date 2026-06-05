@@ -2,7 +2,7 @@
 // [FIX-DB] Thay db.js → sessionService + [REFRESH-ALL] wire refresh
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const sessionService = require('../../services/sessionService.js');
-const { HistoryView } = require('../../src/commands/setup/_HistoryView.js');
+const { HistoryView } = require('../../src/commands/setup/_views/_HistoryView.js'); // [FIX-SETUP]
 const { CUSTOM_ID } = HistoryView;
 
 class SetupHistoryHandler extends InteractionHandler {
