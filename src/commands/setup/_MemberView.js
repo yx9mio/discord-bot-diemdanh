@@ -2,9 +2,9 @@
 // Render trang quản lý thành viên với danh sách + pagination + nút thêm/xoá.
 'use strict';
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const { COLORS, ICONS } = require('../../../utils/theme.js');
-const { FOOTER_DEFAULT } = require('../../../utils/embeds.js');
-const memberService = require('../../../services/memberService.js');
+const { COLORS, ICONS } = require('../../../../utils/theme.js');
+const { FOOTER_DEFAULT } = require('../../../../utils/embeds.js');
+const memberService = require('../../../../services/memberService.js');
 
 const CUSTOM_ID = {
   ADD:          'setup:mem:add',
