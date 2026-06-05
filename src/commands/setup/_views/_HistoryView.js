@@ -28,8 +28,8 @@ function render({ sessions, page = 0, guild }) {
       total === 0
         ? '*Chưa có phiên nào.*'
         : slice.map((s, i) => {
-            const dur = s.ended_at ? durationStr(s.created_at, s.ended_at) : null;
-            const startTs = Math.floor(new Date(s.created_at).getTime() / 1000);
+            const dur = s.ended_at ? durationStr(s.started_at, s.ended_at) : null; // [FIX-DB] created_at → started_at
+            const startTs = Math.floor(new Date(s.started_at).getTime() / 1000); // [FIX-DB] created_at → started_at
             const line = [
               `**${s.session_name}**`,
               `▸ <t:${startTs}:f>${dur ? `  ⏱ ${dur}` : ''}`,

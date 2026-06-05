@@ -1,5 +1,5 @@
 'use strict';
-// [FIX] stub — getSessions dùng bởi _HistoryView.js
+// [FIX-DB] created_at → started_at (schema thực tế của bảng sessions)
 const { createClient } = require('@supabase/supabase-js');
 
 const supabase = createClient(
@@ -18,11 +18,14 @@ async function getSessions(guildId, limit = 50) {
     .from('sessions')
     .select('*')
     .eq('guild_id', guildId)
-    .order('created_at', { ascending: false })
+    .order('started_at', { ascending: false }) // [FIX-DB] created_at → started_at
     .limit(limit);
   if (error) throw error;
   return data ?? [];
 }
+
+// [FIX-DB] alias — setupHistory.js gọi getAllSessions
+const getAllSessions = getSessions;
 
 /**
  * Lấy phiên đang mở (chưa kết thúc) của 1 guild.
@@ -41,4 +44,4 @@ async function getActiveSession(guildId) {
   return data;
 }
 
-module.exports = { getSessions, getActiveSession };
+module.exports = { getSessions, getAllSessions, getActiveSession };
