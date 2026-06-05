@@ -121,8 +121,9 @@ async function handleStartSessionModal(interaction) {
     datHenGioDong(client, guild, session, channel.id, phut * 60_000);
   }
 
-  if (cfg.log_channel_id) {
-    const logCh = guild.channels.cache.get(cfg.log_channel_id);
+  // [FIX] dùng notification_channel_id thay vì log_channel_id
+  if (cfg.notification_channel_id) {
+    const logCh = guild.channels.cache.get(cfg.notification_channel_id);
     if (logCh) await logCh.send({ embeds: [embed] }).catch(() => null);
   }
 }
