@@ -64,13 +64,12 @@ const client = new SapphireClient({
   logger: { level: process.env.NODE_ENV === 'production' ? 30 : 20 },
 });
 
+// [FIX] Chỉ register src/commands/ — Sapphire v3 scan đệ quy tự động
+// KHÔNG register src/commands/setup/ riêng: sẽ khiến Sapphire load _views/*.js
+// như Command và crash với error "Cannot find module" hoặc "not a valid Command"
 client.stores.get('commands').registerPath(path.join(__dirname, 'src', 'commands'));
-// [FIX-SETUP] Sapphire v3 không scan đệ quy — đăng ký sub-folder riêng
-client.stores.get('commands').registerPath(path.join(__dirname, 'src', 'commands', 'setup'));
-client.stores.get('commands').registerPath(path.join(__dirname, 'src', 'commands', 'general'));
 client.stores.get('listeners').registerPath(path.join(__dirname, 'listeners'));
 client.stores.get('interaction-handlers').registerPath(path.join(__dirname, 'interaction-handlers'));
-// [FIX] Sapphire v3 không scan đệ quy — phải đăng ký sub-folder riêng
 client.stores.get('interaction-handlers').registerPath(path.join(__dirname, 'interaction-handlers', 'setup'));
 client.stores.get('preconditions').registerPath(path.join(__dirname, 'preconditions'));
 
