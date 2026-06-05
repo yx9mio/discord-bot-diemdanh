@@ -65,6 +65,9 @@ const client = new SapphireClient({
 });
 
 client.stores.get('commands').registerPath(path.join(__dirname, 'src', 'commands'));
+// [FIX-SETUP] Sapphire v3 không scan đệ quy — đăng ký sub-folder riêng
+client.stores.get('commands').registerPath(path.join(__dirname, 'src', 'commands', 'setup'));
+client.stores.get('commands').registerPath(path.join(__dirname, 'src', 'commands', 'general'));
 client.stores.get('listeners').registerPath(path.join(__dirname, 'listeners'));
 client.stores.get('interaction-handlers').registerPath(path.join(__dirname, 'interaction-handlers'));
 // [FIX] Sapphire v3 không scan đệ quy — phải đăng ký sub-folder riêng
@@ -80,6 +83,11 @@ client.once('ready', () => {
   console.log(`[BOOT] interaction-handlers loaded: ${handlerStore.size}`);
   for (const [name] of handlerStore) {
     console.log(`  - ${name}`);
+  }
+  const commandStore = client.stores.get('commands');
+  console.log(`[BOOT] commands loaded: ${commandStore.size}`);
+  for (const [name] of commandStore) {
+    console.log(`  - /${name}`);
   }
 });
 
