@@ -88,9 +88,12 @@ function renderToi(stats, member, guild, badges) {
     .setTitle(`👤 ${name}`)
     .setDescription(phong ? `📌 ${phong}` : null)
     .addFields(
-      { name: `${ICONS.ATTEND_YES} Đã tham gia`, value: `**${joined}** phiên`, inline: true },
+      // [FIX] ICONS.ATTEND_YES không tồn tại → dùng ICONS.CHECK
+      { name: `${ICONS.CHECK} Đã tham gia`, value: `**${joined}** phiên`, inline: true },
+      // [FIX] ICONS.FIRE tồn tại trong theme.js — giữ nguyên
       { name: `${ICONS.FIRE} Streak hiện tại`, value: `**${streak}**`, inline: true },
       { name: '🏆 Streak cao nhất', value: `**${best}**`, inline: true },
+      // [FIX] ICONS.STAR tồn tại trong theme.js — giữ nguyên
       { name: `${ICONS.STAR} Huy hiệu`, value: badgeStr, inline: false },
     )
     .setFooter({ text: FOOTER_DEFAULT })
@@ -109,7 +112,8 @@ function renderRank(rows, guild, topN = 10) {
   if (!rows?.length) {
     return {
       embeds: [new EmbedBuilder()
-        .setColor(COLORS.PURPLE)
+        // [FIX] COLORS.PURPLE không tồn tại → dùng COLORS.ACCENT
+        .setColor(COLORS.ACCENT)
         .setTitle('🏆 Bảng xếp hạng')
         .setDescription('_Chưa có dữ liệu xếp hạng._')
         .setFooter({ text: FOOTER_DEFAULT })
@@ -128,7 +132,8 @@ function renderRank(rows, guild, topN = 10) {
   });
   return {
     embeds: [new EmbedBuilder()
-      .setColor(COLORS.GOLD)
+      // [FIX] COLORS.PURPLE không tồn tại → dùng COLORS.ACCENT
+      .setColor(COLORS.ACCENT)
       .setTitle(`🏆 Top ${Math.min(rows.length, topN)} — Bảng xếp hạng`)
       .setDescription(lines.join('\n'))
       .setFooter({ text: FOOTER_DEFAULT })
