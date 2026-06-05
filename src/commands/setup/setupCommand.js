@@ -1,16 +1,14 @@
 // src/commands/setup/setupCommand.js
 // /setup — mở Bảng điều khiển (Smart Home dashboard).
-// Đây là hub duy nhất cho mọi thao tác admin (Commit 3+4+5+6).
-// Q1=b: thay thế toàn bộ admin slash commands.
-// [FIX] module.exports = Class (không phải { Class }) để Sapphire load đúng
+// [FIX-SETUP] Import HomeView từ _views/ để tránh Sapphire scan _HomeView.js nhầm làm Command
 'use strict';
 const { Command } = require('@sapphire/framework');
 const { MessageFlags, SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
-const configService    = require('../../../services/configService.js');
-const scheduledService = require('../../../services/scheduledService.js');
-const memberService    = require('../../../services/memberService.js');
-const sessionService   = require('../../../services/sessionService.js');
-const { HomeView } = require('./_HomeView.js');
+const configService    = require('../../services/configService.js');
+const scheduledService = require('../../services/scheduledService.js');
+const memberService    = require('../../services/memberService.js');
+const sessionService   = require('../../services/sessionService.js');
+const { HomeView } = require('./_views/_HomeView.js'); // [FIX-SETUP] đường dẫn mới
 
 class SetupCommand extends Command {
   constructor(context) {
