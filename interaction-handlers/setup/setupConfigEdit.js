@@ -31,16 +31,16 @@ const SELECT_PREFIX = 'setup:cfg:select:';
 function handleButton(interaction) {
   const id = interaction.customId;
 
-  // --- Kênh log: ChannelSelectMenu (chỉ text channel) ---
+  // --- Kênh thông báo: ChannelSelectMenu (chỉ text channel) ---
   if (id === EDIT_CHANNEL) {
     const menu = new ChannelSelectMenuBuilder()
       .setCustomId(SELECT_PREFIX + 'channel')
-      .setPlaceholder('Chọn kênh log...')
+      .setPlaceholder('Chọn kênh thông báo điểm danh...')
       .addChannelTypes(ChannelType.GuildText)
       .setMinValues(1)
       .setMaxValues(1);
     return interaction.reply({
-      content: '📢 Chọn kênh sẽ dùng làm **kênh log điểm danh**:',
+      content: '📢 Chọn kênh sẽ dùng làm **kênh thông báo điểm danh**:',
       components: [new ActionRowBuilder().addComponents(menu)],
       flags: MessageFlags.Ephemeral,
     });
@@ -88,7 +88,7 @@ function handleButton(interaction) {
     });
   }
 
-  // --- Timezone: Modal (vẫn dùng text input) ---
+  // --- Timezone: Modal ---
   if (id === EDIT_TZ) {
     const modal = new ModalBuilder()
       .setCustomId(MODAL_PREFIX + 'tz')

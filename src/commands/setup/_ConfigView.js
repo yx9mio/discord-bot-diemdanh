@@ -1,5 +1,5 @@
 // src/commands/setup/ConfigView.js
-// Render trang cài đặt chung: Kênh log / Role / Phái / Timezone / Nhắc nhở.
+// Render trang cài đặt chung: Kênh thông báo / Role / Phái / Timezone / Nhắc nhở.
 'use strict';
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { COLORS, ICONS } = require('../../../utils/theme.js');
@@ -17,7 +17,6 @@ const CUSTOM_ID = {
 
 function renderConfigSection(cfg) {
   const tz      = cfg?.timezone ?? 'Asia/Ho_Chi_Minh';
-  // [FIX] dùng đúng column notification_channel_id thay vì log_channel_id
   const channel = cfg?.notification_channel_id ? `<#${cfg.notification_channel_id}>` : '_chưa cài_';
   const phai    = (cfg?.phai_role_ids ?? []).length
     ? cfg.phai_role_ids.map(r => `<@&${r}>`).join(' ')
@@ -28,7 +27,7 @@ function renderConfigSection(cfg) {
     ? '⛔ Tắt'
     : `✅ ${cfg?.reminder_minutes ?? 10} phút trước`;
   return [
-    `▸ ${ICONS.CHANNEL} **Kênh log:** ${channel}`,
+    `▸ ${ICONS.CHANNEL} **Kênh thông báo:** ${channel}`,
     `▸ 🛡️ **Role Quản lý:** ${adminRole}`,
     `▸ ${ICONS.ROLE} **Phái:** ${phai}`,
     `▸ ${ICONS.CHECK} **Role Điểm danh:** ${attRole}`,
@@ -49,7 +48,7 @@ function render({ cfg, guild }) {
   const editRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(CUSTOM_ID.EDIT_CHANNEL)
-      .setLabel('Kênh log')
+      .setLabel('Kênh thông báo')
       .setEmoji(ICONS.CHANNEL)
       .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
