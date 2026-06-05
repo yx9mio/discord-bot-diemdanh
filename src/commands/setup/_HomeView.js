@@ -44,7 +44,8 @@ function renderLiveSessionSection(session, _guild) {
 
 function renderConfigSection(cfg) {
   const tz = cfg?.timezone ?? 'Asia/Ho_Chi_Minh';
-  const channel = cfg?.log_channel_id ? `<#${cfg.log_channel_id}>` : '_chưa cài_';
+  // [FIX] dùng đúng column notification_channel_id thay vì log_channel_id
+  const channel = cfg?.notification_channel_id ? `<#${cfg.notification_channel_id}>` : '_chưa cài_';
   const phai = (cfg?.phai_role_ids ?? []).length
     ? cfg.phai_role_ids.map(r => `<@&${r}>`).join(' ')
     : '_Tất cả_';
