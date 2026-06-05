@@ -1,20 +1,22 @@
-// src/commands/setup/ScheduleView.js
+// src/commands/setup/_ScheduleView.js
 // Render trang quản lý lịch cố định với danh sách + nút thêm/sửa/xoá từng dòng.
 'use strict';
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { COLORS, ICONS } = require('../../../utils/theme.js');
 const { FOOTER_DEFAULT } = require('../../../utils/embeds.js');
 const { DAY_NAMES: DAY_VI } = require('../../../utils/format.js');
+const scheduledService = require('../../../services/scheduledService.js');
 
 const CUSTOM_ID = {
-  ADD_R:       'setup:sch:add:r',      // [BUG-2&3] Thêm lịch hằng tuần (recurring) — Button trực tiếp
-  ADD_O:       'setup:sch:add:o',      // [BUG-2&3] Thêm lịch một lần (one-time) — Button trực tiếp
+  ADD_R:       'setup:sch:add:r',
+  ADD_O:       'setup:sch:add:o',
   PAGE_NEXT:   'setup:sch:page:next',
   PAGE_PREV:   'setup:sch:page:prev',
-  DEL_PREFIX:  'setup:sch:del:',       // setup:sch:del:<scheduleId>
-  DEL_CONFIRM: 'setup:sch:del:yes:',   // setup:sch:del:yes:<scheduleId>
-  DEL_CANCEL:  'setup:sch:del:no:',    // setup:sch:del:no:<scheduleId>
-  EDIT_PREFIX: 'setup:sch:edit:',      // setup:sch:edit:<scheduleId>
+  DEL_PREFIX:  'setup:sch:del:',
+  DEL_CONFIRM: 'setup:sch:del:yes:',
+  DEL_CANCEL:  'setup:sch:del:no:',
+  EDIT_PREFIX: 'setup:sch:edit:',
+  REFRESH:     'setup:sch:refresh',   // [REFRESH-ALL]
   BACK_HOME:   'setup:home',
 };
 
@@ -57,52 +59,55 @@ function render({ schedules, page = 0, guild }) {
     }
   }
 
-  // Row 2: [BUG-2&3] 2 nút thêm riêng biệt (recurring / one-time) + sửa lịch đầu
-  const actionRow = new ActionRowBuilder().addComponents(
+  // Row 2: thêm + nav  [REFRESH-ALL] thêm nút Làm mới
+  const ctrlRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(CUSTOM_ID.ADD_R)
-      .setLabel('+ Hằng tuần')
+      .setLabel('+ Thêm hằng tuần')
       .setStyle(ButtonStyle.Success),
     new ButtonBuilder()
       .setCustomId(CUSTOM_ID.ADD_O)
-      .setLabel('+ Một lần')
+      .setLabel('+ Thêm một lần')
       .setStyle(ButtonStyle.Primary),
-  );
-  if (slice.length > 0) {
-    actionRow.addComponents(
-      new ButtonBuilder()
-        .setCustomId(`${CUSTOM_ID.EDIT_PREFIX}${slice[0].id}`)
-        .setLabel('Sửa lịch đầu')
-        .setEmoji(ICONS.EDIT)
-        .setStyle(ButtonStyle.Secondary),
-    );
-  }
-
-  // Row 3: pagination + back
-  const navRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(CUSTOM_ID.PAGE_PREV)
-      .setLabel('◀ Trước')
+      .setLabel('◀')
       .setStyle(ButtonStyle.Secondary)
       .setDisabled(clampedPage === 0),
     new ButtonBuilder()
       .setCustomId(CUSTOM_ID.PAGE_NEXT)
-      .setLabel('Sau ▶')
+      .setLabel('▶')
       .setStyle(ButtonStyle.Secondary)
       .setDisabled(clampedPage >= totalPages - 1),
+  );
+
+  // Row 3: Làm mới + Back  [REFRESH-ALL]
+  const navRow = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(CUSTOM_ID.REFRESH)
+      .setLabel('Làm mới')
+      .setEmoji(ICONS.REFRESH)
+      .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId(CUSTOM_ID.BACK_HOME)
-      .setLabel('← Về Bảng điều khiển')
+      .setLabel('← Bảng điều khiển')
       .setEmoji(ICONS.HOME)
       .setStyle(ButtonStyle.Secondary),
   );
 
   const components = [];
   if (delRow.components.length > 0) components.push(delRow);
-  components.push(actionRow);
+  components.push(ctrlRow);
   components.push(navRow);
 
   return { embeds: [embed], components, _page: clampedPage, _totalPages: totalPages };
 }
 
-module.exports = { ScheduleView: { render, CUSTOM_ID, PAGE_SIZE } };
+// [REFRESH-ALL] Handler: fetch lại schedules rồi re-render
+async function handleRefresh(interaction, page = 0) {
+  await interaction.deferUpdate();
+  const schedules = await scheduledService.getScheduledSessions(interaction.guild.id);
+  return interaction.editReply(render({ schedules, page, guild: interaction.guild }));
+}
+
+module.exports = { ScheduleView: { render, handleRefresh, CUSTOM_ID, PAGE_SIZE } };

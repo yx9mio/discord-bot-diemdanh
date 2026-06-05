@@ -13,6 +13,7 @@ const CUSTOM_ID = {
   LICHSU:    'setup:stats:lichsu',
   XEM:       'setup:stats:xem',
   SERVER:    'setup:stats:server',
+  REFRESH:   'setup:stats:refresh',  // [REFRESH-ALL]
   BACK_HOME: 'setup:home',
 };
 
@@ -52,15 +53,21 @@ function renderStatsMenu() {
     new ButtonBuilder().setCustomId(CUSTOM_ID.SERVER).setLabel('Server').setEmoji(ICONS.CHART).setStyle(ButtonStyle.Secondary),
   );
 
-  const backRow = new ActionRowBuilder().addComponents(
+  // [REFRESH-ALL] Làm mới + Back — dùng ICONS.HOME thay vì hardcode '🏠'
+  const navRow = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(CUSTOM_ID.REFRESH)
+      .setLabel('Làm mới')
+      .setEmoji(ICONS.REFRESH)
+      .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId(CUSTOM_ID.BACK_HOME)
-      .setLabel('← Về Bảng điều khiển')
-      .setEmoji('🏠')
+      .setLabel('← Bảng điều khiển')
+      .setEmoji(ICONS.HOME)
       .setStyle(ButtonStyle.Secondary),
   );
 
-  return { embeds: [embed], components: [row, backRow] };
+  return { embeds: [embed], components: [row, navRow] };
 }
 
 // ─── Thống kê cá nhân ────────────────────────────────────────────────────────────
@@ -142,7 +149,7 @@ function renderRank(rows, guild, topN = 10) {
       .setColor(COLORS.GOLD)
       .setTitle(`${ICONS.TROPHY} Top ${Math.min(rows.length, topN)} — Bảng xếp hạng`)
       .setDescription(lines.join('\n\n'))
-      .setFooter({ text: `${FOOTER_DEFAULT} · Cập nhật` })
+      .setFooter({ text: `${FOOTER_DEFAULT} · Cập nhật lần cuối` })
       .setTimestamp()],
     components: [],
   };
@@ -241,7 +248,7 @@ function renderServerStats(stats) {
   return { embeds: [embed], components: [] };
 }
 
-// ─── Xem input (không thay đổi) ─────────────────────────────────────────────────
+// ─── Xem input ─────────────────────────────────────────────────────────────────
 function renderXemInput() {
   const embed = new EmbedBuilder()
     .setColor(COLORS.PRIMARY)
@@ -250,15 +257,21 @@ function renderXemInput() {
     .setFooter({ text: FOOTER_DEFAULT })
     .setTimestamp();
 
-  const backRow = new ActionRowBuilder().addComponents(
+  // [REFRESH-ALL] dùng ICONS.HOME thay vì hardcode '🏠'
+  const navRow = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(CUSTOM_ID.REFRESH)
+      .setLabel('Làm mới')
+      .setEmoji(ICONS.REFRESH)
+      .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId(CUSTOM_ID.BACK_HOME)
-      .setLabel('← Về Bảng điều khiển')
-      .setEmoji('🏠')
+      .setLabel('← Bảng điều khiển')
+      .setEmoji(ICONS.HOME)
       .setStyle(ButtonStyle.Secondary),
   );
 
-  return { embeds: [embed], components: [backRow] };
+  return { embeds: [embed], components: [navRow] };
 }
 
 module.exports = {

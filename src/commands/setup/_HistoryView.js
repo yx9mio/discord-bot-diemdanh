@@ -3,10 +3,12 @@ const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('
 const { COLORS, ICONS } = require('../../../utils/theme.js');
 const { FOOTER_DEFAULT } = require('../../../utils/embeds.js');
 const { fmtTs, durationStr } = require('../../../utils/format.js');
+const sessionService = require('../../../services/sessionService.js');
 
 const CUSTOM_ID = {
   PAGE_NEXT: 'setup:history:page:next',
   PAGE_PREV: 'setup:history:page:prev',
+  REFRESH:   'setup:history:refresh',  // [REFRESH-ALL]
   BACK_HOME: 'setup:home',
 };
 
@@ -40,6 +42,7 @@ function render({ sessions, page = 0, guild }) {
     .setFooter({ text: `${FOOTER_DEFAULT} · Trang ${clampedPage + 1}/${totalPages} · Tổng ${total} phiên` })
     .setTimestamp();
 
+  // [REFRESH-ALL] thêm nút Làm mới + chuẩn hoá label Back + dùng ICONS.HOME
   const navRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(CUSTOM_ID.PAGE_PREV)
@@ -52,8 +55,13 @@ function render({ sessions, page = 0, guild }) {
       .setStyle(ButtonStyle.Secondary)
       .setDisabled(clampedPage >= totalPages - 1),
     new ButtonBuilder()
+      .setCustomId(CUSTOM_ID.REFRESH)
+      .setLabel('Làm mới')
+      .setEmoji(ICONS.REFRESH)
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
       .setCustomId(CUSTOM_ID.BACK_HOME)
-      .setLabel('← Về Bảng điều khiển')
+      .setLabel('← Bảng điều khiển')
       .setEmoji(ICONS.HOME)
       .setStyle(ButtonStyle.Secondary),
   );
@@ -61,4 +69,11 @@ function render({ sessions, page = 0, guild }) {
   return { embeds: [embed], components: [navRow], _page: clampedPage, _totalPages: totalPages };
 }
 
-module.exports = { HistoryView: { render, CUSTOM_ID, PAGE_SIZE } };
+// [REFRESH-ALL] Handler: fetch lại sessions rồi re-render
+async function handleRefresh(interaction, page = 0) {
+  await interaction.deferUpdate();
+  const sessions = await sessionService.getSessions(interaction.guild.id);
+  return interaction.editReply(render({ sessions, page, guild: interaction.guild }));
+}
+
+module.exports = { HistoryView: { render, handleRefresh, CUSTOM_ID, PAGE_SIZE } };

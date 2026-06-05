@@ -4,15 +4,17 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { COLORS, ICONS } = require('../../../utils/theme.js');
 const { FOOTER_DEFAULT } = require('../../../utils/embeds.js');
+const configService = require('../../../services/configService.js');
 
 const CUSTOM_ID = {
-  EDIT_CHANNEL:       'setup:cfg:edit:channel',
-  EDIT_PHAI:          'setup:cfg:edit:phai',
-  EDIT_TZ:            'setup:cfg:edit:tz',
-  EDIT_REMINDER:      'setup:cfg:edit:reminder',
-  EDIT_ADMIN_ROLE:    'setup:cfg:edit:admin_role',
+  EDIT_CHANNEL:         'setup:cfg:edit:channel',
+  EDIT_PHAI:            'setup:cfg:edit:phai',
+  EDIT_TZ:              'setup:cfg:edit:tz',
+  EDIT_REMINDER:        'setup:cfg:edit:reminder',
+  EDIT_ADMIN_ROLE:      'setup:cfg:edit:admin_role',
   EDIT_ATTENDANCE_ROLE: 'setup:cfg:edit:attendance_role',
-  BACK_HOME:          'setup:home',
+  REFRESH:              'setup:cfg:refresh',   // [REFRESH-ALL]
+  BACK_HOME:            'setup:home',
 };
 
 function renderConfigSection(cfg) {
@@ -82,16 +84,28 @@ function render({ cfg, guild }) {
       .setStyle(ButtonStyle.Secondary),
   );
 
-  // Row 3: Back
-  const backRow = new ActionRowBuilder().addComponents(
+  // Row 3: Làm mới + Back  [REFRESH-ALL]
+  const navRow = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(CUSTOM_ID.REFRESH)
+      .setLabel('Làm mới')
+      .setEmoji(ICONS.REFRESH)
+      .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId(CUSTOM_ID.BACK_HOME)
-      .setLabel('← Về Bảng điều khiển')
+      .setLabel('← Bảng điều khiển')
       .setEmoji(ICONS.HOME)
       .setStyle(ButtonStyle.Secondary),
   );
 
-  return { embeds: [embed], components: [editRow, roleRow, backRow] };
+  return { embeds: [embed], components: [editRow, roleRow, navRow] };
 }
 
-module.exports = { ConfigView: { render, CUSTOM_ID } };
+// [REFRESH-ALL] Handler dùng chung: fetch lại cfg rồi re-render
+async function handleRefresh(interaction) {
+  await interaction.deferUpdate();
+  const cfg = await configService.getGuildConfig(interaction.guild.id);
+  return interaction.editReply(render({ cfg, guild: interaction.guild }));
+}
+
+module.exports = { ConfigView: { render, handleRefresh, CUSTOM_ID } };

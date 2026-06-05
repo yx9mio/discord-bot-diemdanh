@@ -4,15 +4,17 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { COLORS, ICONS } = require('../../../utils/theme.js');
 const { FOOTER_DEFAULT } = require('../../../utils/embeds.js');
+const memberService = require('../../../services/memberService.js');
 
 const CUSTOM_ID = {
-  ADD:         'setup:mem:add',
-  PAGE_NEXT:   'setup:mem:page:next',
-  PAGE_PREV:   'setup:mem:page:prev',
-  DEL_PREFIX:  'setup:mem:del:',   // setup:mem:del:<userId>
-  EDIT_PREFIX: 'setup:mem:edit:',  // setup:mem:edit:<userId>
-  RESET_PREFIX:'setup:mem:reset:', // setup:mem:reset:<userId>
-  BACK_HOME:   'setup:home',
+  ADD:          'setup:mem:add',
+  PAGE_NEXT:    'setup:mem:page:next',
+  PAGE_PREV:    'setup:mem:page:prev',
+  DEL_PREFIX:   'setup:mem:del:',    // setup:mem:del:<userId>
+  EDIT_PREFIX:  'setup:mem:edit:',   // setup:mem:edit:<userId>
+  RESET_PREFIX: 'setup:mem:reset:',  // setup:mem:reset:<userId>
+  REFRESH:      'setup:mem:refresh', // [REFRESH-ALL]
+  BACK_HOME:    'setup:home',
 };
 
 const PAGE_SIZE = 10;
@@ -76,8 +78,6 @@ function render({ members, page = 0, guild }) {
         .setLabel('Reset streak')
         .setEmoji('🔄')
         .setStyle(ButtonStyle.Danger),
-    );
-    actionRow.addComponents(
       new ButtonBuilder()
         .setCustomId('setup:mem:reset:all')
         .setLabel('Reset all')
@@ -86,7 +86,7 @@ function render({ members, page = 0, guild }) {
     );
   }
 
-  // Row 4: nav
+  // Row 4: nav + Làm mới + Back  [REFRESH-ALL]
   const navRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(CUSTOM_ID.PAGE_PREV)
@@ -99,8 +99,13 @@ function render({ members, page = 0, guild }) {
       .setStyle(ButtonStyle.Secondary)
       .setDisabled(clampedPage >= totalPages - 1),
     new ButtonBuilder()
+      .setCustomId(CUSTOM_ID.REFRESH)
+      .setLabel('Làm mới')
+      .setEmoji(ICONS.REFRESH)
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
       .setCustomId(CUSTOM_ID.BACK_HOME)
-      .setLabel('← Về Bảng điều khiển')
+      .setLabel('← Bảng điều khiển')
       .setEmoji(ICONS.HOME)
       .setStyle(ButtonStyle.Secondary),
   );
@@ -114,4 +119,11 @@ function render({ members, page = 0, guild }) {
   return { embeds: [embed], components, _page: clampedPage, _totalPages: totalPages };
 }
 
-module.exports = { MemberView: { render, CUSTOM_ID, PAGE_SIZE } };
+// [REFRESH-ALL] Handler: fetch lại members rồi re-render trang hiện tại
+async function handleRefresh(interaction, page = 0) {
+  await interaction.deferUpdate();
+  const members = await memberService.getMembers(interaction.guild.id);
+  return interaction.editReply(render({ members, page, guild: interaction.guild }));
+}
+
+module.exports = { MemberView: { render, handleRefresh, CUSTOM_ID, PAGE_SIZE } };
