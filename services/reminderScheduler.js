@@ -34,7 +34,7 @@ async function runReminders() {
 
 async function processGuildReminders(guild) {
   try {
-    const cfg = await configService.getConfig(guild.id);
+    const cfg = await configService.getGuildConfig(guild.id); // [#27] getConfig → getGuildConfig
     // [BUG-C] Dùng notification_channel_id thay vì log_channel_id (không tồn tại trong guild_configs)
     if (!cfg?.notification_channel_id) return;
 

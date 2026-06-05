@@ -34,7 +34,7 @@ module.exports = {
   ...bind(C),
   ...bind(L),
   // Aliases giữ backward-compat
-  getConfig:           (...a) => S.getActiveSession(getClient, ...a), // alias cũ
+  getConfig:           (...a) => C.getGuildConfig(getClient, ...a), // [#25] sửa: S.getActiveSession → C.getGuildConfig
   getSessionHistory:   (...a) => S.getRecentSessions(getClient, ...a),
   getBadges:           (...a) => M.getBadgeDefinitions(getClient, ...a),
   getLichCoDinh:       (...a) => S.getScheduledSessions(getClient, ...a),
