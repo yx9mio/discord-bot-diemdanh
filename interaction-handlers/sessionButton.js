@@ -5,16 +5,16 @@
 'use strict';
 const { MessageFlags, AttachmentBuilder } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
-const { getActiveSession } = require('../services/sessionService.js');         // [FIX] db.js → sessionService
-const { getAttendances, cancelSession, closeSession } = require('../services/sessionService.js'); // [FIX]
-const sessionService = require('../services/sessionService.js');               // [FIX] full import for all methods
-const attendanceService = require('../services/attendanceService.js');         // [FIX] db.getAttendances
+// [A] Xóa 2 dòng destructure import thừa (getActiveSession, getAttendances, cancelSession, closeSession)
+//     — chỉ giữ full import, tất cả method gọi qua sessionService.xxx
+const sessionService = require('../services/sessionService.js');
+const attendanceService = require('../services/attendanceService.js');
 const log = require('../utils/logger.js');
 const metrics = require('../utils/metrics.js'); // [Phase C]
 const { buildCsvBuffer, buildCsvFilename } = require('../utils/csvHelper.js');
 const { requireAdmin } = require('../utils/permissions.js');
 const {
-  buildSessionEmbed, buildSummaryEmbed, // [FIX] buildAttendanceButtons removed (obsolete)
+  buildSessionEmbed, buildSummaryEmbed,
   buildSessionActionRow,
   replyErr, replyErrEdit, replyOkEdit, replyConfirm,
 } = require('../utils/embeds.js');
@@ -59,12 +59,21 @@ class SessionButtonHandler extends InteractionHandler {
         const parts = customId.split(':');
         const action = parts[1];
         const currentPage = parseInt(parts[2], 10) || 1;
-        const page = action === 'prev' ? Math.max(1, currentPage - 1) : currentPage + 1;
-        const { embed, components: pagComponents } = await buildSessionEmbed(guild, session, attended, session.phai_role_ids ?? [], false, page);
+        // [B] bỏ await — buildSessionEmbed là sync function
+        // [C] dùng totalPages từ return value để clamp next
+        const { embed: preEmbed, components: preComponents, totalPages } =
+          buildSessionEmbed(guild, session, attended, session.phai_role_ids ?? [], false, currentPage);
+        const page = action === 'prev'
+          ? Math.max(1, currentPage - 1)
+          : Math.min(totalPages, currentPage + 1); // [C] upper bound
+        const { embed, components: pagComponents } =
+          buildSessionEmbed(guild, session, attended, session.phai_role_ids ?? [], false, page);
         return interaction.editReply({ embeds: [embed], components: [...buildSessionActionRow(false), ...pagComponents] });
       }
 
-      const { embed, components } = await buildSessionEmbed(guild, session, attended, session.phai_role_ids ?? [], false, 1);
+      // [B] bỏ await — sync
+      const { embed, components } =
+        buildSessionEmbed(guild, session, attended, session.phai_role_ids ?? [], false, 1);
       return interaction.reply({ embeds: [embed], components, flags: MessageFlags.Ephemeral });
     }
 
@@ -75,7 +84,9 @@ class SessionButtonHandler extends InteractionHandler {
         if (!session) return interaction.followUp({ ...replyErr('Không có phiên điểm danh đang mở.'), flags: MessageFlags.Ephemeral });
         const attended = await attendanceService.getAttendances(session.id);
         await interaction.guild.members.fetch().catch(() => {});
-        const { embed, components: paginationComponents } = await buildSessionEmbed(interaction.guild, session, attended, session.phai_role_ids ?? [], false);
+        // [B] bỏ await — sync
+        const { embed, components: paginationComponents } =
+          buildSessionEmbed(interaction.guild, session, attended, session.phai_role_ids ?? [], false);
         await interaction.editReply({ embeds: [embed], components: [...buildSessionActionRow(false), ...paginationComponents] });
         log.info('REFRESH', interaction.guildId, '%s làm mới embed điểm danh', interaction.user.tag);
       } catch (e) {
