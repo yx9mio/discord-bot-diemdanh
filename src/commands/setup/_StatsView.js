@@ -85,15 +85,13 @@ function renderToi(stats, member, guild, badges) {
 
   const embed = new EmbedBuilder()
     .setColor(COLORS.GOLD)
-    .setTitle(`👤 ${name}`)
+    .setTitle(`${ICONS.PERSON} ${name}`)
     .setDescription(phong ? `📌 ${phong}` : null)
     .addFields(
-      // [FIX] ICONS.ATTEND_YES không tồn tại → dùng ICONS.CHECK
+      // [FIX-STATS] ICONS.ATTEND_YES không tồn tại → dùng ICONS.CHECK
       { name: `${ICONS.CHECK} Đã tham gia`, value: `**${joined}** phiên`, inline: true },
-      // [FIX] ICONS.FIRE tồn tại trong theme.js — giữ nguyên
       { name: `${ICONS.FIRE} Streak hiện tại`, value: `**${streak}**`, inline: true },
       { name: '🏆 Streak cao nhất', value: `**${best}**`, inline: true },
-      // [FIX] ICONS.STAR tồn tại trong theme.js — giữ nguyên
       { name: `${ICONS.STAR} Huy hiệu`, value: badgeStr, inline: false },
     )
     .setFooter({ text: FOOTER_DEFAULT })
@@ -112,7 +110,7 @@ function renderRank(rows, guild, topN = 10) {
   if (!rows?.length) {
     return {
       embeds: [new EmbedBuilder()
-        // [FIX] COLORS.PURPLE không tồn tại → dùng COLORS.ACCENT
+        // [FIX-STATS] COLORS.PURPLE không tồn tại → dùng COLORS.ACCENT
         .setColor(COLORS.ACCENT)
         .setTitle('🏆 Bảng xếp hạng')
         .setDescription('_Chưa có dữ liệu xếp hạng._')
@@ -132,7 +130,7 @@ function renderRank(rows, guild, topN = 10) {
   });
   return {
     embeds: [new EmbedBuilder()
-      // [FIX] COLORS.PURPLE không tồn tại → dùng COLORS.ACCENT
+      // [FIX-STATS] COLORS.PURPLE → COLORS.ACCENT
       .setColor(COLORS.ACCENT)
       .setTitle(`🏆 Top ${Math.min(rows.length, topN)} — Bảng xếp hạng`)
       .setDescription(lines.join('\n'))
@@ -185,12 +183,12 @@ function renderLichSu(records, userId, guild, page = 0) {
   const navRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId('setup:stats:lichsu:prev')
-      .setLabel('◀ Trước')
+      .setLabel('◄ Trước')
       .setStyle(ButtonStyle.Secondary)
       .setDisabled(clampedPage === 0),
     new ButtonBuilder()
       .setCustomId('setup:stats:lichsu:next')
-      .setLabel('Sau ▶')
+      .setLabel('Sau ►')
       .setStyle(ButtonStyle.Secondary)
       .setDisabled(clampedPage >= totalPages - 1),
   );
