@@ -151,7 +151,8 @@ async function _moPhien(guild, lich) {
   const pingContent = lich.allowed_role_id ? `<@&${lich.allowed_role_id}>` : null;
 
   const msg = await ch.send({ content: pingContent, embeds: [embed], components: [buttons] });
-  await sessionService.updateSessionMessage(session.id, msg.id);
+  // [#26] Truyền đủ {messageId, channelId} → ready.js restore được auto-refresh sau restart
+  await sessionService.updateSessionMessage(session.id, { messageId: msg.id, channelId: ch.id });
   log.info('SCHEDULER', guild.id, '%s — đã mở phiên: %s', guild.name, lich.session_name);
 
   // [Phase C] Metric: session mở bởi scheduler
@@ -233,44 +234,60 @@ async function _khoiPhucCloseTimer(client, guild, danhSach) {
   }
 
   if (msRemaining <= 0) {
-    log.info('SCHEDULER', guild.id, '%s — phiên "%s" quá giờ đóng, đóng silent', guild.name, session.session_name);
-    setImmediate(() => runDongLich(client, guild.id, lich, true));
-  } else {
-    log.info('SCHEDULER', guild.id, '%s — khôi phục close timer "%s" sau %s phút', guild.name, session.session_name, Math.round(msRemaining / 60000));
-    const tidC = setTimeout(() => runDongLich(client, guild.id, lich), msRemaining);
-    _setTimer(guild.id, `${lich.id}_close`, tidC);
+    log.info('SCHEDULER', guild.id, '"%s" close timer quá giờ — đóng ngay', lich.session_name);
+    const ch = await guild.channels.fetch(lich.channel_id).catch(() => null);
+    if (ch) await _dongPhienVaThongKe(guild, session, ch, lich, client, false);
+    return;
+  }
+
+  log.info('SCHEDULER', guild.id, 'Khôi phục close timer "%s" sau ~%dm', lich.session_name, Math.round(msRemaining / 60_000));
+  const tidC = setTimeout(async () => {
+    try {
+      const g2 = client.guilds.cache.get(guild.id);
+      if (!g2) return;
+      const sess2 = await sessionService.getActiveSession(guild.id);
+      if (!sess2 || sess2.session_name !== lich.session_name) return;
+      const ch2 = await g2.channels.fetch(lich.channel_id).catch(() => null);
+      if (!ch2) return;
+      await _dongPhienVaThongKe(g2, sess2, ch2, lich, client, false);
+    } catch (e) {
+      log.error('SCHEDULER', guild.id, 'Restore close timer lỗi: %s', e.message);
+    }
+  }, msRemaining);
+  _setTimer(guild.id, `${lich.id}_close`, tidC);
+
+  if (lich.pre_close_minutes > 0) {
+    const msPreRemaining = msRemaining - lich.pre_close_minutes * 60_000;
+    if (msPreRemaining > 0) {
+      const tidPC = setTimeout(async () => {
+        try {
+          const gPC = client.guilds.cache.get(guild.id);
+          if (!gPC) return;
+          const sessPC = await sessionService.getActiveSession(guild.id);
+          if (!sessPC || sessPC.session_name !== lich.session_name) return;
+          const chPC = await gPC.channels.fetch(lich.channel_id).catch(() => null);
+          if (!chPC) return;
+          await _dongPhienVaThongKe(gPC, sessPC, chPC, lich, client, false);
+        } catch (e) {
+          log.error('SCHEDULER', guild.id, 'Restore pre-close timer lỗi: %s', e.message);
+        }
+      }, msPreRemaining);
+      _setTimer(guild.id, `${lich.id}_preclose`, tidPC);
+    }
   }
 }
 
-async function khoiPhucScheduler(client) {
-  let totalLich = 0;
-  let totalSkipped = 0;
-  for (const guild of client.guilds.cache.values()) {
-    try {
-      const rows = await scheduledService.getLichCoDinh(guild.id);
-      let guildCount = 0;
-      const validRows = [];
-      for (const row of rows) {
-        const v = safeParse(LichSchema, row);
-        if (!v.ok) {
-          log.warn('SCHEDULER', guild.id, '%s — lịch #%s bị invalid, bỏ qua: %s', guild.name, row.id ?? '?', v.error);
-          totalSkipped++;
-          continue;
-        }
-        validRows.push(v.data);
-        await scheduleLichCoDinh(client, guild.id, v.data);
-        guildCount++;
-        totalLich++;
-      }
-      if (validRows.length > 0) {
-        log.info('SCHEDULER', guild.id, '%s — khôi phục %s/%s lịch', guild.name, guildCount, rows.length);
-        await _khoiPhucCloseTimer(client, guild, validRows);
-      }
-    } catch (e) {
-      log.error('SCHEDULER', guild.id, 'Lỗi khôi phục guild: %s', e.message);
+async function initGuildScheduler(client, guild) {
+  try {
+    const danhSach = await scheduledService.getScheduledSessions(guild.id);
+    if (!danhSach?.length) return;
+    for (const lich of danhSach) {
+      await scheduleLichCoDinh(client, guild.id, lich);
     }
+    await _khoiPhucCloseTimer(client, guild, danhSach);
+  } catch (e) {
+    log.error('SCHEDULER', guild.id, 'initGuildScheduler lỗi: %s', e.message);
   }
-  log.info('SCHEDULER', null, 'Tổng: %s lịch (%s bỏ qua) trên %s guild(s)', totalLich, totalSkipped, client.guilds.cache.size);
 }
 
 function cancelLichCoDinh(guildId, lichId) {
@@ -278,74 +295,16 @@ function cancelLichCoDinh(guildId, lichId) {
   if (!gMap) return;
   for (const key of [`${lichId}_open`, `${lichId}_close`, `${lichId}_preclose`]) {
     const tid = gMap.get(key);
-    if (tid != null) clearTimeout(tid);
-    gMap.delete(key);
+    if (tid != null) { clearTimeout(tid); gMap.delete(key); }
   }
-  if (gMap.size === 0) schedulerMap.delete(guildId);
-  log.info('SCHEDULER', guildId, 'Đã hủy lịch %s', lichId);
+  log.info('SCHEDULER', guildId, 'Cancelled timers for lich %s', lichId);
 }
 
-async function runLichNgay(client, guildId, lich) {
-  const g = client.guilds.cache.get(guildId);
-  if (!g) throw new Error('Guild không tìm thấy');
-  const v = safeParse(LichSchema, lich);
-  if (!v.ok) throw new Error(`Lịch không hợp lệ: ${v.error}`);
-  const result = await _moPhien(g, v.data);
-  if (!result.ok) return result;
-  if (v.data.close_day_of_week != null) {
-    const msClose = msFromOpenToClose(
-      v.data.day_of_week, v.data.hour, v.data.minute,
-      v.data.close_day_of_week, v.data.close_hour, v.data.close_minute
-    );
-
-    if (v.data.pre_close_minutes > 0) {
-      const msPreClose = Math.max(msClose - v.data.pre_close_minutes * 60_000, 5_000);
-      log.info('SCHEDULER', guildId, '"%s" pre-close sau %s phút (manual)', v.data.session_name, Math.round(msPreClose / 60000));
-      const tidPC = setTimeout(async () => {
-        const gPC = client.guilds.cache.get(guildId);
-        if (!gPC) return;
-        const sessPC = await sessionService.getActiveSession(guildId);
-        if (!sessPC) return;
-        // [BUG-J] Guard cho manual run cũng
-        if (sessPC.session_name !== v.data.session_name) {
-          log.warn('SCHEDULER', guildId, '"%s" pre-close manual: session_name không khớp, bỏ qua', v.data.session_name);
-          return;
-        }
-        const chPC = await gPC.channels.fetch(v.data.channel_id).catch(() => null);
-        if (!chPC) return;
-        await _dongPhienVaThongKe(gPC, sessPC, chPC, v.data, client, false);
-      }, msPreClose);
-      _setTimer(guildId, `${v.data.id}_preclose`, tidPC);
-    }
-
-    log.info('SCHEDULER', guildId, '"%s" đóng sau %s phút (manual)', v.data.session_name, Math.round(msClose / 60000));
-    const tidC = setTimeout(async () => {
-      const g2 = client.guilds.cache.get(guildId);
-      if (!g2) return;
-      const sess2 = await sessionService.getActiveSession(guildId);
-      if (!sess2) return;
-      // [BUG-J] Guard cho manual run cũng
-      if (sess2.session_name !== v.data.session_name) {
-        log.warn('SCHEDULER', guildId, '"%s" close manual: session_name không khớp, bỏ qua', v.data.session_name);
-        return;
-      }
-      const ch2 = await g2.channels.fetch(v.data.channel_id).catch(() => null);
-      if (!ch2) return;
-      await _dongPhienVaThongKe(g2, sess2, ch2, v.data, client, false);
-    }, msClose);
-    _setTimer(guildId, `${v.data.id}_close`, tidC);
-  }
-  return result;
+function cancelAllGuildTimers(guildId) {
+  const gMap = schedulerMap.get(guildId);
+  if (!gMap) return;
+  for (const tid of gMap.values()) clearTimeout(tid);
+  schedulerMap.delete(guildId);
 }
 
-async function runDongLichNgay(client, guildId, lich) {
-  const g = client.guilds.cache.get(guildId);
-  if (!g) throw new Error('Guild không tìm thấy');
-  const session = await sessionService.getActiveSession(guildId);
-  if (!session) throw new Error('Không có phiên đang mở');
-  const ch = await g.channels.fetch(lich.channel_id).catch(() => null);
-  if (!ch) throw new Error('Không tìm thấy kênh');
-  await _dongPhienVaThongKe(g, session, ch, lich, client);
-}
-
-module.exports = { scheduleLichCoDinh, cancelLichCoDinh, khoiPhucScheduler, runLichNgay, runDongLichNgay, msToPreCloseFromNow };
+module.exports = { scheduleLichCoDinh, cancelLichCoDinh, cancelAllGuildTimers, runDongLich, initGuildScheduler };
