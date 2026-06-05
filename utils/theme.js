@@ -12,6 +12,11 @@ const COLORS = {
   GOLD:     0xffd700, // Vàng kim — streak, top rank
   NEUTRAL:  0x36393e, // Xám than — embed phụ, footer text
   ACCENT:   0x9b59b6, // Tím — highlight đặc biệt
+  // [FIX-THEME] Alias ngắn gọn cho _StatsView.js và các View dùng màu trực tiếp
+  GREEN:    0x57f287, // = SUCCESS
+  RED:      0xed4245, // = DANGER
+  YELLOW:   0xfee75c, // = WARNING
+  ORANGE:   0xf0a500, // Cam — trung bình
 };
 
 const ICONS = {
@@ -44,6 +49,12 @@ const ICONS = {
   CLOSE:      '⏹️',
   EDIT:       '✏️',
   TRASH:      '🗑️',
+  // [FIX-THEME] Attendance icons dùng bởi _StatsView.js, _HistoryView.js...
+  ATTEND_YES:    '✅',
+  ATTEND_LATE:   '🕐',
+  ATTEND_NO:     '❌',
+  ATTEND_ABSENT: '📭',
+  ATTEND_EXCUSE: '📋',
 };
 
 // ─── Helper: lấy color theo context ──────────────────────────────────
