@@ -78,7 +78,8 @@ client.stores.get('preconditions').registerPath(path.join(__dirname, 'preconditi
 startHealthServer(client);
 
 // [DEBUG] Log số handlers được load sau khi client ready
-client.once('ready', () => {
+// [FIX] đổi 'ready' → 'clientReady' — discord.js v14 DeprecationWarning, bị xóa trong v15
+client.once('clientReady', () => {
   const handlerStore = client.stores.get('interaction-handlers');
   console.log(`[BOOT] interaction-handlers loaded: ${handlerStore.size}`);
   for (const [name] of handlerStore) {
