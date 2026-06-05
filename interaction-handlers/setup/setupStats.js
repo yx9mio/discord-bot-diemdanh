@@ -1,7 +1,8 @@
 'use strict';
 const { MessageFlags, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
-const db = require('../../db.js');
+const { getMemberStats, getMemberBadges, getTopMembers } = require('../../services/memberService.js'); // [FIX] db.js → memberService
+const { getAttendancesByUser } = require('../../services/attendanceService.js');                       // [FIX] db.js → attendanceService
 const log = require('../../utils/logger.js');
 const { requireAdmin } = require('../../utils/permissions.js');
 const { StatsView } = require('../../src/commands/setup/_StatsView.js');
@@ -37,8 +38,8 @@ class SetupStatsHandler extends InteractionHandler {
     if (customId === CUSTOM_ID.TOI) {
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       const [stats, badges] = await Promise.all([
-        db.getMemberStats(guild.id, user.id),
-        db.getMemberBadges(guild.id, user.id),
+        getMemberStats(guild.id, user.id),
+        getMemberBadges(guild.id, user.id),
       ]);
       const member = guild.members.cache.get(user.id) ?? await guild.members.fetch(user.id).catch(() => null);
       return interaction.editReply(StatsView.renderToi(stats, member, guild, badges));
@@ -46,7 +47,7 @@ class SetupStatsHandler extends InteractionHandler {
 
     if (customId === CUSTOM_ID.RANK) {
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-      const rows = await db.getTopMembers(guild.id, 10);
+      const rows = await getTopMembers(guild.id, 10);
       return interaction.editReply(StatsView.renderRank(rows, guild, 10));
     }
 
@@ -61,7 +62,7 @@ class SetupStatsHandler extends InteractionHandler {
       const curPage = isPageNav ? _extractPageFromEmbed(interaction) : 0;
       const newPage = Math.max(0, curPage + (customId === LICHSU_PAGE_NEXT ? 1 : -1));
 
-      const records = await db.getAttendancesByUser(guild.id, user.id, 100);
+      const records = await getAttendancesByUser(guild.id, user.id, 100);
       const view = StatsView.renderLichSu(records, user.id, guild, newPage);
 
       return interaction.editReply(view);
@@ -114,8 +115,8 @@ class SetupStatsXemModalHandler extends InteractionHandler {
     }
 
     const [stats, badges] = await Promise.all([
-      db.getMemberStats(guild.id, member.id),
-      db.getMemberBadges(guild.id, member.id),
+      getMemberStats(guild.id, member.id),
+      getMemberBadges(guild.id, member.id),
     ]);
 
     return interaction.editReply(StatsView.renderToi(stats, member, guild, badges));

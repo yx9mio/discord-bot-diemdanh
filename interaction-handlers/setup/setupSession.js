@@ -1,11 +1,10 @@
 // interaction-handlers/setup/setupSession.js
 // Handles: setup:session:close
 // Mở confirm dialog đóng phiên hiện tại từ Home dashboard.
-// (Commit 3: chỉ xử lý close. Commit 4+ sẽ thêm broadcast, refresh nâng cao.)
 'use strict';
 const { MessageFlags } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
-const db = require('../../db.js');
+const { getActiveSession } = require('../../services/sessionService.js'); // [FIX] db.js → sessionService
 const { requireAdmin } = require('../../utils/permissions.js');
 const { replyConfirm, replyErrEdit } = require('../../utils/embeds.js');
 const HomeView = require('../../src/commands/setup/_HomeView.js').HomeView;
@@ -26,7 +25,7 @@ class SetupSessionHandler extends InteractionHandler {
     const { ok } = await requireAdmin(interaction, { context: 'đóng phiên từ /setup', deferred: true });
     if (!ok) return;
     const { guild } = interaction;
-    const session = await db.getActiveSession(guild.id);
+    const session = await getActiveSession(guild.id);
     if (!session) {
       return interaction.editReply(replyErrEdit('🚫 Không có phiên nào đang mở.'));
     }

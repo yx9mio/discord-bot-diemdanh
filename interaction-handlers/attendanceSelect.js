@@ -5,7 +5,7 @@
 'use strict';
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const { MessageFlags } = require('discord.js');
-const db = require('../db.js');
+const { getActiveSession } = require('../services/sessionService.js'); // [FIX] db.js → sessionService
 const { markAttendance } = require('../utils/attendanceHandler.js'); // [Phase B] renamed
 const { addBreadcrumb } = require('../utils/sentry.js');
 
@@ -39,7 +39,7 @@ class AttendanceSelectHandler extends InteractionHandler {
       return interaction.reply({ content: '❌ Trạng thái điểm danh không hợp lệ.', flags: MessageFlags.Ephemeral });
     }
 
-    const session = await db.getActiveSession(guild.id);
+    const session = await getActiveSession(guild.id);
     if (!session) {
       return interaction.reply({ content: '🚫 Không có phiên điểm danh nào đang mở.', flags: MessageFlags.Ephemeral });
     }

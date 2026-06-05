@@ -3,7 +3,7 @@
 'use strict';
 const { MessageFlags, PermissionFlagsBits } = require('discord.js');
 const { replyErr, replyErrEdit } = require('./embeds.js');
-const db = require('../db.js');
+const { getGuildConfig } = require('../services/configService.js'); // [FIX] db.js → configService
 
 /**
  * Kiểm tra quyền admin cho interaction.
@@ -35,7 +35,7 @@ async function requireAdmin(interaction, opts = {}) {
 
   // Kiểm tra admin_role_id từ config
   try {
-    const cfg = await db.getGuildConfig(interaction.guildId);
+    const cfg = await getGuildConfig(interaction.guildId);
     if (cfg?.admin_role_id && member.roles.cache.has(cfg.admin_role_id)) return { ok: true };
   } catch (_) { /* fallthrough */ }
 

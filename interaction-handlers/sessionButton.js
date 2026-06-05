@@ -5,7 +5,10 @@
 'use strict';
 const { MessageFlags, AttachmentBuilder } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
-const db  = require('../db.js');
+const { getActiveSession } = require('../services/sessionService.js');         // [FIX] db.js → sessionService
+const { getAttendances, cancelSession, closeSession } = require('../services/sessionService.js'); // [FIX]
+const sessionService = require('../services/sessionService.js');               // [FIX] full import for all methods
+const attendanceService = require('../services/attendanceService.js');         // [FIX] db.getAttendances
 const log = require('../utils/logger.js');
 const metrics = require('../utils/metrics.js'); // [Phase C]
 const { buildCsvBuffer, buildCsvFilename } = require('../utils/csvHelper.js');
@@ -41,7 +44,7 @@ class SessionButtonHandler extends InteractionHandler {
     const { customId, guild } = interaction;
 
     if (customId === 'attend_view' || customId.startsWith('attend_view:')) {
-      const session = await db.getActiveSession(guild.id);
+      const session = await sessionService.getActiveSession(guild.id);
       if (!session) {
         if (customId.startsWith('attend_view:')) {
           await interaction.deferUpdate();
@@ -49,7 +52,7 @@ class SessionButtonHandler extends InteractionHandler {
         }
         return interaction.reply({ content: '🚫 Không có phiên điểm danh nào đang mở.', flags: MessageFlags.Ephemeral });
       }
-      const attended = await db.getAttendances(session.id);
+      const attended = await attendanceService.getAttendances(session.id);
 
       if (customId.startsWith('attend_view:')) {
         await interaction.deferUpdate();
@@ -68,9 +71,9 @@ class SessionButtonHandler extends InteractionHandler {
     if (customId === 'attend_refresh') {
       await interaction.deferUpdate();
       try {
-        const session = await db.getActiveSession(interaction.guildId);
+        const session = await sessionService.getActiveSession(interaction.guildId);
         if (!session) return interaction.followUp({ ...replyErr('Không có phiên điểm danh đang mở.'), flags: MessageFlags.Ephemeral });
-        const attended = await db.getAttendances(session.id);
+        const attended = await attendanceService.getAttendances(session.id);
         await interaction.guild.members.fetch().catch(() => {});
         const { embed, components: paginationComponents } = await buildSessionEmbed(interaction.guild, session, attended, session.phai_role_ids ?? [], false);
         await interaction.editReply({ embeds: [embed], components: [...buildSessionActionRow(false), ...paginationComponents] });
@@ -94,7 +97,7 @@ class SessionButtonHandler extends InteractionHandler {
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       const { ok } = await requireAdmin(interaction, { context: 'hủy phiên', deferred: true });
       if (!ok) return;
-      const session = await db.getActiveSession(guild.id);
+      const session = await sessionService.getActiveSession(guild.id);
       if (!session) return interaction.editReply(replyErrEdit('🚫 Không có phiên nào đang mở.'));
       return interaction.editReply(
         replyConfirm(
@@ -108,16 +111,16 @@ class SessionButtonHandler extends InteractionHandler {
     if (customId === 'session:confirm_cancel') {
       const { channel } = interaction;
       await interaction.deferUpdate();
-      const session = await db.getActiveSession(guild.id);
+      const session = await sessionService.getActiveSession(guild.id);
       if (!session) return interaction.editReply(replyErrEdit('🚫 Phiên đã được đóng hoặc hủy trước đó.'));
 
       try {
         stopAutoRefresh(session.id);
-        await db.cancelSession(session.id);
+        await sessionService.cancelSession(session.id);
         xoaHenGio(guild.id);
       } catch (e) {
         log.error('CANCEL', guild.id, 'cancelSession thất bại %s: %s', session.id, e.message);
-        const stillActive = await db.getActiveSession(guild.id).catch(() => null);
+        const stillActive = await sessionService.getActiveSession(guild.id).catch(() => null);
         if (!stillActive) {
           return interaction.editReply(replyOkEdit('✅ Phiên đã được hủy bởi người khác.'));
         }
@@ -127,7 +130,7 @@ class SessionButtonHandler extends InteractionHandler {
       // [Phase C] Metric: session bị hủy (cancelled)
       metrics.sessionClosed(guild.id, { cancelled: true });
 
-      const attended = await db.getAttendances(session.id);
+      const attended = await attendanceService.getAttendances(session.id);
       await Promise.allSettled([
         interaction.editReply(replyOkEdit('✅ Phiên điểm danh đã được hủy thành công.')),
         voHieuHoaNutDiemDanh(interaction.client, channel, session, attended),
@@ -142,10 +145,10 @@ class SessionButtonHandler extends InteractionHandler {
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       const { ok } = await requireAdmin(interaction, { context: 'xuất CSV', deferred: true });
       if (!ok) return;
-      const session = await db.getActiveSession(guild.id);
+      const session = await sessionService.getActiveSession(guild.id);
       if (!session) return interaction.editReply(replyErrEdit('🚫 Không có phiên nào đang mở.'));
 
-      const attended = await db.getAttendances(session.id);
+      const attended = await attendanceService.getAttendances(session.id);
       if (!attended.length) return interaction.editReply(replyErrEdit('🚫 Chưa có ai điểm danh trong phiên này.'));
 
       try {
@@ -166,7 +169,7 @@ class SessionButtonHandler extends InteractionHandler {
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       const { ok } = await requireAdmin(interaction, { context: 'đóng phiên', deferred: true });
       if (!ok) return;
-      const session = await db.getActiveSession(guild.id);
+      const session = await sessionService.getActiveSession(guild.id);
       if (!session) return interaction.editReply(replyErrEdit('🚫 Không có phiên nào đang mở.'));
       return interaction.editReply(
         replyConfirm(
@@ -180,23 +183,23 @@ class SessionButtonHandler extends InteractionHandler {
     if (customId === 'session:confirm_close') {
       const { channel } = interaction;
       await interaction.deferUpdate();
-      const session = await db.getActiveSession(guild.id);
+      const session = await sessionService.getActiveSession(guild.id);
       if (!session) return interaction.editReply(replyErrEdit('🚫 Phiên đã được đóng trước đó.'));
 
       try {
         stopAutoRefresh(session.id);
-        await db.closeSession(session.id);
+        await sessionService.closeSession(session.id);
         xoaHenGio(guild.id);
       } catch (e) {
         log.error('CLOSE', guild.id, 'closeSession thất bại %s: %s', session.id, e.message);
-        const stillActive = await db.getActiveSession(guild.id).catch(() => null);
+        const stillActive = await sessionService.getActiveSession(guild.id).catch(() => null);
         if (!stillActive) {
           return interaction.editReply(replyOkEdit('✅ Phiên đã được đóng bởi người khác.'));
         }
         return interaction.editReply(replyErrEdit('❌ Không thể đóng phiên do lỗi DB, thử lại sau.'));
       }
 
-      const attended = await db.getAttendances(session.id);
+      const attended = await attendanceService.getAttendances(session.id);
       const [settledKetThuc] = await Promise.allSettled([
         ketThucPhien(guild, session, attended),
         voHieuHoaNutDiemDanh(interaction.client, channel, session, attended),

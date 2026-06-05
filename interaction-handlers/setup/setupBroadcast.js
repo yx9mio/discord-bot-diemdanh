@@ -1,7 +1,7 @@
 'use strict';
 const { MessageFlags, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, EmbedBuilder } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
-const db = require('../../db.js');
+const { getGuildConfig } = require('../../services/configService.js'); // [FIX] db.js → configService
 const log = require('../../utils/logger.js');
 const { requireAdmin } = require('../../utils/permissions.js');
 const { FOOTER_DEFAULT } = require('../../utils/embeds.js');
@@ -70,7 +70,7 @@ class SetupBroadcastModalHandler extends InteractionHandler {
 
     // Gửi vào log channel nếu có
     try {
-      const cfg = await db.getGuildConfig(guild.id);
+      const cfg = await getGuildConfig(guild.id);
       if (cfg?.log_channel_id && cfg.log_channel_id !== channel.id) {
         const logCh = guild.channels.cache.get(cfg.log_channel_id);
         if (logCh) await logCh.send({ embeds: [embed] }).catch(() => null);
