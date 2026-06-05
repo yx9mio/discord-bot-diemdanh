@@ -1,5 +1,7 @@
 // src/utils/theme.js
 // Màu sắc và icon dùng chung cho toàn bộ embed & view
+// NOTE: Đây là source of truth cho src/commands/setup/_views/*
+//       File utils/theme.js ở root cũng giữ nội dung tương tự cho legacy code
 'use strict';
 
 /** Màu embed chuẩn */
