@@ -1,8 +1,8 @@
 // interaction-handlers/setup/setupMember.js
 // [FIX] Thêm confirm step trước xóa + fix silent fail
 'use strict';
-const { InteractionHandler, InteractionHandlerTypes, MessageFlags } = require('@sapphire/framework');
-const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
+const { ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } = require('discord.js');
 const memberService = require('../../services/memberService.js');
 const log = require('../../utils/logger.js');
 const { MemberView } = require('../../src/commands/setup/_MemberView.js');
@@ -71,10 +71,8 @@ class SetupMemberHandler extends InteractionHandler {
         log.info('SETUP_MEM', guild.id, 'Xóa thành viên %s qua /setup', userId);
       } catch (e) {
         log.error('SETUP_MEM', guild.id, 'deleteMember thất bại: %s', e.message);
-        // [FIX] Báo lỗi rõ ràng, không silent fail
         return interaction.editReply({ content: '❌ Không thể xóa thành viên, thử lại sau.', components: [] });
       }
-      // [FIX] Đóng confirm prompt + refresh MemberView trên message gốc
       await interaction.editReply({ content: `✅ Đã xóa <@${userId}> khỏi danh sách.`, components: [] });
       try {
         const members = await memberService.getMembers(guild.id);
