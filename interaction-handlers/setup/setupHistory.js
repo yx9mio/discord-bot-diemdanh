@@ -1,5 +1,5 @@
 'use strict';
-// [FIX-DB] Thay db.js → sessionService
+// [FIX-DB] Thay db.js → sessionService + [REFRESH-ALL] wire refresh
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const sessionService = require('../../services/sessionService.js');
 const { HistoryView } = require('../../src/commands/setup/_HistoryView.js');
@@ -14,17 +14,24 @@ class SetupHistoryHandler extends InteractionHandler {
     const id = interaction.customId;
     if (id === 'setup:history') return this.some();
     if (id === CUSTOM_ID.PAGE_NEXT || id === CUSTOM_ID.PAGE_PREV) return this.some();
+    if (id === CUSTOM_ID.REFRESH) return this.some(); // [REFRESH-ALL]
     return this.none();
   }
 
   async run(interaction) {
+    const { customId, guild } = interaction;
+
+    // [REFRESH-ALL] Làm mới trang hiện tại
+    if (customId === CUSTOM_ID.REFRESH) {
+      const page = _extractPageFromEmbed(interaction);
+      return HistoryView.handleRefresh(interaction, page);
+    }
+
     await interaction.deferUpdate();
-    const { guild } = interaction;
     const sessions = await sessionService.getAllSessions(guild.id);
     const curPage = _extractPageFromEmbed(interaction);
-    const newPage = Math.max(0, curPage + (interaction.customId === CUSTOM_ID.PAGE_NEXT ? 1 : -1));
-    const view = HistoryView.render({ sessions, page: newPage, guild });
-    return interaction.editReply(view);
+    const newPage = Math.max(0, curPage + (customId === CUSTOM_ID.PAGE_NEXT ? 1 : -1));
+    return interaction.editReply(HistoryView.render({ sessions, page: newPage, guild }));
   }
 }
 

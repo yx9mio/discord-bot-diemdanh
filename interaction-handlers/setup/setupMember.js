@@ -1,5 +1,5 @@
 // interaction-handlers/setup/setupMember.js
-// [FIX] Thêm confirm step trước xóa + fix silent fail
+// [FIX] Thêm confirm step trước xóa + fix silent fail + wire REFRESH
 'use strict';
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } = require('discord.js');
@@ -8,7 +8,6 @@ const log = require('../../utils/logger.js');
 const { MemberView } = require('../../src/commands/setup/_MemberView.js');
 const { CUSTOM_ID } = MemberView;
 
-// [FIX] Prefix confirm/cancel xóa thành viên
 const DEL_CONFIRM_PREFIX = 'setup:mem:del:confirm:';
 const DEL_CANCEL_PREFIX  = 'setup:mem:del:cancel:';
 
@@ -21,6 +20,7 @@ class SetupMemberHandler extends InteractionHandler {
     const id = interaction.customId;
     if (id === 'setup:mem') return this.some();
     if (id === CUSTOM_ID.PAGE_NEXT || id === CUSTOM_ID.PAGE_PREV) return this.some();
+    if (id === CUSTOM_ID.REFRESH) return this.some(); // [REFRESH-ALL]
     if (id?.startsWith(CUSTOM_ID.DEL_PREFIX)) return this.some();
     if (id?.startsWith(DEL_CONFIRM_PREFIX)) return this.some();
     if (id?.startsWith(DEL_CANCEL_PREFIX)) return this.some();
@@ -30,7 +30,13 @@ class SetupMemberHandler extends InteractionHandler {
   async run(interaction) {
     const { customId, guild } = interaction;
 
-    // [FIX] Bước 1: Nhấn nút ✕ → hiện confirm prompt (ephemeral)
+    // [REFRESH-ALL] Làm mới trang hiện tại
+    if (customId === CUSTOM_ID.REFRESH) {
+      const page = _extractPageFromEmbed(interaction);
+      return MemberView.handleRefresh(interaction, page);
+    }
+
+    // Bước 1: Nhấn nút ✕ → hiện confirm prompt (ephemeral)
     if (
       customId.startsWith(CUSTOM_ID.DEL_PREFIX) &&
       !customId.startsWith(DEL_CONFIRM_PREFIX) &&
@@ -56,13 +62,13 @@ class SetupMemberHandler extends InteractionHandler {
       return;
     }
 
-    // [FIX] Bước 2b: Hủy xóa
+    // Bước 2b: Hủy xóa
     if (customId.startsWith(DEL_CANCEL_PREFIX)) {
       await interaction.deferUpdate();
       return interaction.editReply({ content: '↩️ Đã hủy.', components: [] });
     }
 
-    // [FIX] Bước 2a: Xác nhận xóa
+    // Bước 2a: Xác nhận xóa
     if (customId.startsWith(DEL_CONFIRM_PREFIX)) {
       await interaction.deferUpdate();
       const userId = customId.slice(DEL_CONFIRM_PREFIX.length);
@@ -90,8 +96,7 @@ class SetupMemberHandler extends InteractionHandler {
     const newPage = customId === CUSTOM_ID.PAGE_NEXT
       ? Math.min(curPage + 1, Math.ceil(members.length / MemberView.PAGE_SIZE) - 1)
       : Math.max(0, curPage - 1);
-    const view = MemberView.render({ members, page: newPage, guild });
-    return interaction.editReply(view);
+    return interaction.editReply(MemberView.render({ members, page: newPage, guild }));
   }
 }
 
