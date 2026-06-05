@@ -2,7 +2,7 @@
 // Handles: setup:cfg (mở Config view)
 'use strict';
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
-const { getGuildConfig } = require('../../services/configService.js'); // [FIX] db.js → configService
+const { getGuildConfig } = require('../../services/configService.js');
 const { ConfigView } = require('../../src/commands/setup/_ConfigView.js');
 
 class SetupConfigHandler extends InteractionHandler {
@@ -11,14 +11,11 @@ class SetupConfigHandler extends InteractionHandler {
   }
 
   parse(interaction) {
-    // [DEBUG] log mọi button interaction để xác nhận handler nhận được
-    console.log('[DEBUG] setupConfig parse() called, customId:', interaction.customId);
     if (interaction.customId === 'setup:cfg') return this.some();
     return this.none();
   }
 
   async run(interaction) {
-    console.log('[DEBUG] setupConfig run() called');
     await interaction.deferUpdate();
     const { guild } = interaction;
     const cfg = await getGuildConfig(guild.id);
