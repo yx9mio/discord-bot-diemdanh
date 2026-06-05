@@ -5,7 +5,8 @@ const { MessageFlags } = require('discord.js');
 const {
   InteractionHandler, InteractionHandlerTypes,
 } = require('@sapphire/framework');
-const db = require('../db.js');
+const { getActiveSession } = require('../services/sessionService.js');         // [FIX] db.js → sessionService
+const { upsertAttendance } = require('../services/attendanceService.js');      // [FIX] db.js → attendanceService
 const log = require('../utils/logger.js');
 const metrics = require('../utils/metrics.js'); // [Phase C]
 const { requireAdmin } = require('../utils/permissions.js');
@@ -40,7 +41,7 @@ class AdminMarkModalHandler extends InteractionHandler {
     const { ok } = await requireAdmin(interaction, { context: 'điểm danh thay', deferred: true });
     if (!ok) return;
 
-    const session = await db.getActiveSession(guild.id);
+    const session = await getActiveSession(guild.id);
     if (!session) {
       return interaction.editReply({ content: '🚫 Không có phiên điểm danh nào đang mở.' });
     }
@@ -77,7 +78,7 @@ class AdminMarkModalHandler extends InteractionHandler {
     const username = targetMember.nickname ?? targetMember.user.displayName ?? targetMember.user.username;
 
     try {
-      await db.upsertAttendance({
+      await upsertAttendance({
         session_id:    session.id,
         guild_id:      guild.id,
         user_id:       targetUserId,
