@@ -6,7 +6,10 @@
 'use strict';
 const { Command } = require('@sapphire/framework');
 const { MessageFlags, SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
-const db = require('../../../db.js');
+const configService    = require('../../../services/configService.js');
+const scheduledService = require('../../../services/scheduledService.js');
+const memberService    = require('../../../services/memberService.js');
+const sessionService   = require('../../../services/sessionService.js');
 const { HomeView } = require('./_HomeView.js');
 
 class SetupCommand extends Command {
@@ -31,10 +34,10 @@ class SetupCommand extends Command {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const { guild } = interaction;
     const [cfg, schedules, members, session] = await Promise.all([
-      db.getGuildConfig(guild.id),
-      db.getScheduledSessions(guild.id),
-      db.getMembers(guild.id),
-      db.getActiveSession(guild.id),
+      configService.getGuildConfig(guild.id),
+      scheduledService.getScheduledSessions(guild.id),
+      memberService.getMembers(guild.id),
+      sessionService.getActiveSession(guild.id),
     ]);
     const view = HomeView.render({ guild, cfg, schedules, members, session });
     return interaction.editReply(view);
