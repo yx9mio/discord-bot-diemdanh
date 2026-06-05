@@ -7,6 +7,7 @@ const {
 } = require('../_helpers');
 
 // ─── Session Embed (live + closed) ───────────────────────────────────────────
+// [C] Return thêm totalPages để caller có thể clamp page khi navigate
 function buildSessionEmbed(guild, session, attended, phaiRoleIds = [], isClosed = false, page = 1) {
   const PAGE_SIZE = 20;
   const joined   = attended.filter(a => a.status === 'tham_gia');
@@ -107,7 +108,8 @@ function buildSessionEmbed(guild, session, attended, phaiRoleIds = [], isClosed 
     components.push(paginationRow);
   }
 
-  return { embed, components };
+  // [C] Expose totalPages cho caller để clamp khi navigate
+  return { embed, components, totalPages };
 }
 
 /**
