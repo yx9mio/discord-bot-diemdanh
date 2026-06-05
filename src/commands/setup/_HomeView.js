@@ -24,9 +24,10 @@ const CUSTOM_ID = {
   STATS:      'setup:stats',
 };
 
+// [FIX-SETUP] Không có cột pre_close_minutes — dùng reminder_1_min/reminder_2_min
 function fmtSchedule(s) {
-  const pc = s.pre_close_minutes ? ` · ⏱️ ${s.pre_close_minutes}p` : '';
-  return `**${DAY_VI[s.day_of_week]} ${String(s.hour).padStart(2,'0')}:${String(s.minute).padStart(2,'0')}** — ${s.session_name ?? 'Phiên'}${pc}`;
+  const r1 = s.reminder_1_min != null ? ` · ⏱️ ${s.reminder_1_min}p` : '';
+  return `**${DAY_VI[s.day_of_week]} ${String(s.hour).padStart(2,'0')}:${String(s.minute).padStart(2,'0')}** — ${s.session_name ?? 'Phiên'}${r1}`;
 }
 
 function renderLiveSessionSection(session, _guild) {
@@ -34,7 +35,8 @@ function renderLiveSessionSection(session, _guild) {
     return `*${ICONS.SESSION} Chưa có phiên nào đang mở.*\n> Bấm **${ICONS.PLUS} Mở phiên mới** để bắt đầu hoặc chờ lịch cố định tự mở.`;
   }
   const ch = session.channel_id ? `<#${session.channel_id}>` : '_chưa có_';
-  const startTs = Math.floor(new Date(session.created_at ?? Date.now()).getTime() / 1000);
+  // [FIX-SETUP] sessions không có cột created_at — dùng started_at
+  const startTs = Math.floor(new Date(session.started_at ?? Date.now()).getTime() / 1000);
   return [
     `${ICONS.SESSION} **${session.session_name}** đang mở`,
     `▸ Bắt đầu: <t:${startTs}:R>  ·  Kênh: ${ch}`,
