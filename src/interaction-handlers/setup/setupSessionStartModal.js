@@ -2,6 +2,8 @@
 // Handles: setup:session:start:modal (ModalSubmit) — tạo phiên mới từ form
 // [FIX-SELECT] buildAttendanceSelectRow() + buildSessionActionRow() từ embeds.js
 // [BUG-A] Fix import path: ../../../services/ (3 cấp lên /app/)
+// [BUG-F] In-memory guild lock — chống race condition double-submit modal
+//         gây 2 session + 2 embed gửi cùng lúc vào channel
 'use strict';
 const { MessageFlags, EmbedBuilder } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
@@ -19,6 +21,11 @@ const { datHenGioDong, startAutoRefresh } = require('../../../utils/timers.js');
 
 const MODAL_ID = 'setup:session:start:modal';
 
+// [BUG-F] Lock per guildId — ngăn double-submit race condition
+// Set này chỉ sống trong memory của process hiện tại, đủ để chặn
+// 2 request đến gần như đồng thời từ cùng 1 guild.
+const _openingLock = new Set();
+
 class SetupSessionStartModalHandler extends InteractionHandler {
   constructor(ctx, options) {
     super(ctx, { ...options, interactionHandlerType: InteractionHandlerTypes.ModalSubmit });
@@ -35,62 +42,74 @@ class SetupSessionStartModalHandler extends InteractionHandler {
     if (!ok) return;
 
     const { guild, client, user } = interaction;
-    const existing = await sessionService.getActiveSession(guild.id);
-    if (existing) {
-      return interaction.editReply({ content: `⚠️ Đang có phiên **${existing.session_name}** đang mở.` });
+
+    // [BUG-F] Kiểm tra lock trước — bail out ngay nếu guild đang trong quá trình mở phiên
+    if (_openingLock.has(guild.id)) {
+      return interaction.editReply({ content: '⏳ Đang mở phiên, vui lòng đợi...' });
     }
+    _openingLock.add(guild.id);
 
-    // [SEC-FIX-3] slice() là safety-net phòng thủ — Discord modal maxLength enforce trước
-    const sessionName = (interaction.fields.getTextInputValue('ten_phien').trim() || `Phiên ${fmtTs(new Date().toISOString())}`).slice(0, 100);
-    const moTa        = (interaction.fields.getTextInputValue('mo_ta').trim() || null)?.slice(0, 200) ?? null;
-    const phutVal     = (interaction.fields.getTextInputValue('phut_dong') || '').trim() || '0';
-    const phut        = parseInt(phutVal, 10) || null;
-    const phaiRoleId  = interaction.fields.getTextInputValue('phai_role').trim() || null;
+    try {
+      const existing = await sessionService.getActiveSession(guild.id);
+      if (existing) {
+        return interaction.editReply({ content: `⚠️ Đang có phiên **${existing.session_name}** đang mở.` });
+      }
 
-    const cfg = await configService.getGuildConfig(guild.id);
-    const phaiRoleIds = phaiRoleId ? [phaiRoleId] : (cfg?.phai_role_ids ?? []);
-    let eligibleIds = null;
-    if (phaiRoleIds.length) {
-      await guild.members.fetch();
-      eligibleIds = guild.members.cache
-        .filter(m => !m.user.bot && m.roles.cache.some(r => phaiRoleIds.includes(r.id)))
-        .map(m => m.id);
+      // [SEC-FIX-3] slice() là safety-net phòng thủ — Discord modal maxLength enforce trước
+      const sessionName = (interaction.fields.getTextInputValue('ten_phien').trim() || `Phiên ${fmtTs(new Date().toISOString())}`).slice(0, 100);
+      const moTa        = (interaction.fields.getTextInputValue('mo_ta').trim() || null)?.slice(0, 200) ?? null;
+      const phutVal     = (interaction.fields.getTextInputValue('phut_dong') || '').trim() || '0';
+      const phut        = parseInt(phutVal, 10) || null;
+      const phaiRoleId  = interaction.fields.getTextInputValue('phai_role').trim() || null;
+
+      const cfg = await configService.getGuildConfig(guild.id);
+      const phaiRoleIds = phaiRoleId ? [phaiRoleId] : (cfg?.phai_role_ids ?? []);
+      let eligibleIds = null;
+      if (phaiRoleIds.length) {
+        await guild.members.fetch();
+        eligibleIds = guild.members.cache
+          .filter(m => !m.user.bot && m.roles.cache.some(r => phaiRoleIds.includes(r.id)))
+          .map(m => m.id);
+      }
+
+      const session = await sessionService.createSession({
+        guildId: guild.id, sessionName, description: moTa,
+        eligibleMemberIds: eligibleIds, phaiRoleIds, started_by: user.id,
+      });
+
+      const embed = new EmbedBuilder()
+        .setColor(0x01696f)
+        .setTitle('🟢 Phiên điểm danh đã mở')
+        .setDescription(`**${sessionName}**${moTa ? `\n${moTa}` : ''}`)
+        .addFields(
+          { name: '🆔 ID',        value: `\`${session.id}\``,                                         inline: true },
+          { name: '⏱️ Bắt đầu', value: fmtTs(session.started_at),                                  inline: true },
+          { name: '⏳ Tự đóng',  value: phut ? `Sau ${phut} phút` : 'Không',                        inline: true },
+          { name: '👥 Bắt buộc', value: eligibleIds ? `${eligibleIds.length} thành viên` : 'Tất cả', inline: true },
+          { name: '🛡️ Phái',   value: phaiRoleId ? `<@&${phaiRoleId}>` : (phaiRoleIds.length ? 'Theo cấu hình' : 'Không'), inline: true },
+        )
+        .setFooter({ text: FOOTER_DEFAULT })
+        .setTimestamp();
+
+      const selectRow = buildAttendanceSelectRow(true);
+      const adminRows = buildSessionActionRow(true);
+      const allComponents = [selectRow, ...adminRows].slice(0, 5);
+
+      const targetChannel = cfg?.notification_channel_id
+        ? (guild.channels.cache.get(cfg.notification_channel_id) ?? interaction.channel)
+        : interaction.channel;
+
+      const msg = await targetChannel.send({ embeds: [embed], components: allComponents });
+      await sessionService.updateSessionMessage(session.id, { messageId: msg.id, channelId: targetChannel.id });
+      startAutoRefresh(session.id, targetChannel.id, msg.id, client);
+      if (phut) datHenGioDong(client, guild, session, targetChannel.id, phut * 60_000);
+
+      log.info('SESSION_START', guild.id, 'Mở phiên %s bởi %s', session.id, user.id);
+      return interaction.editReply({ content: `✅ Đã mở phiên **${sessionName}** tại <#${targetChannel.id}>.` });
+    } finally {
+      // [BUG-F] Luôn release lock dù thành công hay lỗi — tránh deadlock
+      _openingLock.delete(guild.id);
     }
-
-    const session = await sessionService.createSession({
-      guildId: guild.id, sessionName, description: moTa,
-      eligibleMemberIds: eligibleIds, phaiRoleIds, started_by: user.id,
-    });
-
-    const embed = new EmbedBuilder()
-      .setColor(0x01696f)
-      .setTitle('🟢 Phiên điểm danh đã mở')
-      .setDescription(`**${sessionName}**${moTa ? `\n${moTa}` : ''}`)
-      .addFields(
-        { name: '🆔 ID',        value: `\`${session.id}\``,                                         inline: true },
-        { name: '⏱️ Bắt đầu', value: fmtTs(session.started_at),                                  inline: true },
-        { name: '⏳ Tự đóng',  value: phut ? `Sau ${phut} phút` : 'Không',                        inline: true },
-        { name: '👥 Bắt buộc', value: eligibleIds ? `${eligibleIds.length} thành viên` : 'Tất cả', inline: true },
-        { name: '🛡️ Phái',   value: phaiRoleId ? `<@&${phaiRoleId}>` : (phaiRoleIds.length ? 'Theo cấu hình' : 'Không'), inline: true },
-      )
-      .setFooter({ text: FOOTER_DEFAULT })
-      .setTimestamp();
-
-    const selectRow = buildAttendanceSelectRow(true);
-    const adminRows = buildSessionActionRow(true);
-    const allComponents = [selectRow, ...adminRows].slice(0, 5);
-
-    const targetChannel = cfg?.notification_channel_id
-      ? (guild.channels.cache.get(cfg.notification_channel_id) ?? interaction.channel)
-      : interaction.channel;
-
-    const msg = await targetChannel.send({ embeds: [embed], components: allComponents });
-    await sessionService.updateSessionMessage(session.id, { messageId: msg.id, channelId: targetChannel.id });
-    startAutoRefresh(session.id, targetChannel.id, msg.id, client);
-    if (phut) datHenGioDong(client, guild, session, targetChannel.id, phut * 60_000);
-
-    log.info('SESSION_START', guild.id, 'Mở phiên %s bởi %s', session.id, user.id);
-    return interaction.editReply({ content: `✅ Đã mở phiên **${sessionName}** tại <#${targetChannel.id}>.` });
   }
 }
 
