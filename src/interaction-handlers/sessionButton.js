@@ -230,6 +230,37 @@ if (customId === 'session:confirm_close') {
         return interaction.editReply(replyErrEdit('❌ Không thể đóng phiên do lỗi DB, thử lại sau.'));
       }
 
+      // [BUG-FIX] Auto-mark khong_tham_gia cho eligible members chưa điểm danh.
+      // Phải chạy TRƯỚC getAttendances để attended array đầy đủ khi tính stats.
+      const eligibleIds = session.eligible_member_ids ?? [];
+      if (eligibleIds.length > 0) {
+        try {
+          // Lấy danh sách user đã có record (bất kỳ status nào)
+          const existingRecords = await attendanceService.getAttendances(session.id);
+          const existingUserIds = new Set(existingRecords.map(r => r.user_id));
+
+          // Chỉ insert những user chưa có record nào
+          const absentIds = eligibleIds.filter(uid => !existingUserIds.has(uid));
+          if (absentIds.length > 0) {
+            // Resolve username từ guild cache (best-effort)
+            await guild.members.fetch().catch(() => {});
+            const absentRows = absentIds.map(uid => {
+              const member = guild.members.cache.get(uid);
+              return {
+                user_id:  uid,
+                username: member?.user?.username ?? member?.displayName ?? uid,
+              };
+            });
+            await attendanceService.bulkInsertAbsent(session.id, guild.id, absentRows);
+            log.info('CLOSE', guild.id, 'Auto-mark khong_tham_gia: %d thành viên (%s)',
+              absentIds.length, absentIds.join(', '));
+          }
+        } catch (e) {
+          // Không block luồng đóng phiên — log warning và tiếp tục
+          log.warn('CLOSE', guild.id, 'bulkInsertAbsent thất bại (non-fatal): %s', e.message);
+        }
+      }
+
       const attended = await attendanceService.getAttendances(session.id);
       const [settledKetThuc] = await Promise.allSettled([
         ketThucPhien(guild, session, attended),
