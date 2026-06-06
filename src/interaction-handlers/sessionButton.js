@@ -1,17 +1,19 @@
 // interaction-handlers/sessionButton.js
-// Handles: nút trên embed phiên (xem/làm mới/đóng/confirm/cancel)
+// Handles: nút trên embed phiên (điểm danh/làm mới/đóng/confirm/cancel)
+// [FIX-SELECT] attend_view pagination + attend_refresh: thêm buildAttendanceSelectRow(true)
+//   để select menu không bị mất sau khi paginate hoặc refresh
 'use strict';
 const { MessageFlags, AttachmentBuilder } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const sessionService = require('../../services/sessionService.js');
 const attendanceService = require('../../services/attendanceService.js');
 const log = require('../../utils/logger.js');
-const metrics = require('../../utils/metrics.js'); // [Phase C]
+const metrics = require('../../utils/metrics.js');
 const { buildCsvBuffer, buildCsvFilename } = require('../../utils/csvHelper.js');
 const { requireAdmin } = require('../../utils/permissions.js');
 const {
   buildSessionEmbed, buildSummaryEmbed,
-  buildSessionActionRow,
+  buildSessionActionRow, buildAttendanceSelectRow,
   replyErr, replyErrEdit, replyOkEdit, replyConfirm,
 } = require('../../utils/embeds.js');
 const { ketThucPhien, thongBaoHuyHieu, voHieuHoaNutDiemDanh } = require('../../utils/session.js');
@@ -39,7 +41,8 @@ class SessionButtonHandler extends InteractionHandler {
   async run(interaction) {
     const { customId, guild } = interaction;
 
-    if (customId === 'attend_view' || customId.startsWith('attend_view:')) {
+    // ── attend_view / attend_view:prev / attend_view:next ────────────────────────
+if (customId === 'attend_view' || customId.startsWith('attend_view:')) {
       const session = await sessionService.getActiveSession(guild.id);
       if (!session) {
         if (customId.startsWith('attend_view:')) {
@@ -56,7 +59,6 @@ class SessionButtonHandler extends InteractionHandler {
         const action = parts[1];
         const currentPage = parseInt(parts[2], 10) || 1;
 
-        // [FIX] Tính totalPages trước, không build embed dư
         const totalPages = Math.max(1, Math.ceil(attended.length / 15));
         const page = action === 'prev'
           ? Math.max(1, currentPage - 1)
@@ -65,8 +67,13 @@ class SessionButtonHandler extends InteractionHandler {
         const { embed, components: pagComponents } =
           buildSessionEmbed(guild, session, attended, session.phai_role_ids ?? [], false, page);
 
-        // [FIX] buildSessionActionRow(true) — phiên vẫn đang mở
-        return interaction.editReply({ embeds: [embed], components: [...buildSessionActionRow(true), ...pagComponents] });
+        // [FIX-SELECT] Giữ select menu sau pagination
+        const selectRow = buildAttendanceSelectRow(true);
+        const adminRows = buildSessionActionRow(true);
+        return interaction.editReply({
+          embeds: [embed],
+          components: [selectRow, ...adminRows, ...pagComponents].slice(0, 5),
+        });
       }
 
       const { embed, components } =
@@ -74,16 +81,23 @@ class SessionButtonHandler extends InteractionHandler {
       return interaction.reply({ embeds: [embed], components, flags: MessageFlags.Ephemeral });
     }
 
-    if (customId === 'attend_refresh') {
+    // ── attend_refresh ────────────────────────────────────────────────────────────
+if (customId === 'attend_refresh') {
       await interaction.deferUpdate();
       try {
         const session = await sessionService.getActiveSession(interaction.guildId);
         if (!session) return interaction.followUp({ ...replyErr('Không có phiên điểm danh đang mở.'), flags: MessageFlags.Ephemeral });
         const attended = await attendanceService.getAttendances(session.id);
         await interaction.guild.members.fetch().catch(() => {});
-        const { embed, components: paginationComponents } =
+        const { embed, components: pagComponents } =
           buildSessionEmbed(interaction.guild, session, attended, session.phai_role_ids ?? [], false);
-        await interaction.editReply({ embeds: [embed], components: [...buildSessionActionRow(true), ...paginationComponents] });
+        // [FIX-SELECT] Giữ select menu sau refresh
+        const selectRow = buildAttendanceSelectRow(true);
+        const adminRows = buildSessionActionRow(true);
+        await interaction.editReply({
+          embeds: [embed],
+          components: [selectRow, ...adminRows, ...pagComponents].slice(0, 5),
+        });
         log.info('REFRESH', interaction.guildId, '%s làm mới embed điểm danh', interaction.user.tag);
       } catch (e) {
         log.error('REFRESH', interaction.guildId, 'Lỗi handleRefresh: %s', e.message);
@@ -92,13 +106,15 @@ class SessionButtonHandler extends InteractionHandler {
       return;
     }
 
-    if (customId === 'admin:mark') {
+    // ── admin:mark ─────────────────────────────────────────────────────────────────
+if (customId === 'admin:mark') {
       const { ok } = await requireAdmin(interaction, { context: 'điểm danh thay' });
       if (!ok) return;
       return interaction.showModal(buildAdminMarkModal());
     }
 
-    if (customId === 'session:cancel') {
+    // ── session:cancel ──────────────────────────────────────────────────────────
+if (customId === 'session:cancel') {
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       const { ok } = await requireAdmin(interaction, { context: 'hủy phiên', deferred: true });
       if (!ok) return;
@@ -113,7 +129,8 @@ class SessionButtonHandler extends InteractionHandler {
       );
     }
 
-    if (customId === 'session:confirm_cancel') {
+    // ── session:confirm_cancel ───────────────────────────────────────────────────
+if (customId === 'session:confirm_cancel') {
       const { channel } = interaction;
       await interaction.deferUpdate();
       const session = await sessionService.getActiveSession(guild.id);
@@ -132,7 +149,6 @@ class SessionButtonHandler extends InteractionHandler {
         return interaction.editReply(replyErrEdit('❌ Không thể hủy phiên do lỗi DB, thử lại sau.'));
       }
 
-      // [Phase C] Metric: session bị hủy
       metrics.sessionClosed(guild.id, { cancelled: true });
 
       const attended = await attendanceService.getAttendances(session.id);
@@ -142,11 +158,13 @@ class SessionButtonHandler extends InteractionHandler {
       ]);
     }
 
-    if (customId === 'session:cancel_cancel') {
+    // ── session:cancel_cancel ───────────────────────────────────────────────────
+if (customId === 'session:cancel_cancel') {
       return interaction.update({ content: '↩️ Đã hủy. Phiên vẫn đang mở.', embeds: [], components: [] });
     }
 
-    if (customId === 'session:export_csv') {
+    // ── session:export_csv ───────────────────────────────────────────────────────
+if (customId === 'session:export_csv') {
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       const { ok } = await requireAdmin(interaction, { context: 'xuất CSV', deferred: true });
       if (!ok) return;
@@ -170,7 +188,8 @@ class SessionButtonHandler extends InteractionHandler {
       }
     }
 
-    if (customId === 'attend_close') {
+    // ── attend_close ─────────────────────────────────────────────────────────────
+if (customId === 'attend_close') {
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       const { ok } = await requireAdmin(interaction, { context: 'đóng phiên', deferred: true });
       if (!ok) return;
@@ -185,7 +204,8 @@ class SessionButtonHandler extends InteractionHandler {
       );
     }
 
-    if (customId === 'session:confirm_close') {
+    // ── session:confirm_close ───────────────────────────────────────────────────
+if (customId === 'session:confirm_close') {
       const { channel } = interaction;
       await interaction.deferUpdate();
       const session = await sessionService.getActiveSession(guild.id);
@@ -211,17 +231,16 @@ class SessionButtonHandler extends InteractionHandler {
       ]);
       const statsMap = settledKetThuc.status === 'fulfilled' ? settledKetThuc.value : null;
 
-      // [Phase C] Metrics: session đóng thủ công
       metrics.sessionClosed(guild.id, { cancelled: false });
       metrics.sessionMemberCount(guild.id, attended.length);
 
-      // [#5-D1] await buildSummaryEmbed vì đã thành async
       await channel.send({ embeds: [await buildSummaryEmbed(session, attended, guild, session.phai_role_ids ?? [])] }).catch(() => null);
       await thongBaoHuyHieu(guild, channel, guild.id, session.id, attended, statsMap).catch(() => null);
       return interaction.editReply(replyOkEdit('✅ Phiên điểm danh đã được đóng thành công.'));
     }
 
-    if (customId === 'session:cancel_close') {
+    // ── session:cancel_close ────────────────────────────────────────────────────
+if (customId === 'session:cancel_close') {
       return interaction.update({ content: '↩️ Đã hủy. Phiên vẫn đang mở.', embeds: [], components: [] });
     }
   }
