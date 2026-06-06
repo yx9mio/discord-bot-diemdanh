@@ -1,6 +1,5 @@
 // src/commands/setup/_views/_StatsView.js
-// [REDESIGN] Rewrite: fix import path, fix COLORS.GREEN/YELLOW/RED (đã có trong theme),
-//            verify ICONS, chuẩn hóa pattern
+// [FIX] renderServerStats nhận thêm tham số `top` và hiển thị mini top-5
 'use strict';
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { COLORS, ICONS } = require('../../../../utils/theme.js');
@@ -186,12 +185,16 @@ function renderLichSu(records, userId, guild, page = 0) {
 }
 
 // ─── Thống kê server ─────────────────────────────────────────────────
-function renderServerStats(stats) {
+/**
+ * @param {object} stats  — { rate_present, total_sessions, total_members, total_attendances }
+ * @param {Array}  top    — mảng xếp hạng từ statsService.getTopMembers(), có thể undefined/null
+ * @param {object} guild  — Guild object để resolve displayName
+ */
+function renderServerStats(stats, top, guild) {
   const pct     = stats?.rate_present       ?? 0;
   const total   = stats?.total_sessions     ?? 0;
   const members = stats?.total_members      ?? 0;
   const attends = stats?.total_attendances  ?? 0;
-  // [FIX] dùng COLORS có trong theme (GREEN/YELLOW/RED đã được alias trong utils/theme.js)
   const color   = pct >= 80 ? COLORS.GREEN : pct >= 50 ? COLORS.YELLOW : COLORS.RED;
 
   const embed = new EmbedBuilder()
@@ -208,6 +211,20 @@ function renderServerStats(stats) {
     )
     .setFooter({ text: FOOTER_DEFAULT })
     .setTimestamp();
+
+  // [FIX] Hiển thị mini top-5 thay vì bỏ qua data `top`
+  if (Array.isArray(top) && top.length > 0) {
+    const medals = ['🥇', '🥈', '🥉', '4.', '5.'];
+    const lines = top.slice(0, 5).map((r, i) => {
+      const name   = guild?.members?.cache?.get(r.user_id)?.displayName ?? `<@${r.user_id}>`;
+      const joined = r.total_joined   ?? 0;
+      const streak = r.current_streak ?? 0;
+      const totalS = r.total_sessions ?? joined;
+      const pctR   = totalS > 0 ? Math.round((joined / totalS) * 100) : 0;
+      return `${medals[i]} **${name}** — ${pctR}% · ${joined} phiên · ${ICONS.FIRE}${streak}`;
+    });
+    embed.addFields({ name: `${ICONS.TROPHY} Top thành viên`, value: lines.join('\n'), inline: false });
+  }
 
   return { embeds: [embed], components: [_navRow()] };
 }
