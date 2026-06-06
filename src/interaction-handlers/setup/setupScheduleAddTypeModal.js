@@ -1,8 +1,9 @@
 // src/interaction-handlers/setup/setupScheduleAddTypeModal.js
 // Handles: setup:sch:add (Button) — mở Modal bước 1 chọn loại lịch
 'use strict';
-const { ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } = require('discord.js');
+const { ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, MessageFlags } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
+const { requireAdmin } = require('../../../utils/permissions.js');
 
 const CUSTOM_ID = Object.freeze({
   ADD_BTN:             'setup:sch:add',
@@ -27,7 +28,10 @@ class SetupScheduleAddBtnHandler extends InteractionHandler {
     if (interaction.customId === CUSTOM_ID.ADD_BTN) return this.some();
     return this.none();
   }
-  run(interaction) {
+  async run(interaction) {
+    // [BUG-9] requireAdmin — ngăn user thường mở modal thêm lịch
+    const { ok } = await requireAdmin(interaction, { context: 'thêm lịch', deferred: false });
+    if (!ok) return;
     const modal = new ModalBuilder()
       .setCustomId(CUSTOM_ID.TYPE_MODAL)
       .setTitle('Thêm lịch tự động — Bước 1/2')

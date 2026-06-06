@@ -8,6 +8,7 @@ const log = require('../../../utils/logger.js');
 const { ScheduleView } = require('../../commands/setup/_views/_ScheduleView.js');
 const { MODAL_RECURRING_ID, MODAL_ONETIME_ID } = require('./setupScheduleAddDetailModal.js');
 const { CUSTOM_ID } = ScheduleView;
+const { requireAdmin } = require('../../../utils/permissions.js');
 
 class SetupScheduleHandler extends InteractionHandler {
   constructor(ctx, options) {
@@ -146,7 +147,10 @@ class SetupScheduleHandler extends InteractionHandler {
     // Xóa: xác nhận
     // ----------------------------------------------------------------
     if (customId.startsWith(CUSTOM_ID.DEL_CONFIRM)) {
-      await interaction.deferUpdate();
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+      // [BUG-5] Re-validate admin — ngăn user thường gửi thẳng customId này
+      const { ok: okDel } = await requireAdmin(interaction, { context: 'xác nhận xóa lịch', deferred: true });
+      if (!okDel) return;
       const id = customId.slice(CUSTOM_ID.DEL_CONFIRM.length);
       try {
         await scheduledService.deleteScheduledSession(guild.id, id);

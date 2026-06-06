@@ -23,15 +23,15 @@ async function createScheduledSession(payload) {
   return data;
 }
 
-async function updateScheduledSession(id, payload) {
+async function updateScheduledSession(guildId, id, payload) {
   const { data, error } = await getClient()
-    .from('scheduled_sessions').update(payload).eq('id', id).select().single();
+    .from('scheduled_sessions').update(payload).eq('id', id).eq('guild_id', guildId).select().single();
   _throwSupabase(error, 'updateScheduledSession');
   return data;
 }
 
-async function deleteScheduledSession(id) {
-  const { error } = await getClient().from('scheduled_sessions').delete().eq('id', id);
+async function deleteScheduledSession(guildId, id) {
+  const { error } = await getClient().from('scheduled_sessions').delete().eq('id', id).eq('guild_id', guildId);
   _throwSupabase(error, 'deleteScheduledSession');
 }
 
@@ -71,7 +71,7 @@ function themLichCoDinh(guildId, { dayOfWeek, hour, minute, sessionName, closeDa
 }
 
 function suaLichCoDinh(guildId, id, { dayOfWeek, hour, minute, sessionName, closeDayOfWeek, closeHour, closeMinute, channelId, allowedRoleId, reminder1Min, reminder2Min }) {
-  return updateScheduledSession(id, {
+  return updateScheduledSession(guildId, id, {
     day_of_week:       dayOfWeek,
     hour,
     minute,
@@ -86,8 +86,8 @@ function suaLichCoDinh(guildId, id, { dayOfWeek, hour, minute, sessionName, clos
   });
 }
 
-function xoaLichCoDinh(_guildId, id) {
-  return deleteScheduledSession(id);
+function xoaLichCoDinh(guildId, id) {
+  return deleteScheduledSession(guildId, id);
 }
 
 module.exports = {
