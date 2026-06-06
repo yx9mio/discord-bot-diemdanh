@@ -1,5 +1,6 @@
 'use strict';
 // interaction-handlers/setup/setupMember.js
+// [FIX-ROOT] parse() nhận 'setup:mem' (từ HomeView CUSTOM_ID.MEM) thay vì 'setup:member'
 // [FIX-4] deleteReply() trên ephemeral reply throw 404 → thay bằng editReply content rỗng
 const { MessageFlags, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
@@ -10,6 +11,9 @@ const { MemberView } = require('../../commands/setup/_views/_MemberView.js');
 
 const { CUSTOM_ID } = MemberView;
 
+// CustomId mà HomeView gửi khi bấm nút "Thành viên"
+const HOME_MEM_ID = 'setup:mem';
+
 class SetupMemberHandler extends InteractionHandler {
   constructor(ctx, options) {
     super(ctx, { ...options, interactionHandlerType: InteractionHandlerTypes.Button });
@@ -17,12 +21,15 @@ class SetupMemberHandler extends InteractionHandler {
 
   parse(interaction) {
     const id = interaction.customId;
-    if (id === 'setup:member') return this.some();
+    // [FIX-ROOT] HomeView.CUSTOM_ID.MEM = 'setup:mem' (không phải 'setup:member')
+    if (id === HOME_MEM_ID)            return this.some();
     if (id === CUSTOM_ID.PAGE_PREV)    return this.some();
     if (id === CUSTOM_ID.PAGE_NEXT)    return this.some();
     if (id === CUSTOM_ID.REFRESH)      return this.some();
-    if (id?.startsWith(CUSTOM_ID.DEL_PREFIX)  && !id.includes(':confirm') && !id.includes(':cancel')) return this.some();
-    if (id?.startsWith(CUSTOM_ID.EDIT_PREFIX)) return this.some();
+    if (id === CUSTOM_ID.RESET_ALL)    return this.some();
+    if (id?.startsWith(CUSTOM_ID.DEL_PREFIX)   && !id.includes(':confirm') && !id.includes(':cancel')) return this.some();
+    if (id?.startsWith(CUSTOM_ID.EDIT_PREFIX))  return this.some();
+    if (id?.startsWith(CUSTOM_ID.RESET_PREFIX) && !id.endsWith(':all'))                                return this.some();
     if (id?.startsWith(CUSTOM_ID.DEL_PREFIX + 'confirm:')) return this.some();
     if (id?.startsWith(CUSTOM_ID.DEL_PREFIX + 'cancel:'))  return this.some();
     return this.none();
@@ -31,7 +38,8 @@ class SetupMemberHandler extends InteractionHandler {
   async run(interaction) {
     const { customId, guild } = interaction;
 
-    if (customId === 'setup:member') {
+    // Mở trang thành viên từ dashboard
+    if (customId === HOME_MEM_ID) {
       await interaction.deferUpdate();
       const members = await memberService.getMembers(guild.id);
       return interaction.editReply(MemberView.render({ members, page: 0, guild }));
@@ -51,6 +59,38 @@ class SetupMemberHandler extends InteractionHandler {
     if (customId === CUSTOM_ID.REFRESH) {
       const page = _extractPage(interaction);
       return MemberView.handleRefresh(interaction, page);
+    }
+
+    if (customId === CUSTOM_ID.RESET_ALL) {
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+      const { ok } = await requireAdmin(interaction, { context: 'reset tất cả streak', deferred: true });
+      if (!ok) return;
+      try {
+        const members = await memberService.getMembers(guild.id);
+        const userIds = members.map(m => m.user_id);
+        await memberService.batchResetStreak(guild.id, userIds);
+        log.info('MEM_RESET_ALL', guild.id, 'Reset streak %d thành viên', userIds.length);
+        return interaction.editReply({ content: `✅ Đã reset streak cho **${userIds.length}** thành viên.` });
+      } catch (e) {
+        log.error('MEM_RESET_ALL', guild.id, 'batchResetStreak thất bại: %s', e.message);
+        return interaction.editReply({ content: '❌ Không thể reset streak, thử lại sau.' });
+      }
+    }
+
+    // Reset streak per-user (setup:mem:reset:<userId>)
+    if (customId.startsWith(CUSTOM_ID.RESET_PREFIX) && !customId.endsWith(':all')) {
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+      const { ok } = await requireAdmin(interaction, { context: 'reset streak thành viên', deferred: true });
+      if (!ok) return;
+      const userId = customId.slice(CUSTOM_ID.RESET_PREFIX.length);
+      try {
+        await memberService.resetStreak(guild.id, userId);
+        log.info('MEM_RESET', guild.id, 'Reset streak %s', userId);
+        return interaction.editReply({ content: `✅ Đã reset streak của <@${userId}>.` });
+      } catch (e) {
+        log.error('MEM_RESET', guild.id, 'resetStreak thất bại: %s', e.message);
+        return interaction.editReply({ content: '❌ Không thể reset streak, thử lại sau.' });
+      }
     }
 
     if (
@@ -90,8 +130,6 @@ class SetupMemberHandler extends InteractionHandler {
         log.error('MEM_DEL', guild.id, 'deleteMember thất bại: %s', e.message);
         return interaction.editReply({ content: '❌ Không thể xóa, thử lại sau.' });
       }
-      // [FIX-4] deleteReply() trên ephemeral throw DiscordAPIError 404
-      //         → dùng editReply xóa nội dung thay thế
       await interaction.editReply({ content: '✅ Đã xóa thành viên.', components: [] });
       const members = await memberService.getMembers(guild.id).catch(() => []);
       const page = _extractPage(interaction);

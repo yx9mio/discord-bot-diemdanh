@@ -1,5 +1,6 @@
 // src/interaction-handlers/setup/setupStats.js
-// [BUG-1] Fix parse() dùng sai CUSTOM_ID keys (STATS_OPEN/STATS_MEMBER/... không tồn tại)
+// [FIX-ROOT] Thêm 'setup:stats' (HomeView.CUSTOM_ID.STATS) vào parse() → mở menu thống kê
+// [BUG-1] Fix parse() dùng sai CUSTOM_ID keys
 // [BUG-2] Thêm CUSTOM_ID.XEM vào parse()
 // [BUG-3] Fix modal customId: 'setup:stats:search:modal' → 'setup:stats:xem:modal'
 // [BUG-5] Fix StatsView.memberStats() → StatsView.renderToi()
@@ -8,12 +9,14 @@
 'use strict';
 const { ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, MessageFlags } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
-// [BUG-A] Đúng path: ../../../ lên /app/, services/ nằm ở /app/services/
 const { getMemberStats, getMemberBadges, getTopMembers, getServerStats } = require('../../../services/memberService.js');
 const { getAttendancesByUser } = require('../../../services/attendanceService.js');
 const log = require('../../../utils/logger.js');
 const { StatsView } = require('../../commands/setup/_views/_StatsView.js');
 const { CUSTOM_ID } = StatsView;
+
+// CustomId mà HomeView gửi khi bấm nút "Thống kê"
+const HOME_STATS_ID = 'setup:stats';
 
 class SetupStatsHandler extends InteractionHandler {
   constructor(ctx, options) {
@@ -21,6 +24,9 @@ class SetupStatsHandler extends InteractionHandler {
   }
 
   parse(interaction) {
+    // [FIX-ROOT] Nút từ Dashboard gửi 'setup:stats', cần handle riêng để mở menu
+    if (interaction.customId === HOME_STATS_ID) return this.some();
+
     const handled = new Set([
       CUSTOM_ID.TOI,
       CUSTOM_ID.RANK,
@@ -35,6 +41,12 @@ class SetupStatsHandler extends InteractionHandler {
 
   async run(interaction) {
     const { guild, customId } = interaction;
+
+    // [FIX-ROOT] Mở menu thống kê từ dashboard
+    if (customId === HOME_STATS_ID) {
+      await interaction.deferUpdate();
+      return interaction.editReply(StatsView.renderStatsMenu());
+    }
 
     if (customId === CUSTOM_ID.SERVER) {
       await interaction.deferUpdate();
