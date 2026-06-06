@@ -7,8 +7,6 @@
     "start": "node --require dd-trace/init index.js",
     "start:notrace": "node index.js",
     "dev": "nodemon index.js",
-    "test": "vitest run --config vitest.config.mjs",
-    "test:watch": "vitest --config vitest.config.mjs",
     "lint": "eslint . --ext .js",
     "lint:fix": "eslint . --ext .js --fix",
     "prepare": "simple-git-hooks"
@@ -49,7 +47,6 @@
     "lint-staged": "^15.5.0",
     "nodemon": "^3.1.10",
     "pino-pretty": "^13.0.0",
-    "simple-git-hooks": "^2.11.1",
-    "vitest": "^3.2.0"
+    "simple-git-hooks": "^2.11.1"
   }
 }
