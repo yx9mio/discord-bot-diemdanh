@@ -1,10 +1,12 @@
 // interaction-handlers/setup/setupSchedule.js
 'use strict';
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
-const { ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } = require('discord.js');
+const { ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags,
+        ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 const scheduledService = require('../../../services/scheduledService.js');
 const log = require('../../../utils/logger.js');
-const { ScheduleView } = require('../../commands/setup/_views/_ScheduleView.js'); // [FIX-SETUP]
+const { ScheduleView } = require('../../commands/setup/_views/_ScheduleView.js');
+const { MODAL_RECURRING_ID, MODAL_ONETIME_ID } = require('./setupScheduleAddDetailModal.js');
 const { CUSTOM_ID } = ScheduleView;
 
 class SetupScheduleHandler extends InteractionHandler {
@@ -14,25 +16,99 @@ class SetupScheduleHandler extends InteractionHandler {
 
   parse(interaction) {
     const id = interaction.customId;
-    if (id === 'setup:sch') return this.some();
+    if (id === 'setup:sch')           return this.some(); // entry từ dashboard
+    if (id === CUSTOM_ID.ADD_R)       return this.some(); // + Hằng tuần
+    if (id === CUSTOM_ID.ADD_O)       return this.some(); // + Một lần
     if (id === CUSTOM_ID.PAGE_NEXT || id === CUSTOM_ID.PAGE_PREV) return this.some();
-    if (id === CUSTOM_ID.REFRESH) return this.some();
+    if (id === CUSTOM_ID.REFRESH)     return this.some();
     if (id?.startsWith(CUSTOM_ID.DEL_PREFIX) &&
         !id.startsWith(CUSTOM_ID.DEL_CONFIRM) &&
-        !id.startsWith(CUSTOM_ID.DEL_CANCEL)) return this.some();
+        !id.startsWith(CUSTOM_ID.DEL_CANCEL))  return this.some();
     if (id?.startsWith(CUSTOM_ID.DEL_CONFIRM)) return this.some();
-    if (id?.startsWith(CUSTOM_ID.DEL_CANCEL)) return this.some();
+    if (id?.startsWith(CUSTOM_ID.DEL_CANCEL))  return this.some();
     return this.none();
   }
 
   async run(interaction) {
     const { customId, guild } = interaction;
 
+    // ----------------------------------------------------------------
+    // + Hằng tuần — mở thẳng modal recurring detail
+    // ----------------------------------------------------------------
+    if (customId === CUSTOM_ID.ADD_R) {
+      return interaction.showModal(
+        new ModalBuilder()
+          .setCustomId(MODAL_RECURRING_ID)
+          .setTitle('Thêm lịch hàng tuần')
+          .addComponents(
+            new ActionRowBuilder().addComponents(
+              new TextInputBuilder().setCustomId('day_of_week')
+                .setLabel('Ngày trong tuần (t2, t3, t4, t5, t6, t7, cn)')
+                .setStyle(TextInputStyle.Short).setPlaceholder('t7').setRequired(true),
+            ),
+            new ActionRowBuilder().addComponents(
+              new TextInputBuilder().setCustomId('gio_mo')
+                .setLabel('Giờ mở phiên (HH:MM)')
+                .setStyle(TextInputStyle.Short).setPlaceholder('21:00').setRequired(true),
+            ),
+            new ActionRowBuilder().addComponents(
+              new TextInputBuilder().setCustomId('phut_bu')
+                .setLabel('Phiên dài bao nhiêu phút? (0 = không tự đóng)')
+                .setStyle(TextInputStyle.Short).setPlaceholder('30').setRequired(false),
+            ),
+            new ActionRowBuilder().addComponents(
+              new TextInputBuilder().setCustomId('pre_close')
+                .setLabel('Nhắc trước bao nhiêu phút? (mặc định 30)')
+                .setStyle(TextInputStyle.Short).setPlaceholder('30').setRequired(false),
+            ),
+          ),
+      );
+    }
+
+    // ----------------------------------------------------------------
+    // + Một lần — mở thẳng modal onetime detail
+    // ----------------------------------------------------------------
+    if (customId === CUSTOM_ID.ADD_O) {
+      return interaction.showModal(
+        new ModalBuilder()
+          .setCustomId(MODAL_ONETIME_ID)
+          .setTitle('Thêm lịch một lần')
+          .addComponents(
+            new ActionRowBuilder().addComponents(
+              new TextInputBuilder().setCustomId('ngay')
+                .setLabel('Ngày (DD/MM/YYYY hoặc YYYY-MM-DD)')
+                .setStyle(TextInputStyle.Short).setPlaceholder('07/06/2026').setRequired(true),
+            ),
+            new ActionRowBuilder().addComponents(
+              new TextInputBuilder().setCustomId('gio_mo')
+                .setLabel('Giờ mở phiên (HH:MM)')
+                .setStyle(TextInputStyle.Short).setPlaceholder('21:00').setRequired(true),
+            ),
+            new ActionRowBuilder().addComponents(
+              new TextInputBuilder().setCustomId('phut_bu')
+                .setLabel('Phiên dài bao nhiêu phút? (0 = không tự đóng)')
+                .setStyle(TextInputStyle.Short).setPlaceholder('30').setRequired(false),
+            ),
+            new ActionRowBuilder().addComponents(
+              new TextInputBuilder().setCustomId('pre_close')
+                .setLabel('Nhắc trước bao nhiêu phút? (mặc định 30)')
+                .setStyle(TextInputStyle.Short).setPlaceholder('30').setRequired(false),
+            ),
+          ),
+      );
+    }
+
+    // ----------------------------------------------------------------
+    // Làm mới
+    // ----------------------------------------------------------------
     if (customId === CUSTOM_ID.REFRESH) {
       const page = _extractPageFromEmbed(interaction);
       return ScheduleView.handleRefresh(interaction, page);
     }
 
+    // ----------------------------------------------------------------
+    // Xóa: mở confirm
+    // ----------------------------------------------------------------
     if (
       customId.startsWith(CUSTOM_ID.DEL_PREFIX) &&
       !customId.startsWith(CUSTOM_ID.DEL_CONFIRM) &&
@@ -58,11 +134,17 @@ class SetupScheduleHandler extends InteractionHandler {
       return;
     }
 
+    // ----------------------------------------------------------------
+    // Xóa: hủy
+    // ----------------------------------------------------------------
     if (customId.startsWith(CUSTOM_ID.DEL_CANCEL)) {
       await interaction.deferUpdate();
       return interaction.editReply({ content: '↩️ Đã hủy.', components: [] });
     }
 
+    // ----------------------------------------------------------------
+    // Xóa: xác nhận
+    // ----------------------------------------------------------------
     if (customId.startsWith(CUSTOM_ID.DEL_CONFIRM)) {
       await interaction.deferUpdate();
       const id = customId.slice(CUSTOM_ID.DEL_CONFIRM.length);
@@ -82,11 +164,14 @@ class SetupScheduleHandler extends InteractionHandler {
       return;
     }
 
+    // ----------------------------------------------------------------
+    // Phân trang + entry point
+    // ----------------------------------------------------------------
     await interaction.deferUpdate();
     const schedules = await scheduledService.getScheduledSessions(guild.id);
     const curPage = _extractPageFromEmbed(interaction);
     const newPage = customId === CUSTOM_ID.PAGE_NEXT
-      ? Math.min(curPage + 1, Math.ceil(schedules.length / ScheduleView.PAGE_SIZE) - 1)
+      ? Math.min(curPage + 1, Math.max(0, Math.ceil(schedules.length / ScheduleView.PAGE_SIZE) - 1))
       : Math.max(0, curPage - 1);
     return interaction.editReply(ScheduleView.render({ schedules, page: newPage, guild }));
   }
@@ -94,9 +179,9 @@ class SetupScheduleHandler extends InteractionHandler {
 
 function _extractPageFromEmbed(interaction) {
   try {
-    const embed = interaction.message?.embeds?.[0];
+    const embed  = interaction.message?.embeds?.[0];
     const footer = embed?.footer?.text ?? '';
-    const match = footer.match(/Trang (\d+)\/(\d+)/);
+    const match  = footer.match(/Trang (\d+)\/(\d+)/);
     if (match) return Math.max(0, parseInt(match[1], 10) - 1);
   } catch (_e) { /* fallthrough */ }
   return 0;
