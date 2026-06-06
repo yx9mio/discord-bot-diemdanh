@@ -32,6 +32,24 @@ function _badgeStr(badges) {
     .join('  ');
 }
 
+// ── ctx helpers ───────────────────────────────────────────────────────────────
+// Mỗi render fn encode "ctx:<key>" vào footer để setupStats.js REFRESH
+// biết đang ở view nào và reload đúng trang thay vì về menu gốc.
+const CTX = {
+  MENU:   'menu',
+  TOI:    'toi',
+  RANK:   'rank',
+  SERVER: 'server',
+  LICHSU: 'lichsu',
+};
+
+function _footer(ctx, extra = '') {
+  const parts = [FOOTER_DEFAULT, `ctx:${ctx}`];
+  if (extra) parts.push(extra);
+  return parts.join(' · ');
+}
+
+// ── renderStatsMenu ───────────────────────────────────────────────────────────
 function renderStatsMenu() {
   const embed = new EmbedBuilder()
     .setColor(COLORS.PRIMARY)
@@ -45,7 +63,7 @@ function renderStatsMenu() {
       `**🔍 Xem người khác** — Tra cứu thống kê bất kỳ thành viên`,
       `**${ICONS.CHART} Server** — Tổng quan toàn server`,
     ].join('\n'))
-    .setFooter({ text: FOOTER_DEFAULT })
+    .setFooter({ text: _footer(CTX.MENU) })
     .setTimestamp();
 
   const row = new ActionRowBuilder().addComponents(
@@ -62,6 +80,7 @@ function renderStatsMenu() {
   return { embeds: [embed], components: [row, navRow] };
 }
 
+// ── renderToi ─────────────────────────────────────────────────────────────────
 function renderToi(stats, member, guild, badges) {
   const joined  = stats?.total_joined   ?? 0;
   const total   = stats?.total_sessions ?? 0;
@@ -71,11 +90,7 @@ function renderToi(stats, member, guild, badges) {
   const name    = member?.displayName ?? member?.user?.username ?? 'Thành viên';
   const pct     = total > 0 ? Math.round(joined / total * 100) : 0;
   const bar     = buildRichProgressBar(pct);
-
-  // Tính vắng + có phép/trễ từ total_sessions và total_joined
-  // member_stats chỉ lưu total_joined (tham_gia + tre) — vắng = total - joined
   const vang    = Math.max(0, total - joined);
-
   const noData  = total === 0;
 
   const embed = new EmbedBuilder()
@@ -97,7 +112,8 @@ function renderToi(stats, member, guild, badges) {
       { name: '🏆 Streak tốt nhất',                  value: `**${best}** phiên`,             inline: true },
       { name: `${ICONS.STAR} Huy hiệu`,              value: _badgeStr(badges),               inline: false },
     )
-    .setFooter({ text: FOOTER_DEFAULT })
+    // [FIX] Encode ctx:toi để REFRESH reload đúng view này
+    .setFooter({ text: _footer(CTX.TOI) })
     .setTimestamp();
 
   if (typeof member?.displayAvatarURL === 'function') {
@@ -107,6 +123,7 @@ function renderToi(stats, member, guild, badges) {
   return { embeds: [embed], components: [] };
 }
 
+// ── renderRank ────────────────────────────────────────────────────────────────
 /**
  * @param {object[]} rows  – rows từ getTopMembers()
  * @param {import('discord.js').Guild} guild
@@ -117,11 +134,11 @@ async function renderRank(rows, guild, topN = 10) {
     .setColor(COLORS.GOLD)
     .setTitle(`${ICONS.TROPHY} Bảng xếp hạng`)
     .setDescription('> _Chưa có dữ liệu._')
-    .setFooter({ text: FOOTER_DEFAULT })
+    // [FIX] Encode ctx:rank
+    .setFooter({ text: _footer(CTX.RANK) })
     .setTimestamp();
   if (!rows?.length) return { embeds: [empty], components: [] };
 
-  // Fetch members không có trong cache để lấy displayName
   const uncached = rows.filter(r => !guild?.members?.cache?.has(r.user_id)).map(r => r.user_id);
   if (uncached.length && guild) {
     await guild.members.fetch({ user: uncached }).catch(() => null);
@@ -148,16 +165,18 @@ async function renderRank(rows, guild, topN = 10) {
         .setColor(COLORS.GOLD)
         .setTitle(`${ICONS.TROPHY} Top ${Math.min(rows.length, topN)} — Bảng xếp hạng`)
         .setDescription(lines.join('\n\n'))
-        .setFooter({ text: `${FOOTER_DEFAULT} · Cập nhật lần cuối` })
+        // [FIX] Encode ctx:rank
+        .setFooter({ text: _footer(CTX.RANK, 'Cập nhật lần cuối') })
         .setTimestamp(),
     ],
     components: [],
   };
 }
 
+// ── renderLichSu ──────────────────────────────────────────────────────────────
 /**
  * Render lịch sử điểm danh.
- * Footer encode userId để pagination đọc lại đúng người (kể cả khi admin xem người khác).
+ * Footer encode uid + ctx để pagination & REFRESH đọc lại đúng người và view.
  *
  * @param {object[]} records  – từ getAttendancesByUser()
  * @param {string}   userId   – ID người được xem
@@ -173,7 +192,6 @@ function renderLichSu(records, userId, guild, page = 0) {
   const slice       = records.slice(start, start + PAGE_SIZE);
   const name        = guild?.members?.cache?.get(userId)?.displayName ?? `<@${userId}>`;
 
-  // Tính tổng tham gia / vắng để hiển thị trong header
   const tongThamGia = records.filter(r => r.status === 'tham_gia' || r.status === 'tre').length;
   const tongVang    = records.filter(r => r.status === 'khong_tham_gia').length;
   const tongCoPhep  = records.filter(r => r.status === 'co_phep').length;
@@ -185,8 +203,8 @@ function renderLichSu(records, userId, guild, page = 0) {
           .setColor(COLORS.PRIMARY)
           .setTitle(`📋 Lịch sử — ${name}`)
           .setDescription('> _Chưa có điểm danh nào._')
-          // Vẫn encode userId vào footer phòng trường hợp admin reload
-          .setFooter({ text: `${FOOTER_DEFAULT} · uid:${userId}` })
+          // [FIX] Encode ctx:lichsu + uid để REFRESH & pagination đọc đúng
+          .setFooter({ text: _footer(CTX.LICHSU, `uid:${userId}`) })
           .setTimestamp(),
       ],
       components: [],
@@ -208,11 +226,13 @@ function renderLichSu(records, userId, guild, page = 0) {
     return `\`${String(start + i + 1).padStart(2)}.\` ${s.emoji} **${r.sessions?.session_name ?? 'Phiên'}** · ${time}`;
   });
 
-  // Dòng tóm tắt ở đầu description
   const summary = `> ${ICONS.ATTEND_YES} **${tongThamGia}** tham gia · ${ICONS.ATTEND_NO} **${tongVang}** vắng · 🟡 **${tongCoPhep}** có phép\n`;
 
-  // Encode userId vào footer để _extractPageFromEmbed đọc lại khi paginate
-  const footerText = `${FOOTER_DEFAULT} · Trang ${clampedPage + 1}/${totalPages} · ${total} bản ghi · uid:${userId}`;
+  // [FIX] Footer encode ctx:lichsu + trang + uid để cả REFRESH lẫn PAGE_NEXT/PREV đọc đúng
+  const footerText = _footer(
+    CTX.LICHSU,
+    `Trang ${clampedPage + 1}/${totalPages} · ${total} bản ghi · uid:${userId}`,
+  );
 
   const embed = new EmbedBuilder()
     .setColor(COLORS.PRIMARY)
@@ -237,6 +257,7 @@ function renderLichSu(records, userId, guild, page = 0) {
   return { embeds: [embed], components: [navRow] };
 }
 
+// ── renderServerStats ─────────────────────────────────────────────────────────
 function renderServerStats(stats) {
   const pct     = stats?.rate_present      ?? 0;
   const total   = stats?.total_sessions    ?? 0;
@@ -244,7 +265,6 @@ function renderServerStats(stats) {
   const attends = stats?.total_attendances ?? 0;
   const color   = pct >= 80 ? COLORS.GREEN : pct >= 50 ? COLORS.YELLOW : COLORS.RED;
 
-  // Tính số điểm danh hợp lệ (tham_gia + tre)
   const avgPerSession = total > 0 && members > 0
     ? (attends / total).toFixed(1)
     : '—';
@@ -262,18 +282,20 @@ function renderServerStats(stats) {
       { name: `${ICONS.ATTEND_YES} Điểm danh`, value: `**${attends}** lượt`,               inline: true },
       { name: '📊 TB mỗi phiên',         value: `**${avgPerSession}** lượt/phiên`,          inline: true },
     )
-    .setFooter({ text: FOOTER_DEFAULT })
+    // [FIX] Encode ctx:server
+    .setFooter({ text: _footer(CTX.SERVER) })
     .setTimestamp();
 
   return { embeds: [embed], components: [] };
 }
 
+// ── renderXemInput ────────────────────────────────────────────────────────────
 function renderXemInput() {
   const embed = new EmbedBuilder()
     .setColor(COLORS.PRIMARY)
     .setTitle('🔍 Xem điểm danh người khác')
     .setDescription('Nhập **User ID** hoặc **@mention** vào modal.')
-    .setFooter({ text: FOOTER_DEFAULT })
+    .setFooter({ text: _footer(CTX.MENU) })
     .setTimestamp();
   const navRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId(CUSTOM_ID.REFRESH).setLabel('Làm mới').setEmoji(ICONS.REFRESH).setStyle(ButtonStyle.Secondary),
