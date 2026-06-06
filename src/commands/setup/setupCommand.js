@@ -8,6 +8,7 @@ const configService    = require('../../../services/configService.js');
 const scheduledService = require('../../../services/scheduledService.js');
 const memberService    = require('../../../services/memberService.js');
 const sessionService   = require('../../../services/sessionService.js');
+const log = require('../../../utils/logger.js');
 const { HomeView } = require('./_views/_HomeView.js'); // [FIX-SETUP] đường dẫn mới
 
 class SetupCommand extends Command {
@@ -29,7 +30,18 @@ class SetupCommand extends Command {
   }
 
   async chatInputRun(interaction) {
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    // [FIX] Guard stale interaction (40060) xảy ra khi bot restart đúcng lúc user gọi lệnh
+    // Discord có thể deliver cùng 1 interaction tới 2 instance trong quá trình handover
+    try {
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    } catch (e) {
+      if (e.code === 40060) {
+        log.warn('SETUP', interaction.guildId, 'Stale interaction bỏ qua (40060): %s', interaction.id);
+        return;
+      }
+      throw e;
+    }
+
     const { guild } = interaction;
     const [cfg, schedules, members, session] = await Promise.all([
       configService.getGuildConfig(guild.id),
