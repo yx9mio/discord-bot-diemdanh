@@ -1,56 +1,80 @@
-// interaction-handlers/attendanceSelect.js
-// Handles: attendance:select (StringSelectMenu cho điểm danh)
-// [B1] Thay thế button bằng select menu
-// [A4] Refactor để dùng attendanceHandler.markAttendance()
-// [BUG-D] deferReply lên đầu run() trước validation để tránh cấu trúc fragile
+// src/interaction-handlers/attendanceSelect.js
+// Handles: attendance_select (StringSelect) — user tự điểm danh từ select menu
 'use strict';
-const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const { MessageFlags } = require('discord.js');
-const { getActiveSession } = require('../../services/sessionService.js');
-const { markAttendance } = require('../../utils/attendanceHandler.js');
-const { addBreadcrumb } = require('../../utils/sentry.js');
-
-const SELECT_TO_STATUS = {
-  'tham_gia':       'tham_gia',
-  'tre':            'tre',
-  'khong_tham_gia': 'khong_tham_gia',
-  'co_phep':        'co_phep',
-};
+const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
+const sessionService    = require('../../services/sessionService.js');
+const attendanceService = require('../../services/attendanceService.js');
+const log               = require('../../utils/logger.js');
+const { replyErr }      = require('../../utils/embeds.js');
 
 class AttendanceSelectHandler extends InteractionHandler {
   constructor(ctx, options) {
-    super(ctx, { ...options, interactionHandlerType: InteractionHandlerTypes.StringSelect });
+    super(ctx, { ...options, interactionHandlerType: InteractionHandlerTypes.SelectMenu });
   }
 
   parse(interaction) {
-    if (interaction.customId === 'attendance:select') return this.some();
+    if (interaction.customId === 'attendance_select') return this.some();
     return this.none();
   }
 
   async run(interaction) {
-    addBreadcrumb('interaction', 'attendanceSelect', {
-      customId: interaction.customId,
-      userId: interaction.user?.id,
-    });
+    const { guild, member, user } = interaction;
+    const status = interaction.values[0];
 
-    const { guild, member, user, values } = interaction;
-
-    // [BUG-D] Defer ngay đầu tiên — dùng editReply cho mọi lỗi phía dưới
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-    const statusValue = values[0];
-    const status = SELECT_TO_STATUS[statusValue];
-    if (!status) {
-      return interaction.editReply({ content: '❌ Trạng thái điểm danh không hợp lệ.' });
-    }
-
-    const session = await getActiveSession(guild.id);
+    const session = await sessionService.getActiveSession(guild.id);
     if (!session) {
       return interaction.editReply({ content: '🚫 Không có phiên điểm danh nào đang mở.' });
     }
 
-    // [A4] Dùng shared handler logic
-    return markAttendance({ guild, member, user, status, interaction, session, deferred: true });
+    // [SEC-FIX-2] Validate session thuộc đúng guild — ngăn cross-guild session injection
+    if (session.guild_id !== guild.id) {
+      log.warn('SECURITY', guild.id,
+        'attendanceSelect: guild mismatch session.guild_id=%s guild.id=%s user=%s',
+        session.guild_id, guild.id, user.id);
+      return interaction.editReply({ content: '❌ Phiên không hợp lệ.' });
+    }
+
+    // Distributed lock — ngăn double submit
+    const acquired = await attendanceService.tryAcquireAttendanceLock(session.id, user.id);
+    if (!acquired) {
+      return interaction.editReply({ content: '⏳ Đang xử lý điểm danh của bạn, vui lòng chờ...' });
+    }
+
+    try {
+      const existing = await attendanceService.getAttendance(session.id, user.id);
+      if (existing) {
+        await attendanceService.releaseAttendanceLock(session.id, user.id);
+        return interaction.editReply({ content: `✅ Bạn đã điểm danh rồi: **${existing.status}**.` });
+      }
+
+      const memberData = await guild.members.fetch(user.id).catch(() => null);
+      await attendanceService.upsertAttendance({
+        sessionId:  session.id,
+        userId:     user.id,
+        guildId:    guild.id,
+        status,
+        username:   user.username,
+        displayName: memberData?.displayName ?? user.username,
+      });
+
+      const statusLabel = {
+        tham_gia:       '✅ Tham gia',
+        tre:            '⏰ Trễ',
+        co_phep:        '📋 Có phép',
+        khong_tham_gia: '❌ Không tham gia',
+      }[status] ?? status;
+
+      log.info('ATTEND', guild.id, '%s điểm danh: %s', user.tag, status);
+      return interaction.editReply({ content: `${statusLabel} — Đã ghi nhận điểm danh của bạn.` });
+    } catch (e) {
+      log.error('ATTEND', guild.id, 'Lỗi upsertAttendance: %s', e.message);
+      return interaction.editReply(replyErr('❌ Không thể ghi nhận điểm danh, thử lại sau.'));
+    } finally {
+      await attendanceService.releaseAttendanceLock(session.id, user.id).catch(() => {});
+    }
   }
 }
 

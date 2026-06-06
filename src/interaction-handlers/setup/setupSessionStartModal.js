@@ -42,8 +42,9 @@ class SetupSessionStartModalHandler extends InteractionHandler {
       return interaction.editReply({ content: `⚠️ Đang có phiên **${existing.session_name}** đang mở.` });
     }
 
-    const sessionName = interaction.fields.getTextInputValue('ten_phien').trim() || `Phiên ${fmtTs(new Date().toISOString())}`;
-    const moTa        = interaction.fields.getTextInputValue('mo_ta').trim() || null;
+    // [SEC-FIX-3] slice() là safety-net phòng thủ — Discord modal maxLength enforce trước
+    const sessionName = (interaction.fields.getTextInputValue('ten_phien').trim() || `Phiên ${fmtTs(new Date().toISOString())}`).slice(0, 100);
+    const moTa        = (interaction.fields.getTextInputValue('mo_ta').trim() || null)?.slice(0, 200) ?? null;
     const phutVal     = (interaction.fields.getTextInputValue('phut_dong') || '').trim() || '0';
     const phut        = parseInt(phutVal, 10) || null;
     const phaiRoleId  = interaction.fields.getTextInputValue('phai_role').trim() || null;
