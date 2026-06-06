@@ -5,7 +5,10 @@ const sessionService    = require('../services/sessionService.js');
 const attendanceService = require('../services/attendanceService.js');
 const log = require('./logger.js');
 const { ketThucPhien, thongBaoHuyHieu, voHieuHoaNutDiemDanh, guiCsvDinhKem } = require('./session.js');
-const { buildSummaryEmbed, FOOTER_DEFAULT, buildSessionEmbed, buildSessionActionRow } = require('./embeds.js');
+const {
+  buildSummaryEmbed, FOOTER_DEFAULT, buildSessionEmbed,
+  buildSessionActionRow, buildAttendanceSelectRow,
+} = require('./embeds.js');
 
 const timers = new Map(); // guildId → { remind15, remind5, autoClose }
 const refreshTimers = new Map(); // sessionId → intervalId
@@ -107,7 +110,7 @@ function coHenGio(guildId) {
   return timers.has(guildId);
 }
 
-// ─── Auto-refresh embed (C3) ───────────────────────────────────────────────────────────────────────────────
+// ─── Auto-refresh embed (C3) ─────────────────────────────────────────────────
 function startAutoRefresh(sessionId, channelId, messageId, client) {
   stopAutoRefresh(sessionId);
 
@@ -126,21 +129,18 @@ function startAutoRefresh(sessionId, channelId, messageId, client) {
         return;
       }
 
-      const { embed, components: paginationComponents } = buildSessionEmbed(guild, session, attended, session.phai_role_ids ?? []);
-      // [FIX] buildSessionActionRow(true) — phiên vẫn đang mở trong interval
-      const components = [...buildSessionActionRow(true), ...paginationComponents];
+      const { embed, components: pagComponents } = buildSessionEmbed(guild, session, attended, session.phai_role_ids ?? []);
+      // [FIX-SELECT] Giữ nguyên select menu sau mỗi lần auto-refresh
+      //   Thứ tự: selectRow → adminRows → pagComponents, tối đa 5 rows
+      const selectRow = buildAttendanceSelectRow(true);
+      const adminRows = buildSessionActionRow(true);
+      const components = [selectRow, ...adminRows, ...pagComponents].slice(0, 5);
 
       const ch = await guild.channels.fetch(channelId).catch(() => null);
-      if (!ch) {
-        stopAutoRefresh(sessionId);
-        return;
-      }
+      if (!ch) { stopAutoRefresh(sessionId); return; }
 
       const msg = await ch.messages.fetch(messageId).catch(() => null);
-      if (!msg) {
-        stopAutoRefresh(sessionId);
-        return;
-      }
+      if (!msg) { stopAutoRefresh(sessionId); return; }
 
       await msg.edit({ embeds: [embed], components }).catch(() => {
         stopAutoRefresh(sessionId);
@@ -158,7 +158,6 @@ function startAutoRefresh(sessionId, channelId, messageId, client) {
 function stopAutoRefresh(sessionId) {
   const intervalId = refreshTimers.get(sessionId);
   if (!intervalId) return;
-
   clearInterval(intervalId);
   refreshTimers.delete(sessionId);
   log.info('AUTO_REFRESH', sessionId, 'Đã tắt auto-refresh');
