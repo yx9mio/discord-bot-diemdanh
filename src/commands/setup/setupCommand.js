@@ -4,10 +4,10 @@
 'use strict';
 const { Command } = require('@sapphire/framework');
 const { MessageFlags, SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
-const configService    = require('../../services/configService.js');
-const scheduledService = require('../../services/scheduledService.js');
-const memberService    = require('../../services/memberService.js');
-const sessionService   = require('../../services/sessionService.js');
+const configService    = require('../../../services/configService.js');
+const scheduledService = require('../../../services/scheduledService.js');
+const memberService    = require('../../../services/memberService.js');
+const sessionService   = require('../../../services/sessionService.js');
 const { HomeView } = require('./_views/_HomeView.js'); // [FIX-SETUP] đường dẫn mới
 
 class SetupCommand extends Command {
