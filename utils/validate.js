@@ -3,6 +3,19 @@
 const { z }                       = require('zod');
 const { fromZodError }            = require('zod-validation-error');
 
+// ─── Helper: chấp nhận cả ISO 8601 chuẩn (T) lẫn format Supabase PostgreSQL (space)
+// Supabase trả về: "2026-05-31 05:51:42.288+00" — dấu cách, không có 'T'
+// Zod z.string().datetime() mặc định yêu cầu chữ 'T' → reject → spam warning log
+// pgTimestamp: normalize space→T rồi validate bằng z.string().datetime({ offset: true })
+const pgTimestamp = z
+  .string()
+  .transform(s => s.replace(' ', 'T'))   // "2026-05-31 05:51:42+00" → "2026-05-31T05:51:42+00"
+  .pipe(z.string().datetime({ offset: true }));
+
+// Nullable + optional wrapper dùng lại
+const pgTimestampNullOpt = pgTimestamp.nullable().optional();
+const pgTimestampOpt     = pgTimestamp.optional();
+
 // ─── Scheduled session (lịch cố định) ────────────────────────────────────────
 const LichSchema = z.object({
   id:                 z.string().uuid(),
@@ -33,10 +46,10 @@ const SessionSchema = z.object({
   message_id:           z.string().nullable().optional(),
   eligible_member_ids:  z.array(z.string()).nullable().optional(),
   allowed_role_id:      z.string().nullable().optional(),
-  phai_role_ids:        z.array(z.string()).nullable().optional(), // [A3] Thêm field persist phai_role_ids
-  auto_close_at:        z.string().datetime().nullable().optional(),
-  created_at:           z.string().datetime().optional(),
-  ended_at:             z.string().datetime().nullable().optional(),
+  phai_role_ids:        z.array(z.string()).nullable().optional(), // [A3] persist phai_role_ids
+  auto_close_at:        pgTimestampNullOpt,
+  started_at:           pgTimestampOpt,
+  ended_at:             pgTimestampNullOpt,
 });
 
 // ─── Attendance row ───────────────────────────────────────────────────────────
@@ -48,7 +61,7 @@ const AttendanceSchema = z.object({
   username:      z.string().nullable().optional(),
   status:        z.enum(['tham_gia', 'tre', 'khong_tham_gia', 'co_phep']).optional(),
   marked_by:     z.string().nullable().optional(),
-  checked_in_at: z.string().datetime().nullable().optional(),
+  checked_in_at: pgTimestampNullOpt,
 });
 
 // ─── Guild config ─────────────────────────────────────────────────────────────
