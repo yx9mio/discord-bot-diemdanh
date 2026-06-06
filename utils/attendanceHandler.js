@@ -6,11 +6,11 @@
 // [FIX-SELECT] Rebuild select menu khi update embed — tránh select menu bị mất
 'use strict';
 const { MessageFlags } = require('discord.js');
-const log = require('../utils/logger.js');
+const log = require('./logger.js');
 const attendanceService = require('../services/attendanceService.js');
 const memberService     = require('../services/memberService.js');
 const configService     = require('../services/configService.js');
-const metrics = require('../utils/metrics.js'); // [Phase C]
+const metrics = require('./metrics.js'); // [Phase C]
 const {
   buildSessionEmbed,
   buildSessionActionRow,
