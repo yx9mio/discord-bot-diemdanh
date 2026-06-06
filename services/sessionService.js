@@ -10,14 +10,15 @@ async function createSession(payload) {
     session_name:        payload.session_name        ?? payload.sessionName,
     eligible_member_ids: payload.eligible_member_ids ?? payload.eligibleMemberIds ?? null,
     phai_role_ids:       payload.phai_role_ids       ?? payload.phaiRoleIds ?? null,
-    description:         payload.description         ?? null,
     is_active:           payload.is_active           ?? true,
     cancelled:           payload.cancelled           ?? false,
   };
+  // xóa alias keys và field không có trong schema
   delete row.guildId;
   delete row.sessionName;
   delete row.eligibleMemberIds;
   delete row.phaiRoleIds;
+  delete row.description;
   const { data, error } = await getClient().from('sessions').insert(row).select().single();
   _throwSupabase(error, 'createSession');
   addBreadcrumb('session', 'createSession', { guildId: row.guild_id, sessionName: row.session_name });
