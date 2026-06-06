@@ -1,9 +1,6 @@
 'use strict';
 // interaction-handlers/setup/setupMember.js
-// [FIX] Sync toàn bộ custom IDs với _MemberView.CUSTOM_ID
-// [BUG-A] DEL_confirm: deferReply ephemeral thay vì deferUpdate để requireAdmin lỗi không overwrite message gốc
-// [BUG-B] Typo "Xác nhậnminh" → "Xác nhận"
-// [BUG-C] DEL prompt: deferUpdate+editReply thay vì reply() để tránh tạo 2 ephemeral messages
+// [FIX-4] deleteReply() trên ephemeral reply throw 404 → thay bằng editReply content rỗng
 const { MessageFlags, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const memberService = require('../../../services/memberService.js');
@@ -20,7 +17,7 @@ class SetupMemberHandler extends InteractionHandler {
 
   parse(interaction) {
     const id = interaction.customId;
-    if (id === 'setup:member') return this.some();           // entry point từ dashboard
+    if (id === 'setup:member') return this.some();
     if (id === CUSTOM_ID.PAGE_PREV)    return this.some();
     if (id === CUSTOM_ID.PAGE_NEXT)    return this.some();
     if (id === CUSTOM_ID.REFRESH)      return this.some();
@@ -34,14 +31,12 @@ class SetupMemberHandler extends InteractionHandler {
   async run(interaction) {
     const { customId, guild } = interaction;
 
-    // --- Entry point từ Dashboard ---
     if (customId === 'setup:member') {
       await interaction.deferUpdate();
       const members = await memberService.getMembers(guild.id);
       return interaction.editReply(MemberView.render({ members, page: 0, guild }));
     }
 
-    // --- Phân trang ---
     if (customId === CUSTOM_ID.PAGE_PREV || customId === CUSTOM_ID.PAGE_NEXT) {
       await interaction.deferUpdate();
       const members = await memberService.getMembers(guild.id);
@@ -53,14 +48,11 @@ class SetupMemberHandler extends InteractionHandler {
       return interaction.editReply(MemberView.render({ members, page: newPage, guild }));
     }
 
-    // --- Làm mới ---
     if (customId === CUSTOM_ID.REFRESH) {
       const page = _extractPage(interaction);
       return MemberView.handleRefresh(interaction, page);
     }
 
-    // [BUG-C] Xóa thành viên: mở confirm — dùng deferUpdate+editReply để replace message cũ,
-    //         tránh tạo ephemeral message thứ hai
     if (
       customId.startsWith(CUSTOM_ID.DEL_PREFIX) &&
       !customId.includes(':confirm') &&
@@ -68,7 +60,6 @@ class SetupMemberHandler extends InteractionHandler {
     ) {
       const userId = customId.slice(CUSTOM_ID.DEL_PREFIX.length);
       await interaction.deferUpdate();
-      // [BUG-B] Sửa typo "Xác nhậnminh" → "Xác nhận"
       return interaction.editReply({
         content: `⚠️ Xác nhận xóa thành viên <@${userId}> khỏi danh sách?`,
         embeds: [],
@@ -87,7 +78,6 @@ class SetupMemberHandler extends InteractionHandler {
       });
     }
 
-    // [BUG-A] Xóa: xác nhận — deferReply ephemeral để requireAdmin lỗi không overwrite message danh sách
     if (customId.startsWith(CUSTOM_ID.DEL_PREFIX + 'confirm:')) {
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       const { ok } = await requireAdmin(interaction, { context: 'xóa thành viên', deferred: true });
@@ -100,14 +90,14 @@ class SetupMemberHandler extends InteractionHandler {
         log.error('MEM_DEL', guild.id, 'deleteMember thất bại: %s', e.message);
         return interaction.editReply({ content: '❌ Không thể xóa, thử lại sau.' });
       }
-      // Xóa thành công: dismiss ephemeral reply và cập nhật message danh sách
-      await interaction.deleteReply();
+      // [FIX-4] deleteReply() trên ephemeral throw DiscordAPIError 404
+      //         → dùng editReply xóa nội dung thay thế
+      await interaction.editReply({ content: '✅ Đã xóa thành viên.', components: [] });
       const members = await memberService.getMembers(guild.id).catch(() => []);
       const page = _extractPage(interaction);
       return interaction.message.edit({ ...MemberView.render({ members, page, guild }), content: undefined });
     }
 
-    // Xóa: hủy — dismiss confirm prompt, khôi phục danh sách
     if (customId.startsWith(CUSTOM_ID.DEL_PREFIX + 'cancel:')) {
       await interaction.deferUpdate();
       const members = await memberService.getMembers(guild.id).catch(() => []);
@@ -115,7 +105,6 @@ class SetupMemberHandler extends InteractionHandler {
       return interaction.editReply({ ...MemberView.render({ members, page, guild }), content: undefined });
     }
 
-    // --- Chỉnh sửa thành viên ---
     if (customId.startsWith(CUSTOM_ID.EDIT_PREFIX)) {
       const userId = customId.slice(CUSTOM_ID.EDIT_PREFIX.length);
       if (!userId) return interaction.reply({ content: '❌ Không tìm thấy thành viên.', flags: MessageFlags.Ephemeral });
