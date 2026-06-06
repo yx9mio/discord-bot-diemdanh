@@ -1,12 +1,11 @@
 // src/interaction-handlers/setup/setupStatsModal.js
 // Handles: setup:stats:xem:modal (ModalSubmit) — xem thống kê thành viên cụ thể
-// [BUG-3] Modal ID giữ nguyên 'setup:stats:xem:modal' (đây là đúng, setupStats.js đã fix để khớp)
-// [BUG-A] Fix import path: services ở root, không phải src/services
+// [BUG-3] Modal ID giữ nguyên 'setup:stats:xem:modal'
+// [BUG-A] Fix import path: ../../../services/ (3 cấp lên /app/)
 'use strict';
 const { MessageFlags } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
-// [BUG-A] Đúng path: services nằm ở root
-const { getMemberStats, getMemberBadges } = require('../../../../services/memberService.js');
+const { getMemberStats, getMemberBadges } = require('../../../services/memberService.js');
 const log = require('../../../utils/logger.js');
 const { requireAdmin } = require('../../../utils/permissions.js');
 const { StatsView } = require('../../commands/setup/_views/_StatsView.js');

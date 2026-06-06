@@ -1,12 +1,10 @@
 // src/interaction-handlers/setup/setupStatsLichsu.js
-// [BUG-4] NEW — Handler cho pagination lịch sử: lichsu:prev / lichsu:next
-// Buttons được tạo bởi _StatsView.renderLichSu() nhưng chưa có handler nào
-// [BUG-A] Fix import path: services ở root, không phải src/services
+// [BUG-4] NEW — Handler pagination lịch sử: lichsu:prev / lichsu:next
+// [BUG-A] Fix import path: ../../../services/ (3 cấp lên /app/)
 // [BUG-D] Đọc targetUserId từ embed description thay vì luôn dùng interaction.user.id
 'use strict';
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
-// [BUG-A] Đúng path: services nằm ở root
-const { getAttendancesByUser } = require('../../../../services/attendanceService.js');
+const { getAttendancesByUser } = require('../../../services/attendanceService.js');
 const log = require('../../../utils/logger.js');
 const { StatsView } = require('../../commands/setup/_views/_StatsView.js');
 
@@ -28,16 +26,14 @@ class SetupStatsLichsuHandler extends InteractionHandler {
     await interaction.deferUpdate();
     const { guild, customId } = interaction;
 
-    // Đọc trang hiện tại từ footer embed (format: "... · Trang X/Y · ...")
     let currentPage = 0;
     try {
       const footer = interaction.message?.embeds?.[0]?.footer?.text ?? '';
       const match  = footer.match(/Trang (\d+)\/(\d+)/);
-      if (match) currentPage = parseInt(match[1], 10) - 1; // 0-indexed
+      if (match) currentPage = parseInt(match[1], 10) - 1;
     } catch { /* fallback page 0 */ }
 
-    // [BUG-D] Đọc targetUserId từ embed description (<@userId>) thay vì luôn dùng
-    // interaction.user.id — fix trường hợp admin xem lịch sử người khác bị nhảy về chính mình
+    // [BUG-D] Đọc targetUserId từ embed description để admin xem người khác không bị nhảy về mình
     let targetUserId = interaction.user.id;
     try {
       const desc = interaction.message?.embeds?.[0]?.description ?? '';

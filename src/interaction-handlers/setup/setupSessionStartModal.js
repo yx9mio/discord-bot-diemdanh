@@ -1,25 +1,21 @@
 // src/interaction-handlers/setup/setupSessionStartModal.js
 // Handles: setup:session:start:modal (ModalSubmit) — tạo phiên mới từ form
-// [FIX-SELECT] Dùng buildAttendanceSelectRow() từ embeds.js thay vì inline
-//              để đảm bảo cùng component được rebuild trong attendanceHandler
-// [BUG-A] Fix import path: services ở root, không phải src/services
+// [FIX-SELECT] buildAttendanceSelectRow() + buildSessionActionRow() từ embeds.js
+// [BUG-A] Fix import path: ../../../services/ (3 cấp lên /app/)
 'use strict';
-const { MessageFlags } = require('discord.js');
+const { MessageFlags, EmbedBuilder } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
-// [BUG-A] Đúng path: services nằm ở root
-const sessionService = require('../../../../services/sessionService.js');
-const configService  = require('../../../../services/configService.js');
+const sessionService = require('../../../services/sessionService.js');
+const configService  = require('../../../services/configService.js');
 const log            = require('../../../utils/logger.js');
 const { requireAdmin }   = require('../../../utils/permissions.js');
 const {
   FOOTER_DEFAULT,
-  buildSessionEmbed,
   buildSessionActionRow,
   buildAttendanceSelectRow,
 } = require('../../../utils/embeds.js');
 const { fmtTs }          = require('../../../utils/format.js');
 const { datHenGioDong, startAutoRefresh } = require('../../../utils/timers.js');
-const { EmbedBuilder }   = require('discord.js');
 
 const MODAL_ID = 'setup:session:start:modal';
 
@@ -80,7 +76,6 @@ class SetupSessionStartModalHandler extends InteractionHandler {
       .setFooter({ text: FOOTER_DEFAULT })
       .setTimestamp();
 
-    // [FIX-SELECT] Dùng buildAttendanceSelectRow() + buildSessionActionRow()
     const selectRow = buildAttendanceSelectRow(true);
     const adminRows = buildSessionActionRow(true);
     const allComponents = [selectRow, ...adminRows].slice(0, 5);

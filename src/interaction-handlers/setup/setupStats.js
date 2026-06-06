@@ -8,9 +8,9 @@
 'use strict';
 const { ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, MessageFlags } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
-// [BUG-A] Đúng path: services nằm ở root (không phải src/services)
-const { getMemberStats, getMemberBadges, getTopMembers, getServerStats } = require('../../../../services/memberService.js');
-const { getAttendancesByUser } = require('../../../../services/attendanceService.js');
+// [BUG-A] Đúng path: ../../../ lên /app/, services/ nằm ở /app/services/
+const { getMemberStats, getMemberBadges, getTopMembers, getServerStats } = require('../../../services/memberService.js');
+const { getAttendancesByUser } = require('../../../services/attendanceService.js');
 const log = require('../../../utils/logger.js');
 const { StatsView } = require('../../commands/setup/_views/_StatsView.js');
 const { CUSTOM_ID } = StatsView;
@@ -21,7 +21,6 @@ class SetupStatsHandler extends InteractionHandler {
   }
 
   parse(interaction) {
-    // [BUG-1+2] Dùng đúng keys từ CUSTOM_ID: TOI, RANK, LICHSU, XEM, SERVER, REFRESH
     const handled = new Set([
       CUSTOM_ID.TOI,
       CUSTOM_ID.RANK,
@@ -37,11 +36,9 @@ class SetupStatsHandler extends InteractionHandler {
   async run(interaction) {
     const { guild, customId } = interaction;
 
-    // SERVER stats
     if (customId === CUSTOM_ID.SERVER) {
       await interaction.deferUpdate();
       try {
-        // [BUG-C] Fetch cả top và truyền guild vào renderServerStats
         const [stats, top] = await Promise.all([
           getServerStats(guild.id),
           getTopMembers(guild.id, 5),
@@ -53,7 +50,6 @@ class SetupStatsHandler extends InteractionHandler {
       }
     }
 
-    // Stats cá nhân (Của tôi)
     if (customId === CUSTOM_ID.TOI) {
       await interaction.deferUpdate();
       try {
@@ -61,7 +57,6 @@ class SetupStatsHandler extends InteractionHandler {
         const badges = await getMemberBadges(guild.id, interaction.user.id);
         let member;
         try { member = await guild.members.fetch(interaction.user.id); } catch { member = null; }
-        // [BUG-5] Đúng tên method là renderToi, không phải memberStats
         return interaction.editReply(StatsView.renderToi(stats, member, guild, badges));
       } catch (e) {
         log.error('SETUP_STATS', guild.id, 'getMemberStats thất bại: %s', e.message);
@@ -69,7 +64,6 @@ class SetupStatsHandler extends InteractionHandler {
       }
     }
 
-    // Bảng xếp hạng
     if (customId === CUSTOM_ID.RANK) {
       await interaction.deferUpdate();
       try {
@@ -81,7 +75,6 @@ class SetupStatsHandler extends InteractionHandler {
       }
     }
 
-    // Lịch sử cá nhân
     if (customId === CUSTOM_ID.LICHSU) {
       await interaction.deferUpdate();
       try {
@@ -93,10 +86,8 @@ class SetupStatsHandler extends InteractionHandler {
       }
     }
 
-    // Xem người khác — hiện modal nhập user ID
     if (customId === CUSTOM_ID.XEM) {
       const modal = new ModalBuilder()
-        // [BUG-3] Sửa customId khớp với setupStatsModal.js parse: 'setup:stats:xem:modal'
         .setCustomId('setup:stats:xem:modal')
         .setTitle('Xem điểm danh thành viên khác')
         .addComponents(
@@ -113,7 +104,6 @@ class SetupStatsHandler extends InteractionHandler {
       return interaction.showModal(modal);
     }
 
-    // Refresh — quay về menu stats
     if (customId === CUSTOM_ID.REFRESH) {
       await interaction.deferUpdate();
       return interaction.editReply(StatsView.renderStatsMenu());
