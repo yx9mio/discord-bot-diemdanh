@@ -20,6 +20,7 @@ const { ketThucPhien, thongBaoHuyHieu, voHieuHoaNutDiemDanh } = require('../../u
 const { xoaHenGio, stopAutoRefresh } = require('../../utils/timers.js');
 const { buildAdminMarkModal } = require('../../utils/adminMarkModal.js');
 
+// [BUG-FIX] Đồng bộ với tất cả customId được dùng trong file này
 const SESSION_BUTTON_IDS = new Set([
   'attend_view', 'attend_close', 'attend_refresh', 'admin:mark',
   'attend_view:prev', 'attend_view:next',
@@ -34,7 +35,9 @@ class SessionButtonHandler extends InteractionHandler {
   }
 
   parse(interaction) {
+    // Prefix match cho attend_view:prev / attend_view:next
     if (SESSION_BUTTON_IDS.has(interaction.customId)) return this.some();
+    if (interaction.customId.startsWith('attend_view:')) return this.some();
     return this.none();
   }
 
@@ -42,7 +45,7 @@ class SessionButtonHandler extends InteractionHandler {
     const { customId, guild } = interaction;
 
     // ── attend_view / attend_view:prev / attend_view:next ────────────────────────
-if (customId === 'attend_view' || customId.startsWith('attend_view:')) {
+    if (customId === 'attend_view' || customId.startsWith('attend_view:')) {
       const session = await sessionService.getActiveSession(guild.id);
       if (!session) {
         if (customId.startsWith('attend_view:')) {
@@ -82,7 +85,7 @@ if (customId === 'attend_view' || customId.startsWith('attend_view:')) {
     }
 
     // ── attend_refresh ────────────────────────────────────────────────────────────
-if (customId === 'attend_refresh') {
+    if (customId === 'attend_refresh') {
       await interaction.deferUpdate();
       try {
         const session = await sessionService.getActiveSession(interaction.guildId);
@@ -107,14 +110,14 @@ if (customId === 'attend_refresh') {
     }
 
     // ── admin:mark ─────────────────────────────────────────────────────────────────
-if (customId === 'admin:mark') {
+    if (customId === 'admin:mark') {
       const { ok } = await requireAdmin(interaction, { context: 'điểm danh thay' });
       if (!ok) return;
       return interaction.showModal(buildAdminMarkModal());
     }
 
     // ── session:cancel ──────────────────────────────────────────────────────────
-if (customId === 'session:cancel') {
+    if (customId === 'session:cancel') {
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       const { ok } = await requireAdmin(interaction, { context: 'hủy phiên', deferred: true });
       if (!ok) return;
@@ -130,10 +133,10 @@ if (customId === 'session:cancel') {
     }
 
     // ── session:confirm_cancel ───────────────────────────────────────────────────
-if (customId === 'session:confirm_cancel') {
+    if (customId === 'session:confirm_cancel') {
       const { channel } = interaction;
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-      // [SEC-FIX-1] Re-validate admin — ngăn user thường bypass confirm dialog
+      // [SEC-FIX-1] Re-validate admin
       const { ok: okCancel } = await requireAdmin(interaction, { context: 'xác nhận hủy phiên', deferred: true });
       if (!okCancel) return;
       const session = await sessionService.getActiveSession(guild.id);
@@ -162,12 +165,12 @@ if (customId === 'session:confirm_cancel') {
     }
 
     // ── session:cancel_cancel ───────────────────────────────────────────────────
-if (customId === 'session:cancel_cancel') {
+    if (customId === 'session:cancel_cancel') {
       return interaction.update({ content: '↩️ Đã hủy. Phiên vẫn đang mở.', embeds: [], components: [] });
     }
 
     // ── session:export_csv ───────────────────────────────────────────────────────
-if (customId === 'session:export_csv') {
+    if (customId === 'session:export_csv') {
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       const { ok } = await requireAdmin(interaction, { context: 'xuất CSV', deferred: true });
       if (!ok) return;
@@ -192,7 +195,7 @@ if (customId === 'session:export_csv') {
     }
 
     // ── attend_close ─────────────────────────────────────────────────────────────
-if (customId === 'attend_close') {
+    if (customId === 'attend_close') {
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       const { ok } = await requireAdmin(interaction, { context: 'đóng phiên', deferred: true });
       if (!ok) return;
@@ -208,10 +211,10 @@ if (customId === 'attend_close') {
     }
 
     // ── session:confirm_close ───────────────────────────────────────────────────
-if (customId === 'session:confirm_close') {
+    if (customId === 'session:confirm_close') {
       const { channel } = interaction;
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-      // [SEC-FIX-1] Re-validate admin — ngăn user thường bypass confirm dialog
+      // [SEC-FIX-1] Re-validate admin
       const { ok: okClose } = await requireAdmin(interaction, { context: 'xác nhận đóng phiên', deferred: true });
       if (!okClose) return;
       const session = await sessionService.getActiveSession(guild.id);
@@ -230,19 +233,14 @@ if (customId === 'session:confirm_close') {
         return interaction.editReply(replyErrEdit('❌ Không thể đóng phiên do lỗi DB, thử lại sau.'));
       }
 
-      // [BUG-FIX] Auto-mark khong_tham_gia cho eligible members chưa điểm danh.
-      // Phải chạy TRƯỚC getAttendances để attended array đầy đủ khi tính stats.
+      // Auto-mark khong_tham_gia cho eligible members chưa điểm danh
       const eligibleIds = session.eligible_member_ids ?? [];
       if (eligibleIds.length > 0) {
         try {
-          // Lấy danh sách user đã có record (bất kỳ status nào)
           const existingRecords = await attendanceService.getAttendances(session.id);
           const existingUserIds = new Set(existingRecords.map(r => r.user_id));
-
-          // Chỉ insert những user chưa có record nào
           const absentIds = eligibleIds.filter(uid => !existingUserIds.has(uid));
           if (absentIds.length > 0) {
-            // Resolve username từ guild cache (best-effort)
             await guild.members.fetch().catch(() => {});
             const absentRows = absentIds.map(uid => {
               const member = guild.members.cache.get(uid);
@@ -256,7 +254,6 @@ if (customId === 'session:confirm_close') {
               absentIds.length, absentIds.join(', '));
           }
         } catch (e) {
-          // Không block luồng đóng phiên — log warning và tiếp tục
           log.warn('CLOSE', guild.id, 'bulkInsertAbsent thất bại (non-fatal): %s', e.message);
         }
       }
@@ -277,7 +274,7 @@ if (customId === 'session:confirm_close') {
     }
 
     // ── session:cancel_close ────────────────────────────────────────────────────
-if (customId === 'session:cancel_close') {
+    if (customId === 'session:cancel_close') {
       return interaction.update({ content: '↩️ Đã hủy. Phiên vẫn đang mở.', embeds: [], components: [] });
     }
   }
