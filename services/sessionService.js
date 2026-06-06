@@ -14,7 +14,6 @@ async function createSession(payload) {
     is_active:           payload.is_active           ?? true,
     cancelled:           payload.cancelled           ?? false,
   };
-  // xóa alias keys không có trong schema
   delete row.guildId;
   delete row.sessionName;
   delete row.eligibleMemberIds;
@@ -55,21 +54,27 @@ async function getSessionByIdRaw(sessionId, guildId) {
   return _validateSession(data, 'getSessionByIdRaw');
 }
 
-async function closeSession(sessionId) {
-  const { data, error } = await getClient()
+// [BUG-11] Thêm guildId param + .eq('guild_id', guildId) — ngăn IDOR close session của guild khác
+async function closeSession(sessionId, guildId) {
+  const q = getClient()
     .from('sessions')
     .update({ is_active: false, ended_at: new Date().toISOString() })
-    .eq('id', sessionId).select().single();
+    .eq('id', sessionId);
+  if (guildId) q.eq('guild_id', guildId);
+  const { data, error } = await q.select().single();
   _throwSupabase(error, 'closeSession');
-  addBreadcrumb('session', 'closeSession', { sessionId });
+  addBreadcrumb('session', 'closeSession', { sessionId, guildId });
   return _validateSession(data, 'closeSession');
 }
 
-async function cancelSession(sessionId) {
-  const { data, error } = await getClient()
+// [BUG-11] Thêm guildId param + .eq('guild_id', guildId) — ngăn IDOR cancel session của guild khác
+async function cancelSession(sessionId, guildId) {
+  const q = getClient()
     .from('sessions')
     .update({ is_active: false, cancelled: true, ended_at: new Date().toISOString() })
-    .eq('id', sessionId).select().single();
+    .eq('id', sessionId);
+  if (guildId) q.eq('guild_id', guildId);
+  const { data, error } = await q.select().single();
   _throwSupabase(error, 'cancelSession');
   return _validateSession(data, 'cancelSession');
 }

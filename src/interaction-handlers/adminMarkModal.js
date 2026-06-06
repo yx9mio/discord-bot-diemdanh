@@ -9,7 +9,7 @@ const {
 const { getActiveSession } = require('../../services/sessionService.js');
 const { upsertAttendance } = require('../../services/attendanceService.js');
 const log = require('../../utils/logger.js');
-const metrics = require('../../utils/metrics.js'); // [Phase C]
+const metrics = require('../../utils/metrics.js');
 const { requireAdmin } = require('../../utils/permissions.js');
 const { addBreadcrumb } = require('../../utils/sentry.js');
 
@@ -46,6 +46,12 @@ class AdminMarkModalHandler extends InteractionHandler {
       return interaction.editReply({ content: '🚫 Không có phiên điểm danh nào đang mở.' });
     }
 
+    // [BUG-12] Defensive assert — lớp bảo vệ thứ hai bổ sung cho getActiveSession
+    if (session.guild_id !== guild.id) {
+      log.warn('ADMIN_MARK', guild.id, 'SECURITY: session.guild_id=%s !== guild.id=%s user=%s', session.guild_id, guild.id, user.id);
+      return interaction.editReply({ content: '❌ Phiên không hợp lệ.' });
+    }
+
     const userField = interaction.fields.getTextInputValue('user_id').trim();
     const statusField = interaction.fields.getTextInputValue('status').trim().toLowerCase();
 
@@ -57,7 +63,7 @@ class AdminMarkModalHandler extends InteractionHandler {
     }
     const status = statusField;
 
-    // [BUG-E] Guard: từ chối role mention <@&roleId> — chỉ chấp nhận user mention hoặc raw ID
+    // [BUG-E] Guard: từ chối role mention <@&roleId>
     if (userField.startsWith('<@&')) {
       return interaction.editReply({ content: '❌ Vui lòng mention user (không phải role), hoặc nhập thẳng User ID.' });
     }
@@ -80,7 +86,6 @@ class AdminMarkModalHandler extends InteractionHandler {
       return interaction.editReply({ content: '❌ Không thể điểm danh cho bot.' });
     }
 
-    // [#11] Đồng bộ với attendanceService.js
     const username = targetMember.nickname ?? targetMember.user.displayName ?? targetMember.user.username;
 
     try {
@@ -98,9 +103,7 @@ class AdminMarkModalHandler extends InteractionHandler {
       return interaction.editReply({ content: '❌ Không thể lưu điểm danh, thử lại sau.' });
     }
 
-    // [Phase C] Metric: điểm danh được ghi bởi admin
     metrics.attendanceMarked(guild.id, status, { markedBy: 'admin' });
-
     log.info('ADMIN_MARK', guild.id, '%s điểm danh thay cho %s: %s', user.tag, targetUserId, status);
     return interaction.editReply({
       content: `✅ Đã điểm danh thay cho **${username}** (${STATUS_LABELS[status]})`,

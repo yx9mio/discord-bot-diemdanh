@@ -8,6 +8,7 @@ const scheduledService = require('../../../services/scheduledService.js');
 const configService    = require('../../../services/configService.js');
 const log = require('../../../utils/logger.js');
 const { CUSTOM_ID } = require('./setupScheduleAddTypeModal.js');
+const { requireAdmin } = require('../../../utils/permissions.js');
 
 function parseGio(gioStr) {
   const m = /^(\d{1,2}):(\d{2})$/.exec((gioStr ?? '').trim());
@@ -47,6 +48,9 @@ class SetupScheduleRecurringDetailHandler extends InteractionHandler {
   }
   async run(interaction) {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    // [BUG-7] requireAdmin — ngăn user thường tạo lịch qua modal submit trực tiếp
+    const { ok } = await requireAdmin(interaction, { context: 'tạo lịch hàng tuần', deferred: true });
+    if (!ok) return;
     const { guild } = interaction;
     const dowRaw    = interaction.fields.getTextInputValue('day_of_week').trim();
     const gioRaw    = interaction.fields.getTextInputValue('gio_mo').trim();
@@ -60,7 +64,6 @@ class SetupScheduleRecurringDetailHandler extends InteractionHandler {
     if (!gio) return interaction.editReply({ content: '❌ Giờ mở không hợp lệ. Định dạng HH:MM (VD: 20:00).' });
     const { phutBu, closeHour, closeMinute, closeDow } = parsePhutBu(gio.hour, gio.minute, phutBuRaw, dow);
     const preClose = parsePreClose(preRaw);
-    // [FIX-BUG6] Validate preClose không được >= phutBu (nếu phutBu > 0)
     if (phutBu > 0 && preClose >= phutBu) {
       return interaction.editReply({ content: `❌ Thời gian nhắc trước (**${preClose} phút**) phải nhỏ hơn thời lượng phiên (**${phutBu} phút**).` });
     }
@@ -71,7 +74,7 @@ class SetupScheduleRecurringDetailHandler extends InteractionHandler {
       const payload = {
         guild_id:          guild.id,
         type:              'recurring_weekly',
-        session_name:      CUSTOM_ID._sessionName ?? 'Phínien điểm danh',
+        session_name:      CUSTOM_ID._sessionName ?? 'Phiên điểm danh',
         day_of_week:       dow,
         open_hour:         gio.hour,
         open_minute:       gio.minute,
@@ -91,7 +94,7 @@ class SetupScheduleRecurringDetailHandler extends InteractionHandler {
     const dowName = DOW_NAMES[dow] ?? dow;
     return interaction.editReply({
       content: [
-        `✅ Đã tạo lịch **${CUSTOM_ID._sessionName ?? 'Phínien điểm danh'}** (id: \`${scheduleId}\`)`,
+        `✅ Đã tạo lịch **${CUSTOM_ID._sessionName ?? 'Phiên điểm danh'}** (id: \`${scheduleId}\`)`,
         `📅 ${dowName} | 🕐 Mở: \`${String(gio.hour).padStart(2,'0')}:${String(gio.minute).padStart(2,'0')}\` | ⏱️ Đóng sau **${phutBu} phút**`,
         `🔔 Nhắc trước **${preClose} phút** | 🕐 Timezone: \`${timezone}\``,
       ].join('\n'),
@@ -109,12 +112,14 @@ class SetupScheduleOneTimeDetailHandler extends InteractionHandler {
   }
   async run(interaction) {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    // [BUG-7] requireAdmin — ngăn user thường tạo lịch one-time qua modal submit trực tiếp
+    const { ok } = await requireAdmin(interaction, { context: 'tạo lịch một lần', deferred: true });
+    if (!ok) return;
     const { guild } = interaction;
     const dateRaw   = interaction.fields.getTextInputValue('scheduled_date').trim();
     const gioRaw    = interaction.fields.getTextInputValue('gio_mo').trim();
     const phutBuRaw = interaction.fields.getTextInputValue('phut_bu')?.trim() ?? '0';
     const preRaw    = interaction.fields.getTextInputValue('pre_close')?.trim() ?? '30';
-    // Validate date YYYY-MM-DD
     if (!/^\d{4}-\d{2}-\d{2}$/.test(dateRaw)) {
       return interaction.editReply({ content: '❌ Ngày không hợp lệ. Định dạng YYYY-MM-DD (VD: 2026-06-15).' });
     }
@@ -128,7 +133,6 @@ class SetupScheduleOneTimeDetailHandler extends InteractionHandler {
     const dow = targetDate.getDay();
     const { phutBu, closeHour, closeMinute, closeDow } = parsePhutBu(gio.hour, gio.minute, phutBuRaw, dow);
     const preClose = parsePreClose(preRaw);
-    // [FIX-BUG6] Validate preClose không được >= phutBu (nếu phutBu > 0)
     if (phutBu > 0 && preClose >= phutBu) {
       return interaction.editReply({ content: `❌ Thời gian nhắc trước (**${preClose} phút**) phải nhỏ hơn thời lượng phiên (**${phutBu} phút**).` });
     }
@@ -139,7 +143,7 @@ class SetupScheduleOneTimeDetailHandler extends InteractionHandler {
       const payload = {
         guild_id:          guild.id,
         type:              'one_time',
-        session_name:      CUSTOM_ID._sessionName ?? 'Phínien điểm danh',
+        session_name:      CUSTOM_ID._sessionName ?? 'Phiên điểm danh',
         scheduled_date:    dateRaw,
         day_of_week:       dow,
         open_hour:         gio.hour,
@@ -159,7 +163,7 @@ class SetupScheduleOneTimeDetailHandler extends InteractionHandler {
     }
     return interaction.editReply({
       content: [
-        `✅ Đã tạo lịch một lần **${CUSTOM_ID._sessionName ?? 'Phínien điểm danh'}** (id: \`${scheduleId}\`)`,
+        `✅ Đã tạo lịch một lần **${CUSTOM_ID._sessionName ?? 'Phiên điểm danh'}** (id: \`${scheduleId}\`)`,
         `📅 Ngày: \`${dateRaw}\` | 🕐 Mở: \`${String(gio.hour).padStart(2,'0')}:${String(gio.minute).padStart(2,'0')}\` | ⏱️ Đóng sau **${phutBu} phút**`,
         `🔔 Nhắc trước **${preClose} phút** | 🕐 Timezone: \`${timezone}\``,
       ].join('\n'),
@@ -167,4 +171,4 @@ class SetupScheduleOneTimeDetailHandler extends InteractionHandler {
   }
 }
 
-module.exports = { SetupScheduleRecurringDetailHandler, SetupScheduleOneTimeDetailHandler, parseGio, parsePreClose, parsePhutBu };
+module.exports = { SetupScheduleRecurringDetailHandler, SetupScheduleOneTimeDetailHandler, parseGio, parsePreClose, parsePhutBu, MODAL_RECURRING_ID, MODAL_ONETIME_ID };
