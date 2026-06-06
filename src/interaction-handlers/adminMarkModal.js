@@ -1,5 +1,6 @@
 // interaction-handlers/adminMarkModal.js
 // [B3] Modal cho admin điểm danh thay cho member khác
+// [BUG-E] Guard role mention <@&...> để tránh fetch member với role ID
 'use strict';
 const { MessageFlags } = require('discord.js');
 const {
@@ -30,7 +31,6 @@ class AdminMarkModalHandler extends InteractionHandler {
   }
 
   async run(interaction) {
-    // [D1]
     addBreadcrumb('interaction', 'adminMarkModal', {
       customId: interaction.customId,
       userId: interaction.user?.id,
@@ -57,13 +57,19 @@ class AdminMarkModalHandler extends InteractionHandler {
     }
     const status = statusField;
 
-    let targetUserId, targetMember;
+    // [BUG-E] Guard: từ chối role mention <@&roleId> — chỉ chấp nhận user mention hoặc raw ID
+    if (userField.startsWith('<@&')) {
+      return interaction.editReply({ content: '❌ Vui lòng mention user (không phải role), hoặc nhập thẳng User ID.' });
+    }
+
+    let targetUserId;
     if (userField.startsWith('<@') && userField.endsWith('>')) {
       targetUserId = userField.slice(2, -1).replace('!', '');
     } else {
       targetUserId = userField;
     }
 
+    let targetMember;
     try {
       targetMember = await guild.members.fetch(targetUserId);
     } catch {

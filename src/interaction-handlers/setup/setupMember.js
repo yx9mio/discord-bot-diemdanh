@@ -1,7 +1,10 @@
 'use strict';
 // interaction-handlers/setup/setupMember.js
 // [FIX] Sync toàn bộ custom IDs với _MemberView.CUSTOM_ID
-const { MessageFlags } = require('discord.js');
+// [BUG-A] DEL_confirm: deferReply ephemeral thay vì deferUpdate để requireAdmin lỗi không overwrite message gốc
+// [BUG-B] Typo "Xác nhậnminh" → "Xác nhận"
+// [BUG-C] DEL prompt: deferUpdate+editReply thay vì reply() để tránh tạo 2 ephemeral messages
+const { MessageFlags, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const memberService = require('../../../services/memberService.js');
 const log = require('../../../utils/logger.js');
@@ -23,7 +26,6 @@ class SetupMemberHandler extends InteractionHandler {
     if (id === CUSTOM_ID.REFRESH)      return this.some();
     if (id?.startsWith(CUSTOM_ID.DEL_PREFIX)  && !id.includes(':confirm') && !id.includes(':cancel')) return this.some();
     if (id?.startsWith(CUSTOM_ID.EDIT_PREFIX)) return this.some();
-    // DEL_CONFIRM/DEL_CANCEL luưu trong MemberView nhưng chưa xử lý
     if (id?.startsWith(CUSTOM_ID.DEL_PREFIX + 'confirm:')) return this.some();
     if (id?.startsWith(CUSTOM_ID.DEL_PREFIX + 'cancel:'))  return this.some();
     return this.none();
@@ -57,35 +59,37 @@ class SetupMemberHandler extends InteractionHandler {
       return MemberView.handleRefresh(interaction, page);
     }
 
-    // --- Xóa thành viên: mở confirm ---
+    // [BUG-C] Xóa thành viên: mở confirm — dùng deferUpdate+editReply để replace message cũ,
+    //         tránh tạo ephemeral message thứ hai
     if (
       customId.startsWith(CUSTOM_ID.DEL_PREFIX) &&
       !customId.includes(':confirm') &&
       !customId.includes(':cancel')
     ) {
       const userId = customId.slice(CUSTOM_ID.DEL_PREFIX.length);
-      await interaction.reply({
-        content: `⚠️ Xác nhậnminh xóa thành viên <@${userId}> khỏi danh sách?`,
-        flags: MessageFlags.Ephemeral,
+      await interaction.deferUpdate();
+      // [BUG-B] Sửa typo "Xác nhậnminh" → "Xác nhận"
+      return interaction.editReply({
+        content: `⚠️ Xác nhận xóa thành viên <@${userId}> khỏi danh sách?`,
+        embeds: [],
         components: [
-          new (require('discord.js').ActionRowBuilder)().addComponents(
-            new (require('discord.js').ButtonBuilder)()
+          new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
               .setCustomId(`${CUSTOM_ID.DEL_PREFIX}confirm:${userId}`)
               .setLabel('✅ Xác nhận xóa')
-              .setStyle(require('discord.js').ButtonStyle.Danger),
-            new (require('discord.js').ButtonBuilder)()
+              .setStyle(ButtonStyle.Danger),
+            new ButtonBuilder()
               .setCustomId(`${CUSTOM_ID.DEL_PREFIX}cancel:${userId}`)
               .setLabel('↩️ Hủy')
-              .setStyle(require('discord.js').ButtonStyle.Secondary),
+              .setStyle(ButtonStyle.Secondary),
           ),
         ],
       });
-      return;
     }
 
-    // --- Xóa: xác nhận ---
+    // [BUG-A] Xóa: xác nhận — deferReply ephemeral để requireAdmin lỗi không overwrite message danh sách
     if (customId.startsWith(CUSTOM_ID.DEL_PREFIX + 'confirm:')) {
-      await interaction.deferUpdate();
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       const { ok } = await requireAdmin(interaction, { context: 'xóa thành viên', deferred: true });
       if (!ok) return;
       const userId = customId.slice((CUSTOM_ID.DEL_PREFIX + 'confirm:').length);
@@ -94,17 +98,21 @@ class SetupMemberHandler extends InteractionHandler {
         log.info('MEM_DEL', guild.id, 'Xóa thành viên %s', userId);
       } catch (e) {
         log.error('MEM_DEL', guild.id, 'deleteMember thất bại: %s', e.message);
-        return interaction.editReply({ content: '❌ Không thể xóa, thử lại sau.', components: [] });
+        return interaction.editReply({ content: '❌ Không thể xóa, thử lại sau.' });
       }
+      // Xóa thành công: dismiss ephemeral reply và cập nhật message danh sách
+      await interaction.deleteReply();
+      const members = await memberService.getMembers(guild.id).catch(() => []);
+      const page = _extractPage(interaction);
+      return interaction.message.edit({ ...MemberView.render({ members, page, guild }), content: undefined });
+    }
+
+    // Xóa: hủy — dismiss confirm prompt, khôi phục danh sách
+    if (customId.startsWith(CUSTOM_ID.DEL_PREFIX + 'cancel:')) {
+      await interaction.deferUpdate();
       const members = await memberService.getMembers(guild.id).catch(() => []);
       const page = _extractPage(interaction);
       return interaction.editReply({ ...MemberView.render({ members, page, guild }), content: undefined });
-    }
-
-    // --- Xóa: hủy ---
-    if (customId.startsWith(CUSTOM_ID.DEL_PREFIX + 'cancel:')) {
-      await interaction.deferUpdate();
-      return interaction.editReply({ content: '↩️ Đã hủy.', components: [] });
     }
 
     // --- Chỉnh sửa thành viên ---
@@ -113,7 +121,6 @@ class SetupMemberHandler extends InteractionHandler {
       if (!userId) return interaction.reply({ content: '❌ Không tìm thấy thành viên.', flags: MessageFlags.Ephemeral });
       const members = await memberService.getMembers(guild.id);
       const member  = members.find(m => m.user_id === userId);
-      // buildEditModal phải tồn tại trong _MemberView
       if (!MemberView.buildEditModal) {
         return interaction.reply({ content: '❌ buildEditModal chưa được export từ MemberView.', flags: MessageFlags.Ephemeral });
       }

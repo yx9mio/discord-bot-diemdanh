@@ -2,7 +2,7 @@
 // Handles: attendance:select (StringSelectMenu cho điểm danh)
 // [B1] Thay thế button bằng select menu
 // [A4] Refactor để dùng attendanceHandler.markAttendance()
-// [FIX-TIMEOUT] deferReply trước getActiveSession để tránh Discord 3s timeout
+// [BUG-D] deferReply lên đầu run() trước validation để tránh cấu trúc fragile
 'use strict';
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const { MessageFlags } = require('discord.js');
@@ -28,21 +28,21 @@ class AttendanceSelectHandler extends InteractionHandler {
   }
 
   async run(interaction) {
-    // [D1]
     addBreadcrumb('interaction', 'attendanceSelect', {
       customId: interaction.customId,
       userId: interaction.user?.id,
     });
 
     const { guild, member, user, values } = interaction;
+
+    // [BUG-D] Defer ngay đầu tiên — dùng editReply cho mọi lỗi phía dưới
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
     const statusValue = values[0];
     const status = SELECT_TO_STATUS[statusValue];
     if (!status) {
-      return interaction.reply({ content: '❌ Trạng thái điểm danh không hợp lệ.', flags: MessageFlags.Ephemeral });
+      return interaction.editReply({ content: '❌ Trạng thái điểm danh không hợp lệ.' });
     }
-
-    // [FIX-TIMEOUT] Defer ngay trước khi gọi DB
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const session = await getActiveSession(guild.id);
     if (!session) {
