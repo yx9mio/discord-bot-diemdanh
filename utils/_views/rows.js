@@ -2,8 +2,10 @@
 // [FIX] buildSessionActionRow(isOpen) — đúng signature với callers trong sessionButton.js
 //   Callers: buildSessionActionRow(false) → row các nút quản lý phiên
 //   Không dùng sessionId làm param — customId là cố định theo SESSION_BUTTON_IDS
+// [FIX-SELECT] buildAttendanceSelectRow(isOpen) — select menu điểm danh
+//   Tách ra khỏi setupSessionStartModal để tái dùng trong attendanceHandler khi update embed
 'use strict';
-const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, StringSelectMenuOptionBuilder } = require('discord.js');
 
 /**
  * Row confirm/cancel cho các hành động destructive
@@ -15,6 +17,25 @@ function buildConfirmRow(customIdConfirm = 'confirm', customIdCancel = 'cancel')
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId(customIdConfirm).setLabel('✅ Xác nhận').setStyle(ButtonStyle.Success),
     new ButtonBuilder().setCustomId(customIdCancel).setLabel('↩️ Huỷ').setStyle(ButtonStyle.Secondary),
+  );
+}
+
+/**
+ * Select menu để thành viên tự điểm danh
+ * @param {boolean} isOpen – true = phiên đang mở, false = disabled
+ * @returns {ActionRowBuilder}
+ */
+function buildAttendanceSelectRow(isOpen = true) {
+  return new ActionRowBuilder().addComponents(
+    new StringSelectMenuBuilder()
+      .setCustomId('attendance:select')
+      .setPlaceholder('👆 Chọn trạng thái điểm danh...')
+      .setDisabled(!isOpen)
+      .addOptions(
+        new StringSelectMenuOptionBuilder().setLabel('✅ Điểm danh').setDescription('Điểm danh đúng giờ').setValue('tham_gia'),
+        new StringSelectMenuOptionBuilder().setLabel('⏰ Trễ').setDescription('Điểm danh muộn').setValue('tre'),
+        new StringSelectMenuOptionBuilder().setLabel('❌ Không tham gia').setDescription('Báo vắng mặt').setValue('khong_tham_gia'),
+      ),
   );
 }
 
@@ -85,4 +106,4 @@ function buildHistoryNavRow(page = 0, maxPage = 0, prefix = 'hist') {
   );
 }
 
-module.exports = { buildConfirmRow, buildSessionActionRow, buildHistoryNavRow };
+module.exports = { buildConfirmRow, buildAttendanceSelectRow, buildSessionActionRow, buildHistoryNavRow };

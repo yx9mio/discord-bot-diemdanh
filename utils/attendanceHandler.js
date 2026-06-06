@@ -3,6 +3,7 @@
 //           để tránh conflict với services/attendanceService.js (data layer)
 // [A4] Shared attendance logic cho cả slash command và SelectMenu
 // [B-3] Migrate từ db.js → services layer
+// [FIX-SELECT] Rebuild select menu khi update embed — tránh select menu bị mất
 'use strict';
 const { MessageFlags } = require('discord.js');
 const log = require('../utils/logger.js');
@@ -13,6 +14,7 @@ const metrics = require('../utils/metrics.js'); // [Phase C]
 const {
   buildSessionEmbed,
   buildSessionActionRow,
+  buildAttendanceSelectRow,
   buildAttendConfirmEmbed,
 } = require('./embeds.js');
 const { thongBaoStreakMilestone, STREAK_MILESTONES } = require('./session.js');
@@ -99,17 +101,20 @@ async function markAttendance({ guild, member, user, status, interaction, sessio
         const msg = await ch.messages.fetch(session.message_id).catch(() => null);
         if (msg) {
           const attended = await attendanceService.getAttendances(session.id);
-          // [#6] Destructure cả components (pagination) từ buildSessionEmbed
           const { embed, components: pagComponents } = buildSessionEmbed(
             guild,
             session,
             attended,
             session.phai_role_ids ?? []
           );
-          // [FIX] buildSessionActionRow(true) — phiên vẫn đang mở, nút phải active
-          //       Bug cũ: truyền false → nút bị disable ngay sau điểm danh đầu tiên
-          const adminRows = buildSessionActionRow(true);
-          const allComponents = [...adminRows, ...pagComponents].slice(0, 5);
+          // [FIX-SELECT] Rebuild đủ 3 loại rows:
+          //   1. select menu điểm danh (phải là row đầu tiên để user thấy ngay)
+          //   2. admin action buttons (2 rows)
+          //   3. pagination buttons nếu có (từ buildSessionEmbed)
+          // Discord giới hạn 5 rows/message → slice(0,5)
+          const selectRow  = buildAttendanceSelectRow(true);
+          const adminRows  = buildSessionActionRow(true);
+          const allComponents = [selectRow, ...adminRows, ...pagComponents].slice(0, 5);
           await msg.edit({
             embeds: [embed],
             components: allComponents,

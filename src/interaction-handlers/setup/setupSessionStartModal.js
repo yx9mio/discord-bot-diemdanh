@@ -1,15 +1,23 @@
 // src/interaction-handlers/setup/setupSessionStartModal.js
 // Handles: setup:session:start:modal (ModalSubmit) — tạo phiên mới từ form
+// [FIX-SELECT] Dùng buildAttendanceSelectRow() từ embeds.js thay vì inline
+//              để đảm bảo cùng component được rebuild trong attendanceHandler
 'use strict';
-const { MessageFlags, ActionRowBuilder, EmbedBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder } = require('discord.js');
+const { MessageFlags } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const sessionService = require('../../../services/sessionService.js');
 const configService  = require('../../../services/configService.js');
 const log            = require('../../../utils/logger.js');
 const { requireAdmin }   = require('../../../utils/permissions.js');
-const { FOOTER_DEFAULT } = require('../../../utils/embeds.js');
+const {
+  FOOTER_DEFAULT,
+  buildSessionEmbed,
+  buildSessionActionRow,
+  buildAttendanceSelectRow,
+} = require('../../../utils/embeds.js');
 const { fmtTs }          = require('../../../utils/format.js');
 const { datHenGioDong, startAutoRefresh } = require('../../../utils/timers.js');
+const { EmbedBuilder }   = require('discord.js');
 
 const MODAL_ID = 'setup:session:start:modal';
 
@@ -69,22 +77,17 @@ class SetupSessionStartModalHandler extends InteractionHandler {
       .setFooter({ text: FOOTER_DEFAULT })
       .setTimestamp();
 
-    const row = new ActionRowBuilder().addComponents(
-      new StringSelectMenuBuilder()
-        .setCustomId('attendance:select')
-        .setPlaceholder('👆 Chọn trạng thái điểm danh...')
-        .addOptions(
-          new StringSelectMenuOptionBuilder().setLabel('✅ Điểm danh').setDescription('Điểm danh đúng giờ').setValue('tham_gia'),
-          new StringSelectMenuOptionBuilder().setLabel('⏰ Trễ').setDescription('Điểm danh muộn').setValue('tre'),
-          new StringSelectMenuOptionBuilder().setLabel('❌ Không tham gia').setDescription('Báo vắng mặt').setValue('khong_tham_gia'),
-        ),
-    );
+    // [FIX-SELECT] Dùng buildAttendanceSelectRow() + buildSessionActionRow()
+    //   thay vì tạo inline ActionRowBuilder — đảm bảo nhất quán với attendanceHandler
+    const selectRow = buildAttendanceSelectRow(true);
+    const adminRows = buildSessionActionRow(true);
+    const allComponents = [selectRow, ...adminRows].slice(0, 5);
 
     const targetChannel = cfg?.notification_channel_id
       ? (guild.channels.cache.get(cfg.notification_channel_id) ?? interaction.channel)
       : interaction.channel;
 
-    const msg = await targetChannel.send({ embeds: [embed], components: [row] });
+    const msg = await targetChannel.send({ embeds: [embed], components: allComponents });
     await sessionService.updateSessionMessage(session.id, { messageId: msg.id, channelId: targetChannel.id });
     startAutoRefresh(session.id, targetChannel.id, msg.id, client);
     if (phut) datHenGioDong(client, guild, session, targetChannel.id, phut * 60_000);
