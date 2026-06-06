@@ -1,5 +1,6 @@
 // interaction-handlers/setup/setupHome.js
 // Handles: setup:home, setup:home:refresh
+// [FIX-PATH] ../../../ → ../../../../
 'use strict';
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const { getGuildConfig } = require('../../../../services/configService.js');
@@ -8,11 +9,6 @@ const { getMembers } = require('../../../../services/memberService.js');
 const { getActiveSession } = require('../../../../services/sessionService.js');
 const { HomeView } = require('../../commands/setup/_views/_HomeView.js');
 const { CUSTOM_ID } = HomeView;
-
-const KNOWN_IDS = new Set([
-  CUSTOM_ID.HOME,
-  CUSTOM_ID.REFRESH,
-]);
 
 class SetupHomeHandler extends InteractionHandler {
   constructor(ctx, options) {
@@ -34,9 +30,8 @@ class SetupHomeHandler extends InteractionHandler {
       getMembers(guild.id),
       getActiveSession(guild.id),
     ]);
-    const view = HomeView.render({ guild, cfg, schedules, members, session });
-    return interaction.editReply(view);
+    return interaction.editReply(HomeView.render({ guild, cfg, schedules, members, session }));
   }
 }
 
-module.exports = { SetupHomeHandler, KNOWN_IDS };
+module.exports = { SetupHomeHandler };

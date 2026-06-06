@@ -1,5 +1,6 @@
-// interaction-handlers/setup/setupMemberAddModal.js
+// src/interaction-handlers/setup/setupMemberAddModal.js
 // Handles: setup:mem:add:modal (ModalSubmit)
+// [FIX-PATH] ../../../ → ../../../../
 'use strict';
 const { MessageFlags } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
@@ -26,9 +27,9 @@ class SetupMemberAddModalHandler extends InteractionHandler {
     if (!ok) return;
 
     const { guild } = interaction;
-    const rawId   = interaction.fields.getTextInputValue('user_id').trim().replace(/[<@!>]/g, '');
-    const nick    = interaction.fields.getTextInputValue('nickname')?.trim() || null;
-    const phong   = interaction.fields.getTextInputValue('phong_ban')?.trim() || null;
+    const rawId = interaction.fields.getTextInputValue('user_id').trim().replace(/[<@!>]/g, '');
+    const nick  = interaction.fields.getTextInputValue('nickname')?.trim() || null;
+    const phong = interaction.fields.getTextInputValue('phong_ban')?.trim() || null;
 
     if (!/^\d{10,20}$/.test(rawId)) {
       return interaction.editReply({ content: '❌ User ID không hợp lệ. Vui lòng nhập chuỗi số ID của Discord.' });
@@ -37,7 +38,9 @@ class SetupMemberAddModalHandler extends InteractionHandler {
     try {
       await memberService.addMember({ guild_id: guild.id, user_id: rawId, nickname: nick, phong_ban: phong });
       log.info('MEM_ADD', guild.id, 'Thêm thành viên %s', rawId);
-      return interaction.editReply({ content: `✅ Đã thêm <@${rawId}> vào danh sách.` });
+      const members = await memberService.getMembers(guild.id).catch(() => []);
+      await interaction.editReply({ content: `✅ Đã thêm <@${rawId}> vào danh sách.` });
+      await interaction.message?.edit(MemberView.render({ guild, members })).catch(() => null);
     } catch (e) {
       if (e.code === '23505') {
         return interaction.editReply({ content: `⚠️ <@${rawId}> đã có trong danh sách.` });

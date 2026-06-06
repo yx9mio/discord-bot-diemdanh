@@ -1,5 +1,7 @@
 // interaction-handlers/setup/setupConfig.js
 // Handles: setup:cfg (mở Config view), setup:cfg:refresh
+// [FIX-PATH] ../../../ → ../../../../
+// [FIX-DEFER] thêm deferUpdate trước ConfigView.handleRefresh
 'use strict';
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const { getGuildConfig } = require('../../../../services/configService.js');
@@ -18,10 +20,10 @@ class SetupConfigHandler extends InteractionHandler {
   }
 
   async run(interaction) {
+    await interaction.deferUpdate();
     if (interaction.customId === CUSTOM_ID.REFRESH) {
       return ConfigView.handleRefresh(interaction);
     }
-    await interaction.deferUpdate();
     const cfg = await getGuildConfig(interaction.guild.id);
     return interaction.editReply(ConfigView.render({ cfg, guild: interaction.guild }));
   }
