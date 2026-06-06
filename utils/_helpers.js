@@ -3,7 +3,7 @@
 'use strict';
 const { EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder, MessageFlags } = require('discord.js');
 
-// ─── Palette & Icons ──────────────────────────────────────────────────────────
+// ─── Palette & Icons ───────────────────────────────────────────────────────
 const COLORS = {
   GREEN:   0x57f287,
   RED:     0xff4444,
@@ -23,7 +23,7 @@ const ICONS = {
   ATTEND_YES:     '✅',
   ATTEND_LATE:    '🕐',
   ATTEND_NO:      '❌',
-  ATTEND_ABSENT:  '📭',
+  ATTEND_ABSENT:  '💭',
   ATTEND_EXCUSE:  '📋',
   PERSON:         '👤',
   CLOCK:          '🕒',
@@ -51,7 +51,7 @@ const ATTENDANCE_OPTIONS = [
   { label: '📋 Có phép', description: 'Vắng mặt có lý do',   value: 'co_phep'        },
 ];
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 function pctColor(pct) {
   if (pct >= 80) return COLORS.GREEN;
   if (pct >= 50) return COLORS.ORANGE;
@@ -143,7 +143,7 @@ function buildPhaiStatsText(guild, phaiRoleIds, attended, eligibleArr) {
   return lines.length ? lines.join('\n') : null;
 }
 
-// ─── Reply helpers (ephemeral) ────────────────────────────────────────────────
+// ─── Reply helpers (ephemeral) ──────────────────────────────────────────────────
 function replyErr(msg = 'Có lỗi xảy ra. Vui lòng thử lại.') {
   return { embeds: [new EmbedBuilder().setColor(COLORS.RED).setDescription(`❌ ${msg}`)], flags: MessageFlags.Ephemeral };
 }
@@ -163,7 +163,8 @@ function replyOkEdit(msg = 'Thành công.') {
   return { embeds: [new EmbedBuilder().setColor(COLORS.GREEN).setDescription(`✅ ${msg}`)], components: [] };
 }
 function replyConfirm(description, yesId, noId) {
-  const { buildConfirmRow } = require('./rows');
+  // [FIX] require('./_views/rows') — utils/rows.js không tồn tại
+  const { buildConfirmRow } = require('./_views/rows');
   return {
     embeds: [new EmbedBuilder().setColor(COLORS.YELLOW).setDescription(`⚠️ ${description}`).setFooter({ text: FOOTER_DEFAULT })],
     components: [buildConfirmRow(yesId, noId)],
