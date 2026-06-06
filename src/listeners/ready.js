@@ -2,9 +2,10 @@
 // listeners/ready.js
 // Phase 2 fix: restore active-session timers khi bot restart
 // + khởi động reminder scheduler
+// [BUG-READY] buildSummaryEmbed là async — phải await, không thì gửi [object Promise]
 const { Listener, Events } = require('@sapphire/framework');
-const { getActiveSession, closeSession } = require('../../services/sessionService.js'); // [B-5]
-const { getAttendances } = require('../../services/attendanceService.js'); // [B-5]
+const { getActiveSession, closeSession } = require('../../services/sessionService.js');
+const { getAttendances } = require('../../services/attendanceService.js');
 const log = require('../../utils/logger.js');
 const { datHenGioDong, startAutoRefresh } = require('../../utils/timers.js');
 const { startReminderScheduler } = require('../../services/reminderScheduler.js');
@@ -49,7 +50,8 @@ class ReadyListener extends Listener {
               if (ch2) {
                 const statsMap = await ketThucPhien(guild, session, attended);
                 await voHieuHoaNutDiemDanh(client, ch2, session, attended);
-                await ch2.send({ embeds: [buildSummaryEmbed(session, attended, guild, session.phai_role_ids ?? [])] });
+                // [BUG-READY] await buildSummaryEmbed — hàm async, thiếu await → gửi Promise
+                await ch2.send({ embeds: [await buildSummaryEmbed(session, attended, guild, session.phai_role_ids ?? [])] });
                 await thongBaoHuyHieu(guild, ch2, guild.id, session.id, attended, statsMap);
               }
             } catch (e) {

@@ -4,13 +4,14 @@
 // [A4] Shared attendance logic cho cả slash command và SelectMenu
 // [B-3] Migrate từ db.js → services layer
 // [FIX-SELECT] Rebuild select menu khi update embed — tránh select menu bị mất
+// [BUG-LOCK] tryAcquireAttendanceLock / releaseAttendanceLock đã sync (không cần await)
 'use strict';
 const { MessageFlags } = require('discord.js');
 const log = require('./logger.js');
 const attendanceService = require('../services/attendanceService.js');
 const memberService     = require('../services/memberService.js');
 const configService     = require('../services/configService.js');
-const metrics = require('./metrics.js'); // [Phase C]
+const metrics = require('./metrics.js');
 const {
   buildSessionEmbed,
   buildSessionActionRow,
@@ -39,14 +40,14 @@ async function markAttendance({ guild, member, user, status, interaction, sessio
       ? interaction.editReply({ content: msg })
       : interaction.reply({ content: msg, flags: MessageFlags.Ephemeral });
   }
-  // [A2] Distributed lock thay vì in-memory Map
-  const acquired = await attendanceService.tryAcquireAttendanceLock(session.id, user.id);
+
+  // [BUG-LOCK] sync lock — không cần await
+  const acquired = attendanceService.tryAcquireAttendanceLock(session.id, user.id);
   if (!acquired) {
     const msg = '⏳ Đang xử lý yêu cầu của bạn, vui lòng chờ...';
-    if (deferred) {
-      return interaction.editReply({ content: msg });
-    }
-    return interaction.reply({ content: msg, flags: MessageFlags.Ephemeral });
+    return deferred
+      ? interaction.editReply({ content: msg })
+      : interaction.reply({ content: msg, flags: MessageFlags.Ephemeral });
   }
 
   try {
@@ -76,7 +77,6 @@ async function markAttendance({ guild, member, user, status, interaction, sessio
 
     const username = member.nickname ?? user.displayName ?? user.username;
 
-    // Upsert attendance với full payload
     await attendanceService.upsertAttendance({
       session_id:    session.id,
       guild_id:      guild.id,
@@ -87,20 +87,15 @@ async function markAttendance({ guild, member, user, status, interaction, sessio
       checked_in_at: new Date().toISOString(),
     });
 
-    // [Phase C] Metric: điểm danh được ghi nhận
     metrics.attendanceMarked(guild.id, status, { markedBy: 'self' });
 
-    // [C2] Fetch streak from member_stats (best-effort)
     let streak = 0;
     let projectedStreak = 0;
     try {
       const stats = await memberService.getMemberStats(guild.id, user.id);
       streak = stats?.current_streak ?? 0;
       projectedStreak = ['tham_gia', 'tre'].includes(status) ? streak + 1 : streak;
-    } catch (_) {
-      streak = 0;
-      projectedStreak = 0;
-    }
+    } catch (_) {}
 
     // Cập nhật embed chính
     try {
@@ -110,28 +105,18 @@ async function markAttendance({ guild, member, user, status, interaction, sessio
         if (msg) {
           const attended = await attendanceService.getAttendances(session.id);
           const { embed, components: pagComponents } = buildSessionEmbed(
-            guild,
-            session,
-            attended,
-            session.phai_role_ids ?? []
+            guild, session, attended, session.phai_role_ids ?? []
           );
-          // [FIX-SELECT] Rebuild đủ 3 loại rows:
-          //   1. select menu điểm danh (phải là row đầu tiên để user thấy ngay)
-          //   2. admin action buttons (2 rows)
-          //   3. pagination buttons nếu có (từ buildSessionEmbed)
-          // Discord giới hạn 5 rows/message → slice(0,5)
           const selectRow  = buildAttendanceSelectRow(true);
           const adminRows  = buildSessionActionRow(true);
-          const allComponents = [selectRow, ...adminRows, ...pagComponents].slice(0, 5);
           await msg.edit({
             embeds: [embed],
-            components: allComponents,
+            components: [selectRow, ...adminRows, ...pagComponents].slice(0, 5),
           }).catch(() => null);
         }
       }
     } catch (_) {}
 
-    // [C2] Streak milestone notification (projected streak sau phiên hiện tại)
     if (STREAK_MILESTONES.includes(projectedStreak) && ['tham_gia', 'tre'].includes(status)) {
       try {
         const ch = guild.channels.cache.get(session.channel_id);
@@ -139,24 +124,21 @@ async function markAttendance({ guild, member, user, status, interaction, sessio
       } catch (_) {}
     }
 
-    // Return confirm embed — hiển thị projected streak khi tham gia/trễ
     const displayStreak = ['tham_gia', 'tre'].includes(status) ? projectedStreak : streak;
-    const confirmEmbed = buildAttendConfirmEmbed(
-      member,
-      status,
-      session.session_name ?? 'Phiên điểm danh',
-      displayStreak
-    );
-    return interaction.editReply(confirmEmbed);
+    return interaction.editReply(buildAttendConfirmEmbed(
+      member, status, session.session_name ?? 'Phiên điểm danh', displayStreak
+    ));
   } catch (e) {
     log.error('ATTENDANCE', guild.id, 'markAttendance lỗi: %s', e?.message ?? e);
+    const errMsg = { content: '❌ Có lỗi xảy ra khi điểm danh, thử lại sau.' };
     if (deferred || interaction.replied) {
-      await interaction.editReply({ content: '❌ Có lỗi xảy ra khi điểm danh, thử lại sau.' }).catch(() => null);
+      await interaction.editReply(errMsg).catch(() => null);
     } else {
-      await interaction.reply({ content: '❌ Có lỗi xảy ra khi điểm danh, thử lại sau.', flags: MessageFlags.Ephemeral }).catch(() => null);
+      await interaction.reply({ ...errMsg, flags: MessageFlags.Ephemeral }).catch(() => null);
     }
   } finally {
-    await attendanceService.releaseAttendanceLock(session.id, user.id).catch(() => null);
+    // [BUG-LOCK] sync release — không cần await
+    attendanceService.releaseAttendanceLock(session.id, user.id);
   }
 }
 
