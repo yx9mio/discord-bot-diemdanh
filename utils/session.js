@@ -5,10 +5,16 @@
 //   - eligible_member_ids === [] (rỗng): streak reset KHÔNG chạy (đúng semantic)
 //     → chỉ reset streak khi eligible có data (admin đã set danh sách)
 // [B-3] Migrate từ db.js → services layer
+// [FIX-SELECT] voHieuHoaNutDiemDanh: thêm selectRow(false) — disable select menu khi đóng phiên
 const { EmbedBuilder } = require('discord.js');
 const memberService = require('../services/memberService.js');
 const log = require('./logger.js');
-const { FOOTER_DEFAULT, buildClosedSessionEmbed, buildSessionActionRow } = require('./embeds.js');
+const {
+  FOOTER_DEFAULT,
+  buildClosedSessionEmbed,
+  buildSessionActionRow,
+  buildAttendanceSelectRow,
+} = require('./embeds.js');
 
 const DEFAULT_BADGES = [
   { threshold:   5, emoji: '🌱', label: 'Lính Mới'     },
@@ -177,15 +183,18 @@ async function thongBaoHuyHieu(guild, channel, guildId, sessionId, attended, sta
 /**
  * Vô hiệu hoá nút điểm danh, cập nhật embed → đã đóng.
  * [FIX] buildSessionActionRow(false) — false = isOpen=false → tất cả nút disabled
- *       Bug cũ: truyền true → nút vẫn sáng sau khi đóng/huỷ phiên
+ * [FIX-SELECT] buildAttendanceSelectRow(false) — disable select menu khi đóng phiên
+ *   Thứ tự rows: selectRow(disabled) → adminRows(disabled) — tối đa 5 rows
  */
 async function voHieuHoaNutDiemDanh(client, channel, session, attended = []) {
   if (!session.message_id) return;
   try {
     const msg = await channel.messages.fetch(session.message_id);
     if (!msg) return;
-    const closedEmbed        = await buildClosedSessionEmbed(session, attended, channel.guild ?? null);
-    const disabledComponents = buildSessionActionRow(false); // [FIX] false = isOpen=false → disabled
+    const closedEmbed  = await buildClosedSessionEmbed(session, attended, channel.guild ?? null);
+    const selectRow    = buildAttendanceSelectRow(false); // disabled
+    const adminRows    = buildSessionActionRow(false);    // disabled
+    const disabledComponents = [selectRow, ...adminRows].slice(0, 5);
     await msg.edit({ embeds: [closedEmbed], components: disabledComponents });
   } catch (e) {
     log.warn('SESSION', session.guild_id, 'Không vô hiệu hoá được nút: %s', e.message);
