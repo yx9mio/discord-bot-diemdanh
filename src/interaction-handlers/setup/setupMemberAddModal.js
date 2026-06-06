@@ -1,62 +1,50 @@
-// src/interaction-handlers/setup/setupMemberAddModal.js
-// Handles: setup:mem:add:modal (ModalSubmit) — lưu thành viên mới
+// interaction-handlers/setup/setupMemberAddModal.js
+// Handles: setup:mem:add:modal (ModalSubmit)
 'use strict';
 const { MessageFlags } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
-const memberService = require('../../../services/memberService.js');
-const log = require('../../../utils/logger.js');
-const { requireAdmin } = require('../../../utils/permissions.js');
+const memberService = require('../../../../services/memberService.js');
+const log = require('../../../../utils/logger.js');
+const { requireAdmin } = require('../../../../utils/permissions.js');
 const { MemberView } = require('../../commands/setup/_views/_MemberView.js');
+
+const MODAL_ID = 'setup:mem:add:modal';
 
 class SetupMemberAddModalHandler extends InteractionHandler {
   constructor(ctx, options) {
     super(ctx, { ...options, interactionHandlerType: InteractionHandlerTypes.ModalSubmit });
   }
+
   parse(interaction) {
-    if (interaction.customId === 'setup:mem:add:modal') return this.some();
+    if (interaction.customId === MODAL_ID) return this.some();
     return this.none();
   }
+
   async run(interaction) {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const { ok } = await requireAdmin(interaction, { context: 'thêm thành viên', deferred: true });
     if (!ok) return;
 
     const { guild } = interaction;
-    const userId = interaction.fields.getTextInputValue('user_id').trim().replace(/[<@!>]/g, '');
-    // [FIX] Modal dùng field 'display_name' và 'note' → map sang key đúng của upsertMember
-    const displayName = interaction.fields.getTextInputValue('display_name')?.trim() || null;
-    const note = interaction.fields.getTextInputValue('note')?.trim() || null;
+    const rawId   = interaction.fields.getTextInputValue('user_id').trim().replace(/[<@!>]/g, '');
+    const nick    = interaction.fields.getTextInputValue('nickname')?.trim() || null;
+    const phong   = interaction.fields.getTextInputValue('phong_ban')?.trim() || null;
 
-    if (!userId) return interaction.editReply({ content: '❌ User ID không hợp lệ.' });
-
-    let member;
-    try {
-      member = await guild.members.fetch(userId);
-    } catch {
-      return interaction.editReply({ content: `❌ Không tìm thấy user với ID: \`${userId}\`` });
+    if (!/^\d{10,20}$/.test(rawId)) {
+      return interaction.editReply({ content: '❌ User ID không hợp lệ. Vui lòng nhập chuỗi số ID của Discord.' });
     }
-    if (member.user.bot) return interaction.editReply({ content: '❌ Không thể thêm bot vào danh sách.' });
 
-    const username = displayName ?? member.nickname ?? member.user.displayName ?? member.user.username;
     try {
-      // [FIX] Trước: upsertMember(guild.id, { user_id, username, display_name, note }) — sai signature (2 args + key sai)
-      // Sau:  upsertMember({ guildId, userId, username, phongBan, ghiChu })         — đúng 1 arg object
-      await memberService.upsertMember({
-        guildId:  guild.id,
-        userId,
-        username,
-        phongBan: null,
-        ghiChu:   note,
-      });
-      log.info('MEM_ADD', guild.id, 'Thêm thành viên %s (%s)', userId, username);
+      await memberService.addMember({ guild_id: guild.id, user_id: rawId, nickname: nick, phong_ban: phong });
+      log.info('MEM_ADD', guild.id, 'Thêm thành viên %s', rawId);
+      return interaction.editReply({ content: `✅ Đã thêm <@${rawId}> vào danh sách.` });
     } catch (e) {
-      log.error('MEM_ADD', guild.id, 'upsertMember thất bại: %s', e.message);
+      if (e.code === '23505') {
+        return interaction.editReply({ content: `⚠️ <@${rawId}> đã có trong danh sách.` });
+      }
+      log.error('MEM_ADD', guild.id, 'addMember thất bại: %s', e.message);
       return interaction.editReply({ content: '❌ Không thể thêm thành viên, thử lại sau.' });
     }
-
-    const members = await memberService.getMembers(guild.id).catch(() => []);
-    await interaction.editReply({ content: `✅ Đã thêm **${username}** vào danh sách.` });
-    await interaction.message?.edit(MemberView.render({ guild, members })).catch(() => null);
   }
 }
 

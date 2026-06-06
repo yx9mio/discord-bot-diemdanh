@@ -3,10 +3,10 @@
 'use strict';
 const { MessageFlags, EmbedBuilder } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
-const { getGuildConfig } = require('../../../services/configService.js');
-const log = require('../../../utils/logger.js');
-const { requireAdmin } = require('../../../utils/permissions.js');
-const { FOOTER_DEFAULT } = require('../../../utils/embeds.js');
+const { getGuildConfig } = require('../../../../services/configService.js');
+const log = require('../../../../utils/logger.js');
+const { requireAdmin } = require('../../../../utils/permissions.js');
+const { FOOTER_DEFAULT } = require('../../../../utils/embeds.js');
 
 const BROADCAST_MODAL_ID = 'setup:session:broadcast:modal';
 
@@ -25,7 +25,6 @@ class SetupBroadcastModalHandler extends InteractionHandler {
     const { guild, channel } = interaction;
     const content = interaction.fields.getTextInputValue('message').trim();
     if (!content) return interaction.editReply({ content: '❌ Nội dung tin nhắn không được để trống.' });
-    // [SEC-FIX-4] Discord Embed description giới hạn 4096 ký tự — reject sớm để tránh API crash
     if (content.length > 4000) {
       return interaction.editReply({ content: `❌ Nội dung quá dài (${content.length}/4000 ký tự tối đa).` });
     }

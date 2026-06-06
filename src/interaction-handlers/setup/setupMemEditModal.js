@@ -1,15 +1,14 @@
-'use strict';
 // interaction-handlers/setup/setupMemEditModal.js
-// [FIX-1] updateMember không tồn tại → dùng upsertMember
-// [FIX-2] Field names sai (display_name/note) → đúng (username/phong_ban/ghi_chu) theo _MemberView modal
+// Handles: setup:mem:edit:modal:<userId>
+'use strict';
 const { MessageFlags } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
-const memberService = require('../../../services/memberService.js');
-const log = require('../../../utils/logger.js');
-const { requireAdmin } = require('../../../utils/permissions.js');
+const memberService = require('../../../../services/memberService.js');
+const log = require('../../../../utils/logger.js');
+const { requireAdmin } = require('../../../../utils/permissions.js');
 const { MemberView } = require('../../commands/setup/_views/_MemberView.js');
 
-const MODAL_EDIT = 'setup:mem:edit:modal:';
+const MODAL_PREFIX = 'setup:mem:edit:modal:';
 
 class SetupMemEditModalHandler extends InteractionHandler {
   constructor(ctx, options) {
@@ -17,51 +16,30 @@ class SetupMemEditModalHandler extends InteractionHandler {
   }
 
   parse(interaction) {
-    if (interaction.customId.startsWith(MODAL_EDIT)) return this.some();
+    if (interaction.customId?.startsWith(MODAL_PREFIX)) return this.some();
     return this.none();
   }
 
   async run(interaction) {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-    const { ok } = await requireAdmin(interaction, { context: 'sửa thành viên', deferred: true });
+    const { ok } = await requireAdmin(interaction, { context: 'chỉnh sửa thành viên', deferred: true });
     if (!ok) return;
 
     const { guild } = interaction;
-    // customId = 'setup:mem:edit:modal:<userId>'
-    const userId = interaction.customId.slice(MODAL_EDIT.length);
-    if (!userId) return interaction.editReply({ content: '❌ Không xác định được thành viên.' });
+    const userId = interaction.customId.slice(MODAL_PREFIX.length);
+    if (!userId) return interaction.editReply({ content: '❌ Không tìm thấy User ID.' });
 
-    // [FIX-2] Đọc đúng field theo _MemberView.buildEditModal: 'username' / 'phong_ban' / 'ghi_chu'
-    const username  = interaction.fields.getTextInputValue('username')?.trim()   || null;
-    const phongBan  = interaction.fields.getTextInputValue('phong_ban')?.trim()  || null;
-    const ghiChu    = interaction.fields.getTextInputValue('ghi_chu')?.trim()    || null;
-
-    // Lấy member hiện tại để giữ username cũ nếu không nhập mới
-    let currentUsername = username;
-    if (!currentUsername) {
-      const members = await memberService.getMembers(guild.id).catch(() => []);
-      const m = members.find(x => x.user_id === userId);
-      currentUsername = m?.username ?? userId;
-    }
+    const nickname = interaction.fields.getTextInputValue('nickname')?.trim() || null;
+    const phongBan = interaction.fields.getTextInputValue('phong_ban')?.trim() || null;
 
     try {
-      // [FIX-1] updateMember không tồn tại — dùng upsertMember với đúng key camelCase
-      await memberService.upsertMember({
-        guildId:  guild.id,
-        userId,
-        username: currentUsername,
-        phongBan,
-        ghiChu,
-      });
-      log.info('MEM_EDIT', guild.id, 'Sửa thành viên %s: username=%s phongBan=%s ghiChu=%s', userId, currentUsername, phongBan, ghiChu);
+      await memberService.upsertMember({ guild_id: guild.id, user_id: userId, nickname, phong_ban: phongBan });
+      log.info('MEM_EDIT', guild.id, 'Cập nhật %s: nickname=%s phong_ban=%s', userId, nickname, phongBan);
+      return interaction.editReply({ content: `✅ Đã cập nhật thông tin <@${userId}>.` });
     } catch (e) {
       log.error('MEM_EDIT', guild.id, 'upsertMember thất bại: %s', e.message);
       return interaction.editReply({ content: '❌ Không thể cập nhật, thử lại sau.' });
     }
-
-    const members = await memberService.getMembers(guild.id).catch(() => []);
-    await interaction.editReply({ content: '✅ Đã cập nhật thành viên.' });
-    await interaction.message?.edit(MemberView.render({ guild, members })).catch(() => null);
   }
 }
 

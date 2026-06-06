@@ -2,11 +2,11 @@
 // Handles: setup:home, setup:home:refresh
 'use strict';
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
-const { getGuildConfig } = require('../../../services/configService.js');
-const { getScheduledSessions } = require('../../../services/scheduledService.js');
-const { getMembers } = require('../../../services/memberService.js');
-const { getActiveSession } = require('../../../services/sessionService.js');
-const { HomeView } = require('../../commands/setup/_views/_HomeView.js'); // [FIX-SETUP]
+const { getGuildConfig } = require('../../../../services/configService.js');
+const { getScheduledSessions } = require('../../../../services/scheduledService.js');
+const { getMembers } = require('../../../../services/memberService.js');
+const { getActiveSession } = require('../../../../services/sessionService.js');
+const { HomeView } = require('../../commands/setup/_views/_HomeView.js');
 const { CUSTOM_ID } = HomeView;
 
 const KNOWN_IDS = new Set([

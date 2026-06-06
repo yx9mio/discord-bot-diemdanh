@@ -2,8 +2,8 @@
 // Handles: setup:cfg (mở Config view), setup:cfg:refresh
 'use strict';
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
-const { getGuildConfig } = require('../../../services/configService.js');
-const { ConfigView } = require('../../commands/setup/_views/_ConfigView.js'); // [FIX-SETUP]
+const { getGuildConfig } = require('../../../../services/configService.js');
+const { ConfigView } = require('../../commands/setup/_views/_ConfigView.js');
 const { CUSTOM_ID } = ConfigView;
 
 class SetupConfigHandler extends InteractionHandler {
