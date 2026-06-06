@@ -8,7 +8,7 @@
 const { EmbedBuilder } = require('discord.js');
 const memberService = require('../services/memberService.js');
 const log = require('./logger.js');
-const { FOOTER_DEFAULT, buildClosedSessionEmbed, buildSessionActionRow } = require('./embeds.js'); // [FIX] bỏ buildAttendanceButtons đã obsolete
+const { FOOTER_DEFAULT, buildClosedSessionEmbed, buildSessionActionRow } = require('./embeds.js');
 
 const DEFAULT_BADGES = [
   { threshold:   5, emoji: '🌱', label: 'Lính Mới'     },
@@ -50,18 +50,15 @@ async function ketThucPhien(guild, session, attended) {
   const allStats   = await memberService.getAllMemberStats(guild.id);
   const statsCache = new Map(allStats.map(s => [s.user_id, s]));
 
-  // Helper: gộp patch cho 1 user (tránh duplicate entry ghi đè nhau)
   function mergePatch(uid, patch) {
     const existing = patchMap.get(uid) ?? {};
     patchMap.set(uid, { ...existing, ...patch, user_id: uid, last_session_id: session.id });
   }
 
-  // Helper: lấy stats an toàn
   function getStats(uid) {
     return statsCache.get(uid) ?? {};
   }
 
-  // 1. Cập nhật stats cho người có mặt
   for (const record of attended) {
     if (!PRESENT_STATUSES.has(record.status)) continue;
     const uid   = record.user_id;
@@ -80,7 +77,6 @@ async function ketThucPhien(guild, session, attended) {
     });
   }
 
-  // 2. Cập nhật absent/excused cho người không có mặt
   for (const record of attended) {
     if (PRESENT_STATUSES.has(record.status)) continue;
     const uid   = record.user_id;
@@ -98,13 +94,11 @@ async function ketThucPhien(guild, session, attended) {
     }
   }
 
-  // 3. Reset streak cho người eligible mà vắng — CHỈ khi eligible có data
   const eligibleIds = session.eligible_member_ids ?? [];
   if (eligibleIds.length > 0) {
     for (const uid of eligibleIds.filter(id => !presentIds.has(id))) {
       const stats = getStats(uid);
       if (stats.current_streak === 0) {
-        // Vẫn tăng total_sessions cho eligible ngay cả khi streak = 0
         mergePatch(uid, { total_sessions: (stats.total_sessions ?? 0) + 1 });
         continue;
       }
@@ -123,16 +117,8 @@ async function ketThucPhien(guild, session, attended) {
   return statsMap;
 }
 
-/**
- * Thông báo huy hiệu mới.
- * Phase 1B fix: earnedSet null-safe — filter undefined threshold trước khi Set
- * Optimized: Sử dụng batch queries thay vì sequential calls trong loop
- */
-const STREAK_MILESTONES = [5, 10, 20, 50]; // [C2]
+const STREAK_MILESTONES = [5, 10, 20, 50];
 
-/**
- * Thông báo milestone streak trong channel phiên (best-effort).
- */
 async function thongBaoStreakMilestone(guild, channel, userId, streak) {
   if (!STREAK_MILESTONES.includes(streak)) return;
   const embed = new EmbedBuilder()
@@ -155,18 +141,16 @@ async function thongBaoHuyHieu(guild, channel, guildId, sessionId, attended, sta
   if (!badges.length) return;
   const newBadges = [];
 
-  // Batch fetch all user badges at once instead of sequential calls
   const userIds = Array.from(statsMap.keys());
   const allUserBadges = await memberService.getMemberBadgesMulti(guildId, userIds);
 
   for (const [userId, stats] of statsMap.entries()) {
     const existing = allUserBadges[userId] ?? [];
-    // Fix null-safe: bỏ qua row có threshold undefined/null
     const earnedSet = new Set(
       existing.map(b => b.threshold).filter(t => t != null)
     );
     for (const badge of badges) {
-      if (badge.threshold == null) continue; // skip badge definition lỗi
+      if (badge.threshold == null) continue;
       if (stats.total >= badge.threshold && !earnedSet.has(badge.threshold)) {
         try {
           await memberService.upsertMemberBadge(guildId, userId, badge.threshold);
@@ -192,23 +176,22 @@ async function thongBaoHuyHieu(guild, channel, guildId, sessionId, attended, sta
 
 /**
  * Vô hiệu hoá nút điểm danh, cập nhật embed → đã đóng.
- * [#10] Fix: dùng buildSessionActionRow(true) thay vì buildAttendanceButtons(true)
- *       để disabled đủ tất cả 3 ActionRow (dropdown + admin buttons + đóng phiên).
+ * [FIX] buildSessionActionRow(false) — false = isOpen=false → tất cả nút disabled
+ *       Bug cũ: truyền true → nút vẫn sáng sau khi đóng/huỷ phiên
  */
 async function voHieuHoaNutDiemDanh(client, channel, session, attended = []) {
   if (!session.message_id) return;
   try {
     const msg = await channel.messages.fetch(session.message_id);
     if (!msg) return;
-    const closedEmbed      = await buildClosedSessionEmbed(session, attended, channel.guild ?? null);
-    const disabledComponents = buildSessionActionRow(true); // [#10] đủ 3 rows, tất cả disabled
+    const closedEmbed        = await buildClosedSessionEmbed(session, attended, channel.guild ?? null);
+    const disabledComponents = buildSessionActionRow(false); // [FIX] false = isOpen=false → disabled
     await msg.edit({ embeds: [closedEmbed], components: disabledComponents });
   } catch (e) {
     log.warn('SESSION', session.guild_id, 'Không vô hiệu hoá được nút: %s', e.message);
   }
 }
 
-/** Gửi file CSV điểm danh đính kèm vào channel. */
 async function guiCsvDinhKem(channel, session, attended) {
   try {
     const lines = [
