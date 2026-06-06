@@ -1,9 +1,12 @@
 // src/interaction-handlers/setup/setupStatsLichsu.js
 // [BUG-4] NEW — Handler cho pagination lịch sử: lichsu:prev / lichsu:next
 // Buttons được tạo bởi _StatsView.renderLichSu() nhưng chưa có handler nào
+// [BUG-A] Fix import path: services ở root, không phải src/services
+// [BUG-D] Đọc targetUserId từ embed description thay vì luôn dùng interaction.user.id
 'use strict';
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
-const { getAttendancesByUser } = require('../../../services/attendanceService.js');
+// [BUG-A] Đúng path: services nằm ở root
+const { getAttendancesByUser } = require('../../../../services/attendanceService.js');
 const log = require('../../../utils/logger.js');
 const { StatsView } = require('../../commands/setup/_views/_StatsView.js');
 
@@ -33,11 +36,20 @@ class SetupStatsLichsuHandler extends InteractionHandler {
       if (match) currentPage = parseInt(match[1], 10) - 1; // 0-indexed
     } catch { /* fallback page 0 */ }
 
+    // [BUG-D] Đọc targetUserId từ embed description (<@userId>) thay vì luôn dùng
+    // interaction.user.id — fix trường hợp admin xem lịch sử người khác bị nhảy về chính mình
+    let targetUserId = interaction.user.id;
+    try {
+      const desc = interaction.message?.embeds?.[0]?.description ?? '';
+      const mentionMatch = desc.match(/<@!?(\d+)>/);
+      if (mentionMatch) targetUserId = mentionMatch[1];
+    } catch { /* giữ interaction.user.id nếu parse lỗi */ }
+
     const nextPage = customId === LICHSU_NEXT ? currentPage + 1 : currentPage - 1;
 
     try {
-      const records = await getAttendancesByUser(guild.id, interaction.user.id);
-      return interaction.editReply(StatsView.renderLichSu(records, interaction.user.id, guild, nextPage));
+      const records = await getAttendancesByUser(guild.id, targetUserId);
+      return interaction.editReply(StatsView.renderLichSu(records, targetUserId, guild, nextPage));
     } catch (e) {
       log.error('STATS_LICHSU', guild.id, 'pagination thất bại: %s', e.message);
       return interaction.editReply({ content: '❌ Không thể tải trang, thử lại sau.' });

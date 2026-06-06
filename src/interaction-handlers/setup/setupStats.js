@@ -3,11 +3,14 @@
 // [BUG-2] Thêm CUSTOM_ID.XEM vào parse()
 // [BUG-3] Fix modal customId: 'setup:stats:search:modal' → 'setup:stats:xem:modal'
 // [BUG-5] Fix StatsView.memberStats() → StatsView.renderToi()
+// [BUG-A] Fix import path: services ở root, không phải src/services
+// [BUG-C] renderServerStats truyền guild để mini top-5 hiển thị đúng
 'use strict';
 const { ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, MessageFlags } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
-const { getMemberStats, getMemberBadges, getTopMembers, getServerStats } = require('../../../services/memberService.js');
-const { getAttendancesByUser } = require('../../../services/attendanceService.js');
+// [BUG-A] Đúng path: services nằm ở root (không phải src/services)
+const { getMemberStats, getMemberBadges, getTopMembers, getServerStats } = require('../../../../services/memberService.js');
+const { getAttendancesByUser } = require('../../../../services/attendanceService.js');
 const log = require('../../../utils/logger.js');
 const { StatsView } = require('../../commands/setup/_views/_StatsView.js');
 const { CUSTOM_ID } = StatsView;
@@ -38,9 +41,12 @@ class SetupStatsHandler extends InteractionHandler {
     if (customId === CUSTOM_ID.SERVER) {
       await interaction.deferUpdate();
       try {
-        const stats = await getServerStats(guild.id);
-        const top   = await getTopMembers(guild.id, 5);
-        return interaction.editReply(StatsView.renderServerStats(stats, top));
+        // [BUG-C] Fetch cả top và truyền guild vào renderServerStats
+        const [stats, top] = await Promise.all([
+          getServerStats(guild.id),
+          getTopMembers(guild.id, 5),
+        ]);
+        return interaction.editReply(StatsView.renderServerStats(stats, top, guild));
       } catch (e) {
         log.error('SETUP_STATS', guild.id, 'getServerStats thất bại: %s', e.message);
         return interaction.editReply({ content: '❌ Không thể tải stats server, thử lại sau.' });
@@ -52,7 +58,6 @@ class SetupStatsHandler extends InteractionHandler {
       await interaction.deferUpdate();
       try {
         const stats  = await getMemberStats(guild.id, interaction.user.id);
-        const atts   = await getAttendancesByUser(guild.id, interaction.user.id);
         const badges = await getMemberBadges(guild.id, interaction.user.id);
         let member;
         try { member = await guild.members.fetch(interaction.user.id); } catch { member = null; }
@@ -101,6 +106,7 @@ class SetupStatsHandler extends InteractionHandler {
               .setLabel('User ID hoặc @mention')
               .setStyle(TextInputStyle.Short)
               .setRequired(true)
+              .setMaxLength(100)
               .setPlaceholder('123456789012345678 hoặc @username'),
           ),
         );
