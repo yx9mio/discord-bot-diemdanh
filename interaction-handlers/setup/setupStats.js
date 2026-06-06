@@ -5,12 +5,24 @@ const { getMemberStats, getMemberBadges, getTopMembers, getServerStats } = requi
 const { getAttendancesByUser } = require('../../services/attendanceService.js');
 const log = require('../../utils/logger.js');
 const { requireAdmin } = require('../../utils/permissions.js');
-const { StatsView } = require('../../src/commands/setup/_views/_StatsView.js'); // [FIX-SETUP]
+const { StatsView } = require('../../src/commands/setup/_views/_StatsView.js');
 const { CUSTOM_ID } = StatsView;
 
 const XEM_MODAL_ID = 'setup:stats:xem:modal';
 const LICHSU_PAGE_NEXT = 'setup:stats:lichsu:next';
 const LICHSU_PAGE_PREV = 'setup:stats:lichsu:prev';
+
+const HANDLED_IDS = new Set([
+  'setup:stats',
+  CUSTOM_ID.TOI,
+  CUSTOM_ID.RANK,
+  CUSTOM_ID.SERVER,
+  CUSTOM_ID.XEM,
+  CUSTOM_ID.LICHSU,
+  CUSTOM_ID.REFRESH, // [FIX] setup:stats:refresh — thiếu trong parse cũ
+  LICHSU_PAGE_NEXT,
+  LICHSU_PAGE_PREV,
+]);
 
 class SetupStatsHandler extends InteractionHandler {
   constructor(ctx, options) {
@@ -18,18 +30,14 @@ class SetupStatsHandler extends InteractionHandler {
   }
 
   parse(interaction) {
-    const id = interaction.customId;
-    if (id === 'setup:stats') return this.some();
-    if (id === CUSTOM_ID.TOI || id === CUSTOM_ID.RANK || id === CUSTOM_ID.SERVER) return this.some();
-    if (id === CUSTOM_ID.XEM) return this.some();
-    if (id === CUSTOM_ID.LICHSU || id === LICHSU_PAGE_NEXT || id === LICHSU_PAGE_PREV) return this.some();
+    if (HANDLED_IDS.has(interaction.customId)) return this.some();
     return this.none();
   }
 
   async run(interaction) {
     const { customId, guild, user } = interaction;
 
-    if (customId === 'setup:stats') {
+    if (customId === 'setup:stats' || customId === CUSTOM_ID.REFRESH) {
       await interaction.deferUpdate();
       return interaction.editReply(StatsView.renderStatsMenu());
     }
@@ -50,7 +58,6 @@ class SetupStatsHandler extends InteractionHandler {
       return interaction.editReply(StatsView.renderRank(rows, guild, 10));
     }
 
-    // [FIX-A] Block SERVER bị thiếu — đây là nguyên nhân "tương tác không thành công"
     if (customId === CUSTOM_ID.SERVER) {
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       const stats = await getServerStats(guild.id);
@@ -67,8 +74,7 @@ class SetupStatsHandler extends InteractionHandler {
       const curPage = isPageNav ? _extractPageFromEmbed(interaction) : 0;
       const newPage = Math.max(0, curPage + (customId === LICHSU_PAGE_NEXT ? 1 : -1));
       const records = await getAttendancesByUser(guild.id, user.id, 100);
-      const view = StatsView.renderLichSu(records, user.id, guild, newPage);
-      return interaction.editReply(view);
+      return interaction.editReply(StatsView.renderLichSu(records, user.id, guild, newPage));
     }
 
     if (customId === CUSTOM_ID.XEM) {

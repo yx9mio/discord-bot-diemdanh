@@ -2,7 +2,7 @@
 const { MessageFlags, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const memberService = require('../../services/memberService.js');
-const { MemberView } = require('../../src/commands/setup/_views/_MemberView.js'); // [FIX-SETUP]
+const { MemberView } = require('../../src/commands/setup/_views/_MemberView.js');
 const log = require('../../utils/logger.js');
 const { requireAdmin } = require('../../utils/permissions.js');
 
@@ -49,7 +49,6 @@ async function handleAddMemberModal(interaction) {
   const phongBan = interaction.fields.getTextInputValue('phong_ban').trim() || null;
   const ghiChu = interaction.fields.getTextInputValue('ghi_chu').trim() || null;
 
-  // [UX] Parse @mention → userId
   let userId = rawId;
   if (rawId.startsWith('<@') && rawId.endsWith('>')) {
     userId = rawId.slice(2, -1).replace('!', '');
@@ -79,14 +78,14 @@ async function handleAddMemberModal(interaction) {
     return interaction.editReply({ content: '❌ Không thể thêm thành viên, thử lại sau.' });
   }
 
-  log.info('SETUP_MEM_ADD', guild.id, 'Đã thêm thành viên %s (%s)', userId, member.user.tag);
+  // [FIX] user.tag deprecated trong djs v14 — dùng user.username
+  log.info('SETUP_MEM_ADD', guild.id, 'Đã thêm thành viên %s (%s)', userId, member.user.username);
 
-  // [UX] Auto-refresh MemberView trên message gốc
   try {
     const members = await memberService.getMembers(guild.id);
     const view = MemberView.render({ members, page: 0, guild });
     await interaction.message?.edit(view).catch(() => null);
-  } catch (_e) { /* fallthrough — không block reply nếu refresh lỗi */ }
+  } catch (_e) { /* fallthrough */ }
 
   return interaction.editReply({
     content: `✅ Đã thêm **${member.displayName ?? member.user.username}** vào danh sách quản lý.`,
