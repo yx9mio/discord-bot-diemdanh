@@ -15,6 +15,7 @@ const COLORS = {
   TEAL:    0x1abc9c,
   PRIMARY: 0x01696f,
   GOLD:    0xFFD700,
+  SUCCESS: 0x57f287,
 };
 
 const ICONS = {
@@ -37,6 +38,14 @@ const ICONS = {
   SPARKLE:        '✨',
   BELL:           '🔔',
   GEAR:           '⚙️',
+  ID:             '🆔',
+  // [Phase-D] thêm các icon dùng bởi _ScheduleView, _SessionView, _HomeView
+  REFRESH:        '🔄',
+  HOME:           '🏠',
+  MEMBER:         '👥',
+  STATS:          '📈',
+  HISTORY:        '📜',
+  SETTINGS:       '🔧',
 };
 
 const FOOTER_DEFAULT = 'Quản Gia · Bot Điểm Danh';
