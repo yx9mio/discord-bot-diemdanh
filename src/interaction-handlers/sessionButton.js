@@ -55,14 +55,18 @@ class SessionButtonHandler extends InteractionHandler {
         const parts = customId.split(':');
         const action = parts[1];
         const currentPage = parseInt(parts[2], 10) || 1;
-        const { embed: preEmbed, components: preComponents, totalPages } =
-          buildSessionEmbed(guild, session, attended, session.phai_role_ids ?? [], false, currentPage);
+
+        // [FIX] Tính totalPages trước, không build embed dư
+        const totalPages = Math.max(1, Math.ceil(attended.length / 15));
         const page = action === 'prev'
           ? Math.max(1, currentPage - 1)
           : Math.min(totalPages, currentPage + 1);
+
         const { embed, components: pagComponents } =
           buildSessionEmbed(guild, session, attended, session.phai_role_ids ?? [], false, page);
-        return interaction.editReply({ embeds: [embed], components: [...buildSessionActionRow(false), ...pagComponents] });
+
+        // [FIX] buildSessionActionRow(true) — phiên vẫn đang mở
+        return interaction.editReply({ embeds: [embed], components: [...buildSessionActionRow(true), ...pagComponents] });
       }
 
       const { embed, components } =
@@ -79,7 +83,7 @@ class SessionButtonHandler extends InteractionHandler {
         await interaction.guild.members.fetch().catch(() => {});
         const { embed, components: paginationComponents } =
           buildSessionEmbed(interaction.guild, session, attended, session.phai_role_ids ?? [], false);
-        await interaction.editReply({ embeds: [embed], components: [...buildSessionActionRow(false), ...paginationComponents] });
+        await interaction.editReply({ embeds: [embed], components: [...buildSessionActionRow(true), ...paginationComponents] });
         log.info('REFRESH', interaction.guildId, '%s làm mới embed điểm danh', interaction.user.tag);
       } catch (e) {
         log.error('REFRESH', interaction.guildId, 'Lỗi handleRefresh: %s', e.message);
