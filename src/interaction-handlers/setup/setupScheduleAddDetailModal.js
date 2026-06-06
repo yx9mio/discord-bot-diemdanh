@@ -1,5 +1,7 @@
 // src/interaction-handlers/setup/setupScheduleAddDetailModal.js
 // Handles: setup:sch:add:recurring:detail + setup:sch:add:onetime:detail (ModalSubmit)
+// [BUG-FIX] One-time modal đọc field 'ngay' (không phải 'scheduled_date') cho khớp
+//           với modal được build trong setupSchedule.js
 // Export helpers parseGio/parsePreClose/parsePhutBu để setupScheduleEditOneTimeModal dùng lại
 'use strict';
 const { MessageFlags } = require('discord.js');
@@ -48,7 +50,6 @@ class SetupScheduleRecurringDetailHandler extends InteractionHandler {
   }
   async run(interaction) {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-    // [BUG-7] requireAdmin — ngăn user thường tạo lịch qua modal submit trực tiếp
     const { ok } = await requireAdmin(interaction, { context: 'tạo lịch hàng tuần', deferred: true });
     if (!ok) return;
     const { guild } = interaction;
@@ -74,7 +75,7 @@ class SetupScheduleRecurringDetailHandler extends InteractionHandler {
       const payload = {
         guild_id:          guild.id,
         type:              'recurring_weekly',
-        session_name:      CUSTOM_ID._sessionName ?? 'Phiên điểm danh',
+        session_name:      'Phiên điểm danh',
         day_of_week:       dow,
         open_hour:         gio.hour,
         open_minute:       gio.minute,
@@ -94,7 +95,7 @@ class SetupScheduleRecurringDetailHandler extends InteractionHandler {
     const dowName = DOW_NAMES[dow] ?? dow;
     return interaction.editReply({
       content: [
-        `✅ Đã tạo lịch **${CUSTOM_ID._sessionName ?? 'Phiên điểm danh'}** (id: \`${scheduleId}\`)`,
+        `✅ Đã tạo lịch **Phiên điểm danh** (id: \`${scheduleId}\`)`,
         `📅 ${dowName} | 🕐 Mở: \`${String(gio.hour).padStart(2,'0')}:${String(gio.minute).padStart(2,'0')}\` | ⏱️ Đóng sau **${phutBu} phút**`,
         `🔔 Nhắc trước **${preClose} phút** | 🕐 Timezone: \`${timezone}\``,
       ].join('\n'),
@@ -112,20 +113,30 @@ class SetupScheduleOneTimeDetailHandler extends InteractionHandler {
   }
   async run(interaction) {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-    // [BUG-7] requireAdmin — ngăn user thường tạo lịch one-time qua modal submit trực tiếp
     const { ok } = await requireAdmin(interaction, { context: 'tạo lịch một lần', deferred: true });
     if (!ok) return;
     const { guild } = interaction;
-    const dateRaw   = interaction.fields.getTextInputValue('scheduled_date').trim();
+
+    // [BUG-FIX] Đọc 'ngay' (field name trong modal setupSchedule.js) thay vì 'scheduled_date'
+    const dateRaw   = interaction.fields.getTextInputValue('ngay').trim();
     const gioRaw    = interaction.fields.getTextInputValue('gio_mo').trim();
     const phutBuRaw = interaction.fields.getTextInputValue('phut_bu')?.trim() ?? '0';
     const preRaw    = interaction.fields.getTextInputValue('pre_close')?.trim() ?? '30';
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateRaw)) {
-      return interaction.editReply({ content: '❌ Ngày không hợp lệ. Định dạng YYYY-MM-DD (VD: 2026-06-15).' });
+
+    // Hỗ trợ cả DD/MM/YYYY và YYYY-MM-DD
+    let normalizedDate = dateRaw;
+    const dmyMatch = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(dateRaw);
+    if (dmyMatch) {
+      const [, d, m, y] = dmyMatch;
+      normalizedDate = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    }
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(normalizedDate)) {
+      return interaction.editReply({ content: '❌ Ngày không hợp lệ. Định dạng DD/MM/YYYY hoặc YYYY-MM-DD (VD: 07/06/2026).' });
     }
     const gio = parseGio(gioRaw);
     if (!gio) return interaction.editReply({ content: '❌ Giờ mở không hợp lệ. Định dạng HH:MM (VD: 20:00).' });
-    const [yyyy, mm, dd] = dateRaw.split('-').map(Number);
+    const [yyyy, mm, dd] = normalizedDate.split('-').map(Number);
     const targetDate = new Date(yyyy, mm - 1, dd, gio.hour, gio.minute);
     if (targetDate <= new Date()) {
       return interaction.editReply({ content: '❌ Ngày/giờ đã qua. Vui lòng chọn thời điểm trong tương lai.' });
@@ -143,8 +154,8 @@ class SetupScheduleOneTimeDetailHandler extends InteractionHandler {
       const payload = {
         guild_id:          guild.id,
         type:              'one_time',
-        session_name:      CUSTOM_ID._sessionName ?? 'Phiên điểm danh',
-        scheduled_date:    dateRaw,
+        session_name:      'Phiên điểm danh',
+        scheduled_date:    normalizedDate,
         day_of_week:       dow,
         open_hour:         gio.hour,
         open_minute:       gio.minute,
@@ -163,8 +174,8 @@ class SetupScheduleOneTimeDetailHandler extends InteractionHandler {
     }
     return interaction.editReply({
       content: [
-        `✅ Đã tạo lịch một lần **${CUSTOM_ID._sessionName ?? 'Phiên điểm danh'}** (id: \`${scheduleId}\`)`,
-        `📅 Ngày: \`${dateRaw}\` | 🕐 Mở: \`${String(gio.hour).padStart(2,'0')}:${String(gio.minute).padStart(2,'0')}\` | ⏱️ Đóng sau **${phutBu} phút**`,
+        `✅ Đã tạo lịch một lần **Phiên điểm danh** (id: \`${scheduleId}\`)`,
+        `📅 Ngày: \`${normalizedDate}\` | 🕐 Mở: \`${String(gio.hour).padStart(2,'0')}:${String(gio.minute).padStart(2,'0')}\` | ⏱️ Đóng sau **${phutBu} phút**`,
         `🔔 Nhắc trước **${preClose} phút** | 🕐 Timezone: \`${timezone}\``,
       ].join('\n'),
     });

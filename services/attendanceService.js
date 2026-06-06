@@ -36,7 +36,8 @@ async function getAttendances(sessionId) {
   return _validateAttendances(data ?? [], 'getAttendances');
 }
 
-async function getAttendancesByUser(guildId, userId, limit = 50) {
+// [BUG-FIX] Tăng default limit 50 → 200 để tránh cắt lịch sử của user điểm danh nhiều
+async function getAttendancesByUser(guildId, userId, limit = 200) {
   const { data, error } = await getClient()
     .from('attendances')
     .select('session_id, status, checked_in_at, sessions!inner(session_name, started_at, cancelled)')

@@ -95,6 +95,7 @@ async function getTopMembers(guildId, limit = 10) {
   return data ?? [];
 }
 
+// [UPG] getServerStats: trả về breakdown đầy đủ 4 trạng thái thay vì chỉ rate_present
 async function getServerStats(guildId) {
   const [sessionsRes, membersRes, attRes] = await Promise.all([
     getClient().from('sessions').select('id, cancelled', { count: 'exact', head: false })
@@ -107,15 +108,31 @@ async function getServerStats(guildId) {
   _throwSupabase(sessionsRes.error, 'getServerStats.sessions');
   _throwSupabase(membersRes.error, 'getServerStats.members');
   _throwSupabase(attRes.error, 'getServerStats.attendances');
+
   const totalSessions = sessionsRes.count ?? (sessionsRes.data?.length ?? 0);
   const totalMembers  = membersRes.count  ?? (membersRes.data?.length  ?? 0);
   const atts          = attRes.data ?? [];
-  const present       = atts.filter(a => a.status === 'tham_gia' || a.status === 'tre').length;
+  const totalAtt      = atts.length;
+
+  const present = atts.filter(a => a.status === 'tham_gia').length;
+  const late    = atts.filter(a => a.status === 'tre').length;
+  const absent  = atts.filter(a => a.status === 'khong_tham_gia').length;
+  const excused = atts.filter(a => a.status === 'co_phep').length;
+
+  const totalPresent = present + late; // tham gia + trễ đều tính là có mặt
+
   return {
     total_sessions:    totalSessions,
     total_members:     totalMembers,
-    total_attendances: atts.length,
-    rate_present:      atts.length ? Math.round((present / atts.length) * 100) : 0,
+    total_attendances: totalAtt,
+    total_present:     present,
+    total_late:        late,
+    total_absent:      absent,
+    total_excused:     excused,
+    rate_present:      totalAtt ? Math.round((totalPresent / totalAtt) * 100) : 0,
+    rate_late:         totalAtt ? Math.round((late    / totalAtt) * 100) : 0,
+    rate_absent:       totalAtt ? Math.round((absent  / totalAtt) * 100) : 0,
+    rate_excused:      totalAtt ? Math.round((excused / totalAtt) * 100) : 0,
   };
 }
 

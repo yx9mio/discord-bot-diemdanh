@@ -1,8 +1,9 @@
 // src/commands/setup/_views/_StatsView.js
 // [FIX] renderLichSu: embed targetUserId vào footer để setupStatsLichsu.js parse đúng
-// [FIX] renderServerStats: nhận tham số `top` và hiển thị mini top-5
-// [UPG] renderLichSu: thêm tóm tắt tham gia/vắng/trễ ở mỗi trang
-// [UPG] renderRank: hiển thị phòng ban nếu có
+// [FIX] renderServerStats: nhận tham số `top` và hiển thị breakdown 4 trạng thái đầy đủ
+// [UPG] renderToi: thêm total_absent, total_late từ stats
+// [UPG] renderLichSu: tăng limit 200 + hiển thị rõ hơn per-status
+// [UPG] renderRank: hiển thị phòng ban + % tỉ lệ
 'use strict';
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { COLORS, ICONS } = require('../../../../utils/theme.js');
@@ -65,14 +66,20 @@ function renderStatsMenu() {
 
 // ─── Thống kê cá nhân ─────────────────────────────────────────────────
 function renderToi(stats, member, guild, badges) {
-  const joined = stats?.total_joined   ?? 0;
-  const total  = stats?.total_sessions ?? 0;
-  const streak = stats?.current_streak ?? 0;
-  const best   = stats?.best_streak    ?? 0;
-  const phong  = stats?.phong_ban      ?? '';
-  const name   = member?.displayName ?? member?.user?.username ?? 'Thành viên';
-  const pct    = total > 0 ? Math.round((joined / total) * 100) : 0;
-  const bar    = buildRichProgressBar(pct);
+  const joined  = stats?.total_joined   ?? 0;
+  const total   = stats?.total_sessions ?? 0;
+  const streak  = stats?.current_streak ?? 0;
+  const best    = stats?.best_streak    ?? 0;
+  const phong   = stats?.phong_ban      ?? '';
+  const name    = member?.displayName ?? member?.user?.username ?? 'Thành viên';
+  const pct     = total > 0 ? Math.round((joined / total) * 100) : 0;
+  const bar     = buildRichProgressBar(pct);
+
+  // [UPG] Tính absent + late từ total_sessions - total_joined nếu service chưa cung cấp riêng
+  // member_stats lưu total_joined (tham_gia + tre) và total_sessions
+  // late & absent ước tính từ attendanceService nếu cần; hiện dùng field nếu có
+  const late   = stats?.total_late   ?? null;
+  const absent = stats?.total_absent ?? (total > 0 ? total - joined : null);
 
   const badgeStr = (badges ?? []).length
     ? badges.map(b => {
@@ -80,6 +87,22 @@ function renderToi(stats, member, guild, badges) {
         return def ? `${def.emoji} **${def.label}**` : `🎖️ ${b.threshold}`;
       }).join('  ')
     : '_Chưa có huy hiệu_';
+
+  const fields = [
+    { name: `${ICONS.ATTEND_YES} Đã tham gia`, value: `**${joined}** / ${total} phiên`, inline: true },
+    { name: `${ICONS.FIRE} Streak hiện tại`,   value: `**${streak}** phiên liên tiếp`,  inline: true },
+    { name: '🏆 Streak tốt nhất',              value: `**${best}** phiên`,               inline: true },
+  ];
+
+  // [UPG] Thêm dòng vắng/trễ nếu có dữ liệu
+  if (late !== null || absent !== null) {
+    const parts = [];
+    if (late   !== null) parts.push(`${ICONS.ATTEND_LATE ?? '🕐'} Trễ: **${late}**`);
+    if (absent !== null) parts.push(`${ICONS.ATTEND_NO ?? '❌'} Vắng: **${absent}**`);
+    fields.push({ name: '📊 Chi tiết', value: parts.join('  ·  '), inline: false });
+  }
+
+  fields.push({ name: `${ICONS.STAR} Huy hiệu`, value: badgeStr, inline: false });
 
   const embed = new EmbedBuilder()
     .setColor(COLORS.GOLD)
@@ -91,12 +114,7 @@ function renderToi(stats, member, guild, badges) {
         : `${pctEmoji(pct)} **Tỉ lệ tham gia: ${pct}%** — ${pctLabel(pct)}`,
       total > 0 ? `\`${bar}\`` : null,
     ].filter(Boolean).join('\n'))
-    .addFields(
-      { name: `${ICONS.ATTEND_YES} Đã tham gia`, value: `**${joined}** / ${total} phiên`, inline: true },
-      { name: `${ICONS.FIRE} Streak hiện tại`,   value: `**${streak}** phiên liên tiếp`,  inline: true },
-      { name: '🏆 Streak tốt nhất',              value: `**${best}** phiên`,               inline: true },
-      { name: `${ICONS.STAR} Huy hiệu`,          value: badgeStr,                          inline: false },
-    )
+    .addFields(...fields)
     .setFooter({ text: FOOTER_DEFAULT })
     .setTimestamp();
 
@@ -131,8 +149,8 @@ function renderRank(rows, guild, topN = 10) {
     const streak  = r.current_streak ?? 0;
     const total   = r.total_sessions ?? joined;
     const pct     = total > 0 ? Math.round((joined / total) * 100) : 0;
-    const phongStr = phong ? ` · 📌${phong}` : '';
-    return `${medal} **${name}**${phongStr}\n\`${buildRichProgressBar(pct, 8)}\` ${pct}% · ${joined} phiên · ${ICONS.FIRE}${streak}`;
+    const phongStr = phong ? ` · 📌 ${phong}` : '';
+    return `${medal} **${name}**${phongStr}\n\`${buildRichProgressBar(pct, 8)}\` **${pct}%** · ${joined} phiên · ${ICONS.FIRE}${streak}`;
   });
 
   return {
@@ -145,6 +163,7 @@ function renderRank(rows, guild, topN = 10) {
 }
 
 // ─── Lịch sử cá nhân ─────────────────────────────────────────────────
+// [UPG] limit tăng lên 200 (khớp với attendanceService)
 function renderLichSu(records, userId, guild, page = 0) {
   const PAGE_SIZE  = 10;
   const total      = records.length;
@@ -153,15 +172,14 @@ function renderLichSu(records, userId, guild, page = 0) {
   const start      = cPage * PAGE_SIZE;
   const slice      = records.slice(start, start + PAGE_SIZE);
 
-  // [UPG] Dùng displayName nếu có, fallback về mention
   const gMember = guild?.members?.cache?.get(userId);
   const name    = gMember?.displayName ?? `<@${userId}>`;
 
   const statusMap = {
-    tham_gia:       { emoji: ICONS.ATTEND_YES,    label: 'Tham gia' },
-    tre:            { emoji: ICONS.ATTEND_LATE,   label: 'Trễ'      },
-    khong_tham_gia: { emoji: ICONS.ATTEND_NO,     label: 'Vắng'     },
-    co_phep:        { emoji: ICONS.ATTEND_EXCUSE, label: 'Có phép'  },
+    tham_gia:       { emoji: ICONS.ATTEND_YES    ?? '✅', label: 'Tham gia' },
+    tre:            { emoji: ICONS.ATTEND_LATE   ?? '🕐', label: 'Trễ'     },
+    khong_tham_gia: { emoji: ICONS.ATTEND_NO     ?? '❌', label: 'Vắng'    },
+    co_phep:        { emoji: ICONS.ATTEND_EXCUSE ?? '📋', label: 'Có phép' },
   };
 
   if (!total) {
@@ -172,22 +190,25 @@ function renderLichSu(records, userId, guild, page = 0) {
     };
   }
 
-  // [UPG] Tóm tắt trạng thái toàn bộ records
-  const summary = Object.fromEntries(Object.keys(statusMap).map(k => [k, 0]));
-  for (const r of records) { if (summary[r.status] !== undefined) summary[r.status]++; }
+  // Tóm tắt trạng thái toàn bộ records
+  const summary = { tham_gia: 0, tre: 0, khong_tham_gia: 0, co_phep: 0 };
+  for (const r of records) {
+    if (summary[r.status] !== undefined) summary[r.status]++;
+  }
   const summaryStr = [
-    `${ICONS.ATTEND_YES} ${summary.tham_gia}`,
-    `${ICONS.ATTEND_LATE} ${summary.tre}`,
-    `${ICONS.ATTEND_NO} ${summary.khong_tham_gia}`,
-    `${ICONS.ATTEND_EXCUSE} ${summary.co_phep}`,
-  ].join('  ');
+    `${statusMap.tham_gia.emoji} **${summary.tham_gia}** tham gia`,
+    `${statusMap.tre.emoji} **${summary.tre}** trễ`,
+    `${statusMap.khong_tham_gia.emoji} **${summary.khong_tham_gia}** vắng`,
+    `${statusMap.co_phep.emoji} **${summary.co_phep}** có phép`,
+  ].join('  ·  ');
 
   const lines = slice.map((r, i) => {
     const s    = statusMap[r.status] ?? { emoji: '❓', label: r.status };
     const time = r.checked_in_at
       ? `<t:${Math.floor(new Date(r.checked_in_at).getTime() / 1000)}:d>`
       : '—';
-    return `\`${String(start + i + 1).padStart(2)}.\` ${s.emoji} **${r.sessions?.session_name ?? 'Phiên'}** · ${time}`;
+    const sessionName = r.sessions?.session_name ?? 'Phiên';
+    return `\`${String(start + i + 1).padStart(2)}.\` ${s.emoji} **${sessionName}** · ${time}`;
   });
 
   const navRow = new ActionRowBuilder().addComponents(
@@ -213,16 +234,26 @@ function renderLichSu(records, userId, guild, page = 0) {
 
 // ─── Thống kê server ─────────────────────────────────────────────────
 /**
- * @param {object} stats  — { rate_present, total_sessions, total_members, total_attendances }
- * @param {Array}  top    — mảng xếp hạng từ statsService.getTopMembers(), có thể undefined/null
+ * @param {object} stats  — kết quả từ getServerStats() (đã có breakdown đầy đủ)
+ * @param {Array}  top    — mảng từ getTopMembers(), có thể undefined/null
  * @param {object} guild  — Guild object để resolve displayName
  */
 function renderServerStats(stats, top, guild) {
-  const pct     = stats?.rate_present       ?? 0;
-  const total   = stats?.total_sessions     ?? 0;
-  const members = stats?.total_members      ?? 0;
-  const attends = stats?.total_attendances  ?? 0;
-  const color   = pct >= 80 ? COLORS.GREEN : pct >= 50 ? COLORS.YELLOW : COLORS.RED;
+  const pct      = stats?.rate_present      ?? 0;
+  const total    = stats?.total_sessions    ?? 0;
+  const members  = stats?.total_members     ?? 0;
+  const attends  = stats?.total_attendances ?? 0;
+
+  // [UPG] Breakdown 4 trạng thái
+  const nPresent = stats?.total_present  ?? null;
+  const nLate    = stats?.total_late     ?? null;
+  const nAbsent  = stats?.total_absent   ?? null;
+  const nExcused = stats?.total_excused  ?? null;
+  const rLate    = stats?.rate_late      ?? null;
+  const rAbsent  = stats?.rate_absent    ?? null;
+  const rExcused = stats?.rate_excused   ?? null;
+
+  const color = pct >= 80 ? COLORS.GREEN : pct >= 50 ? COLORS.YELLOW : COLORS.RED;
 
   const embed = new EmbedBuilder()
     .setColor(color)
@@ -232,23 +263,36 @@ function renderServerStats(stats, top, guild) {
       `\`${buildRichProgressBar(pct)}\``,
     ].join('\n'))
     .addFields(
-      { name: '📅 Tổng phiên',                   value: `**${total}** phiên`,   inline: true },
-      { name: '👥 Thành viên',                    value: `**${members}** người`, inline: true },
-      { name: `${ICONS.ATTEND_YES} Điểm danh`,   value: `**${attends}** lượt`,  inline: true },
+      { name: '📅 Tổng phiên',                 value: `**${total}** phiên`,   inline: true },
+      { name: '👥 Thành viên',                  value: `**${members}** người`, inline: true },
+      { name: `${ICONS.ATTEND_YES} Điểm danh`, value: `**${attends}** lượt`,  inline: true },
     )
     .setFooter({ text: FOOTER_DEFAULT })
     .setTimestamp();
 
-  // Hiển thị mini top-5 nếu có data
+  // [UPG] Breakdown chi tiết nếu service trả về
+  if (nPresent !== null || nLate !== null || nAbsent !== null || nExcused !== null) {
+    const breakdownLines = [
+      nPresent !== null ? `${ICONS.ATTEND_YES  ?? '✅'} Tham gia: **${nPresent}** lượt` : null,
+      nLate    !== null ? `${ICONS.ATTEND_LATE ?? '🕐'} Trễ: **${nLate}** lượt (${rLate ?? 0}%)` : null,
+      nAbsent  !== null ? `${ICONS.ATTEND_NO   ?? '❌'} Vắng: **${nAbsent}** lượt (${rAbsent ?? 0}%)` : null,
+      nExcused !== null ? `${ICONS.ATTEND_EXCUSE ?? '📋'} Có phép: **${nExcused}** lượt (${rExcused ?? 0}%)` : null,
+    ].filter(Boolean);
+    if (breakdownLines.length) {
+      embed.addFields({ name: '📊 Breakdown', value: breakdownLines.join('\n'), inline: false });
+    }
+  }
+
+  // Mini top-5 nếu có data
   if (Array.isArray(top) && top.length > 0) {
-    const medals = ['🥇', '🥈', '🥉', '4.', '5.'];
+    const medals = ['🥇', '🥈', '🥉', '`4.`', '`5.`'];
     const lines = top.slice(0, 5).map((r, i) => {
-      const name   = guild?.members?.cache?.get(r.user_id)?.displayName ?? `<@${r.user_id}>`;
+      const nm     = guild?.members?.cache?.get(r.user_id)?.displayName ?? `<@${r.user_id}>`;
       const joined = r.total_joined   ?? 0;
       const streak = r.current_streak ?? 0;
       const totalS = r.total_sessions ?? joined;
       const pctR   = totalS > 0 ? Math.round((joined / totalS) * 100) : 0;
-      return `${medals[i]} **${name}** — ${pctR}% · ${joined} phiên · ${ICONS.FIRE}${streak}`;
+      return `${medals[i]} **${nm}** — **${pctR}%** · ${joined} phiên · ${ICONS.FIRE}${streak}`;
     });
     embed.addFields({ name: `${ICONS.TROPHY} Top thành viên`, value: lines.join('\n'), inline: false });
   }
