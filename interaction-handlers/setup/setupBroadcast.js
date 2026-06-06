@@ -1,36 +1,34 @@
 'use strict';
 const { MessageFlags, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, EmbedBuilder } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
-const { getGuildConfig } = require('../../services/configService.js');
-const log = require('../../utils/logger.js');
+const configService = require('../../services/configService.js');
 const { requireAdmin } = require('../../utils/permissions.js');
-const { FOOTER_DEFAULT } = require('../../utils/embeds.js');
-
-const BROADCAST_MODAL_ID = 'setup:session:broadcast:modal';
+const { replyErrEdit, replyOkEdit } = require('../../utils/replies.js');
+const log = require('../../utils/logger.js');
 
 class SetupBroadcastHandler extends InteractionHandler {
-  constructor(ctx, options) {
-    super(ctx, { ...options, interactionHandlerType: InteractionHandlerTypes.Button });
+  constructor(ctx, opts) {
+    super(ctx, { ...opts, interactionHandlerType: InteractionHandlerTypes.Button });
   }
-
   parse(interaction) {
-    if (interaction.customId === 'setup:session:broadcast') return this.some();
-    return this.none();
+    return interaction.customId === 'setup:broadcast' ? this.some() : this.none();
   }
+  async run(interaction) {
+    const { ok } = await requireAdmin(interaction, { context: 'broadcast' });
+    if (!ok) return;
 
-  run(interaction) {
     const modal = new ModalBuilder()
-      .setCustomId(BROADCAST_MODAL_ID)
-      .setTitle('📢 Phát tin')
+      .setCustomId('setup:broadcast_modal')
+      .setTitle('Gửi thông báo')
       .addComponents(
         new ActionRowBuilder().addComponents(
           new TextInputBuilder()
             .setCustomId('message')
-            .setLabel('Nội dung tin nhắn')
+            .setLabel('Nội dung thông báo')
             .setStyle(TextInputStyle.Paragraph)
-            .setMaxLength(1900)
+            .setMaxLength(4000)
             .setRequired(true)
-            .setPlaceholder('Nhập nội dung cần gửi...'),
+            .setPlaceholder('Nhập nội dung thông báo...'),
         ),
       );
     return interaction.showModal(modal);
@@ -38,51 +36,50 @@ class SetupBroadcastHandler extends InteractionHandler {
 }
 
 class SetupBroadcastModalHandler extends InteractionHandler {
-  constructor(ctx, options) {
-    super(ctx, { ...options, interactionHandlerType: InteractionHandlerTypes.ModalSubmit });
+  constructor(ctx, opts) {
+    super(ctx, { ...opts, interactionHandlerType: InteractionHandlerTypes.ModalSubmit });
   }
-
   parse(interaction) {
-    if (interaction.customId === BROADCAST_MODAL_ID) return this.some();
-    return this.none();
+    return interaction.customId === 'setup:broadcast_modal' ? this.some() : this.none();
   }
-
   async run(interaction) {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-    const { ok } = await requireAdmin(interaction, { context: 'phát tin', deferred: true });
-    if (!ok) return;
+    const { guild } = interaction;
 
-    const { guild, channel } = interaction;
-    const content = interaction.fields.getTextInputValue('message').trim();
+    let content = '';
+    content = interaction.fields.getTextInputValue('message').trim();
     if (!content) {
       return interaction.editReply({ content: '❌ Nội dung tin nhắn không được để trống.' });
+    }
+    // [SEC-FIX-4] Giới hạn 4000 ký tự — Discord Embed description max 4096
+    if (content.length > 4000) {
+      return interaction.editReply({ content: `❌ Nội dung quá dài (${content.length}/4000 ký tự tối đa).` });
     }
 
     // [FIX] user.tag deprecated trong djs v14 — dùng user.username thay thế
     const authorName = interaction.member?.displayName ?? interaction.user.username;
 
-    const embed = new EmbedBuilder()
-      .setColor(0x5865f2)
-      .setTitle('📢 Thông báo')
-      .setDescription(content)
-      .setAuthor({ name: authorName, iconURL: interaction.user.displayAvatarURL({ extension: 'png' }) })
-      .setFooter({ text: FOOTER_DEFAULT })
-      .setTimestamp();
-
-    await channel.send({ embeds: [embed] }).catch(e => log.warn('BROADCAST', guild.id, 'Gửi broadcast thất bại: %s', e.message));
-
-    // [FIX-B] Dùng notification_channel_id thay vì log_channel_id (field không tồn tại)
-    try {
-      const cfg = await getGuildConfig(guild.id);
-      if (cfg?.notification_channel_id && cfg.notification_channel_id !== channel.id) {
-        const logCh = guild.channels.cache.get(cfg.notification_channel_id);
-        if (logCh) await logCh.send({ embeds: [embed] }).catch(() => null);
-      }
-    } catch (e) {
-      log.warn('BROADCAST', guild.id, 'Không thể gửi tới notification channel: %s', e.message);
+    const cfg = await configService.getGuildConfig(guild.id);
+    const targetChannelId = cfg?.broadcast_channel_id ?? cfg?.session_channel_id ?? interaction.channelId;
+    const targetChannel = await guild.channels.fetch(targetChannelId).catch(() => null);
+    if (!targetChannel) {
+      return interaction.editReply(replyErrEdit('❌ Không tìm thấy kênh broadcast. Vui lòng cấu hình lại.'));
     }
 
-    log.info('BROADCAST', guild.id, '%s phát tin: %.50s', authorName, content);
+    const embed = new EmbedBuilder()
+      .setTitle('📢 Thông báo')
+      .setDescription(content)
+      .setFooter({ text: `Gửi bởi ${authorName}` })
+      .setTimestamp()
+      .setColor(0x5865f2);
+
+    try {
+      await targetChannel.send({ embeds: [embed] });
+    } catch (e) {
+      log.error('BROADCAST', guild.id, 'gửi broadcast lỗi: %s', e?.message ?? e);
+      return interaction.editReply(replyErrEdit('⚠️ Không thể gửi thông báo vào kênh. Kiểm tra quyền bot.'));
+    }
+
     return interaction.editReply({ content: '✅ Đã gửi thông báo.' });
   }
 }

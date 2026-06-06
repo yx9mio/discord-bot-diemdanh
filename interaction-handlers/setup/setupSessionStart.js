@@ -3,167 +3,141 @@ const { MessageFlags, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowB
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const sessionService = require('../../services/sessionService.js');
 const configService  = require('../../services/configService.js');
-const log = require('../../utils/logger.js');
+const memberService  = require('../../services/memberService.js');
+const { buildSessionEmbed, buildSessionButtons } = require('../../utils/sessionEmbed.js');
 const { requireAdmin } = require('../../utils/permissions.js');
-const { FOOTER_DEFAULT } = require('../../utils/embeds.js');
+const { replyErrEdit, replyOkEdit } = require('../../utils/replies.js');
 const { fmtTs } = require('../../utils/format.js');
-const { datHenGioDong, startAutoRefresh } = require('../../utils/timers.js');
-
-const MODAL_ID = 'setup:session:start:modal';
-
-function openStartSessionModal(interaction) {
-  const modal = new ModalBuilder()
-    .setCustomId(MODAL_ID)
-    .setTitle('Mở phiên điểm danh mới');
-  modal.addComponents(
-    new ActionRowBuilder().addComponents(
-      new TextInputBuilder()
-        .setCustomId('ten_phien')
-        .setLabel('Tên phiên')
-        .setStyle(TextInputStyle.Short)
-        .setMaxLength(100)
-        .setRequired(false)
-        .setPlaceholder('Để trống để đặt tên tự động'),
-    ),
-    new ActionRowBuilder().addComponents(
-      new TextInputBuilder()
-        .setCustomId('mo_ta')
-        .setLabel('Mô tả (tuỳ chọn)')
-        .setStyle(TextInputStyle.Paragraph)
-        .setMaxLength(500)
-        .setRequired(false),
-    ),
-    new ActionRowBuilder().addComponents(
-      new TextInputBuilder()
-        .setCustomId('phut_dong')
-        .setLabel('Tự động đóng sau (phút) — 0 = không tự đóng')
-        .setStyle(TextInputStyle.Short)
-        .setRequired(false)
-        .setPlaceholder('15 / 30 / 60 / 90 / 120 (mặc định 0)'),
-    ),
-    new ActionRowBuilder().addComponents(
-      new TextInputBuilder()
-        .setCustomId('phai_role')
-        .setLabel('Role ID giới hạn (tuỳ chọn)')
-        .setStyle(TextInputStyle.Short)
-        .setRequired(false)
-        .setPlaceholder('VD: 123456789012345678'),
-    ),
-  );
-  return interaction.showModal(modal);
-}
-
-async function handleStartSessionModal(interaction) {
-  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-  const { ok } = await requireAdmin(interaction, { context: 'mở phiên từ /setup', deferred: true });
-  if (!ok) return;
-
-  const { guild, client, user } = interaction;
-  const existing = await sessionService.getActiveSession(guild.id);
-  if (existing) {
-    return interaction.editReply({ content: `⚠️ Đang có phiên **${existing.session_name}** đang mở.` });
-  }
-
-  const sessionName = interaction.fields.getTextInputValue('ten_phien').trim() || `Phiên ${fmtTs(new Date().toISOString())}`;
-  const moTa = interaction.fields.getTextInputValue('mo_ta').trim() || null;
-  const phutVal = (interaction.fields.getTextInputValue('phut_dong') || '').trim() || '0';
-  const phut = parseInt(phutVal, 10) || null;
-  const phaiRoleId = interaction.fields.getTextInputValue('phai_role').trim() || null;
-
-  const cfg = await configService.getGuildConfig(guild.id);
-  const phaiRoleIds = phaiRoleId ? [phaiRoleId] : (cfg?.phai_role_ids ?? []);
-  let eligibleIds = null;
-  if (phaiRoleIds.length) {
-    await guild.members.fetch();
-    eligibleIds = guild.members.cache
-      .filter(m => !m.user.bot && m.roles.cache.some(r => phaiRoleIds.includes(r.id)))
-      .map(m => m.id);
-  }
-
-  const session = await sessionService.createSession({
-    guildId: guild.id,
-    sessionName,
-    description: moTa,
-    eligibleMemberIds: eligibleIds,
-    phaiRoleIds,
-    // [FIX] started_by là NOT NULL trong DB — phải truyền user.id
-    started_by: user.id,
-  });
-
-  const embed = new EmbedBuilder()
-    .setColor(0x01696f)
-    .setTitle('🟢 Phiên điểm danh đã mở')
-    .setDescription(`**${sessionName}**${moTa ? `\n${moTa}` : ''}`)
-    .addFields(
-      { name: '🆔 ID', value: `\`${session.id}\``, inline: true },
-      { name: '⏱️ Bắt đầu', value: fmtTs(session.started_at), inline: true },
-      { name: '⏳ Tự đóng', value: phut ? `Sau ${phut} phút` : 'Không', inline: true },
-      { name: '👥 Bắt buộc', value: eligibleIds ? `${eligibleIds.length} thành viên` : 'Tất cả', inline: true },
-      { name: '🛡️ Phái', value: phaiRoleId ? `<@&${phaiRoleId}>` : (phaiRoleIds.length ? 'Theo cấu hình' : 'Không'), inline: true },
-    )
-    .setFooter({ text: FOOTER_DEFAULT })
-    .setTimestamp();
-
-  // [FIX] attendances.status CHECK: chỉ chấp nhận 'tham_gia' | 'khong_tham_gia' | 'tre'
-  // Xóa 'co_phep' ra khỏi select menu vì sẽ vi phạm DB constraint
-  const row = new ActionRowBuilder().addComponents(
-    new StringSelectMenuBuilder()
-      .setCustomId('attendance:select')
-      .setPlaceholder('👆 Chọn trạng thái điểm danh...')
-      .addOptions(
-        new StringSelectMenuOptionBuilder().setLabel('✅ Điểm danh').setDescription('Điểm danh đúng giờ').setValue('tham_gia'),
-        new StringSelectMenuOptionBuilder().setLabel('⏰ Trễ').setDescription('Điểm danh muộn').setValue('tre'),
-        new StringSelectMenuOptionBuilder().setLabel('❌ Không tham gia').setDescription('Báo vắng mặt').setValue('khong_tham_gia'),
-      ),
-  );
-
-  const targetChannel = cfg?.notification_channel_id
-    ? (guild.channels.cache.get(cfg.notification_channel_id) ?? interaction.channel)
-    : interaction.channel;
-
-  const msg = await targetChannel.send({ embeds: [embed], components: [row] });
-  await sessionService.updateSessionMessage(session.id, { messageId: msg.id, channelId: targetChannel.id });
-
-  startAutoRefresh(session.id, targetChannel.id, msg.id, client);
-
-  if (phut) {
-    datHenGioDong(client, guild, session, targetChannel.id, phut * 60_000);
-  }
-
-  log.info('SESSION_START', guild.id, 'Mở phiên %s bởi %s', session.id, user.id);
-
-  return interaction.editReply({
-    content: `✅ Đã mở phiên **${sessionName}** tại <#${targetChannel.id}>.`,
-  });
-}
+const { scheduleAutoClose, agendaHenGio } = require('../../utils/sessionScheduler.js');
+const log = require('../../utils/logger.js');
 
 class SetupSessionStartHandler extends InteractionHandler {
-  constructor(ctx, options) {
-    super(ctx, { ...options, interactionHandlerType: InteractionHandlerTypes.Button });
+  constructor(ctx, opts) {
+    super(ctx, { ...opts, interactionHandlerType: InteractionHandlerTypes.Button });
   }
-
   parse(interaction) {
-    if (interaction.customId === 'setup:session:start') return this.some();
-    return this.none();
+    return interaction.customId === 'setup:session_start' ? this.some() : this.none();
   }
+  async run(interaction) {
+    const { guild } = interaction;
+    const { ok } = await requireAdmin(interaction, { context: 'mở phiên' });
+    if (!ok) return;
 
-  run(interaction) {
-    return openStartSessionModal(interaction);
+    const existing = await sessionService.getActiveSession(guild.id);
+    if (existing) {
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+      return interaction.editReply({ content: `⚠️ Đang có phiên **${existing.session_name}** đang mở.` });
+    }
+
+    const modal = new ModalBuilder()
+      .setCustomId('setup:session_start_modal')
+      .setTitle('Mở phiên điểm danh')
+      .addComponents(
+        new ActionRowBuilder().addComponents(
+          new TextInputBuilder()
+            .setCustomId('ten_phien')
+            .setLabel('Tên phiên')
+            .setStyle(TextInputStyle.Short)
+            .setMaxLength(100)
+            .setRequired(false)
+            .setPlaceholder('Để trống để đặt tên tự động'),
+        ),
+        new ActionRowBuilder().addComponents(
+          new TextInputBuilder()
+            .setCustomId('mo_ta')
+            .setLabel('Mô tả (tuỳ chọn)')
+            .setStyle(TextInputStyle.Paragraph)
+            .setMaxLength(200)
+            .setRequired(false),
+        ),
+        new ActionRowBuilder().addComponents(
+          new TextInputBuilder()
+            .setCustomId('phut_dong')
+            .setLabel('Tự đóng sau X phút (0 = không tự đóng)')
+            .setStyle(TextInputStyle.Short)
+            .setMaxLength(4)
+            .setRequired(false)
+            .setPlaceholder('0'),
+        ),
+        new ActionRowBuilder().addComponents(
+          new TextInputBuilder()
+            .setCustomId('phai_role')
+            .setLabel('Role bắt buộc (ID, để trống = ai cũng được)')
+            .setStyle(TextInputStyle.Short)
+            .setMaxLength(20)
+            .setRequired(false),
+        ),
+      );
+    return interaction.showModal(modal);
   }
 }
 
 class SetupSessionStartModalHandler extends InteractionHandler {
-  constructor(ctx, options) {
-    super(ctx, { ...options, interactionHandlerType: InteractionHandlerTypes.ModalSubmit });
+  constructor(ctx, opts) {
+    super(ctx, { ...opts, interactionHandlerType: InteractionHandlerTypes.ModalSubmit });
   }
-
   parse(interaction) {
-    if (interaction.customId === MODAL_ID) return this.some();
-    return this.none();
+    return interaction.customId === 'setup:session_start_modal' ? this.some() : this.none();
   }
+  async run(interaction) {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    const { guild } = interaction;
 
-  run(interaction) {
-    return handleStartSessionModal(interaction);
+    const existing = await sessionService.getActiveSession(guild.id);
+    if (existing) {
+      return interaction.editReply({ content: `⚠️ Đang có phiên **${existing.session_name}** đang mở.` });
+    }
+
+    // [SEC-FIX-3] slice phòng thủ — Discord modal maxLength enforce trước, đây là safety net
+    const sessionName = (interaction.fields.getTextInputValue('ten_phien').trim() || `Phiên ${fmtTs(new Date().toISOString())}`).slice(0, 100);
+    const moTa = (interaction.fields.getTextInputValue('mo_ta').trim() || null)?.slice(0, 200) ?? null;
+    const phutVal = (interaction.fields.getTextInputValue('phut_dong') || '').trim() || '0';
+    const phut = parseInt(phutVal, 10) || null;
+    const phaiRoleId = interaction.fields.getTextInputValue('phai_role').trim() || null;
+
+    const cfg = await configService.getGuildConfig(guild.id);
+    const targetChannelId = cfg?.session_channel_id ?? interaction.channelId;
+    const targetChannel = await guild.channels.fetch(targetChannelId).catch(() => null);
+    if (!targetChannel) {
+      return interaction.editReply(replyErrEdit('❌ Không tìm thấy kênh phiên. Vui lòng cấu hình lại.'));
+    }
+
+    let session;
+    try {
+      session = await sessionService.createSession({
+        guild_id: guild.id,
+        sessionName,
+        description: moTa,
+        autoCloseMinutes: phut,
+        requiredRoleId: phaiRoleId,
+      });
+    } catch (e) {
+      log.error('SESSION_START', guild.id, 'createSession lỗi: %s', e?.message ?? e);
+      return interaction.editReply(replyErrEdit('⚠️ Không thể tạo phiên do lỗi DB. Thử lại sau.'));
+    }
+
+    const attendances = [];
+    const embed = await buildSessionEmbed(session, attendances, guild);
+    const buttons = buildSessionButtons();
+
+    let sessionMsg;
+    try {
+      sessionMsg = await targetChannel.send({ embeds: [embed], components: [buttons] });
+    } catch (e) {
+      log.error('SESSION_START', guild.id, 'gửi embed phiên lỗi: %s', e?.message ?? e);
+      await sessionService.cancelSession(session.id).catch(() => {});
+      return interaction.editReply(replyErrEdit('⚠️ Không thể gửi embed phiên vào kênh. Kiểm tra quyền bot.'));
+    }
+
+    await sessionService.updateSessionMessageId(session.id, sessionMsg.id, targetChannelId).catch(() => {});
+
+    if (phut && phut > 0) {
+      scheduleAutoClose(guild, session, phut, targetChannel, sessionMsg);
+    }
+
+    return interaction.editReply({
+      content: `✅ Đã mở phiên **${sessionName}** tại <#${targetChannel.id}>.`,
+    });
   }
 }
 
