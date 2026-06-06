@@ -11,7 +11,6 @@ const attendanceService = require('../../services/attendanceService.js');
 const log               = require('../../utils/logger.js');
 const { replyErr }      = require('../../utils/embeds.js');
 
-// [BUG-E] Đúng customId khớp với rows.js buildAttendanceSelectRow()
 const SELECT_CUSTOM_ID = 'attendance:select';
 
 class AttendanceSelectHandler extends InteractionHandler {
@@ -43,27 +42,24 @@ class AttendanceSelectHandler extends InteractionHandler {
       return interaction.editReply({ content: '❌ Phiên không hợp lệ.' });
     }
 
-    // Distributed lock — ngăn double submit
-    const acquired = await attendanceService.tryAcquireAttendanceLock(session.id, user.id);
+    // [BUG-LOCK] sync lock — không dùng await
+    const acquired = attendanceService.tryAcquireAttendanceLock(session.id, user.id);
     if (!acquired) {
       return interaction.editReply({ content: '⏳ Đang xử lý điểm danh của bạn, vui lòng chờ...' });
     }
 
     try {
-      const existing = await attendanceService.getAttendance(session.id, user.id);
-      if (existing) {
-        await attendanceService.releaseAttendanceLock(session.id, user.id);
-        return interaction.editReply({ content: `✅ Bạn đã điểm danh rồi: **${existing.status}**.` });
-      }
-
       const memberData = await guild.members.fetch(user.id).catch(() => null);
+
+      // upsertAttendance dùng snake_case, idempotent (onConflict update)
       await attendanceService.upsertAttendance({
-        sessionId:   session.id,
-        userId:      user.id,
-        guildId:     guild.id,
+        session_id:    session.id,
+        user_id:       user.id,
+        guild_id:      guild.id,
         status,
-        username:    user.username,
-        displayName: memberData?.displayName ?? user.username,
+        username:      memberData?.nickname ?? user.displayName ?? user.username,
+        marked_by:     user.id,
+        checked_in_at: new Date().toISOString(),
       });
 
       const statusLabel = {
@@ -79,7 +75,8 @@ class AttendanceSelectHandler extends InteractionHandler {
       log.error('ATTEND', guild.id, 'Lỗi upsertAttendance: %s', e.message);
       return interaction.editReply(replyErr('❌ Không thể ghi nhận điểm danh, thử lại sau.'));
     } finally {
-      await attendanceService.releaseAttendanceLock(session.id, user.id).catch(() => {});
+      // [BUG-LOCK] sync release — không dùng await/.catch()
+      attendanceService.releaseAttendanceLock(session.id, user.id);
     }
   }
 }
