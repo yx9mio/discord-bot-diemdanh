@@ -30,7 +30,8 @@ class SetupStatsHandler extends InteractionHandler {
   }
   async run(interaction) {
     await interaction.deferUpdate();
-    const { guild, user } = interaction;
+    // interaction.member luôn là GuildMember — không cần fetch thêm
+    const { guild, user, member } = interaction;
     const cid = interaction.customId;
 
     if (cid === CUSTOM_ID.XEM) {
@@ -46,27 +47,22 @@ class SetupStatsHandler extends InteractionHandler {
         getMemberStats(guild.id, user.id).catch(() => null),
         getMemberBadges(guild.id, user.id).catch(() => []),
       ]);
-      // renderToi(stats, member, guild, badges)
-      const member = await guild.members.fetch(user.id).catch(() => null);
       return interaction.editReply(StatsView.renderToi(stats, member, guild, badges));
     }
 
     if (cid === CUSTOM_ID.RANK) {
       const top = await getTopMembers(guild.id, 10).catch(() => []);
-      // renderRank(rows, guild, topN)
       return interaction.editReply(StatsView.renderRank(top, guild, 10));
     }
 
     if (cid === CUSTOM_ID.SERVER) {
       const serverStats = await getServerStats(guild.id).catch(() => null);
-      // renderServerStats(stats)
       return interaction.editReply(StatsView.renderServerStats(serverStats));
     }
 
     if (cid === CUSTOM_ID.LICHSU || cid === LICHSU_PAGE_NEXT || cid === LICHSU_PAGE_PREV) {
       const page = cid === LICHSU_PAGE_NEXT ? 1 : 0;
       const history = await getAttendancesByUser(guild.id, user.id, { page: page + 1, limit: 10 }).catch(() => []);
-      // renderLichSu(records, userId, guild, page)
       return interaction.editReply(StatsView.renderLichSu(history, user.id, guild, page));
     }
   }
