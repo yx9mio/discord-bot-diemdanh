@@ -18,8 +18,10 @@ class SetupConfigHandler extends InteractionHandler {
   }
 
   async run(interaction) {
-    // [REFRESH-ALL] Delegate refresh sang handleRefresh
+    // [FIX] Thêm deferUpdate trước handleRefresh để tránh Discord 3s timeout.
+    // handleRefresh bên trong ConfigView không tự defer, nên phải defer ở đây.
     if (interaction.customId === CUSTOM_ID.REFRESH) {
+      await interaction.deferUpdate();
       return ConfigView.handleRefresh(interaction);
     }
     await interaction.deferUpdate();

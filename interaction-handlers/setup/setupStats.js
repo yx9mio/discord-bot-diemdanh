@@ -11,6 +11,13 @@ const XEM_MODAL_ID       = 'setup:stats:xem:modal';
 const LICHSU_PAGE_NEXT   = 'setup:stats:lichsu:next';
 const LICHSU_PAGE_PREV   = 'setup:stats:lichsu:prev';
 
+// Context keys để REFRESH biết đang ở view nào
+const CTX_MENU   = 'menu';
+const CTX_TOI    = 'toi';
+const CTX_RANK   = 'rank';
+const CTX_SERVER = 'server';
+const CTX_LICHSU = 'lichsu';
+
 const HANDLED_IDS = new Set([
   'setup:stats',
   CUSTOM_ID.TOI,
@@ -36,9 +43,47 @@ class SetupStatsHandler extends InteractionHandler {
   async run(interaction) {
     const { customId, guild, user } = interaction;
 
-    // ── Menu chính / Làm mới ──────────────────────────────────────────────────
-    if (customId === 'setup:stats' || customId === CUSTOM_ID.REFRESH) {
+    // ── Menu chính ────────────────────────────────────────────────────────────
+    if (customId === 'setup:stats') {
       await interaction.deferUpdate();
+      return interaction.editReply(StatsView.renderStatsMenu());
+    }
+
+    // ── Làm mới (context-aware) ──────────────────────────────────────────────
+    // [FIX] Đọc ctx:<view> từ footer để reload đúng view thay vì luôn về menu gốc
+    if (customId === CUSTOM_ID.REFRESH) {
+      await interaction.deferUpdate();
+      const ctx = _extractContext(interaction);
+
+      if (ctx === CTX_TOI) {
+        const [stats, badges] = await Promise.all([
+          getMemberStats(guild.id, user.id),
+          getMemberBadges(guild.id, user.id),
+        ]);
+        const member = guild.members.cache.get(user.id)
+          ?? await guild.members.fetch(user.id).catch(() => null);
+        return interaction.editReply(StatsView.renderToi(stats, member, guild, badges));
+      }
+
+      if (ctx === CTX_RANK) {
+        const rows  = await getTopMembers(guild.id, 10);
+        const reply = await StatsView.renderRank(rows, guild, 10);
+        return interaction.editReply(reply);
+      }
+
+      if (ctx === CTX_SERVER) {
+        const stats = await getServerStats(guild.id);
+        return interaction.editReply(StatsView.renderServerStats(stats));
+      }
+
+      if (ctx === CTX_LICHSU) {
+        const { page, userId } = _extractPageAndUser(interaction);
+        const targetId = userId ?? user.id;
+        const records  = await getAttendancesByUser(guild.id, targetId, 100);
+        return interaction.editReply(StatsView.renderLichSu(records, targetId, guild, page));
+      }
+
+      // Fallback: về menu
       return interaction.editReply(StatsView.renderStatsMenu());
     }
 
@@ -58,7 +103,6 @@ class SetupStatsHandler extends InteractionHandler {
     if (customId === CUSTOM_ID.RANK) {
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       const rows   = await getTopMembers(guild.id, 10);
-      // renderRank là async (cần fetch members)
       const reply  = await StatsView.renderRank(rows, guild, 10);
       return interaction.editReply(reply);
     }
@@ -168,7 +212,7 @@ class SetupStatsXemModalHandler extends InteractionHandler {
   }
 }
 
-// ── Helper ────────────────────────────────────────────────────────────────────
+// ── Helpers ────────────────────────────────────────────────────────────────────
 /**
  * Đọc trang hiện tại VÀ userId được encode trong footer embed.
  * Footer format: "... · Trang X/Y · N bản ghi · uid:<userId>"
@@ -191,6 +235,24 @@ function _extractPageAndUser(interaction) {
     return { page, userId };
   } catch (_e) {
     return { page: 0, userId: null };
+  }
+}
+
+/**
+ * Đọc view context từ footer embed.
+ * Footer format: "... · ctx:<view>"
+ * View có thể là: menu | toi | rank | server | lichsu
+ *
+ * @param {import('discord.js').ButtonInteraction} interaction
+ * @returns {string} context key, default 'menu'
+ */
+function _extractContext(interaction) {
+  try {
+    const footer = interaction.message?.embeds?.[0]?.footer?.text ?? '';
+    const match  = footer.match(/ctx:(\w+)/);
+    return match ? match[1] : CTX_MENU;
+  } catch (_e) {
+    return CTX_MENU;
   }
 }
 

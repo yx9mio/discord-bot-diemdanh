@@ -28,7 +28,8 @@ class SetupHistoryHandler extends InteractionHandler {
     }
 
     await interaction.deferUpdate();
-    const sessions = await sessionService.getAllSessions(guild.id);
+    // [FIX] Đổi getAllSessions → getSessions (getAllSessions không tồn tại trong service)
+    const sessions = await sessionService.getSessions(guild.id);
     const curPage = _extractPageFromEmbed(interaction);
     const newPage = Math.max(0, curPage + (customId === CUSTOM_ID.PAGE_NEXT ? 1 : -1));
     return interaction.editReply(HistoryView.render({ sessions, page: newPage, guild }));
