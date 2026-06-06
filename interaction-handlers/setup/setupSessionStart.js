@@ -58,7 +58,7 @@ async function handleStartSessionModal(interaction) {
   const { ok } = await requireAdmin(interaction, { context: 'mở phiên từ /setup', deferred: true });
   if (!ok) return;
 
-  const { guild, client } = interaction;
+  const { guild, client, user } = interaction;
   const existing = await sessionService.getActiveSession(guild.id);
   if (existing) {
     return interaction.editReply({ content: `⚠️ Đang có phiên **${existing.session_name}** đang mở.` });
@@ -71,7 +71,7 @@ async function handleStartSessionModal(interaction) {
   const phaiRoleId = interaction.fields.getTextInputValue('phai_role').trim() || null;
 
   const cfg = await configService.getGuildConfig(guild.id);
-  const phaiRoleIds = phaiRoleId ? [phaiRoleId] : (cfg.phai_role_ids ?? []);
+  const phaiRoleIds = phaiRoleId ? [phaiRoleId] : (cfg?.phai_role_ids ?? []);
   let eligibleIds = null;
   if (phaiRoleIds.length) {
     await guild.members.fetch();
@@ -81,7 +81,13 @@ async function handleStartSessionModal(interaction) {
   }
 
   const session = await sessionService.createSession({
-    guildId: guild.id, sessionName, description: moTa, eligibleMemberIds: eligibleIds, phaiRoleIds,
+    guildId: guild.id,
+    sessionName,
+    description: moTa,
+    eligibleMemberIds: eligibleIds,
+    phaiRoleIds,
+    // [FIX] started_by là NOT NULL trong DB — phải truyền user.id
+    started_by: user.id,
   });
 
   const embed = new EmbedBuilder()
@@ -98,6 +104,8 @@ async function handleStartSessionModal(interaction) {
     .setFooter({ text: FOOTER_DEFAULT })
     .setTimestamp();
 
+  // [FIX] attendances.status CHECK: chỉ chấp nhận 'tham_gia' | 'khong_tham_gia' | 'tre'
+  // Xóa 'co_phep' ra khỏi select menu vì sẽ vi phạm DB constraint
   const row = new ActionRowBuilder().addComponents(
     new StringSelectMenuBuilder()
       .setCustomId('attendance:select')
@@ -106,15 +114,10 @@ async function handleStartSessionModal(interaction) {
         new StringSelectMenuOptionBuilder().setLabel('✅ Điểm danh').setDescription('Điểm danh đúng giờ').setValue('tham_gia'),
         new StringSelectMenuOptionBuilder().setLabel('⏰ Trễ').setDescription('Điểm danh muộn').setValue('tre'),
         new StringSelectMenuOptionBuilder().setLabel('❌ Không tham gia').setDescription('Báo vắng mặt').setValue('khong_tham_gia'),
-        new StringSelectMenuOptionBuilder().setLabel('🏥 Có phép').setDescription('Vắng mặt có lý do').setValue('co_phep'),
       ),
   );
 
-  // [FIX-C] Ephemeral reply chỉ để confirm cho admin.
-  // Embed phiên + select menu phải gửi ra PUBLIC channel để:
-  //   1. Lấy được messageId thật (ephemeral không có public msg.id)
-  //   2. Thành viên thấy và bấm điểm danh được
-  const targetChannel = cfg.notification_channel_id
+  const targetChannel = cfg?.notification_channel_id
     ? (guild.channels.cache.get(cfg.notification_channel_id) ?? interaction.channel)
     : interaction.channel;
 
@@ -127,7 +130,8 @@ async function handleStartSessionModal(interaction) {
     datHenGioDong(client, guild, session, targetChannel.id, phut * 60_000);
   }
 
-  // Confirm ephemeral cho admin
+  log.info('SESSION_START', guild.id, 'Mở phiên %s bởi %s', session.id, user.id);
+
   return interaction.editReply({
     content: `✅ Đã mở phiên **${sessionName}** tại <#${targetChannel.id}>.`,
   });
