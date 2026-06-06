@@ -23,6 +23,7 @@ class SetupMemberAddModalHandler extends InteractionHandler {
 
     const { guild } = interaction;
     const userId = interaction.fields.getTextInputValue('user_id').trim().replace(/[<@!>]/g, '');
+    // [FIX] Modal dùng field 'display_name' và 'note' → map sang key đúng của upsertMember
     const displayName = interaction.fields.getTextInputValue('display_name')?.trim() || null;
     const note = interaction.fields.getTextInputValue('note')?.trim() || null;
 
@@ -38,7 +39,15 @@ class SetupMemberAddModalHandler extends InteractionHandler {
 
     const username = displayName ?? member.nickname ?? member.user.displayName ?? member.user.username;
     try {
-      await memberService.upsertMember(guild.id, { user_id: userId, username, display_name: displayName, note });
+      // [FIX] Trước: upsertMember(guild.id, { user_id, username, display_name, note }) — sai signature (2 args + key sai)
+      // Sau:  upsertMember({ guildId, userId, username, phongBan, ghiChu })         — đúng 1 arg object
+      await memberService.upsertMember({
+        guildId:  guild.id,
+        userId,
+        username,
+        phongBan: null,
+        ghiChu:   note,
+      });
       log.info('MEM_ADD', guild.id, 'Thêm thành viên %s (%s)', userId, username);
     } catch (e) {
       log.error('MEM_ADD', guild.id, 'upsertMember thất bại: %s', e.message);
