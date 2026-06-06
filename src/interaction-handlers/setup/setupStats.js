@@ -1,17 +1,14 @@
 // src/interaction-handlers/setup/setupStats.js
 // [FIX-ROOT] Thêm 'setup:stats' (HomeView.CUSTOM_ID.STATS) vào parse() → mở menu thống kê
-// [BUG-1] Fix parse() dùng sai CUSTOM_ID keys
-// [BUG-2] Thêm CUSTOM_ID.XEM vào parse()
-// [BUG-3] Fix modal customId: 'setup:stats:search:modal' → 'setup:stats:xem:modal'
-// [BUG-5] Fix StatsView.memberStats() → StatsView.renderToi()
-// [BUG-A] Fix import path: services ở root, không phải src/services
-// [BUG-C] renderServerStats truyền guild để mini top-5 hiển thị đúng
+// [FIX-PATH] services/ và utils/ nằm ở root, cần ../../../../ (không phải ../../../)
 'use strict';
 const { ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, MessageFlags } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
-const { getMemberStats, getMemberBadges, getTopMembers, getServerStats } = require('../../../services/memberService.js');
-const { getAttendancesByUser } = require('../../../services/attendanceService.js');
-const log = require('../../../utils/logger.js');
+// [FIX-PATH] src/interaction-handlers/setup/ → lên 4 cấp → root/services/
+const { getMemberStats, getMemberBadges, getTopMembers, getServerStats } = require('../../../../services/memberService.js');
+const { getAttendancesByUser } = require('../../../../services/attendanceService.js');
+// [FIX-PATH] utils/ cũng ở root
+const log = require('../../../../utils/logger.js');
 const { StatsView } = require('../../commands/setup/_views/_StatsView.js');
 const { CUSTOM_ID } = StatsView;
 
