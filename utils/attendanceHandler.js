@@ -106,8 +106,9 @@ async function markAttendance({ guild, member, user, status, interaction, sessio
             attended,
             session.phai_role_ids ?? []
           );
-          // [#6] Merge admin rows + pagination rows; tổng ≤ 5 rows (Discord limit)
-          const adminRows = buildSessionActionRow(false);
+          // [FIX] buildSessionActionRow(true) — phiên vẫn đang mở, nút phải active
+          //       Bug cũ: truyền false → nút bị disable ngay sau điểm danh đầu tiên
+          const adminRows = buildSessionActionRow(true);
           const allComponents = [...adminRows, ...pagComponents].slice(0, 5);
           await msg.edit({
             embeds: [embed],
