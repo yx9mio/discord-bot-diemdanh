@@ -6,7 +6,6 @@ const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/frame
 const { getMemberStats, getMemberBadges, getTopMembers, getServerStats } = require('../../../services/memberService.js');
 const { getAttendancesByUser } = require('../../../services/attendanceService.js');
 const log = require('../../../utils/logger.js');
-const { requireAdmin } = require('../../../utils/permissions.js');
 const { StatsView } = require('../../commands/setup/_views/_StatsView.js');
 const { CUSTOM_ID } = StatsView;
 
@@ -29,18 +28,28 @@ class SetupStatsHandler extends InteractionHandler {
     return this.none();
   }
   async run(interaction) {
-    await interaction.deferUpdate();
-    // interaction.member luôn là GuildMember — không cần fetch thêm
     const { guild, user, member } = interaction;
     const cid = interaction.customId;
 
+    // [FIX] showModal() KHÔNG thể gọi sau deferUpdate/deferReply.
+    // XEM cần showModal → xử lý trước khi defer bất cứ thứ gì.
     if (cid === CUSTOM_ID.XEM) {
-      const modal = new ModalBuilder().setCustomId(XEM_MODAL_ID).setTitle('Xem thống kê thành viên')
+      const modal = new ModalBuilder()
+        .setCustomId(XEM_MODAL_ID)
+        .setTitle('Xem thống kê thành viên')
         .addComponents(new ActionRowBuilder().addComponents(
-          new TextInputBuilder().setCustomId('user_id').setLabel('User ID').setStyle(TextInputStyle.Short).setRequired(true).setPlaceholder('VD: 123456789012345678'),
+          new TextInputBuilder()
+            .setCustomId('user_id')
+            .setLabel('User ID')
+            .setStyle(TextInputStyle.Short)
+            .setRequired(true)
+            .setPlaceholder('VD: 123456789012345678'),
         ));
-      return interaction.followUp({ embeds: [], components: [] }).then(() => interaction.showModal(modal)).catch(() => interaction.showModal(modal));
+      return interaction.showModal(modal);
     }
+
+    // Mọi nhánh còn lại đều đọc DB → defer trước
+    await interaction.deferUpdate();
 
     if (cid === 'setup:stats' || cid === CUSTOM_ID.TOI || cid === CUSTOM_ID.REFRESH) {
       const [stats, badges] = await Promise.all([
