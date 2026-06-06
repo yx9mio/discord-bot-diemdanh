@@ -2,11 +2,13 @@
 // Handles: setup:session:start:modal (ModalSubmit) — tạo phiên mới từ form
 // [FIX-SELECT] Dùng buildAttendanceSelectRow() từ embeds.js thay vì inline
 //              để đảm bảo cùng component được rebuild trong attendanceHandler
+// [BUG-A] Fix import path: services ở root, không phải src/services
 'use strict';
 const { MessageFlags } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
-const sessionService = require('../../../services/sessionService.js');
-const configService  = require('../../../services/configService.js');
+// [BUG-A] Đúng path: services nằm ở root
+const sessionService = require('../../../../services/sessionService.js');
+const configService  = require('../../../../services/configService.js');
 const log            = require('../../../utils/logger.js');
 const { requireAdmin }   = require('../../../utils/permissions.js');
 const {
@@ -79,7 +81,6 @@ class SetupSessionStartModalHandler extends InteractionHandler {
       .setTimestamp();
 
     // [FIX-SELECT] Dùng buildAttendanceSelectRow() + buildSessionActionRow()
-    //   thay vì tạo inline ActionRowBuilder — đảm bảo nhất quán với attendanceHandler
     const selectRow = buildAttendanceSelectRow(true);
     const adminRows = buildSessionActionRow(true);
     const allComponents = [selectRow, ...adminRows].slice(0, 5);
