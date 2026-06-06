@@ -10,7 +10,7 @@ const { requireAdmin } = require('../../../utils/permissions.js');
 const { StatsView } = require('../../commands/setup/_views/_StatsView.js');
 const { CUSTOM_ID } = StatsView;
 
-const XEM_MODAL_ID    = 'setup:stats:xem:modal';
+const XEM_MODAL_ID     = 'setup:stats:xem:modal';
 const LICHSU_PAGE_NEXT = 'setup:stats:lichsu:next';
 const LICHSU_PAGE_PREV = 'setup:stats:lichsu:prev';
 
@@ -32,6 +32,7 @@ class SetupStatsHandler extends InteractionHandler {
     await interaction.deferUpdate();
     const { guild, user } = interaction;
     const cid = interaction.customId;
+
     if (cid === CUSTOM_ID.XEM) {
       const modal = new ModalBuilder().setCustomId(XEM_MODAL_ID).setTitle('Xem thống kê thành viên')
         .addComponents(new ActionRowBuilder().addComponents(
@@ -39,25 +40,34 @@ class SetupStatsHandler extends InteractionHandler {
         ));
       return interaction.followUp({ embeds: [], components: [] }).then(() => interaction.showModal(modal)).catch(() => interaction.showModal(modal));
     }
-    const [stats, badges] = await Promise.all([
-      getMemberStats(guild.id, user.id).catch(() => null),
-      getMemberBadges(guild.id, user.id).catch(() => []),
-    ]);
+
     if (cid === 'setup:stats' || cid === CUSTOM_ID.TOI || cid === CUSTOM_ID.REFRESH) {
-      return interaction.editReply(StatsView.renderMe({ guild, user, stats, badges }));
+      const [stats, badges] = await Promise.all([
+        getMemberStats(guild.id, user.id).catch(() => null),
+        getMemberBadges(guild.id, user.id).catch(() => []),
+      ]);
+      // renderToi(stats, member, guild, badges)
+      const member = await guild.members.fetch(user.id).catch(() => null);
+      return interaction.editReply(StatsView.renderToi(stats, member, guild, badges));
     }
+
     if (cid === CUSTOM_ID.RANK) {
       const top = await getTopMembers(guild.id, 10).catch(() => []);
-      return interaction.editReply(StatsView.renderRank({ guild, top }));
+      // renderRank(rows, guild, topN)
+      return interaction.editReply(StatsView.renderRank(top, guild, 10));
     }
+
     if (cid === CUSTOM_ID.SERVER) {
       const serverStats = await getServerStats(guild.id).catch(() => null);
-      return interaction.editReply(StatsView.renderServer({ guild, serverStats }));
+      // renderServerStats(stats)
+      return interaction.editReply(StatsView.renderServerStats(serverStats));
     }
+
     if (cid === CUSTOM_ID.LICHSU || cid === LICHSU_PAGE_NEXT || cid === LICHSU_PAGE_PREV) {
-      const page = cid === LICHSU_PAGE_NEXT ? 2 : 1;
-      const history = await getAttendancesByUser(guild.id, user.id, { page, limit: 10 }).catch(() => []);
-      return interaction.editReply(StatsView.renderHistory({ guild, user, history, page }));
+      const page = cid === LICHSU_PAGE_NEXT ? 1 : 0;
+      const history = await getAttendancesByUser(guild.id, user.id, { page: page + 1, limit: 10 }).catch(() => []);
+      // renderLichSu(records, userId, guild, page)
+      return interaction.editReply(StatsView.renderLichSu(history, user.id, guild, page));
     }
   }
 }

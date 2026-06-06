@@ -34,7 +34,8 @@ class SetupStatsXemModalHandler extends InteractionHandler {
       getMemberBadges(guild.id, rawId).catch(() => []),
     ]);
     log.info('STATS_XEM', guild.id, 'Xem stats của %s', rawId);
-    return interaction.editReply(StatsView.renderMe({ guild, user: member.user, stats, badges }));
+    // renderToi(stats, member, guild, badges)
+    return interaction.editReply(StatsView.renderToi(stats, member, guild, badges));
   }
 }
 
