@@ -132,7 +132,10 @@ if (customId === 'session:cancel') {
     // ── session:confirm_cancel ───────────────────────────────────────────────────
 if (customId === 'session:confirm_cancel') {
       const { channel } = interaction;
-      await interaction.deferUpdate();
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+      // [SEC-FIX-1] Re-validate admin — ngăn user thường bypass confirm dialog
+      const { ok: okCancel } = await requireAdmin(interaction, { context: 'xác nhận hủy phiên', deferred: true });
+      if (!okCancel) return;
       const session = await sessionService.getActiveSession(guild.id);
       if (!session) return interaction.editReply(replyErrEdit('🚫 Phiên đã được đóng hoặc hủy trước đó.'));
 
@@ -207,7 +210,10 @@ if (customId === 'attend_close') {
     // ── session:confirm_close ───────────────────────────────────────────────────
 if (customId === 'session:confirm_close') {
       const { channel } = interaction;
-      await interaction.deferUpdate();
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+      // [SEC-FIX-1] Re-validate admin — ngăn user thường bypass confirm dialog
+      const { ok: okClose } = await requireAdmin(interaction, { context: 'xác nhận đóng phiên', deferred: true });
+      if (!okClose) return;
       const session = await sessionService.getActiveSession(guild.id);
       if (!session) return interaction.editReply(replyErrEdit('🚫 Phiên đã được đóng trước đó.'));
 

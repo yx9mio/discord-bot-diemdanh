@@ -31,6 +31,14 @@ const { thongBaoStreakMilestone, STREAK_MILESTONES } = require('./session.js');
  * @param {boolean} params.deferred - true nếu interaction đã defer
  */
 async function markAttendance({ guild, member, user, status, interaction, session, deferred = false }) {
+  // [SEC-FIX-2] Validate session thuộc đúng guild — ngăn cross-guild session injection
+  if (session.guild_id !== guild.id) {
+    log.warn('SECURITY', guild.id, 'markAttendance: guild mismatch session.guild_id=%s guild.id=%s user=%s', session.guild_id, guild.id, user.id);
+    const msg = '❌ Phiên không hợp lệ.';
+    return deferred
+      ? interaction.editReply({ content: msg })
+      : interaction.reply({ content: msg, flags: MessageFlags.Ephemeral });
+  }
   // [A2] Distributed lock thay vì in-memory Map
   const acquired = await attendanceService.tryAcquireAttendanceLock(session.id, user.id);
   if (!acquired) {
@@ -143,12 +151,12 @@ async function markAttendance({ guild, member, user, status, interaction, sessio
   } catch (e) {
     log.error('ATTENDANCE', guild.id, 'markAttendance lỗi: %s', e?.message ?? e);
     if (deferred || interaction.replied) {
-      await interaction.editReply({ content: '❌ Lỗi xử lý điểm danh, vui lòng thử lại.' }).catch(() => null);
+      await interaction.editReply({ content: '❌ Có lỗi xảy ra khi điểm danh, thử lại sau.' }).catch(() => null);
     } else {
-      await interaction.reply({ content: '❌ Lỗi xử lý điểm danh, vui lòng thử lại.', flags: MessageFlags.Ephemeral }).catch(() => null);
+      await interaction.reply({ content: '❌ Có lỗi xảy ra khi điểm danh, thử lại sau.', flags: MessageFlags.Ephemeral }).catch(() => null);
     }
   } finally {
-    await attendanceService.releaseAttendanceLock(session.id, user.id);
+    await attendanceService.releaseAttendanceLock(session.id, user.id).catch(() => null);
   }
 }
 
