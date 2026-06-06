@@ -1,5 +1,8 @@
 // src/interaction-handlers/attendanceSelect.js
-// Handles: attendance_select (StringSelect) — user tự điểm danh từ select menu
+// Handles: attendance:select (StringSelect) — user tự điểm danh từ select menu
+// [BUG-E] Fix customId mismatch: 'attendance_select' → 'attendance:select'
+//         rows.js tạo StringSelectMenu với customId 'attendance:select'
+//         nhưng parse() check 'attendance_select' → không bao giờ match → timeout
 'use strict';
 const { MessageFlags } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
@@ -8,18 +11,21 @@ const attendanceService = require('../../services/attendanceService.js');
 const log               = require('../../utils/logger.js');
 const { replyErr }      = require('../../utils/embeds.js');
 
+// [BUG-E] Đúng customId khớp với rows.js buildAttendanceSelectRow()
+const SELECT_CUSTOM_ID = 'attendance:select';
+
 class AttendanceSelectHandler extends InteractionHandler {
   constructor(ctx, options) {
     super(ctx, { ...options, interactionHandlerType: InteractionHandlerTypes.SelectMenu });
   }
 
   parse(interaction) {
-    if (interaction.customId === 'attendance_select') return this.some();
+    if (interaction.customId === SELECT_CUSTOM_ID) return this.some();
     return this.none();
   }
 
   async run(interaction) {
-    const { guild, member, user } = interaction;
+    const { guild, user } = interaction;
     const status = interaction.values[0];
 
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
@@ -29,7 +35,7 @@ class AttendanceSelectHandler extends InteractionHandler {
       return interaction.editReply({ content: '🚫 Không có phiên điểm danh nào đang mở.' });
     }
 
-    // [SEC-FIX-2] Validate session thuộc đúng guild — ngăn cross-guild session injection
+    // [SEC-FIX-2] Validate session thuộc đúng guild
     if (session.guild_id !== guild.id) {
       log.warn('SECURITY', guild.id,
         'attendanceSelect: guild mismatch session.guild_id=%s guild.id=%s user=%s',
@@ -52,11 +58,11 @@ class AttendanceSelectHandler extends InteractionHandler {
 
       const memberData = await guild.members.fetch(user.id).catch(() => null);
       await attendanceService.upsertAttendance({
-        sessionId:  session.id,
-        userId:     user.id,
-        guildId:    guild.id,
+        sessionId:   session.id,
+        userId:      user.id,
+        guildId:     guild.id,
         status,
-        username:   user.username,
+        username:    user.username,
         displayName: memberData?.displayName ?? user.username,
       });
 
