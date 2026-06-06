@@ -1,17 +1,14 @@
 'use strict';
 // interaction-handlers/setup/setupMember.js
+// [FIX] Sync toàn bộ custom IDs với _MemberView.CUSTOM_ID
 const { MessageFlags } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const memberService = require('../../../services/memberService.js');
 const log = require('../../../utils/logger.js');
 const { requireAdmin } = require('../../../utils/permissions.js');
-const { MemberView } = require('../../commands/setup/_views/_MemberView.js'); // [FIX-SETUP]
+const { MemberView } = require('../../commands/setup/_views/_MemberView.js');
 
-const MEMBER_NAV_IDS = new Set([
-  'setup:member', 'setup:mem:prev', 'setup:mem:next',
-  'setup:mem:delete', 'setup:mem:delete:confirm', 'setup:mem:delete:cancel',
-  'setup:mem:edit',
-]);
+const { CUSTOM_ID } = MemberView;
 
 class SetupMemberHandler extends InteractionHandler {
   constructor(ctx, options) {
@@ -20,65 +17,119 @@ class SetupMemberHandler extends InteractionHandler {
 
   parse(interaction) {
     const id = interaction.customId;
-    if (id === 'setup:member' || id.startsWith('setup:mem:')) return this.some();
+    if (id === 'setup:member') return this.some();           // entry point từ dashboard
+    if (id === CUSTOM_ID.PAGE_PREV)    return this.some();
+    if (id === CUSTOM_ID.PAGE_NEXT)    return this.some();
+    if (id === CUSTOM_ID.REFRESH)      return this.some();
+    if (id?.startsWith(CUSTOM_ID.DEL_PREFIX)  && !id.includes(':confirm') && !id.includes(':cancel')) return this.some();
+    if (id?.startsWith(CUSTOM_ID.EDIT_PREFIX)) return this.some();
+    // DEL_CONFIRM/DEL_CANCEL luưu trong MemberView nhưng chưa xử lý
+    if (id?.startsWith(CUSTOM_ID.DEL_PREFIX + 'confirm:')) return this.some();
+    if (id?.startsWith(CUSTOM_ID.DEL_PREFIX + 'cancel:'))  return this.some();
     return this.none();
   }
 
   async run(interaction) {
     const { customId, guild } = interaction;
 
+    // --- Entry point từ Dashboard ---
     if (customId === 'setup:member') {
       await interaction.deferUpdate();
       const members = await memberService.getMembers(guild.id);
-      return interaction.editReply(MemberView.render({ guild, members }));
+      return interaction.editReply(MemberView.render({ members, page: 0, guild }));
     }
 
-    if (customId === 'setup:mem:prev' || customId === 'setup:mem:next') {
+    // --- Phân trang ---
+    if (customId === CUSTOM_ID.PAGE_PREV || customId === CUSTOM_ID.PAGE_NEXT) {
       await interaction.deferUpdate();
       const members = await memberService.getMembers(guild.id);
-      const currentPage = MemberView.getPageFromMessage(interaction.message);
-      const newPage = customId === 'setup:mem:prev' ? currentPage - 1 : currentPage + 1;
-      return interaction.editReply(MemberView.render({ guild, members, page: newPage }));
+      const currentPage = _extractPage(interaction);
+      const totalPages  = Math.max(1, Math.ceil(members.length / MemberView.PAGE_SIZE));
+      const newPage = customId === CUSTOM_ID.PAGE_PREV
+        ? Math.max(0, currentPage - 1)
+        : Math.min(totalPages - 1, currentPage + 1);
+      return interaction.editReply(MemberView.render({ members, page: newPage, guild }));
     }
 
-    if (customId === 'setup:mem:delete') {
-      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    // --- Làm mới ---
+    if (customId === CUSTOM_ID.REFRESH) {
+      const page = _extractPage(interaction);
+      return MemberView.handleRefresh(interaction, page);
+    }
+
+    // --- Xóa thành viên: mở confirm ---
+    if (
+      customId.startsWith(CUSTOM_ID.DEL_PREFIX) &&
+      !customId.includes(':confirm') &&
+      !customId.includes(':cancel')
+    ) {
+      const userId = customId.slice(CUSTOM_ID.DEL_PREFIX.length);
+      await interaction.reply({
+        content: `⚠️ Xác nhậnminh xóa thành viên <@${userId}> khỏi danh sách?`,
+        flags: MessageFlags.Ephemeral,
+        components: [
+          new (require('discord.js').ActionRowBuilder)().addComponents(
+            new (require('discord.js').ButtonBuilder)()
+              .setCustomId(`${CUSTOM_ID.DEL_PREFIX}confirm:${userId}`)
+              .setLabel('✅ Xác nhận xóa')
+              .setStyle(require('discord.js').ButtonStyle.Danger),
+            new (require('discord.js').ButtonBuilder)()
+              .setCustomId(`${CUSTOM_ID.DEL_PREFIX}cancel:${userId}`)
+              .setLabel('↩️ Hủy')
+              .setStyle(require('discord.js').ButtonStyle.Secondary),
+          ),
+        ],
+      });
+      return;
+    }
+
+    // --- Xóa: xác nhận ---
+    if (customId.startsWith(CUSTOM_ID.DEL_PREFIX + 'confirm:')) {
+      await interaction.deferUpdate();
       const { ok } = await requireAdmin(interaction, { context: 'xóa thành viên', deferred: true });
       if (!ok) return;
-      const userId = MemberView.getSelectedUserId(interaction.message);
-      if (!userId) return interaction.editReply({ content: '❌ Không tìm thấy thành viên được chọn.' });
-      return interaction.editReply(MemberView.renderDeleteConfirm(userId));
-    }
-
-    if (customId === 'setup:mem:delete:confirm') {
-      await interaction.deferUpdate();
-      const userId = MemberView.getSelectedUserIdFromConfirm(interaction.message);
-      if (!userId) return interaction.editReply({ content: '❌ Không tìm thấy thành viên.' });
+      const userId = customId.slice((CUSTOM_ID.DEL_PREFIX + 'confirm:').length);
       try {
         await memberService.deleteMember(guild.id, userId);
         log.info('MEM_DEL', guild.id, 'Xóa thành viên %s', userId);
       } catch (e) {
         log.error('MEM_DEL', guild.id, 'deleteMember thất bại: %s', e.message);
-        return interaction.editReply({ content: '❌ Không thể xóa, thử lại sau.' });
+        return interaction.editReply({ content: '❌ Không thể xóa, thử lại sau.', components: [] });
       }
       const members = await memberService.getMembers(guild.id).catch(() => []);
-      return interaction.editReply(MemberView.render({ guild, members }));
+      const page = _extractPage(interaction);
+      return interaction.editReply({ ...MemberView.render({ members, page, guild }), content: undefined });
     }
 
-    if (customId === 'setup:mem:delete:cancel') {
+    // --- Xóa: hủy ---
+    if (customId.startsWith(CUSTOM_ID.DEL_PREFIX + 'cancel:')) {
       await interaction.deferUpdate();
-      const members = await memberService.getMembers(guild.id);
-      return interaction.editReply(MemberView.render({ guild, members }));
+      return interaction.editReply({ content: '↩️ Đã hủy.', components: [] });
     }
 
-    if (customId === 'setup:mem:edit') {
-      const userId = MemberView.getSelectedUserId(interaction.message);
-      if (!userId) return interaction.reply({ content: '❌ Không tìm thấy thành viên được chọn.', flags: MessageFlags.Ephemeral });
+    // --- Chỉnh sửa thành viên ---
+    if (customId.startsWith(CUSTOM_ID.EDIT_PREFIX)) {
+      const userId = customId.slice(CUSTOM_ID.EDIT_PREFIX.length);
+      if (!userId) return interaction.reply({ content: '❌ Không tìm thấy thành viên.', flags: MessageFlags.Ephemeral });
       const members = await memberService.getMembers(guild.id);
-      const member = members.find(m => m.user_id === userId);
+      const member  = members.find(m => m.user_id === userId);
+      // buildEditModal phải tồn tại trong _MemberView
+      if (!MemberView.buildEditModal) {
+        return interaction.reply({ content: '❌ buildEditModal chưa được export từ MemberView.', flags: MessageFlags.Ephemeral });
+      }
       return interaction.showModal(MemberView.buildEditModal(userId, member));
     }
   }
+}
+
+function _extractPage(interaction) {
+  try {
+    const embed  = interaction.message?.embeds?.[0];
+    const footer = embed?.footer?.text ?? '';
+    const match  = footer.match(/Trang (\d+)\/(\d+)/);
+    if (match) return Math.max(0, parseInt(match[1], 10) - 1);
+  } catch (_e) { /* fallthrough */ }
+  return 0;
 }
 
 module.exports = { SetupMemberHandler };
