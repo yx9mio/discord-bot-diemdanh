@@ -9,6 +9,7 @@ const {
 } = require('discord.js');
 const { CATEGORIES, byAudience } = require('../../../utils/commands.js');
 const { FOOTER_DEFAULT } = require('../../../utils/embeds.js');
+const log = require('../../../utils/logger.js');
 
 const CUSTOM_ID = {
   USER_PAGE:  'help:page:user',
@@ -16,9 +17,9 @@ const CUSTOM_ID = {
 };
 
 const COLOR = {
-  USER:  0x57f287,  // green
-  ADMIN: 0xfee75c,  // yellow
-  BOTH:  0x01696f,  // teal primary
+  USER:  0x57f287,
+  ADMIN: 0xfee75c,
+  BOTH:  0x01696f,
 };
 
 function buildQuickStart() {
@@ -101,11 +102,20 @@ class HelpCommand extends Command {
   }
 
   async chatInputRun(interaction) {
-    await interaction.reply({
-      embeds: [buildEmbed('user')],
-      components: [buildActionRow('user')],
-      flags: MessageFlags.Ephemeral,
-    });
+    // [FIX] Guard stale interaction (40060) khi bot restart
+    try {
+      await interaction.reply({
+        embeds: [buildEmbed('user')],
+        components: [buildActionRow('user')],
+        flags: MessageFlags.Ephemeral,
+      });
+    } catch (e) {
+      if (e.code === 40060) {
+        log.warn('HELP', interaction.guildId, 'Stale interaction bỏ qua (40060): %s', interaction.id);
+        return;
+      }
+      throw e;
+    }
   }
 
   // Public — gọi từ interaction handler
