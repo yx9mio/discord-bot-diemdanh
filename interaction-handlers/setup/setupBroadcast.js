@@ -21,16 +21,16 @@ class SetupBroadcastHandler extends InteractionHandler {
   run(interaction) {
     const modal = new ModalBuilder()
       .setCustomId(BROADCAST_MODAL_ID)
-      .setTitle('\uD83D\uDCE2 Ph\u00e1t tin')
+      .setTitle('📢 Phát tin')
       .addComponents(
         new ActionRowBuilder().addComponents(
           new TextInputBuilder()
             .setCustomId('message')
-            .setLabel('N\u1ed9i dung tin nh\u1eafn')
+            .setLabel('Nội dung tin nhắn')
             .setStyle(TextInputStyle.Paragraph)
             .setMaxLength(1900)
             .setRequired(true)
-            .setPlaceholder('Nh\u1eadp n\u1ed9i dung c\u1ea7n g\u1eedi...'),
+            .setPlaceholder('Nhập nội dung cần gửi...'),
         ),
       );
     return interaction.showModal(modal);
@@ -49,26 +49,29 @@ class SetupBroadcastModalHandler extends InteractionHandler {
 
   async run(interaction) {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-    const { ok } = await requireAdmin(interaction, { context: 'ph\u00e1t tin', deferred: true });
+    const { ok } = await requireAdmin(interaction, { context: 'phát tin', deferred: true });
     if (!ok) return;
 
     const { guild, channel } = interaction;
     const content = interaction.fields.getTextInputValue('message').trim();
     if (!content) {
-      return interaction.editReply({ content: '\u274c N\u1ed9i dung tin nh\u1eafn kh\u00f4ng \u0111\u01b0\u1ee3c \u0111\u1ec3 tr\u1ed1ng.' });
+      return interaction.editReply({ content: '❌ Nội dung tin nhắn không được để trống.' });
     }
+
+    // [FIX] user.tag deprecated trong djs v14 — dùng user.username thay thế
+    const authorName = interaction.member?.displayName ?? interaction.user.username;
 
     const embed = new EmbedBuilder()
       .setColor(0x5865f2)
-      .setTitle('\uD83D\uDCE2 Th\u00f4ng b\u00e1o')
+      .setTitle('📢 Thông báo')
       .setDescription(content)
-      .setAuthor({ name: interaction.user.tag, iconURL: interaction.user.displayAvatarURL({ dynamic: true }) })
+      .setAuthor({ name: authorName, iconURL: interaction.user.displayAvatarURL({ extension: 'png' }) })
       .setFooter({ text: FOOTER_DEFAULT })
       .setTimestamp();
 
-    await channel.send({ embeds: [embed] }).catch(e => log.warn('BROADCAST', guild.id, 'G\u1eedi broadcast th\u1ea5t b\u1ea1i: %s', e.message));
+    await channel.send({ embeds: [embed] }).catch(e => log.warn('BROADCAST', guild.id, 'Gửi broadcast thất bại: %s', e.message));
 
-    // [FIX-B] D\u00f9ng notification_channel_id thay v\u00ec log_channel_id (field kh\u00f4ng t\u1ed3n t\u1ea1i)
+    // [FIX-B] Dùng notification_channel_id thay vì log_channel_id (field không tồn tại)
     try {
       const cfg = await getGuildConfig(guild.id);
       if (cfg?.notification_channel_id && cfg.notification_channel_id !== channel.id) {
@@ -76,11 +79,11 @@ class SetupBroadcastModalHandler extends InteractionHandler {
         if (logCh) await logCh.send({ embeds: [embed] }).catch(() => null);
       }
     } catch (e) {
-      log.warn('BROADCAST', guild.id, 'Kh\u00f4ng th\u1ec3 g\u1eedi t\u1edbi notification channel: %s', e.message);
+      log.warn('BROADCAST', guild.id, 'Không thể gửi tới notification channel: %s', e.message);
     }
 
-    log.info('BROADCAST', guild.id, '%s ph\u00e1t tin: %.50s', interaction.user.tag, content);
-    return interaction.editReply({ content: '\u2705 \u0110\u00e3 g\u1eedi th\u00f4ng b\u00e1o.' });
+    log.info('BROADCAST', guild.id, '%s phát tin: %.50s', authorName, content);
+    return interaction.editReply({ content: '✅ Đã gửi thông báo.' });
   }
 }
 
