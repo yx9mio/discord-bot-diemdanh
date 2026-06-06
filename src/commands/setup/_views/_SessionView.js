@@ -45,13 +45,14 @@ function render({ guild, session, cfg, members = [] }) {
       (session.description ? `_${session.description}_\n` : '') +
       `\n${bar} **${pct}%**`,
     );
+    // [SEC] Session ID (UUID) bị ẩn khỏi embed public — chỉ admin cần biết,
+    //       có thể xem tại /setup hoặc ephemeral reply khi mở phiên.
     embed.addFields(
-      { name: `${ICONS.ID} Session ID`,     value: `\`${session.id}\``,                             inline: true },
-      { name: `⏱️ Bắt đầu`,              value: fmtTs(session.started_at),                      inline: true },
-      { name: `👥 Bắt buộc`,             value: `${totalEligible} thành viên`,                    inline: true },
-      { name: `✅ Đúng giờ`,             value: `${totalIn}`,                                    inline: true },
-      { name: `⏰ Trễ`,                  value: `${totalLate}`,                                  inline: true },
-      { name: `❌ Vắng`,                 value: `${totalAbsent}`,                                 inline: true },
+      { name: `⏱️ Bắt đầu`,  value: fmtTs(session.started_at),       inline: true },
+      { name: `👥 Bắt buộc`, value: `${totalEligible} thành viên`,    inline: true },
+      { name: `✅ Đúng giờ`, value: `${totalIn}`,                     inline: true },
+      { name: `⏰ Trễ`,      value: `${totalLate}`,                   inline: true },
+      { name: `❌ Vắng`,     value: `${totalAbsent}`,                  inline: true },
     );
     if (cfg?.notification_channel_id) {
       embed.addFields({ name: `📢 Kênh điểm danh`, value: `<#${cfg.notification_channel_id}>`, inline: true });
