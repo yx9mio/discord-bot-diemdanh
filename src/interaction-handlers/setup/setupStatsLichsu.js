@@ -1,7 +1,6 @@
 // src/interaction-handlers/setup/setupStatsLichsu.js
-// [BUG-4] NEW — Handler pagination lịch sử: lichsu:prev / lichsu:next
+// [FIX] Đọc targetUserId từ footer `uid:XXXXXXX` (chắc chắn hơn parse mention trong description)
 // [BUG-A] Fix import path: ../../../services/ (3 cấp lên /app/)
-// [BUG-D] Đọc targetUserId từ embed description thay vì luôn dùng interaction.user.id
 'use strict';
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const { getAttendancesByUser } = require('../../../services/attendanceService.js');
@@ -26,6 +25,7 @@ class SetupStatsLichsuHandler extends InteractionHandler {
     await interaction.deferUpdate();
     const { guild, customId } = interaction;
 
+    // Đọc trang hiện tại từ footer pattern "Trang X/Y"
     let currentPage = 0;
     try {
       const footer = interaction.message?.embeds?.[0]?.footer?.text ?? '';
@@ -33,12 +33,13 @@ class SetupStatsLichsuHandler extends InteractionHandler {
       if (match) currentPage = parseInt(match[1], 10) - 1;
     } catch { /* fallback page 0 */ }
 
-    // [BUG-D] Đọc targetUserId từ embed description để admin xem người khác không bị nhảy về mình
+    // [FIX] Đọc targetUserId từ footer uid:<id> — chính xác hơn parse mention trong description
+    // Format footer: "... · uid:123456789012345678 · Trang X/Y · Tổng N lần"
     let targetUserId = interaction.user.id;
     try {
-      const desc = interaction.message?.embeds?.[0]?.description ?? '';
-      const mentionMatch = desc.match(/<@!?(\d+)>/);
-      if (mentionMatch) targetUserId = mentionMatch[1];
+      const footer = interaction.message?.embeds?.[0]?.footer?.text ?? '';
+      const uidMatch = footer.match(/uid:(\d{10,20})/);
+      if (uidMatch) targetUserId = uidMatch[1];
     } catch { /* giữ interaction.user.id nếu parse lỗi */ }
 
     const nextPage = customId === LICHSU_NEXT ? currentPage + 1 : currentPage - 1;
