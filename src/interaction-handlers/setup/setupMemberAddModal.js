@@ -4,12 +4,12 @@
 'use strict';
 const { MessageFlags } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
-const memberService = require('../../../services/memberService.js');
-const log = require('../../../utils/logger.js');
-const { requireAdmin } = require('../../../utils/permissions.js');
+const memberService = require('../../../../services/memberService.js');
+const log = require('../../../../utils/logger.js');
+const { requireAdmin } = require('../../../../utils/permissions.js');
 const { MemberView } = require('../../commands/setup/_views/_MemberView.js');
 
-const MODAL_ID = 'setup:mem:add:modal';
+const MODAL_ADD = 'setup:mem:add:modal';
 
 class SetupMemberAddModalHandler extends InteractionHandler {
   constructor(ctx, options) {
@@ -17,36 +17,29 @@ class SetupMemberAddModalHandler extends InteractionHandler {
   }
 
   parse(interaction) {
-    if (interaction.customId === MODAL_ID) return this.some();
+    if (interaction.customId === MODAL_ADD) return this.some();
     return this.none();
   }
 
   async run(interaction) {
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-    const { ok } = await requireAdmin(interaction, { context: 'thêm thành viên', deferred: true });
-    if (!ok) return;
-
-    const { guild } = interaction;
-    const rawId = interaction.fields.getTextInputValue('user_id').trim().replace(/[<@!>]/g, '');
-    const nick  = interaction.fields.getTextInputValue('nickname')?.trim() || null;
-    const phong = interaction.fields.getTextInputValue('phong_ban')?.trim() || null;
-
-    if (!/^\d{10,20}$/.test(rawId)) {
-      return interaction.editReply({ content: '❌ User ID không hợp lệ. Vui lòng nhập chuỗi số ID của Discord.' });
+    if (!requireAdmin(interaction)) {
+      return interaction.reply({ content: '⛔ Chỉ admin mới dùng được.', flags: MessageFlags.Ephemeral });
     }
+    await interaction.deferUpdate();
+    const { guild } = interaction;
+
+    const userId = interaction.fields.getTextInputValue('user_id').trim().replace(/[<@>]/g, '');
+    const username = interaction.fields.getTextInputValue('username').trim();
+    const phongBan = interaction.fields.getTextInputValue('phong_ban')?.trim() ?? '';
+    const ghiChu = interaction.fields.getTextInputValue('ghi_chu')?.trim() ?? '';
 
     try {
-      await memberService.addMember({ guild_id: guild.id, user_id: rawId, nickname: nick, phong_ban: phong });
-      log.info('MEM_ADD', guild.id, 'Thêm thành viên %s', rawId);
-      const members = await memberService.getMembers(guild.id).catch(() => []);
-      await interaction.editReply({ content: `✅ Đã thêm <@${rawId}> vào danh sách.` });
-      await interaction.message?.edit(MemberView.render({ guild, members })).catch(() => null);
+      await memberService.upsertMember(guild.id, userId, { username, phong_ban: phongBan, ghi_chu: ghiChu });
+      const members = await memberService.getMembers(guild.id);
+      return interaction.editReply(MemberView.render(members, guild, 0));
     } catch (e) {
-      if (e.code === '23505') {
-        return interaction.editReply({ content: `⚠️ <@${rawId}> đã có trong danh sách.` });
-      }
-      log.error('MEM_ADD', guild.id, 'addMember thất bại: %s', e.message);
-      return interaction.editReply({ content: '❌ Không thể thêm thành viên, thử lại sau.' });
+      log.error('MEMBER_ADD', guild.id, 'Lỗi thêm %s: %s', userId, e.message);
+      return interaction.editReply({ content: `❌ Không thể thêm thành viên: ${e.message}` });
     }
   }
 }

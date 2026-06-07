@@ -1,74 +1,73 @@
 // src/interaction-handlers/setup/setupStatsModal.js
 // [FIX-PATH] ../../../services/ và ../../../utils/ (3 cấp, không phải 4)
 // [FIX-SEARCH] Hỗ trợ tìm bằng username/displayName
-// [FIX-UID] Truyền viewerId để renderToi encode uid vào footer → REFRESH đúng target
+// [FIX-UID] Truyền viewerId vào renderToi để footer encode uid (REFRESH biết target)
 'use strict';
 const { MessageFlags } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
-const { getMemberStats, getMemberBadges } = require('../../../services/memberService.js');
-const log = require('../../../utils/logger.js');
+const { getMemberStats, getMemberBadges } = require('../../../../services/memberService.js');
+const log = require('../../../../utils/logger.js');
 const { StatsView } = require('../../commands/setup/_views/_StatsView.js');
 
-const XEM_MODAL_ID = 'setup:stats:xem:modal';
+const MODAL_ID = 'setup:stats:xem:modal';
 
-class SetupStatsXemModalHandler extends InteractionHandler {
+class SetupStatsModalHandler extends InteractionHandler {
   constructor(ctx, options) {
     super(ctx, { ...options, interactionHandlerType: InteractionHandlerTypes.ModalSubmit });
   }
 
   parse(interaction) {
-    if (interaction.customId === XEM_MODAL_ID) return this.some();
+    if (interaction.customId === MODAL_ID) return this.some();
     return this.none();
   }
 
   async run(interaction) {
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    await interaction.deferUpdate();
     const { guild } = interaction;
-    const raw = interaction.fields.getTextInputValue('user_id').trim();
-    const extractedId = raw.replace(/[<@!>]/g, '');
-    let member = null;
 
-    // Tìm theo User ID trước
-    if (/^\d{10,20}$/.test(extractedId)) {
-      try { member = await guild.members.fetch(extractedId); } catch { member = null; }
-    }
+    try {
+      const raw = interaction.fields.getTextInputValue('user_id').trim();
+      // Hỗ trợ <@id>, id thuần, hoặc username
+      const idMatch = raw.match(/(\d{10,20})/);
+      let targetUserId = idMatch ? idMatch[1] : null;
 
-    // Fallback: tìm theo username / displayName
-    if (!member) {
-      const query = raw.toLowerCase().replace(/^@/, '');
-      try {
-        const results = await guild.members.search({ query, limit: 5 });
-        if (results.size === 1) {
-          member = results.first();
-        } else if (results.size > 1) {
-          member = results.find(m =>
-            m.user.username.toLowerCase() === query ||
-            (m.displayName ?? '').toLowerCase() === query,
-          ) ?? results.first();
-        }
-      } catch { member = null; }
-    }
+      // Nếu không có ID, tìm theo displayName trong cache
+      if (!targetUserId) {
+        const lower = raw.replace(/^@/, '').toLowerCase();
+        const found = guild.members.cache.find(
+          m => m.displayName.toLowerCase() === lower || m.user.username.toLowerCase() === lower
+        );
+        if (found) targetUserId = found.id;
+      }
 
-    if (!member) {
+      if (!targetUserId) {
+        return interaction.editReply({
+          content: '❌ Không tìm thấy thành viên. Nhập User ID (số) hoặc @username chính xác.',
+          flags: MessageFlags.Ephemeral,
+        });
+      }
+
+      const [stats, badges] = await Promise.all([
+        getMemberStats(guild.id, targetUserId),
+        getMemberBadges(guild.id, targetUserId),
+      ]);
+
+      let member;
+      try { member = await guild.members.fetch(targetUserId); } catch { member = null; }
+
+      // [FIX] Truyền viewerId = interaction.user.id → renderToi encode uid:targetUserId vào footer
+      // → REFRESH sau này đọc được uid để reload đúng target
+      return interaction.editReply(
+        StatsView.renderToi(stats, member, guild, badges, interaction.user.id)
+      );
+    } catch (e) {
+      log.error('STATS_MODAL', guild?.id, 'xem người khác thất bại: %s', e.message);
       return interaction.editReply({
-        content: [
-          `❌ Không tìm thấy **\`${raw}\`** trong server.`,
-          '> Nhập **User ID** (chuỗi số) hoặc **username** chính xác.',
-          '> Ví dụ: `123456789012345678` hoặc `yx9mio`',
-        ].join('\n'),
+        content: '❌ Không thể tải stats, thử lại sau.',
+        flags: MessageFlags.Ephemeral,
       });
     }
-
-    const userId = member.id;
-    const [stats, badges] = await Promise.all([
-      getMemberStats(guild.id, userId).catch(() => null),
-      getMemberBadges(guild.id, userId).catch(() => []),
-    ]);
-
-    log.info('STATS_XEM', guild.id, '%s xem stats của %s', interaction.user.id, userId);
-    // [FIX-UID] Truyền viewerId = interaction.user.id để footer encode uid khi xem người khác
-    return interaction.editReply(StatsView.renderToi(stats, member, guild, badges, interaction.user.id));
   }
 }
 
-module.exports = { SetupStatsXemModalHandler };
+module.exports = { SetupStatsModalHandler };

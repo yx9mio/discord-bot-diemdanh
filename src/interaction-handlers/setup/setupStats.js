@@ -5,9 +5,9 @@
 'use strict';
 const { ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, MessageFlags } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
-const { getMemberStats, getMemberBadges, getTopMembers, getServerStats } = require('../../../services/memberService.js');
-const { getAttendancesByUser } = require('../../../services/attendanceService.js');
-const log = require('../../../utils/logger.js');
+const { getMemberStats, getMemberBadges, getTopMembers, getServerStats } = require('../../../../services/memberService.js');
+const { getAttendancesByUser } = require('../../../../services/attendanceService.js');
+const log = require('../../../../utils/logger.js');
 const { StatsView } = require('../../commands/setup/_views/_StatsView.js');
 const { CUSTOM_ID } = StatsView;
 
@@ -147,8 +147,6 @@ class SetupStatsHandler extends InteractionHandler {
 
       try {
         if (ctx === 'toi') {
-          // [FIX] Lấy uid từ footer nếu đây là xem người khác
-          // renderToi() chỉ encode uid khi viewerId !== userId
           const targetId = _readUid(interaction) ?? interaction.user.id;
           const [stats, badges] = await Promise.all([
             getMemberStats(guild.id, targetId),
@@ -156,7 +154,6 @@ class SetupStatsHandler extends InteractionHandler {
           ]);
           let member;
           try { member = await guild.members.fetch(targetId); } catch { member = null; }
-          // [FIX] Truyền viewerId để footer tiếp tục encode uid nếu đang xem người khác
           const viewerId = targetId !== interaction.user.id ? interaction.user.id : targetId;
           return interaction.editReply(StatsView.renderToi(stats, member, guild, badges, viewerId));
         }
@@ -177,7 +174,6 @@ class SetupStatsHandler extends InteractionHandler {
         if (ctx === 'lichsu') {
           const targetId = _readUid(interaction) ?? interaction.user.id;
           const records = await getAttendancesByUser(guild.id, targetId);
-          // Giữ nguyên trang hiện tại
           let currentPage = 0;
           try {
             const footer = interaction.message?.embeds?.[0]?.footer?.text ?? '';
@@ -187,7 +183,6 @@ class SetupStatsHandler extends InteractionHandler {
           return interaction.editReply(StatsView.renderLichSu(records, targetId, guild, currentPage));
         }
 
-        // ctx === 'menu' hoặc không nhận ra → về menu
         return interaction.editReply(StatsView.renderStatsMenu());
       } catch (e) {
         log.error('SETUP_STATS_REFRESH', guild.id, 'refresh thất bại ctx=%s: %s', ctx, e.message);

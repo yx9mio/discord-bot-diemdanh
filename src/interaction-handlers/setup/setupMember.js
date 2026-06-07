@@ -2,29 +2,23 @@
 // interaction-handlers/setup/setupMember.js
 // [MERGE] setupMembers.js đã được hợp nhất vào đây — xóa setupMembers.js
 // [FIX-BUG-1]  Loại bỏ duplicate handler (setupMembers.js bị xóa)
-// [FIX-BUG-2]  Thêm ADD modal handler
-// [FIX-BUG-3]  DEL confirm: dùng interaction.message.edit() TRƯỚC editReply, hoặc catch guard
-// [FIX-BUG-4]  Đổi REMOVE_PREFIX → DEL_PREFIX (setupMembers dùng sai key)
-// [FIX-BUG-17] EDIT flow: deferUpdate() trước khi query DB để tránh timeout 3s
+// [FIX-BUG-2]  requireAdmin: truyền interaction, không phải member
+// [FIX-BUG-3]  deleteMember → removeMember (tên đúng trong memberService)
+// [FIX-PATH]   ../../../ → ../../../../
 const {
-  MessageFlags,
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
-  ModalBuilder,
-  TextInputBuilder,
-  TextInputStyle,
+  MessageFlags,
 } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
-const memberService = require('../../../services/memberService.js');
-const log = require('../../../utils/logger.js');
-const { requireAdmin } = require('../../../utils/permissions.js');
+const memberService = require('../../../../services/memberService.js');
+const log = require('../../../../utils/logger.js');
+const { requireAdmin } = require('../../../../utils/permissions.js');
 const { MemberView } = require('../../commands/setup/_views/_MemberView.js');
-
 const { CUSTOM_ID } = MemberView;
 
-// CustomId mà HomeView gửi khi bấm nút "Thành viên"
-const HOME_MEM_ID = 'setup:mem';
+const PAGE_SIZE = 10;
 
 class SetupMemberHandler extends InteractionHandler {
   constructor(ctx, options) {
@@ -32,203 +26,139 @@ class SetupMemberHandler extends InteractionHandler {
   }
 
   parse(interaction) {
-    const id = interaction.customId;
-    if (id === HOME_MEM_ID)                                                                          return this.some();
-    if (id === CUSTOM_ID.PAGE_PREV)                                                                  return this.some();
-    if (id === CUSTOM_ID.PAGE_NEXT)                                                                  return this.some();
-    if (id === CUSTOM_ID.REFRESH)                                                                    return this.some();
-    if (id === CUSTOM_ID.RESET_ALL)                                                                  return this.some();
-    if (id === CUSTOM_ID.ADD)                                                                        return this.some();
-    if (id?.startsWith(CUSTOM_ID.DEL_PREFIX)   && !id.includes(':confirm') && !id.includes(':cancel')) return this.some();
-    if (id?.startsWith(CUSTOM_ID.DEL_PREFIX + 'confirm:'))                                          return this.some();
-    if (id?.startsWith(CUSTOM_ID.DEL_PREFIX + 'cancel:'))                                           return this.some();
-    if (id?.startsWith(CUSTOM_ID.EDIT_PREFIX))                                                       return this.some();
-    if (id?.startsWith(CUSTOM_ID.RESET_PREFIX) && !id.endsWith(':all'))                              return this.some();
+    const handled = new Set([
+      CUSTOM_ID.MEMBER,
+      CUSTOM_ID.PAGE_NEXT,
+      CUSTOM_ID.PAGE_PREV,
+      CUSTOM_ID.REFRESH,
+      CUSTOM_ID.ADD,
+      CUSTOM_ID.EDIT_PREFIX,
+      CUSTOM_ID.DELETE_PREFIX,
+      CUSTOM_ID.DELETE_CONFIRM_PREFIX,
+      CUSTOM_ID.DELETE_CANCEL_PREFIX,
+      CUSTOM_ID.STREAK_RESET_PREFIX,
+    ]);
+    // Prefix-based IDs
+    if (
+      interaction.customId === CUSTOM_ID.MEMBER ||
+      interaction.customId === CUSTOM_ID.PAGE_NEXT ||
+      interaction.customId === CUSTOM_ID.PAGE_PREV ||
+      interaction.customId === CUSTOM_ID.REFRESH ||
+      interaction.customId === CUSTOM_ID.ADD ||
+      interaction.customId.startsWith(CUSTOM_ID.EDIT_PREFIX) ||
+      interaction.customId.startsWith(CUSTOM_ID.DELETE_PREFIX) ||
+      interaction.customId.startsWith(CUSTOM_ID.DELETE_CONFIRM_PREFIX) ||
+      interaction.customId.startsWith(CUSTOM_ID.DELETE_CANCEL_PREFIX) ||
+      interaction.customId.startsWith(CUSTOM_ID.STREAK_RESET_PREFIX)
+    ) return this.some();
     return this.none();
   }
 
   async run(interaction) {
-    const { customId, guild } = interaction;
+    const { guild, customId } = interaction;
 
-    // ── Entry: mở trang thành viên từ dashboard ───────────────────────
-    if (customId === HOME_MEM_ID) {
-      await interaction.deferUpdate();
-      const members = await memberService.getMembers(guild.id);
-      return interaction.editReply(MemberView.render({ members, page: 0, guild }));
-    }
-
-    // ── Pagination ────────────────────────────────────────────────────
-    if (customId === CUSTOM_ID.PAGE_PREV || customId === CUSTOM_ID.PAGE_NEXT) {
-      await interaction.deferUpdate();
-      const members     = await memberService.getMembers(guild.id);
-      const currentPage = _extractPage(interaction);
-      const totalPages  = Math.max(1, Math.ceil(members.length / MemberView.PAGE_SIZE));
-      const newPage = customId === CUSTOM_ID.PAGE_PREV
-        ? Math.max(0, currentPage - 1)
-        : Math.min(totalPages - 1, currentPage + 1);
-      return interaction.editReply(MemberView.render({ members, page: newPage, guild }));
-    }
-
-    // ── Refresh ───────────────────────────────────────────────────────
-    if (customId === CUSTOM_ID.REFRESH) {
-      const page = _extractPage(interaction);
-      return MemberView.handleRefresh(interaction, page);
-    }
-
-    // ── Thêm thành viên → mở modal ────────────────────────────────────
-    // [FIX-BUG-2] ADD handler — không defer, showModal không cần
-    if (customId === CUSTOM_ID.ADD) {
-      return interaction.showModal(
-        new ModalBuilder()
-          .setCustomId('setup:mem:add:modal')
-          .setTitle('Thêm thành viên')
-          .addComponents(
-            new ActionRowBuilder().addComponents(
-              new TextInputBuilder()
-                .setCustomId('user_id')
-                .setLabel('User ID (chuỗi số Discord)')
-                .setStyle(TextInputStyle.Short)
-                .setRequired(true)
-                .setMaxLength(20)
-                .setPlaceholder('123456789012345678'),
-            ),
-            new ActionRowBuilder().addComponents(
-              new TextInputBuilder()
-                .setCustomId('nickname')
-                .setLabel('Nickname (tuỳ chọn)')
-                .setStyle(TextInputStyle.Short)
-                .setRequired(false)
-                .setMaxLength(50),
-            ),
-            new ActionRowBuilder().addComponents(
-              new TextInputBuilder()
-                .setCustomId('phong_ban')
-                .setLabel('Phòng ban (tuỳ chọn)')
-                .setStyle(TextInputStyle.Short)
-                .setRequired(false)
-                .setMaxLength(50),
-            ),
-          ),
-      );
-    }
-
-    // ── Reset streak ALL ──────────────────────────────────────────────
-    if (customId === CUSTOM_ID.RESET_ALL) {
-      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-      const { ok } = await requireAdmin(interaction, { context: 'reset tất cả streak', deferred: true });
-      if (!ok) return;
-      try {
-        const members = await memberService.getMembers(guild.id);
-        const userIds = members.map(m => m.user_id);
-        await memberService.batchResetStreak(guild.id, userIds);
-        log.info('MEM_RESET_ALL', guild.id, 'Reset streak %d thành viên', userIds.length);
-        return interaction.editReply({ content: `✅ Đã reset streak cho **${userIds.length}** thành viên.` });
-      } catch (e) {
-        log.error('MEM_RESET_ALL', guild.id, 'batchResetStreak thất bại: %s', e.message);
-        return interaction.editReply({ content: '❌ Không thể reset streak, thử lại sau.' });
-      }
-    }
-
-    // ── Reset streak per-user ─────────────────────────────────────────
-    if (customId.startsWith(CUSTOM_ID.RESET_PREFIX) && !customId.endsWith(':all')) {
-      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-      const { ok } = await requireAdmin(interaction, { context: 'reset streak thành viên', deferred: true });
-      if (!ok) return;
-      const userId = customId.slice(CUSTOM_ID.RESET_PREFIX.length);
-      try {
-        await memberService.resetStreak(guild.id, userId);
-        log.info('MEM_RESET', guild.id, 'Reset streak %s', userId);
-        return interaction.editReply({ content: `✅ Đã reset streak của <@${userId}>.` });
-      } catch (e) {
-        log.error('MEM_RESET', guild.id, 'resetStreak thất bại: %s', e.message);
-        return interaction.editReply({ content: '❌ Không thể reset streak, thử lại sau.' });
-      }
-    }
-
-    // ── Xóa thành viên: bước 1 — confirm prompt ──────────────────────
+    // ── Danh sách thành viên / navigation ─────────────────────────────
     if (
-      customId.startsWith(CUSTOM_ID.DEL_PREFIX) &&
-      !customId.includes(':confirm') &&
-      !customId.includes(':cancel')
+      customId === CUSTOM_ID.MEMBER ||
+      customId === CUSTOM_ID.PAGE_NEXT ||
+      customId === CUSTOM_ID.PAGE_PREV ||
+      customId === CUSTOM_ID.REFRESH
     ) {
-      const userId = customId.slice(CUSTOM_ID.DEL_PREFIX.length);
       await interaction.deferUpdate();
+      const footer = interaction.message?.embeds?.[0]?.footer?.text ?? '';
+      let currentPage = 0;
+      const m = footer.match(/Trang (\d+)\/(\d+)/);
+      if (m) currentPage = parseInt(m[1], 10) - 1;
+
+      let nextPage = currentPage;
+      if (customId === CUSTOM_ID.PAGE_NEXT) nextPage++;
+      if (customId === CUSTOM_ID.PAGE_PREV) nextPage--;
+
+      const members = await memberService.getMembers(guild.id);
+      return interaction.editReply(MemberView.render(members, guild, nextPage));
+    }
+
+    // ── Thêm thành viên ───────────────────────────────────────────────
+    if (customId === CUSTOM_ID.ADD) {
+      if (!requireAdmin(interaction)) {
+        return interaction.reply({ content: '⛔ Chỉ admin mới dùng được.', flags: MessageFlags.Ephemeral });
+      }
+      const { MemberView: MV } = require('../../commands/setup/_views/_MemberView.js');
+      return interaction.showModal(MV.buildAddModal());
+    }
+
+    // ── Sửa thành viên ────────────────────────────────────────────────
+    if (customId.startsWith(CUSTOM_ID.EDIT_PREFIX)) {
+      if (!requireAdmin(interaction)) {
+        return interaction.reply({ content: '⛔ Chỉ admin mới dùng được.', flags: MessageFlags.Ephemeral });
+      }
+      const userId = customId.slice(CUSTOM_ID.EDIT_PREFIX.length);
+      const member = await memberService.getMember(guild.id, userId);
+      const { MemberView: MV } = require('../../commands/setup/_views/_MemberView.js');
+      return interaction.showModal(MV.buildEditModal(member));
+    }
+
+    // ── Xoá thành viên (bước 1: confirm) ─────────────────────────────
+    if (customId.startsWith(CUSTOM_ID.DELETE_PREFIX) && !customId.startsWith(CUSTOM_ID.DELETE_CONFIRM_PREFIX) && !customId.startsWith(CUSTOM_ID.DELETE_CANCEL_PREFIX)) {
+      if (!requireAdmin(interaction)) {
+        return interaction.reply({ content: '⛔ Chỉ admin mới dùng được.', flags: MessageFlags.Ephemeral });
+      }
+      await interaction.deferUpdate();
+      const userId = customId.slice(CUSTOM_ID.DELETE_PREFIX.length);
+      const gMember = guild.members.cache.get(userId);
+      const name = gMember?.displayName ?? `<@${userId}>`;
       return interaction.editReply({
-        content: `⚠️ Xác nhận xóa thành viên <@${userId}> khỏi danh sách?`,
-        embeds: [],
+        content: `⚠️ Xác nhận xoá thành viên **${name}** khỏi danh sách điểm danh?`,
         components: [
           new ActionRowBuilder().addComponents(
-            new ButtonBuilder()
-              .setCustomId(`${CUSTOM_ID.DEL_PREFIX}confirm:${userId}`)
-              .setLabel('✅ Xác nhận xóa')
-              .setStyle(ButtonStyle.Danger),
-            new ButtonBuilder()
-              .setCustomId(`${CUSTOM_ID.DEL_PREFIX}cancel:${userId}`)
-              .setLabel('↩️ Hủy')
-              .setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`${CUSTOM_ID.DELETE_CONFIRM_PREFIX}${userId}`).setLabel('Xác nhận xoá').setStyle(ButtonStyle.Danger),
+            new ButtonBuilder().setCustomId(`${CUSTOM_ID.DELETE_CANCEL_PREFIX}${userId}`).setLabel('Huỷ').setStyle(ButtonStyle.Secondary),
           ),
         ],
       });
     }
 
-    // ── Xóa thành viên: bước 2 — confirm ─────────────────────────────
-    // [FIX-BUG-3] message.edit() với .catch() guard tránh 404 Unknown Message
-    if (customId.startsWith(CUSTOM_ID.DEL_PREFIX + 'confirm:')) {
-      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-      const { ok } = await requireAdmin(interaction, { context: 'xóa thành viên', deferred: true });
-      if (!ok) return;
-      const userId = customId.slice((CUSTOM_ID.DEL_PREFIX + 'confirm:').length);
-      try {
-        await memberService.deleteMember(guild.id, userId);
-        log.info('MEM_DEL', guild.id, 'Xóa thành viên %s', userId);
-      } catch (e) {
-        log.error('MEM_DEL', guild.id, 'deleteMember thất bại: %s', e.message);
-        return interaction.editReply({ content: '❌ Không thể xóa, thử lại sau.' });
+    // ── Xoá thành viên (bước 2: thực hiện) ───────────────────────────
+    if (customId.startsWith(CUSTOM_ID.DELETE_CONFIRM_PREFIX)) {
+      if (!requireAdmin(interaction)) {
+        return interaction.reply({ content: '⛔ Chỉ admin mới dùng được.', flags: MessageFlags.Ephemeral });
       }
-      // [FIX-BUG-3] Edit message gốc TRƯỚC khi reply ephemeral — nếu lỗi thì bỏ qua
-      const members = await memberService.getMembers(guild.id).catch(() => []);
-      const page    = _extractPage(interaction);
-      await interaction.message.edit({ ...MemberView.render({ members, page, guild }), content: null })
-        .catch(e => log.warn('MEM_DEL', guild.id, 'message.edit thất bại (bỏ qua): %s', e.message));
-      return interaction.editReply({ content: `✅ Đã xóa <@${userId}> khỏi danh sách.`, components: [] });
-    }
-
-    // ── Xóa thành viên: hủy ──────────────────────────────────────────
-    if (customId.startsWith(CUSTOM_ID.DEL_PREFIX + 'cancel:')) {
       await interaction.deferUpdate();
-      const members = await memberService.getMembers(guild.id).catch(() => []);
-      const page    = _extractPage(interaction);
-      return interaction.editReply({ ...MemberView.render({ members, page, guild }), content: null });
+      const userId = customId.slice(CUSTOM_ID.DELETE_CONFIRM_PREFIX.length);
+      try {
+        await memberService.removeMember(guild.id, userId);
+        const members = await memberService.getMembers(guild.id);
+        return interaction.editReply(MemberView.render(members, guild, 0));
+      } catch (e) {
+        log.error('MEMBER_DELETE', guild.id, 'Lỗi xoá %s: %s', userId, e.message);
+        return interaction.editReply({ content: `❌ Không thể xoá: ${e.message}` });
+      }
     }
 
-    // ── Sửa thành viên → mở modal ─────────────────────────────────────
-    // [FIX-BUG-17] deferUpdate() trước DB call để tránh timeout 3s trên DB chậm
-    if (customId.startsWith(CUSTOM_ID.EDIT_PREFIX)) {
-      const userId = customId.slice(CUSTOM_ID.EDIT_PREFIX.length);
-      if (!userId) {
-        return interaction.reply({ content: '❌ Không tìm thấy thành viên.', flags: MessageFlags.Ephemeral });
-      }
-      // EDIT mở modal — không thể deferUpdate rồi showModal (Discord không cho phép)
-      // Thay vào đó: chấp nhận risk timeout 3s, hoặc cache members ở tầng trên
-      // → Giải pháp an toàn nhất: fetch member đơn lẻ thay vì getMembers() toàn bộ
+    // ── Huỷ xoá ──────────────────────────────────────────────────────
+    if (customId.startsWith(CUSTOM_ID.DELETE_CANCEL_PREFIX)) {
+      await interaction.deferUpdate();
       const members = await memberService.getMembers(guild.id);
-      const member  = members.find(m => m.user_id === userId);
-      if (!MemberView.buildEditModal) {
-        return interaction.reply({ content: '❌ buildEditModal chưa được export từ MemberView.', flags: MessageFlags.Ephemeral });
+      return interaction.editReply(MemberView.render(members, guild, 0));
+    }
+
+    // ── Reset streak ──────────────────────────────────────────────────
+    if (customId.startsWith(CUSTOM_ID.STREAK_RESET_PREFIX)) {
+      if (!requireAdmin(interaction)) {
+        return interaction.reply({ content: '⛔ Chỉ admin mới dùng được.', flags: MessageFlags.Ephemeral });
       }
-      return interaction.showModal(MemberView.buildEditModal(userId, member));
+      await interaction.deferUpdate();
+      const userId = customId.slice(CUSTOM_ID.STREAK_RESET_PREFIX.length);
+      try {
+        await memberService.resetStreak(guild.id, userId);
+        const members = await memberService.getMembers(guild.id);
+        return interaction.editReply(MemberView.render(members, guild, 0));
+      } catch (e) {
+        log.error('MEMBER_STREAK_RESET', guild.id, 'Lỗi reset streak %s: %s', userId, e.message);
+        return interaction.editReply({ content: `❌ Không thể reset streak: ${e.message}` });
+      }
     }
   }
-}
-
-function _extractPage(interaction) {
-  try {
-    const embed  = interaction.message?.embeds?.[0];
-    const footer = embed?.footer?.text ?? '';
-    const match  = footer.match(/Trang (\d+)\/(\d+)/);
-    if (match) return Math.max(0, parseInt(match[1], 10) - 1);
-  } catch (_e) { /* fallthrough */ }
-  return 0;
 }
 
 module.exports = { SetupMemberHandler };
