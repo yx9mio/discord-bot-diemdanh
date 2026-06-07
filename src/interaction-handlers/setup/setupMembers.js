@@ -1,10 +1,9 @@
 // src/interaction-handlers/setup/setupMembers.js
-// Handles: setup:mem (entry), pagination PAGE_NEXT/PAGE_PREV, REFRESH, ADD, REMOVE
-// [NEW] File bị mất — tạo lại
+// Handles: setup:mem (entry), pagination PAGE_NEXT/PAGE_PREV, REFRESH, ADD, REMOVE, EDIT, RESET
 'use strict';
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const { MessageFlags, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } = require('discord.js');
-const memberService = require('../../../../services/memberService.js');
+const { getMembers, deleteMember } = require('../../../../services/memberService.js');
 const { requireAdmin } = require('../../../../utils/permissions.js');
 const log = require('../../../../utils/logger.js');
 const { MemberView } = require('../../commands/setup/_views/_MemberView.js');
@@ -38,7 +37,7 @@ class SetupMembersHandler extends InteractionHandler {
     // ── Entry / Refresh → về trang đầu ───────────────────────────────
     if (customId === 'setup:mem' || customId === CUSTOM_ID.REFRESH) {
       await interaction.deferUpdate();
-      const members = await memberService.getMembers(guild.id).catch(() => []);
+      const members = await getMembers(guild.id).catch(() => []);
       return interaction.editReply(MemberView.render({ guild, members, page: 0 }));
     }
 
@@ -51,7 +50,7 @@ class SetupMembersHandler extends InteractionHandler {
         const m = footer.match(/Trang (\d+)\/(\d+)/);
         if (m) currentPage = parseInt(m[1], 10) - 1;
       } catch { /* ignore */ }
-      const members = await memberService.getMembers(guild.id).catch(() => []);
+      const members = await getMembers(guild.id).catch(() => []);
       const totalPages = Math.max(1, Math.ceil(members.length / (MemberView.PAGE_SIZE ?? 10)));
       const newPage = customId === CUSTOM_ID.PAGE_NEXT
         ? Math.min(totalPages - 1, currentPage + 1)
@@ -88,7 +87,7 @@ class SetupMembersHandler extends InteractionHandler {
     // ── Sửa thành viên → mở modal ─────────────────────────────────────
     if (customId.startsWith(CUSTOM_ID.EDIT_PREFIX ?? 'setup:mem:edit:')) {
       const userId = customId.slice((CUSTOM_ID.EDIT_PREFIX ?? 'setup:mem:edit:').length);
-      const members = await memberService.getMembers(guild.id).catch(() => []);
+      const members = await getMembers(guild.id).catch(() => []);
       const target = members.find(m => m.user_id === userId);
       return interaction.showModal(
         new ModalBuilder()
@@ -124,13 +123,13 @@ class SetupMembersHandler extends InteractionHandler {
       if (!ok) return;
       const userId = customId.slice((CUSTOM_ID.REMOVE_PREFIX ?? 'setup:mem:remove:').length);
       try {
-        await memberService.removeMember(guild.id, userId);
+        await deleteMember(guild.id, userId);
         log.info('MEM_REMOVE', guild.id, 'Xoá thành viên %s', userId);
-        const members = await memberService.getMembers(guild.id).catch(() => []);
+        const members = await getMembers(guild.id).catch(() => []);
         await interaction.editReply({ content: `✅ Đã xoá <@${userId}> khỏi danh sách.` });
         await interaction.message?.edit(MemberView.render({ guild, members, page: 0 })).catch(() => null);
       } catch (e) {
-        log.error('MEM_REMOVE', guild.id, 'removeMember thất bại: %s', e.message);
+        log.error('MEM_REMOVE', guild.id, 'deleteMember thất bại: %s', e.message);
         return interaction.editReply({ content: '❌ Không thể xoá thành viên, thử lại sau.' });
       }
     }
