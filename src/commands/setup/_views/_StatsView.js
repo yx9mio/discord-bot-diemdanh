@@ -33,8 +33,6 @@ function _badgeStr(badges) {
 }
 
 // ── ctx helpers ───────────────────────────────────────────────────────────────
-// Mỗi render fn encode "ctx:<key>" vào footer để setupStats.js REFRESH
-// biết đang ở view nào và reload đúng trang thay vì về menu gốc.
 const CTX = {
   MENU:   'menu',
   TOI:    'toi',
@@ -47,6 +45,14 @@ function _footer(ctx, extra = '') {
   const parts = [FOOTER_DEFAULT, `ctx:${ctx}`];
   if (extra) parts.push(extra);
   return parts.join(' · ');
+}
+
+// ── shared nav rows ───────────────────────────────────────────────────────────
+function _navRow() {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(CUSTOM_ID.REFRESH).setLabel('Làm mới').setEmoji(ICONS.REFRESH).setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(CUSTOM_ID.BACK_HOME).setLabel('← Bảng điều khiển').setEmoji(ICONS.HOME).setStyle(ButtonStyle.Secondary),
+  );
 }
 
 // ── renderStatsMenu ───────────────────────────────────────────────────────────
@@ -73,11 +79,7 @@ function renderStatsMenu() {
     new ButtonBuilder().setCustomId(CUSTOM_ID.XEM).setLabel('Xem người khác').setEmoji('🔍').setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId(CUSTOM_ID.SERVER).setLabel('Server').setEmoji(ICONS.CHART).setStyle(ButtonStyle.Secondary),
   );
-  const navRow = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId(CUSTOM_ID.REFRESH).setLabel('Làm mới').setEmoji(ICONS.REFRESH).setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId(CUSTOM_ID.BACK_HOME).setLabel('← Bảng điều khiển').setEmoji(ICONS.HOME).setStyle(ButtonStyle.Secondary),
-  );
-  return { embeds: [embed], components: [row, navRow] };
+  return { embeds: [embed], components: [row, _navRow()] };
 }
 
 // ── renderToi ─────────────────────────────────────────────────────────────────
@@ -112,7 +114,6 @@ function renderToi(stats, member, guild, badges) {
       { name: '🏆 Streak tốt nhất',                  value: `**${best}** phiên`,             inline: true },
       { name: `${ICONS.STAR} Huy hiệu`,              value: _badgeStr(badges),               inline: false },
     )
-    // [FIX] Encode ctx:toi để REFRESH reload đúng view này
     .setFooter({ text: _footer(CTX.TOI) })
     .setTimestamp();
 
@@ -120,24 +121,27 @@ function renderToi(stats, member, guild, badges) {
     const url = member.displayAvatarURL({ dynamic: true, size: 64 });
     if (url) embed.setThumbnail(url);
   }
-  return { embeds: [embed], components: [] };
+
+  // [FIX] Thêm navRow — trước đây components: [] khiến người dùng bị kẹt
+  return { embeds: [embed], components: [_navRow()] };
 }
 
 // ── renderRank ────────────────────────────────────────────────────────────────
-/**
- * @param {object[]} rows  – rows từ getTopMembers()
- * @param {import('discord.js').Guild} guild
- * @param {number} topN
- */
 async function renderRank(rows, guild, topN = 10) {
-  const empty = new EmbedBuilder()
-    .setColor(COLORS.GOLD)
-    .setTitle(`${ICONS.TROPHY} Bảng xếp hạng`)
-    .setDescription('> _Chưa có dữ liệu._')
-    // [FIX] Encode ctx:rank
-    .setFooter({ text: _footer(CTX.RANK) })
-    .setTimestamp();
-  if (!rows?.length) return { embeds: [empty], components: [] };
+  // [FIX] empty state cũng cần navRow
+  if (!rows?.length) {
+    return {
+      embeds: [
+        new EmbedBuilder()
+          .setColor(COLORS.GOLD)
+          .setTitle(`${ICONS.TROPHY} Bảng xếp hạng`)
+          .setDescription('> _Chưa có dữ liệu._')
+          .setFooter({ text: _footer(CTX.RANK) })
+          .setTimestamp(),
+      ],
+      components: [_navRow()],
+    };
+  }
 
   const uncached = rows.filter(r => !guild?.members?.cache?.has(r.user_id)).map(r => r.user_id);
   if (uncached.length && guild) {
@@ -165,24 +169,15 @@ async function renderRank(rows, guild, topN = 10) {
         .setColor(COLORS.GOLD)
         .setTitle(`${ICONS.TROPHY} Top ${Math.min(rows.length, topN)} — Bảng xếp hạng`)
         .setDescription(lines.join('\n\n'))
-        // [FIX] Encode ctx:rank
         .setFooter({ text: _footer(CTX.RANK, 'Cập nhật lần cuối') })
         .setTimestamp(),
     ],
-    components: [],
+    // [FIX] Thêm navRow — trước đây components: [] khiến người dùng bị kẹt
+    components: [_navRow()],
   };
 }
 
 // ── renderLichSu ──────────────────────────────────────────────────────────────
-/**
- * Render lịch sử điểm danh.
- * Footer encode uid + ctx để pagination & REFRESH đọc lại đúng người và view.
- *
- * @param {object[]} records  – từ getAttendancesByUser()
- * @param {string}   userId   – ID người được xem
- * @param {import('discord.js').Guild} guild
- * @param {number}   page     – 0-indexed
- */
 function renderLichSu(records, userId, guild, page = 0) {
   const PAGE_SIZE   = 10;
   const total       = records.length;
@@ -203,11 +198,11 @@ function renderLichSu(records, userId, guild, page = 0) {
           .setColor(COLORS.PRIMARY)
           .setTitle(`📋 Lịch sử — ${name}`)
           .setDescription('> _Chưa có điểm danh nào._')
-          // [FIX] Encode ctx:lichsu + uid để REFRESH & pagination đọc đúng
           .setFooter({ text: _footer(CTX.LICHSU, `uid:${userId}`) })
           .setTimestamp(),
       ],
-      components: [],
+      // [FIX] Thêm navRow — trước đây components: [] khiến người dùng bị kẹt
+      components: [_navRow()],
     };
   }
 
@@ -228,7 +223,6 @@ function renderLichSu(records, userId, guild, page = 0) {
 
   const summary = `> ${ICONS.ATTEND_YES} **${tongThamGia}** tham gia · ${ICONS.ATTEND_NO} **${tongVang}** vắng · 🟡 **${tongCoPhep}** có phép\n`;
 
-  // [FIX] Footer encode ctx:lichsu + trang + uid để cả REFRESH lẫn PAGE_NEXT/PREV đọc đúng
   const footerText = _footer(
     CTX.LICHSU,
     `Trang ${clampedPage + 1}/${totalPages} · ${total} bản ghi · uid:${userId}`,
@@ -241,7 +235,9 @@ function renderLichSu(records, userId, guild, page = 0) {
     .setFooter({ text: footerText })
     .setTimestamp();
 
-  const navRow = new ActionRowBuilder().addComponents(
+  // [FIX] Tách 2 row: row 1 = pagination, row 2 = REFRESH + BACK_HOME
+  // Trước đây chỉ có row pagination, không có cách quay lại menu
+  const pageRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId('setup:stats:lichsu:prev')
       .setLabel('◄ Trang trước')
@@ -254,7 +250,7 @@ function renderLichSu(records, userId, guild, page = 0) {
       .setDisabled(clampedPage >= totalPages - 1),
   );
 
-  return { embeds: [embed], components: [navRow] };
+  return { embeds: [embed], components: [pageRow, _navRow()] };
 }
 
 // ── renderServerStats ─────────────────────────────────────────────────────────
@@ -282,11 +278,11 @@ function renderServerStats(stats) {
       { name: `${ICONS.ATTEND_YES} Điểm danh`, value: `**${attends}** lượt`,               inline: true },
       { name: '📊 TB mỗi phiên',         value: `**${avgPerSession}** lượt/phiên`,          inline: true },
     )
-    // [FIX] Encode ctx:server
     .setFooter({ text: _footer(CTX.SERVER) })
     .setTimestamp();
 
-  return { embeds: [embed], components: [] };
+  // [FIX] Thêm navRow — trước đây components: [] khiến người dùng bị kẹt
+  return { embeds: [embed], components: [_navRow()] };
 }
 
 // ── renderXemInput ────────────────────────────────────────────────────────────
@@ -297,11 +293,7 @@ function renderXemInput() {
     .setDescription('Nhập **User ID** hoặc **@mention** vào modal.')
     .setFooter({ text: _footer(CTX.MENU) })
     .setTimestamp();
-  const navRow = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId(CUSTOM_ID.REFRESH).setLabel('Làm mới').setEmoji(ICONS.REFRESH).setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId(CUSTOM_ID.BACK_HOME).setLabel('← Bảng điều khiển').setEmoji(ICONS.HOME).setStyle(ButtonStyle.Secondary),
-  );
-  return { embeds: [embed], components: [navRow] };
+  return { embeds: [embed], components: [_navRow()] };
 }
 
 module.exports = {
