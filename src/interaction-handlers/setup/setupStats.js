@@ -1,19 +1,36 @@
 // src/interaction-handlers/setup/setupStats.js
 // [FIX-ROOT] Thêm 'setup:stats' (HomeView.CUSTOM_ID.STATS) vào parse() → mở menu thống kê
-// [FIX-PATH] services/ và utils/ nằm ở root, cần ../../../../ (không phải ../../../)
+// [FIX-PATH] src/interaction-handlers/setup/ → lên 3 cấp → root/services/ (không phải 4 cấp)
+// [FIX-REFRESH] Đọc ctx: từ footer để reload đúng view thay vì luôn về menu
 'use strict';
 const { ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, MessageFlags } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
-// [FIX-PATH] src/interaction-handlers/setup/ → lên 4 cấp → root/services/
-const { getMemberStats, getMemberBadges, getTopMembers, getServerStats } = require('../../../../services/memberService.js');
-const { getAttendancesByUser } = require('../../../../services/attendanceService.js');
-// [FIX-PATH] utils/ cũng ở root
-const log = require('../../../../utils/logger.js');
+const { getMemberStats, getMemberBadges, getTopMembers, getServerStats } = require('../../../services/memberService.js');
+const { getAttendancesByUser } = require('../../../services/attendanceService.js');
+const log = require('../../../utils/logger.js');
 const { StatsView } = require('../../commands/setup/_views/_StatsView.js');
 const { CUSTOM_ID } = StatsView;
 
 // CustomId mà HomeView gửi khi bấm nút "Thống kê"
 const HOME_STATS_ID = 'setup:stats';
+
+/** Đọc ctx: từ footer của embed đầu tiên trong message */
+function _readCtx(interaction) {
+  try {
+    const footer = interaction.message?.embeds?.[0]?.footer?.text ?? '';
+    const m = footer.match(/ctx:(\w+)/);
+    return m ? m[1] : 'menu';
+  } catch { return 'menu'; }
+}
+
+/** Đọc uid: từ footer (dùng cho REFRESH ở view lịch sử người khác) */
+function _readUid(interaction) {
+  try {
+    const footer = interaction.message?.embeds?.[0]?.footer?.text ?? '';
+    const m = footer.match(/uid:(\d{10,20})/);
+    return m ? m[1] : null;
+  } catch { return null; }
+}
 
 class SetupStatsHandler extends InteractionHandler {
   constructor(ctx, options) {
@@ -21,9 +38,7 @@ class SetupStatsHandler extends InteractionHandler {
   }
 
   parse(interaction) {
-    // [FIX-ROOT] Nút từ Dashboard gửi 'setup:stats', cần handle riêng để mở menu
     if (interaction.customId === HOME_STATS_ID) return this.some();
-
     const handled = new Set([
       CUSTOM_ID.TOI,
       CUSTOM_ID.RANK,
@@ -39,12 +54,13 @@ class SetupStatsHandler extends InteractionHandler {
   async run(interaction) {
     const { guild, customId } = interaction;
 
-    // [FIX-ROOT] Mở menu thống kê từ dashboard
+    // ── Mở menu thống kê từ dashboard ─────────────────────────────────
     if (customId === HOME_STATS_ID) {
       await interaction.deferUpdate();
       return interaction.editReply(StatsView.renderStatsMenu());
     }
 
+    // ── Server stats ──────────────────────────────────────────────────
     if (customId === CUSTOM_ID.SERVER) {
       await interaction.deferUpdate();
       try {
@@ -59,11 +75,14 @@ class SetupStatsHandler extends InteractionHandler {
       }
     }
 
+    // ── Thống kê cá nhân ──────────────────────────────────────────────
     if (customId === CUSTOM_ID.TOI) {
       await interaction.deferUpdate();
       try {
-        const stats  = await getMemberStats(guild.id, interaction.user.id);
-        const badges = await getMemberBadges(guild.id, interaction.user.id);
+        const [stats, badges] = await Promise.all([
+          getMemberStats(guild.id, interaction.user.id),
+          getMemberBadges(guild.id, interaction.user.id),
+        ]);
         let member;
         try { member = await guild.members.fetch(interaction.user.id); } catch { member = null; }
         return interaction.editReply(StatsView.renderToi(stats, member, guild, badges));
@@ -73,17 +92,20 @@ class SetupStatsHandler extends InteractionHandler {
       }
     }
 
+    // ── Bảng xếp hạng ─────────────────────────────────────────────────
     if (customId === CUSTOM_ID.RANK) {
       await interaction.deferUpdate();
       try {
         const top = await getTopMembers(guild.id, 10);
-        return interaction.editReply(StatsView.renderRank(top, guild));
+        // renderRank là async (fetch uncached members)
+        return interaction.editReply(await StatsView.renderRank(top, guild));
       } catch (e) {
         log.error('SETUP_STATS', guild.id, 'getTopMembers thất bại: %s', e.message);
         return interaction.editReply({ content: '❌ Không thể tải bảng xếp hạng, thử lại sau.' });
       }
     }
 
+    // ── Lịch sử cá nhân ───────────────────────────────────────────────
     if (customId === CUSTOM_ID.LICHSU) {
       await interaction.deferUpdate();
       try {
@@ -95,6 +117,7 @@ class SetupStatsHandler extends InteractionHandler {
       }
     }
 
+    // ── Xem người khác → modal ────────────────────────────────────────
     if (customId === CUSTOM_ID.XEM) {
       const modal = new ModalBuilder()
         .setCustomId('setup:stats:xem:modal')
@@ -113,9 +136,56 @@ class SetupStatsHandler extends InteractionHandler {
       return interaction.showModal(modal);
     }
 
+    // ── REFRESH: reload đúng view hiện tại dựa vào ctx: trong footer ──
     if (customId === CUSTOM_ID.REFRESH) {
       await interaction.deferUpdate();
-      return interaction.editReply(StatsView.renderStatsMenu());
+      const ctx = _readCtx(interaction);
+
+      try {
+        if (ctx === 'toi') {
+          // Lấy uid từ footer nếu đây là xem người khác, fallback interaction.user.id
+          const targetId = _readUid(interaction) ?? interaction.user.id;
+          const [stats, badges] = await Promise.all([
+            getMemberStats(guild.id, targetId),
+            getMemberBadges(guild.id, targetId),
+          ]);
+          let member;
+          try { member = await guild.members.fetch(targetId); } catch { member = null; }
+          return interaction.editReply(StatsView.renderToi(stats, member, guild, badges));
+        }
+
+        if (ctx === 'rank') {
+          const top = await getTopMembers(guild.id, 10);
+          return interaction.editReply(await StatsView.renderRank(top, guild));
+        }
+
+        if (ctx === 'server') {
+          const [stats, top] = await Promise.all([
+            getServerStats(guild.id),
+            getTopMembers(guild.id, 5),
+          ]);
+          return interaction.editReply(StatsView.renderServerStats(stats, top, guild));
+        }
+
+        if (ctx === 'lichsu') {
+          const targetId = _readUid(interaction) ?? interaction.user.id;
+          const records = await getAttendancesByUser(guild.id, targetId);
+          // Giữ nguyên trang hiện tại
+          let currentPage = 0;
+          try {
+            const footer = interaction.message?.embeds?.[0]?.footer?.text ?? '';
+            const m = footer.match(/Trang (\d+)\/(\d+)/);
+            if (m) currentPage = parseInt(m[1], 10) - 1;
+          } catch { /* keep 0 */ }
+          return interaction.editReply(StatsView.renderLichSu(records, targetId, guild, currentPage));
+        }
+
+        // ctx === 'menu' hoặc không nhận ra → về menu
+        return interaction.editReply(StatsView.renderStatsMenu());
+      } catch (e) {
+        log.error('SETUP_STATS_REFRESH', guild.id, 'refresh thất bại ctx=%s: %s', ctx, e.message);
+        return interaction.editReply({ content: '❌ Không thể làm mới, thử lại sau.' });
+      }
     }
   }
 }

@@ -1,11 +1,12 @@
 // src/interaction-handlers/setup/setupMembers.js
 // Handles: setup:mem (entry), pagination PAGE_NEXT/PAGE_PREV, REFRESH, ADD, REMOVE, EDIT, RESET
+// [FIX-PATH] ../../../services/ (3 cấp từ src/interaction-handlers/setup/)
 'use strict';
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const { MessageFlags, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } = require('discord.js');
-const { getMembers, deleteMember } = require('../../../../services/memberService.js');
-const { requireAdmin } = require('../../../../utils/permissions.js');
-const log = require('../../../../utils/logger.js');
+const { getMembers, deleteMember } = require('../../../services/memberService.js');
+const { requireAdmin } = require('../../../utils/permissions.js');
+const log = require('../../../utils/logger.js');
 const { MemberView } = require('../../commands/setup/_views/_MemberView.js');
 const { CUSTOM_ID } = MemberView;
 

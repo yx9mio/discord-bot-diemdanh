@@ -1,10 +1,10 @@
 // src/interaction-handlers/setup/setupStatsLichsu.js
-// [FIX] Đọc targetUserId từ footer `uid:XXXXXXX`
-// [FIX-PATH] ../../../../services/ và ../../../../utils/
+// [FIX-PATH] ../../../services/ (3 cấp, không phải 4)
+// [FIX] Đọc targetUserId từ footer `uid:XXXXXXX` để phân trang đúng khi admin xem người khác
 'use strict';
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
-const { getAttendancesByUser } = require('../../../../services/attendanceService.js');
-const log = require('../../../../utils/logger.js');
+const { getAttendancesByUser } = require('../../../services/attendanceService.js');
+const log = require('../../../utils/logger.js');
 const { StatsView } = require('../../commands/setup/_views/_StatsView.js');
 
 const LICHSU_PREV = 'setup:stats:lichsu:prev';
@@ -25,6 +25,7 @@ class SetupStatsLichsuHandler extends InteractionHandler {
     await interaction.deferUpdate();
     const { guild, customId } = interaction;
 
+    // Đọc trang hiện tại từ footer
     let currentPage = 0;
     try {
       const footer = interaction.message?.embeds?.[0]?.footer?.text ?? '';
@@ -32,6 +33,8 @@ class SetupStatsLichsuHandler extends InteractionHandler {
       if (match) currentPage = parseInt(match[1], 10) - 1;
     } catch { /* fallback page 0 */ }
 
+    // [FIX] Đọc uid: từ footer thay vì luôn dùng interaction.user.id
+    // Điều này quan trọng khi admin đang xem lịch sử của người khác
     let targetUserId = interaction.user.id;
     try {
       const footer = interaction.message?.embeds?.[0]?.footer?.text ?? '';

@@ -1,12 +1,12 @@
 // src/interaction-handlers/setup/setupMemberAddModal.js
 // Handles: setup:mem:add:modal (ModalSubmit)
-// [FIX-PATH] ../../../ → ../../../../
+// [FIX-PATH] ../../../services/ (3 cấp từ src/interaction-handlers/setup/)
 'use strict';
 const { MessageFlags } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
-const memberService = require('../../../../services/memberService.js');
-const log = require('../../../../utils/logger.js');
-const { requireAdmin } = require('../../../../utils/permissions.js');
+const memberService = require('../../../services/memberService.js');
+const log = require('../../../utils/logger.js');
+const { requireAdmin } = require('../../../utils/permissions.js');
 const { MemberView } = require('../../commands/setup/_views/_MemberView.js');
 
 const MODAL_ID = 'setup:mem:add:modal';

@@ -1,10 +1,10 @@
-// interaction-handlers/setup/setupConfig.js
+// src/interaction-handlers/setup/setupConfig.js
 // Handles: setup:cfg (mở Config view), setup:cfg:refresh
-// [FIX-PATH] ../../../ → ../../../../
-// [FIX-DEFER] thêm deferUpdate trước ConfigView.handleRefresh
+// [FIX-PATH] ../../../services/ (3 cấp từ src/interaction-handlers/setup/)
+// [FIX-DEFER] deferUpdate trước ConfigView.handleRefresh
 'use strict';
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
-const { getGuildConfig } = require('../../../../services/configService.js');
+const { getGuildConfig } = require('../../../services/configService.js');
 const { ConfigView } = require('../../commands/setup/_views/_ConfigView.js');
 const { CUSTOM_ID } = ConfigView;
 
