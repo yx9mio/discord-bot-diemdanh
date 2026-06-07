@@ -29,10 +29,32 @@ function upsertMember({ guildId, userId, phongBan = null, ghiChu = null, usernam
 
 // ─── Member Stats ─────────────────────────────────────────────────────────────
 async function getMemberStats(guildId, userId) {
-  const { data, error } = await getClient()
-    .from('member_stats').select('*').eq('guild_id', guildId).eq('user_id', userId).maybeSingle();
-  _throwSupabase(error, 'getMemberStats');
-  return data;
+  const [statsRes, attRes] = await Promise.all([
+    getClient()
+      .from('member_stats')
+      .select('*')
+      .eq('guild_id', guildId)
+      .eq('user_id', userId)
+      .maybeSingle(),
+    getClient()
+      .from('attendances')
+      .select('status, sessions!inner(cancelled)')
+      .eq('guild_id', guildId)
+      .eq('user_id', userId)
+      .eq('sessions.cancelled', false),
+  ]);
+  _throwSupabase(statsRes.error, 'getMemberStats');
+  _throwSupabase(attRes.error, 'getMemberStats.attendance');
+
+  const base = statsRes.data;
+  if (!base) return null;
+
+  const atts = attRes.data ?? [];
+  const total_late    = atts.filter(a => a.status === 'tre').length;
+  const total_absent  = atts.filter(a => a.status === 'khong_tham_gia').length;
+  const total_excused = atts.filter(a => a.status === 'co_phep').length;
+
+  return { ...base, total_late, total_absent, total_excused };
 }
 
 async function getMemberStatsMulti(guildId, userIds) {
