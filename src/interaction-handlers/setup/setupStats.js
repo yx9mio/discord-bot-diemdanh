@@ -1,7 +1,7 @@
 // src/interaction-handlers/setup/setupStats.js
-// [FIX-ROOT] Thêm 'setup:stats' (HomeView.CUSTOM_ID.STATS) vào parse() → mở menu thống kê
-// [FIX-PATH] src/interaction-handlers/setup/ → lên 3 cấp → root/services/ (không phải 4 cấp)
-// [FIX-REFRESH] Đọc ctx: từ footer để reload đúng view thay vì luôn về menu
+// [FIX] Đọc ctx: từ footer để reload đúng view khi REFRESH
+// [FIX] Đọc uid: từ footer để REFRESH "xem người khác" reload đúng target
+// [FIX] renderToi: truyền interaction.user.id làm viewerId → footer encode uid khi cần
 'use strict';
 const { ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, MessageFlags } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
@@ -23,7 +23,11 @@ function _readCtx(interaction) {
   } catch { return 'menu'; }
 }
 
-/** Đọc uid: từ footer (dùng cho REFRESH ở view lịch sử người khác) */
+/**
+ * [FIX] Đọc uid: từ footer
+ * Quan trọng khi admin đang xem stats hoặc lịch sử của người khác.
+ * renderToi() sẽ encode uid:${userId} vào footer khi viewerId !== userId.
+ */
 function _readUid(interaction) {
   try {
     const footer = interaction.message?.embeds?.[0]?.footer?.text ?? '';
@@ -85,7 +89,8 @@ class SetupStatsHandler extends InteractionHandler {
         ]);
         let member;
         try { member = await guild.members.fetch(interaction.user.id); } catch { member = null; }
-        return interaction.editReply(StatsView.renderToi(stats, member, guild, badges));
+        // [FIX] truyền viewerId = interaction.user.id (xem của chính mình → không encode uid)
+        return interaction.editReply(StatsView.renderToi(stats, member, guild, badges, interaction.user.id));
       } catch (e) {
         log.error('SETUP_STATS', guild.id, 'getMemberStats thất bại: %s', e.message);
         return interaction.editReply({ content: '❌ Không thể tải stats cá nhân, thử lại sau.' });
@@ -97,7 +102,6 @@ class SetupStatsHandler extends InteractionHandler {
       await interaction.deferUpdate();
       try {
         const top = await getTopMembers(guild.id, 10);
-        // renderRank là async (fetch uncached members)
         return interaction.editReply(await StatsView.renderRank(top, guild));
       } catch (e) {
         log.error('SETUP_STATS', guild.id, 'getTopMembers thất bại: %s', e.message);
@@ -143,7 +147,8 @@ class SetupStatsHandler extends InteractionHandler {
 
       try {
         if (ctx === 'toi') {
-          // Lấy uid từ footer nếu đây là xem người khác, fallback interaction.user.id
+          // [FIX] Lấy uid từ footer nếu đây là xem người khác
+          // renderToi() chỉ encode uid khi viewerId !== userId
           const targetId = _readUid(interaction) ?? interaction.user.id;
           const [stats, badges] = await Promise.all([
             getMemberStats(guild.id, targetId),
@@ -151,7 +156,9 @@ class SetupStatsHandler extends InteractionHandler {
           ]);
           let member;
           try { member = await guild.members.fetch(targetId); } catch { member = null; }
-          return interaction.editReply(StatsView.renderToi(stats, member, guild, badges));
+          // [FIX] Truyền viewerId để footer tiếp tục encode uid nếu đang xem người khác
+          const viewerId = targetId !== interaction.user.id ? interaction.user.id : targetId;
+          return interaction.editReply(StatsView.renderToi(stats, member, guild, badges, viewerId));
         }
 
         if (ctx === 'rank') {

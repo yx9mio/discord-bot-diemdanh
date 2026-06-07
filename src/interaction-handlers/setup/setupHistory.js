@@ -1,11 +1,11 @@
-// interaction-handlers/setup/setupHistory.js
+// src/interaction-handlers/setup/setupHistory.js
 // Handles: setup:history, PAGE_NEXT, PAGE_PREV, REFRESH
-// [FIX-PATH] ../../../ → ../../../../
-// [FIX-METHOD] getAllSessions → getSessions
+// [FIX-PATH] '../../../services/' (3 cấp = root, không phải 4 cấp)
+// [FIX-METHOD] getSessions thay vì getAllSessions
 'use strict';
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const { HistoryView } = require('../../commands/setup/_views/_HistoryView.js');
-const sessionService = require('../../../../services/sessionService.js');
+const sessionService = require('../../../services/sessionService.js');
 
 const { CUSTOM_ID } = HistoryView;
 
@@ -43,7 +43,7 @@ class SetupHistoryHandler extends InteractionHandler {
       cid === CUSTOM_ID.PAGE_PREV ? Math.max(0, currentPage - 1) :
       0;
 
-    // [FIX-METHOD] getSessions (không phải getAllSessions)
+    // [FIX-METHOD] getSessions (tên đúng trong sessionService)
     const sessions = await sessionService.getSessions(guild.id).catch(() => []);
     return interaction.editReply(HistoryView.render({ sessions, page, guild }));
   }

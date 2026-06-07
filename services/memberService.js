@@ -49,7 +49,7 @@ async function getMemberStats(guildId, userId) {
   const base = statsRes.data;
   if (!base) return null;
 
-  const atts = attRes.data ?? [];
+  const atts          = attRes.data ?? [];
   const total_late    = atts.filter(a => a.status === 'tre').length;
   const total_absent  = atts.filter(a => a.status === 'khong_tham_gia').length;
   const total_excused = atts.filter(a => a.status === 'co_phep').length;
@@ -84,7 +84,7 @@ async function upsertMemberStats(payload) {
 
 async function batchUpsertMemberStats(guildId, patches) {
   if (!patches?.length) return;
-  const rows = patches.map(p => ({ ...p, guild_id: guildId }));
+  const rows = patches.map(p => ({ guild_id: guildId, ...p }));
   const { error } = await getClient()
     .from('member_stats').upsert(rows, { onConflict: 'guild_id,user_id' });
   _throwSupabase(error, 'batchUpsertMemberStats');
@@ -98,7 +98,7 @@ async function resetStreak(guildId, userId) {
   _throwSupabase(error, 'resetStreak');
 }
 
-// [FIX-BUG3] Reset streak toàn bộ members trong 1 query thay vì N queries
+// [FIX] Reset streak toàn bộ members trong 1 query thay vì N queries
 async function batchResetStreak(guildId, userIds) {
   if (!userIds?.length) return;
   const { error } = await getClient()
@@ -117,22 +117,26 @@ async function getTopMembers(guildId, limit = 10) {
   return data ?? [];
 }
 
-// [UPG] getServerStats: trả về breakdown đầy đủ 4 trạng thái thay vì chỉ rate_present
+/**
+ * [FIX] getServerStats: dùng data.length thay vì .count để tránh Supabase count quirk
+ * khi select có cột cụ thể và head:false.
+ * Trả về breakdown đầy đủ 4 trạng thái (present/late/absent/excused) + rates.
+ */
 async function getServerStats(guildId) {
   const [sessionsRes, membersRes, attRes] = await Promise.all([
-    getClient().from('sessions').select('id, cancelled', { count: 'exact', head: false })
+    getClient().from('sessions').select('id')
       .eq('guild_id', guildId).eq('cancelled', false),
-    getClient().from('members').select('user_id', { count: 'exact', head: false })
+    getClient().from('members').select('user_id')
       .eq('guild_id', guildId),
-    getClient().from('attendances').select('status', { count: 'exact', head: false })
+    getClient().from('attendances').select('status')
       .eq('guild_id', guildId),
   ]);
   _throwSupabase(sessionsRes.error, 'getServerStats.sessions');
   _throwSupabase(membersRes.error, 'getServerStats.members');
   _throwSupabase(attRes.error, 'getServerStats.attendances');
 
-  const totalSessions = sessionsRes.count ?? (sessionsRes.data?.length ?? 0);
-  const totalMembers  = membersRes.count  ?? (membersRes.data?.length  ?? 0);
+  const totalSessions = sessionsRes.data?.length  ?? 0;
+  const totalMembers  = membersRes.data?.length   ?? 0;
   const atts          = attRes.data ?? [];
   const totalAtt      = atts.length;
 
@@ -141,7 +145,8 @@ async function getServerStats(guildId) {
   const absent  = atts.filter(a => a.status === 'khong_tham_gia').length;
   const excused = atts.filter(a => a.status === 'co_phep').length;
 
-  const totalPresent = present + late; // tham gia + trễ đều tính là có mặt
+  // tham_gia + trễ đều được tính là có mặt cho tỉ lệ tổng
+  const totalPresent = present + late;
 
   return {
     total_sessions:    totalSessions,
@@ -217,7 +222,6 @@ module.exports = {
   getMemberStats, getMemberStatsMulti, getAllMemberStats,
   upsertMemberStats, batchUpsertMemberStats, resetStreak, batchResetStreak,
   getTopMembers, getServerStats,
-  getBadgeDefinitions, getUserBadges, upsertUserBadge,
-  getBadges, getMemberBadges, upsertMemberBadge,
-  getMemberBadgesMulti, batchUpsertUserBadges,
+  getBadgeDefinitions, getBadges, getUserBadges, upsertUserBadge,
+  getMemberBadges, upsertMemberBadge, getMemberBadgesMulti, batchUpsertUserBadges,
 };
