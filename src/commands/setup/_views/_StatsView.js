@@ -1,6 +1,9 @@
 // src/commands/setup/_views/_StatsView.js
 // [FIX] renderLichSu: embed targetUserId vào footer để setupStatsLichsu.js parse đúng
 // [FIX] renderServerStats: nhận tham số `top` và hiển thị breakdown 4 trạng thái đầy đủ
+// [FIX] Encode ctx:<view> vào tất cả footers để REFRESH reload đúng view (sync main@5509e8d)
+// [FIX] renderLichSu navRow: thêm REFRESH button
+// [FIX] renderRank: async + guild.members.fetch() cho uncached users
 // [UPG] renderToi: thêm total_absent, total_late từ stats
 // [UPG] renderLichSu: tăng limit 200 + hiển thị rõ hơn per-status
 // [UPG] renderRank: hiển thị phòng ban + % tỉ lệ
@@ -28,6 +31,22 @@ const BADGE_THRESHOLDS = [
   { threshold: 5,   label: 'Lính Mới',       emoji: '⭐' },
 ];
 
+// ─── ctx helpers (sync với main@5509e8d) ─────────────────────────────
+// Encode "ctx:<key>" vào footer để setupStats.js REFRESH reload đúng view.
+const CTX = {
+  MENU:   'menu',
+  TOI:    'toi',
+  RANK:   'rank',
+  SERVER: 'server',
+  LICHSU: 'lichsu',
+};
+
+function _footer(ctx, extra = '') {
+  const parts = [FOOTER_DEFAULT, `ctx:${ctx}`];
+  if (extra) parts.push(extra);
+  return parts.join(' · ');
+}
+
 // ─── Nav row dùng chung ───────────────────────────────────────────────
 function _navRow() {
   return new ActionRowBuilder().addComponents(
@@ -50,7 +69,7 @@ function renderStatsMenu() {
       `**🔍 Xem người khác** — Tra cứu thống kê bất kỳ thành viên`,
       `**${ICONS.CHART} Server** — Tổng quan toàn server`,
     ].join('\n'))
-    .setFooter({ text: FOOTER_DEFAULT })
+    .setFooter({ text: _footer(CTX.MENU) })
     .setTimestamp();
 
   const menuRow = new ActionRowBuilder().addComponents(
@@ -76,8 +95,6 @@ function renderToi(stats, member, guild, badges) {
   const bar     = buildRichProgressBar(pct);
 
   // [UPG] Tính absent + late từ total_sessions - total_joined nếu service chưa cung cấp riêng
-  // member_stats lưu total_joined (tham_gia + tre) và total_sessions
-  // late & absent ước tính từ attendanceService nếu cần; hiện dùng field nếu có
   const late   = stats?.total_late   ?? null;
   const absent = stats?.total_absent ?? (total > 0 ? total - joined : null);
 
@@ -115,7 +132,8 @@ function renderToi(stats, member, guild, badges) {
       total > 0 ? `\`${bar}\`` : null,
     ].filter(Boolean).join('\n'))
     .addFields(...fields)
-    .setFooter({ text: FOOTER_DEFAULT })
+    // [FIX] Encode ctx:toi để REFRESH reload đúng view này
+    .setFooter({ text: _footer(CTX.TOI) })
     .setTimestamp();
 
   if (typeof member?.displayAvatarURL === 'function') {
@@ -127,15 +145,24 @@ function renderToi(stats, member, guild, badges) {
 }
 
 // ─── Bảng xếp hạng ───────────────────────────────────────────────────
-function renderRank(rows, guild, topN = 10) {
+// [FIX] async để fetch uncached members → tránh hiển thị <@id>
+async function renderRank(rows, guild, topN = 10) {
   const medals = ['🥇', '🥈', '🥉'];
 
   if (!rows?.length) {
     return {
       embeds: [new EmbedBuilder().setColor(COLORS.GOLD).setTitle(`${ICONS.TROPHY} Bảng xếp hạng`)
-        .setDescription('> _Chưa có dữ liệu._').setFooter({ text: FOOTER_DEFAULT }).setTimestamp()],
+        .setDescription('> _Chưa có dữ liệu._')
+        // [FIX] Encode ctx:rank
+        .setFooter({ text: _footer(CTX.RANK) }).setTimestamp()],
       components: [_navRow()],
     };
+  }
+
+  // [FIX] Fetch uncached members trước khi render
+  const uncached = rows.filter(r => !guild?.members?.cache?.has(r.user_id)).map(r => r.user_id);
+  if (uncached.length && guild) {
+    await guild.members.fetch({ user: uncached }).catch(() => null);
   }
 
   const lines = rows.slice(0, topN).map((r, i) => {
@@ -157,7 +184,8 @@ function renderRank(rows, guild, topN = 10) {
     embeds: [new EmbedBuilder().setColor(COLORS.GOLD)
       .setTitle(`${ICONS.TROPHY} Top ${Math.min(rows.length, topN)} — Bảng xếp hạng`)
       .setDescription(lines.join('\n\n'))
-      .setFooter({ text: FOOTER_DEFAULT }).setTimestamp()],
+      // [FIX] Encode ctx:rank
+      .setFooter({ text: _footer(CTX.RANK) }).setTimestamp()],
     components: [_navRow()],
   };
 }
@@ -185,7 +213,9 @@ function renderLichSu(records, userId, guild, page = 0) {
   if (!total) {
     return {
       embeds: [new EmbedBuilder().setColor(COLORS.PRIMARY).setTitle(`📋 Lịch sử — ${name}`)
-        .setDescription('> _Chưa có điểm danh nào._').setFooter({ text: FOOTER_DEFAULT }).setTimestamp()],
+        .setDescription('> _Chưa có điểm danh nào._')
+        // [FIX] Encode ctx:lichsu + uid để REFRESH reload đúng
+        .setFooter({ text: _footer(CTX.LICHSU, `uid:${userId}`) }).setTimestamp()],
       components: [_navRow()],
     };
   }
@@ -211,14 +241,16 @@ function renderLichSu(records, userId, guild, page = 0) {
     return `\`${String(start + i + 1).padStart(2)}.\` ${s.emoji} **${sessionName}** · ${time}`;
   });
 
+  // [FIX] navRow: prev/next + REFRESH + BACK_HOME (trước thiếu REFRESH)
   const navRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId('setup:stats:lichsu:prev').setLabel('◄ Trang trước').setStyle(ButtonStyle.Secondary).setDisabled(cPage === 0),
     new ButtonBuilder().setCustomId('setup:stats:lichsu:next').setLabel('Trang sau ►').setStyle(ButtonStyle.Secondary).setDisabled(cPage >= totalPages - 1),
+    new ButtonBuilder().setCustomId(CUSTOM_ID.REFRESH).setLabel('Làm mới').setEmoji(ICONS.REFRESH).setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId(CUSTOM_ID.BACK_HOME).setLabel('← Dashboard').setEmoji(ICONS.HOME).setStyle(ButtonStyle.Secondary),
   );
 
-  // [FIX] Nhúng userId vào footer để setupStatsLichsu.js parse đúng khi admin xem người khác
-  const footerText = `${FOOTER_DEFAULT} · uid:${userId} · Trang ${cPage + 1}/${totalPages} · Tổng ${total} lần`;
+  // [FIX] Footer encode ctx:lichsu + uid + trang để REFRESH & pagination đọc đúng người và view
+  const footerText = _footer(CTX.LICHSU, `uid:${userId} · Trang ${cPage + 1}/${totalPages} · Tổng ${total} lần`);
 
   return {
     embeds: [new EmbedBuilder().setColor(COLORS.PRIMARY)
@@ -267,7 +299,8 @@ function renderServerStats(stats, top, guild) {
       { name: '👥 Thành viên',                  value: `**${members}** người`, inline: true },
       { name: `${ICONS.ATTEND_YES} Điểm danh`, value: `**${attends}** lượt`,  inline: true },
     )
-    .setFooter({ text: FOOTER_DEFAULT })
+    // [FIX] Encode ctx:server để REFRESH reload đúng view này
+    .setFooter({ text: _footer(CTX.SERVER) })
     .setTimestamp();
 
   // [UPG] Breakdown chi tiết nếu service trả về
@@ -306,7 +339,8 @@ function renderXemInput() {
     .setColor(COLORS.PRIMARY)
     .setTitle('🔍 Xem điểm danh người khác')
     .setDescription('Nhập **User ID** hoặc **@mention** vào modal.')
-    .setFooter({ text: FOOTER_DEFAULT })
+    // [FIX] Encode ctx:menu để REFRESH về menu
+    .setFooter({ text: _footer(CTX.MENU) })
     .setTimestamp();
 
   return { embeds: [embed], components: [_navRow()] };
