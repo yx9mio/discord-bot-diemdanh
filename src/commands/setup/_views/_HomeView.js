@@ -30,6 +30,23 @@ function _phaiRoles(cfg) {
   return ids.map(id => `<@&${id}>`).join(' ');
 }
 
+function _buildStatusBanner(cfg, members) {
+  const steps = [];
+  const hasChannel = !!cfg?.notification_channel_id;
+  const hasMembers = (members?.length ?? 0) > 0;
+
+  steps.push(`${hasChannel ? '✅' : '⬜'} **Cài đặt chung** — chọn kênh log + timezone`);
+  steps.push(`${hasMembers ? '✅' : '⬜'} **Thành viên** — thêm người vào hệ thống`);
+  steps.push(`📌 **Lịch cố định** — (tùy chọn) tạo lịch tự động`);
+
+  const done = steps.every(s => s.startsWith('✅'));
+  const header = done
+    ? `**🎉 Sẵn sàng!** Nhấn **${ICONS.PLUS} Mở phiên mới** để bắt đầu.`
+    : '**📋 Bắt đầu nhanh:**';
+
+  return [`${header}`, ...steps.map(s => `▸ ${s}`)].join('\n');
+}
+
 function render({ guild, cfg, schedules, members, session, sessions }) {
   const phaiText = _phaiRoles(cfg);
 
@@ -49,6 +66,13 @@ function render({ guild, cfg, schedules, members, session, sessions }) {
     embed.setThumbnail(phaiRole.iconURL({ size: 64 }));
   } else {
     embed.setThumbnail(guild.iconURL({ size: 64 }) ?? null);
+  }
+
+  const hasChannel = !!cfg?.notification_channel_id;
+  const hasMembers = (members?.length ?? 0) > 0;
+
+  if (!hasChannel || !hasMembers) {
+    embed.addFields({ name: '📋 Bắt đầu nhanh', value: _buildStatusBanner(cfg, members) });
   }
 
   const cnt = activeSessions.length;
@@ -99,9 +123,9 @@ function render({ guild, cfg, schedules, members, session, sessions }) {
   });
 
   const navRow = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId(CUSTOM_ID.CFG).setLabel('Cài đặt').setEmoji(ICONS.GEAR).setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(CUSTOM_ID.CFG).setLabel('Cài đặt').setEmoji(ICONS.GEAR).setStyle(hasChannel ? ButtonStyle.Secondary : ButtonStyle.Primary),
     new ButtonBuilder().setCustomId(CUSTOM_ID.SCH).setLabel('Lịch cố định').setEmoji(ICONS.CALENDAR).setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId(CUSTOM_ID.MEM).setLabel('Thành viên').setEmoji(ICONS.MEMBER).setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(CUSTOM_ID.MEM).setLabel('Thành viên').setEmoji(ICONS.MEMBER).setStyle(hasMembers ? ButtonStyle.Secondary : ButtonStyle.Primary),
     new ButtonBuilder().setCustomId(CUSTOM_ID.HISTORY).setLabel('Nhật ký').setEmoji(ICONS.CHART).setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId(CUSTOM_ID.STATS).setLabel('Thống kê').setEmoji(ICONS.TROPHY).setStyle(ButtonStyle.Secondary),
   );
