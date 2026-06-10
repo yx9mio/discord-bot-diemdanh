@@ -12,9 +12,9 @@ const {
   MessageFlags,
 } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
-const memberService = require('../../services/memberService.js');
-const log = require('../../utils/logger.js');
-const { requireAdmin } = require('../../utils/permissions.js');
+const memberService = require('../../../services/memberService.js');
+const log = require('../../../utils/logger.js');
+const { requireAdmin } = require('../../../utils/permissions.js');
 const { MemberView } = require('../../commands/setup/_views/_MemberView.js');
 const { CUSTOM_ID } = MemberView;
 

@@ -5,9 +5,9 @@
 'use strict';
 const { ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, MessageFlags } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
-const { getMemberStats, getMemberBadges, getTopMembers, getServerStats } = require('../../services/memberService.js');
-const { getAttendancesByUser } = require('../../services/attendanceService.js');
-const log = require('../../utils/logger.js');
+const { getMemberStats, getMemberBadges, getTopMembers, getServerStats } = require('../../../services/memberService.js');
+const { getAttendancesByUser } = require('../../../services/attendanceService.js');
+const log = require('../../../utils/logger.js');
 const { StatsView } = require('../../commands/setup/_views/_StatsView.js');
 const { CUSTOM_ID } = StatsView;
 

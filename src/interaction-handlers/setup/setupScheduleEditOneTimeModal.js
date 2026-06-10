@@ -3,11 +3,11 @@
 'use strict';
 const { MessageFlags, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
-const scheduledService = require('../../services/scheduledService.js');
-const configService    = require('../../services/configService.js');
-const log = require('../../utils/logger.js');
+const scheduledService = require('../../../services/scheduledService.js');
+const configService    = require('../../../services/configService.js');
+const log = require('../../../utils/logger.js');
 const { CUSTOM_ID: SCH_CUSTOM_ID } = require('../../commands/setup/_views/_ScheduleView.js');
-const { requireAdmin } = require('../../utils/permissions.js');
+const { requireAdmin } = require('../../../utils/permissions.js');
 
 const EDIT_PREFIX = 'setup:sch:edit:';
 

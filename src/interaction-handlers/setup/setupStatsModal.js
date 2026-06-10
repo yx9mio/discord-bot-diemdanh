@@ -5,8 +5,8 @@
 'use strict';
 const { MessageFlags } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
-const { getMemberStats, getMemberBadges } = require('../../services/memberService.js');
-const log = require('../../utils/logger.js');
+const { getMemberStats, getMemberBadges } = require('../../../services/memberService.js');
+const log = require('../../../utils/logger.js');
 const { StatsView } = require('../../commands/setup/_views/_StatsView.js');
 
 const MODAL_ID = 'setup:stats:xem:modal';

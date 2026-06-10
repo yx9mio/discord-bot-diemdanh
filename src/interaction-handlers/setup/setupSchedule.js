@@ -4,12 +4,12 @@
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags,
         ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
-const scheduledService = require('../../services/scheduledService.js');
-const log = require('../../utils/logger.js');
+const scheduledService = require('../../../services/scheduledService.js');
+const log = require('../../../utils/logger.js');
 const { ScheduleView } = require('../../commands/setup/_views/_ScheduleView.js');
 const { MODAL_RECURRING_ID, MODAL_ONETIME_ID } = require('./setupScheduleAddDetailModal.js');
 const { CUSTOM_ID } = ScheduleView;
-const { requireAdmin } = require('../../utils/permissions.js');
+const { requireAdmin } = require('../../../utils/permissions.js');
 
 class SetupScheduleHandler extends InteractionHandler {
   constructor(ctx, options) {

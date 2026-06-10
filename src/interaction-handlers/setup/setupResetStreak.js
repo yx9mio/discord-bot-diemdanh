@@ -4,9 +4,9 @@
 // [FIX-3] parse(): đặt check cụ thể (reset:all, confirm, cancel) TRƯỚC startsWith(RESET_PREFIX)
 const { MessageFlags, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
-const memberService = require('../../services/memberService.js');
-const { requireAdmin } = require('../../utils/permissions.js');
-const log = require('../../utils/logger.js');
+const memberService = require('../../../services/memberService.js');
+const { requireAdmin } = require('../../../utils/permissions.js');
+const log = require('../../../utils/logger.js');
 
 const RESET_PREFIX   = 'setup:mem:reset:';
 const CONFIRM_PREFIX = 'setup:mem:reset:confirm:';

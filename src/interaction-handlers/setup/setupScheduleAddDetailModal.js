@@ -5,11 +5,11 @@
 'use strict';
 const { MessageFlags } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
-const scheduledService = require('../../services/scheduledService.js');
-const configService    = require('../../services/configService.js');
-const log = require('../../utils/logger.js');
+const scheduledService = require('../../../services/scheduledService.js');
+const configService    = require('../../../services/configService.js');
+const log = require('../../../utils/logger.js');
 const { CUSTOM_ID } = require('./setupScheduleAddTypeModal.js');
-const { requireAdmin } = require('../../utils/permissions.js');
+const { requireAdmin } = require('../../../utils/permissions.js');
 
 const MODAL_RECURRING = 'setup:sch:add:recurring:detail';
 const MODAL_ONETIME   = 'setup:sch:add:onetime:detail';

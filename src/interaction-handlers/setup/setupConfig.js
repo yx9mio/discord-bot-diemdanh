@@ -4,7 +4,7 @@
 // [FIX-DEFER] deferUpdate thay vì deferReply
 'use strict';
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
-const { getGuildConfig } = require('../../services/configService.js');
+const { getGuildConfig } = require('../../../services/configService.js');
 const { ConfigView } = require('../../commands/setup/_views/_ConfigView.js');
 const { CUSTOM_ID } = ConfigView;
 

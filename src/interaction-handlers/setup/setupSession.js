@@ -3,9 +3,9 @@
 // [FIX-PATH] ../../../ → ../../../../
 'use strict';
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
-const sessionService = require('../../services/sessionService.js');
-const { getGuildConfig } = require('../../services/configService.js');
-const { getMembers } = require('../../services/memberService.js');
+const sessionService = require('../../../services/sessionService.js');
+const { getGuildConfig } = require('../../../services/configService.js');
+const { getMembers } = require('../../../services/memberService.js');
 
 const SESSION_ENTRY_ID = 'setup:session';
 
