@@ -9,7 +9,6 @@ const {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
-  MessageFlags,
 } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const memberService = require('../../../services/memberService.js');
@@ -80,18 +79,16 @@ class SetupMemberHandler extends InteractionHandler {
 
     // ── Thêm thành viên ───────────────────────────────────────────────
     if (customId === CUSTOM_ID.ADD) {
-      if (!requireAdmin(interaction)) {
-        return interaction.reply({ content: '⛔ Chỉ admin mới dùng được.', flags: MessageFlags.Ephemeral });
-      }
+      const { ok } = await requireAdmin(interaction, { context: 'thêm thành viên', deferred: false });
+      if (!ok) return;
       const { MemberView: MV } = require('../../commands/setup/_views/_MemberView.js');
       return interaction.showModal(MV.buildAddModal());
     }
 
     // ── Sửa thành viên ────────────────────────────────────────────────
     if (customId.startsWith(CUSTOM_ID.EDIT_PREFIX)) {
-      if (!requireAdmin(interaction)) {
-        return interaction.reply({ content: '⛔ Chỉ admin mới dùng được.', flags: MessageFlags.Ephemeral });
-      }
+      const { ok } = await requireAdmin(interaction, { context: 'sửa thành viên', deferred: false });
+      if (!ok) return;
       const userId = customId.slice(CUSTOM_ID.EDIT_PREFIX.length);
       const member = await memberService.getMember(guild.id, userId);
       const { MemberView: MV } = require('../../commands/setup/_views/_MemberView.js');
@@ -100,9 +97,8 @@ class SetupMemberHandler extends InteractionHandler {
 
     // ── Xoá thành viên (bước 1: confirm) ─────────────────────────────
     if (customId.startsWith(CUSTOM_ID.DELETE_PREFIX) && !customId.startsWith(CUSTOM_ID.DELETE_CONFIRM_PREFIX) && !customId.startsWith(CUSTOM_ID.DELETE_CANCEL_PREFIX)) {
-      if (!requireAdmin(interaction)) {
-        return interaction.reply({ content: '⛔ Chỉ admin mới dùng được.', flags: MessageFlags.Ephemeral });
-      }
+      const { ok } = await requireAdmin(interaction, { context: 'xoá thành viên', deferred: false });
+      if (!ok) return;
       await interaction.deferUpdate();
       const userId = customId.slice(CUSTOM_ID.DELETE_PREFIX.length);
       const gMember = guild.members.cache.get(userId);
@@ -120,9 +116,8 @@ class SetupMemberHandler extends InteractionHandler {
 
     // ── Xoá thành viên (bước 2: thực hiện) ───────────────────────────
     if (customId.startsWith(CUSTOM_ID.DELETE_CONFIRM_PREFIX)) {
-      if (!requireAdmin(interaction)) {
-        return interaction.reply({ content: '⛔ Chỉ admin mới dùng được.', flags: MessageFlags.Ephemeral });
-      }
+      const { ok } = await requireAdmin(interaction, { context: 'xoá thành viên', deferred: false });
+      if (!ok) return;
       await interaction.deferUpdate();
       const userId = customId.slice(CUSTOM_ID.DELETE_CONFIRM_PREFIX.length);
       try {
@@ -144,9 +139,8 @@ class SetupMemberHandler extends InteractionHandler {
 
     // ── Reset streak ──────────────────────────────────────────────────
     if (customId.startsWith(CUSTOM_ID.STREAK_RESET_PREFIX)) {
-      if (!requireAdmin(interaction)) {
-        return interaction.reply({ content: '⛔ Chỉ admin mới dùng được.', flags: MessageFlags.Ephemeral });
-      }
+      const { ok } = await requireAdmin(interaction, { context: 'reset streak', deferred: false });
+      if (!ok) return;
       await interaction.deferUpdate();
       const userId = customId.slice(CUSTOM_ID.STREAK_RESET_PREFIX.length);
       try {

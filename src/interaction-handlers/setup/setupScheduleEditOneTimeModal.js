@@ -22,9 +22,8 @@ class SetupScheduleEditOneTimeModalHandler extends InteractionHandler {
   }
 
   async run(interaction) {
-    if (!requireAdmin(interaction)) {
-      return interaction.reply({ content: '⛔ Chỉ admin mới dùng được.', flags: MessageFlags.Ephemeral });
-    }
+    const { ok } = await requireAdmin(interaction, { context: 'sửa lịch', deferred: false });
+    if (!ok) return;
 
     const scheduleId = interaction.customId.slice(EDIT_PREFIX.length);
     const { guild } = interaction;

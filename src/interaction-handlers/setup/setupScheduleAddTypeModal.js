@@ -21,10 +21,8 @@ class SetupScheduleAddTypeModalHandler extends InteractionHandler {
   }
 
   async run(interaction) {
-    if (!requireAdmin(interaction)) {
-      const { MessageFlags } = require('discord.js');
-      return interaction.reply({ content: '⛔ Chỉ admin mới dùng được.', flags: MessageFlags.Ephemeral });
-    }
+    const { ok } = await requireAdmin(interaction, { context: 'thêm lịch', deferred: false });
+    if (!ok) return;
 
     const modal = new ModalBuilder()
       .setCustomId(CUSTOM_ID.TYPE_MODAL)

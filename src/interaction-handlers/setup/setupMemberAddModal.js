@@ -2,7 +2,6 @@
 // Handles: setup:mem:add:modal (ModalSubmit)
 // [FIX-PATH] ../../../services/ (3 cấp từ src/interaction-handlers/setup/)
 'use strict';
-const { MessageFlags } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const memberService = require('../../../services/memberService.js');
 const log = require('../../../utils/logger.js');
@@ -22,9 +21,8 @@ class SetupMemberAddModalHandler extends InteractionHandler {
   }
 
   async run(interaction) {
-    if (!requireAdmin(interaction)) {
-      return interaction.reply({ content: '⛔ Chỉ admin mới dùng được.', flags: MessageFlags.Ephemeral });
-    }
+    const { ok } = await requireAdmin(interaction, { context: 'thêm thành viên', deferred: false });
+    if (!ok) return;
     await interaction.deferUpdate();
     const { guild } = interaction;
 

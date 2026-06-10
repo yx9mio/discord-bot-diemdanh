@@ -1,7 +1,6 @@
 'use strict';
 // interaction-handlers/setup/setupConfigEditSelect.js
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
-const { MessageFlags } = require('discord.js');
 const configService = require('../../../services/configService.js');
 const log = require('../../../utils/logger.js');
 const { requireAdmin } = require('../../../utils/permissions.js');
@@ -19,9 +18,8 @@ class SetupConfigEditSelectHandler extends InteractionHandler {
   }
 
   async run(interaction) {
-    if (!requireAdmin(interaction)) {
-      return interaction.reply({ content: '⛔ Chỉ admin mới dùng được.', flags: MessageFlags.Ephemeral });
-    }
+    const { ok } = await requireAdmin(interaction, { context: 'sửa cấu hình', deferred: false });
+    if (!ok) return;
     await interaction.deferUpdate();
     const field = interaction.customId.slice(SELECT_PREFIX.length);
     const value = interaction.values[0];
