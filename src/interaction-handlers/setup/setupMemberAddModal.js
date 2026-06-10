@@ -32,9 +32,9 @@ class SetupMemberAddModalHandler extends InteractionHandler {
     const ghiChu = interaction.fields.getTextInputValue('ghi_chu')?.trim() ?? '';
 
     try {
-      await memberService.upsertMember(guild.id, userId, { username, phong_ban: phongBan, ghi_chu: ghiChu });
+      await memberService.upsertMember({ guildId: guild.id, userId, username, phongBan, ghiChu });
       const members = await memberService.getMembers(guild.id);
-      return interaction.editReply(MemberView.render(members, guild, 0));
+      return interaction.editReply(MemberView.render({ members, guild, page: 0 }));
     } catch (e) {
       log.error('MEMBER_ADD', guild.id, 'Lỗi thêm %s: %s', userId, e.message);
       return interaction.editReply({ content: `❌ Không thể thêm thành viên: ${e.message}` });

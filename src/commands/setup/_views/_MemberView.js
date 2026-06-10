@@ -8,7 +8,6 @@ const {
 } = require('discord.js');
 const { COLORS, ICONS } = require('../../../../utils/theme.js');
 const { FOOTER_DEFAULT } = require('../../../../utils/embeds.js');
-const memberService = require('../../../../services/memberService.js');
 
 const CUSTOM_ID = {
   ADD:          'setup:mem:add',
@@ -70,11 +69,12 @@ function buildEditModal(userId, currentData = {}) {
 
 // ─── Render view ─────────────────────────────────────────────────────
 function render({ members, page = 0, guild }) {
-  const total      = members.length;
+  const safe      = Array.isArray(members) ? members : [];
+  const total      = safe.length;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const cPage      = Math.max(0, Math.min(page, totalPages - 1));
   const start      = cPage * PAGE_SIZE;
-  const slice      = members.slice(start, start + PAGE_SIZE);
+  const slice      = safe.slice(start, start + PAGE_SIZE);
   // [FIX] btnSlice = đúng 5 item của trang hiện tại
   const btnSlice   = slice.slice(0, BTN_LIMIT);
 
@@ -150,10 +150,4 @@ function render({ members, page = 0, guild }) {
   return { embeds: [embed], components, _page: cPage, _totalPages: totalPages };
 }
 
-async function handleRefresh(interaction, page = 0) {
-  await interaction.deferUpdate();
-  const members = await memberService.getMembers(interaction.guild.id);
-  return interaction.editReply(render({ members, page, guild: interaction.guild }));
-}
-
-module.exports = { MemberView: { render, handleRefresh, buildEditModal, CUSTOM_ID, PAGE_SIZE } };
+module.exports = { MemberView: { render, buildEditModal, CUSTOM_ID, PAGE_SIZE } };

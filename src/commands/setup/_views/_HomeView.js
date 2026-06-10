@@ -5,10 +5,6 @@ const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('
 const { COLORS, ICONS } = require('../../../../utils/theme.js');
 const { FOOTER_DEFAULT } = require('../../../../utils/embeds.js');
 const { DAY_NAMES: DAY_VI } = require('../../../../utils/format.js');
-const sessionService   = require('../../../../services/sessionService.js');
-const configService    = require('../../../../services/configService.js');
-const scheduledService = require('../../../../services/scheduledService.js');
-const memberService    = require('../../../../services/memberService.js');
 
 const CUSTOM_ID = {
   HOME:      'setup:home',
@@ -119,16 +115,4 @@ function render({ guild, cfg, schedules, members, session }) {
   return { embeds: [embed], components: [navRow, sessionRow] };
 }
 
-async function handleRefresh(interaction) {
-  await interaction.deferUpdate();
-  const guildId = interaction.guild.id;
-  const [cfg, schedules, members, session] = await Promise.all([
-    configService.getGuildConfig(guildId),
-    scheduledService.getScheduledSessions(guildId),
-    memberService.getMembers(guildId),
-    sessionService.getActiveSession(guildId),
-  ]);
-  return interaction.editReply(render({ guild: interaction.guild, cfg, schedules, members, session }));
-}
-
-module.exports = { HomeView: { render, handleRefresh, CUSTOM_ID } };
+module.exports = { HomeView: { render, CUSTOM_ID } };

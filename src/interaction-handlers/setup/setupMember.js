@@ -17,27 +17,12 @@ const { requireAdmin } = require('../../../utils/permissions.js');
 const { MemberView } = require('../../commands/setup/_views/_MemberView.js');
 const { CUSTOM_ID } = MemberView;
 
-const PAGE_SIZE = 10;
-
 class SetupMemberHandler extends InteractionHandler {
   constructor(ctx, options) {
     super(ctx, { ...options, interactionHandlerType: InteractionHandlerTypes.Button });
   }
 
   parse(interaction) {
-    const handled = new Set([
-      CUSTOM_ID.MEMBER,
-      CUSTOM_ID.PAGE_NEXT,
-      CUSTOM_ID.PAGE_PREV,
-      CUSTOM_ID.REFRESH,
-      CUSTOM_ID.ADD,
-      CUSTOM_ID.EDIT_PREFIX,
-      CUSTOM_ID.DELETE_PREFIX,
-      CUSTOM_ID.DELETE_CONFIRM_PREFIX,
-      CUSTOM_ID.DELETE_CANCEL_PREFIX,
-      CUSTOM_ID.STREAK_RESET_PREFIX,
-    ]);
-    // Prefix-based IDs
     if (
       interaction.customId === CUSTOM_ID.MEMBER ||
       interaction.customId === CUSTOM_ID.PAGE_NEXT ||
@@ -74,7 +59,7 @@ class SetupMemberHandler extends InteractionHandler {
       if (customId === CUSTOM_ID.PAGE_PREV) nextPage--;
 
       const members = await memberService.getMembers(guild.id);
-      return interaction.editReply(MemberView.render(members, guild, nextPage));
+      return interaction.editReply(MemberView.render({ members, guild, page: nextPage }));
     }
 
     // ── Thêm thành viên ───────────────────────────────────────────────
@@ -123,7 +108,7 @@ class SetupMemberHandler extends InteractionHandler {
       try {
         await memberService.removeMember(guild.id, userId);
         const members = await memberService.getMembers(guild.id);
-        return interaction.editReply(MemberView.render(members, guild, 0));
+        return interaction.editReply(MemberView.render({ members, guild, page: 0 }));
       } catch (e) {
         log.error('MEMBER_DELETE', guild.id, 'Lỗi xoá %s: %s', userId, e.message);
         return interaction.editReply({ content: `❌ Không thể xoá: ${e.message}` });
@@ -134,7 +119,7 @@ class SetupMemberHandler extends InteractionHandler {
     if (customId.startsWith(CUSTOM_ID.DELETE_CANCEL_PREFIX)) {
       await interaction.deferUpdate();
       const members = await memberService.getMembers(guild.id);
-      return interaction.editReply(MemberView.render(members, guild, 0));
+      return interaction.editReply(MemberView.render({ members, guild, page: 0 }));
     }
 
     // ── Reset streak ──────────────────────────────────────────────────
@@ -146,7 +131,7 @@ class SetupMemberHandler extends InteractionHandler {
       try {
         await memberService.resetStreak(guild.id, userId);
         const members = await memberService.getMembers(guild.id);
-        return interaction.editReply(MemberView.render(members, guild, 0));
+        return interaction.editReply(MemberView.render({ members, guild, page: 0 }));
       } catch (e) {
         log.error('MEMBER_STREAK_RESET', guild.id, 'Lỗi reset streak %s: %s', userId, e.message);
         return interaction.editReply({ content: `❌ Không thể reset streak: ${e.message}` });

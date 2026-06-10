@@ -21,7 +21,7 @@ class SetupConfigHandler extends InteractionHandler {
   async run(interaction) {
     await interaction.deferUpdate();
     const cfg = await getGuildConfig(interaction.guild.id);
-    return interaction.editReply(ConfigView.render(cfg));
+    return interaction.editReply(ConfigView.render({ cfg, guild: interaction.guild }));
   }
 }
 

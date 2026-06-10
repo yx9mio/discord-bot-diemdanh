@@ -6,7 +6,6 @@ const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('
 const { COLORS, ICONS } = require('../../../../utils/theme.js');
 const { FOOTER_DEFAULT } = require('../../../../utils/embeds.js');
 const { DAY_NAMES: DAY_VI } = require('../../../../utils/format.js');
-const scheduledService = require('../../../../services/scheduledService.js');
 
 const CUSTOM_ID = {
   ADD_R:       'setup:sch:add:r',
@@ -36,11 +35,12 @@ function _fmtSchedule(s) {
 }
 
 function render({ schedules, page = 0, guild }) {
-  const total      = schedules.length;
+  const safe      = Array.isArray(schedules) ? schedules : [];
+  const total      = safe.length;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const cPage      = Math.max(0, Math.min(page, totalPages - 1));
   const start      = cPage * PAGE_SIZE;
-  const slice      = schedules.slice(start, start + PAGE_SIZE);
+  const slice      = safe.slice(start, start + PAGE_SIZE);
 
   const desc = total === 0
     ? `*Chưa có lịch cố định nào.*\n> Bấm **+ Thêm hằng tuần** hoặc **+ Thêm một lần** để tạo.`
@@ -83,10 +83,4 @@ function render({ schedules, page = 0, guild }) {
   return { embeds: [embed], components, _page: cPage, _totalPages: totalPages };
 }
 
-async function handleRefresh(interaction, page = 0) {
-  await interaction.deferUpdate();
-  const schedules = await scheduledService.getScheduledSessions(interaction.guild.id);
-  return interaction.editReply(render({ schedules, page, guild: interaction.guild }));
-}
-
-module.exports = { ScheduleView: { render, handleRefresh, CUSTOM_ID, PAGE_SIZE } };
+module.exports = { ScheduleView: { render, CUSTOM_ID, PAGE_SIZE } };

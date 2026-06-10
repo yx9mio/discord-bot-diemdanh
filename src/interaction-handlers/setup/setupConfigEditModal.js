@@ -29,7 +29,7 @@ class SetupConfigEditModalHandler extends InteractionHandler {
       await configService.setConfigField(guildId, field, value);
       const cfg = await configService.getGuildConfig(guildId);
       const { ConfigView } = require('../../commands/setup/_views/_ConfigView.js');
-      return interaction.editReply(ConfigView.render(cfg));
+      return interaction.editReply(ConfigView.render({ cfg, guild: interaction.guild }));
     } catch (e) {
       log.error('CFG_EDIT_MODAL', guildId, 'Lỗi lưu field %s: %s', field, e.message);
       return interaction.editReply({ content: `❌ Không thể lưu cấu hình: ${e.message}` });

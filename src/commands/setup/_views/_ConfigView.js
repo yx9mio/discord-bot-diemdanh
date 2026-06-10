@@ -4,7 +4,6 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { COLORS, ICONS } = require('../../../../utils/theme.js');
 const { FOOTER_DEFAULT } = require('../../../../utils/embeds.js');
-const configService = require('../../../../services/configService.js');
 
 const CUSTOM_ID = {
   EDIT_CHANNEL:         'setup:cfg:edit:channel',
@@ -66,10 +65,4 @@ function render({ cfg, guild }) {
   return { embeds: [embed], components: [editRow, roleRow, navRow] };
 }
 
-async function handleRefresh(interaction) {
-  await interaction.deferUpdate();
-  const cfg = await configService.getGuildConfig(interaction.guild.id);
-  return interaction.editReply(render({ cfg, guild: interaction.guild }));
-}
-
-module.exports = { ConfigView: { render, handleRefresh, CUSTOM_ID } };
+module.exports = { ConfigView: { render, CUSTOM_ID } };
