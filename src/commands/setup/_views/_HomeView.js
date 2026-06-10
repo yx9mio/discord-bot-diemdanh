@@ -15,7 +15,6 @@ const CUSTOM_ID = {
   HISTORY:   'setup:history',
   BROADCAST: 'setup:session:broadcast',
   STATS:     'setup:stats',
-  INACTIVE:  'setup:inactive',
 };
 
 function _fmtSchedule(s) {
@@ -112,7 +111,6 @@ function render({ guild, cfg, schedules, members, session, sessions }) {
     new ButtonBuilder().setCustomId(CUSTOM_ID.SESSION).setLabel('Quản lý phiên').setEmoji(ICONS.SESSION).setStyle(cnt > 0 ? ButtonStyle.Primary : ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId(CUSTOM_ID.REFRESH).setLabel('Làm mới').setEmoji(ICONS.REFRESH).setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId(CUSTOM_ID.BROADCAST).setLabel('Phát tin').setEmoji(ICONS.BELL).setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId(CUSTOM_ID.INACTIVE).setLabel('Không hoạt động').setEmoji(ICONS.INACTIVE).setStyle(ButtonStyle.Secondary),
   );
 
   return { embeds: [embed], components: [navRow, actionRow] };

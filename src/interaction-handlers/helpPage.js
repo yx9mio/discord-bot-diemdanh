@@ -17,7 +17,7 @@ class HelpPageHandler extends InteractionHandler {
     return this.some();
   }
 
-  run(interaction) {
+  async run(interaction) {
     const audience = interaction.customId === CUSTOM_ID.ADMIN_PAGE ? 'admin' : 'user';
     return HelpCommand.render(audience, interaction);
   }
