@@ -10,15 +10,18 @@ const { COLORS, ICONS } = require('../../../../utils/theme.js');
 const { FOOTER_DEFAULT } = require('../../../../utils/embeds.js');
 
 const CUSTOM_ID = {
-  ADD:          'setup:mem:add',
-  PAGE_NEXT:    'setup:mem:page:next',
-  PAGE_PREV:    'setup:mem:page:prev',
-  DEL_PREFIX:   'setup:mem:del:',
-  EDIT_PREFIX:  'setup:mem:edit:',
-  RESET_PREFIX: 'setup:mem:reset:',
-  RESET_ALL:    'setup:mem:reset:all',
-  REFRESH:      'setup:mem:refresh',
-  BACK_HOME:    'setup:home',
+  ADD:                'setup:mem:add',
+  MEMBER:             'setup:mem',
+  PAGE_NEXT:          'setup:mem:page:next',
+  PAGE_PREV:          'setup:mem:page:prev',
+  DEL_PREFIX:         'setup:mem:del:',
+  DEL_CONFIRM_PREFIX: 'setup:mem:del:confirm:',
+  DEL_CANCEL_PREFIX:  'setup:mem:del:cancel:',
+  EDIT_PREFIX:        'setup:mem:edit:',
+  RESET_PREFIX:       'setup:mem:reset:',
+  RESET_ALL:          'setup:mem:reset:all',
+  REFRESH:            'setup:mem:refresh',
+  BACK_HOME:          'setup:home',
 };
 
 const PAGE_SIZE = 10;
@@ -63,6 +66,48 @@ function buildEditModal(userId, currentData = {}) {
           .setRequired(false)
           .setMaxLength(200)
           .setValue(currentData.ghi_chu ?? ''),
+      ),
+    );
+}
+
+// ─── Modal thêm thành viên ───────────────────────────────────────────
+function buildAddModal() {
+  return new ModalBuilder()
+    .setCustomId('setup:mem:add:modal')
+    .setTitle('Thêm thành viên')
+    .addComponents(
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('user_id')
+          .setLabel('ID người dùng (Discord ID)')
+          .setStyle(TextInputStyle.Short)
+          .setRequired(true)
+          .setMaxLength(30)
+          .setPlaceholder('Ví dụ: 123456789012345678'),
+      ),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('username')
+          .setLabel('Tên hiển thị')
+          .setStyle(TextInputStyle.Short)
+          .setRequired(false)
+          .setMaxLength(80),
+      ),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('phong_ban')
+          .setLabel('Phòng ban')
+          .setStyle(TextInputStyle.Short)
+          .setRequired(false)
+          .setMaxLength(60),
+      ),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('ghi_chu')
+          .setLabel('Ghi chú')
+          .setStyle(TextInputStyle.Paragraph)
+          .setRequired(false)
+          .setMaxLength(200),
       ),
     );
 }
@@ -150,4 +195,4 @@ function render({ members, page = 0, guild }) {
   return { embeds: [embed], components, _page: cPage, _totalPages: totalPages };
 }
 
-module.exports = { MemberView: { render, buildEditModal, CUSTOM_ID, PAGE_SIZE } };
+module.exports = { MemberView: { render, buildAddModal, buildEditModal, CUSTOM_ID, PAGE_SIZE } };

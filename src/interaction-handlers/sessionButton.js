@@ -16,8 +16,8 @@ const {
   buildSessionActionRow, buildAttendanceSelectRow,
   replyErr, replyErrEdit, replyOkEdit, replyConfirm,
 } = require('../../utils/embeds.js');
-const { ketThucPhien, thongBaoHuyHieu, voHieuHoaNutDiemDanh } = require('../../utils/session.js');
-const { xoaHenGio, stopAutoRefresh } = require('../../utils/timers.js');
+const { endSession, announceBadges, disableAttendanceUI } = require('../../utils/session.js');
+const { cancelTimers, stopAutoRefresh } = require('../../utils/timers.js');
 const { buildAdminMarkModal } = require('../../utils/adminMarkModal.js');
 
 // [BUG-FIX] Đồng bộ với tất cả customId được dùng trong file này
@@ -145,7 +145,7 @@ class SessionButtonHandler extends InteractionHandler {
       try {
         stopAutoRefresh(session.id);
         await sessionService.cancelSession(session.id);
-        xoaHenGio(guild.id);
+        cancelTimers(guild.id);
       } catch (e) {
         log.error('CANCEL', guild.id, 'cancelSession thất bại %s: %s', session.id, e.message);
         const stillActive = await sessionService.getActiveSession(guild.id).catch(() => null);
@@ -160,7 +160,7 @@ class SessionButtonHandler extends InteractionHandler {
       const attended = await attendanceService.getAttendances(session.id);
       await Promise.allSettled([
         interaction.editReply(replyOkEdit('✅ Phiên điểm danh đã được hủy thành công.')),
-        voHieuHoaNutDiemDanh(interaction.client, channel, session, attended),
+        disableAttendanceUI(interaction.client, channel, session, attended),
       ]);
     }
 
@@ -223,7 +223,7 @@ class SessionButtonHandler extends InteractionHandler {
       try {
         stopAutoRefresh(session.id);
         await sessionService.closeSession(session.id);
-        xoaHenGio(guild.id);
+        cancelTimers(guild.id);
       } catch (e) {
         log.error('CLOSE', guild.id, 'closeSession thất bại %s: %s', session.id, e.message);
         const stillActive = await sessionService.getActiveSession(guild.id).catch(() => null);
@@ -259,17 +259,17 @@ class SessionButtonHandler extends InteractionHandler {
       }
 
       const attended = await attendanceService.getAttendances(session.id);
-      const [settledKetThuc] = await Promise.allSettled([
-        ketThucPhien(guild, session, attended),
-        voHieuHoaNutDiemDanh(interaction.client, channel, session, attended),
+      const [settledEndSession] = await Promise.allSettled([
+        endSession(guild, session, attended),
+        disableAttendanceUI(interaction.client, channel, session, attended),
       ]);
-      const statsMap = settledKetThuc.status === 'fulfilled' ? settledKetThuc.value : null;
+      const statsMap = settledEndSession.status === 'fulfilled' ? settledEndSession.value : null;
 
       metrics.sessionClosed(guild.id, { cancelled: false });
       metrics.sessionMemberCount(guild.id, attended.length);
 
       await channel.send({ embeds: [await buildSummaryEmbed(session, attended, guild, session.phai_role_ids ?? [])] }).catch(() => null);
-      await thongBaoHuyHieu(guild, channel, guild.id, session.id, attended, statsMap).catch(() => null);
+      await announceBadges(guild, channel, guild.id, session.id, attended, statsMap).catch(() => null);
       return interaction.editReply(replyOkEdit('✅ Phiên điểm danh đã được đóng thành công.'));
     }
 

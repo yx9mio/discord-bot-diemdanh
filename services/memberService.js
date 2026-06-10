@@ -10,6 +10,13 @@ async function getMembers(guildId) {
   return data ?? [];
 }
 
+async function getMember(guildId, userId) {
+  const { data, error } = await getClient()
+    .from('members').select('*').eq('guild_id', guildId).eq('user_id', userId).maybeSingle();
+  _throwSupabase(error, 'getMember');
+  return data;
+}
+
 async function addMember(payload) {
   const { data, error } = await getClient()
     .from('members').upsert(payload, { onConflict: 'guild_id,user_id' }).select().single();
@@ -227,7 +234,7 @@ async function batchUpsertUserBadges(guildId, badges) {
 }
 
 module.exports = {
-  getMembers, addMember, deleteMember, upsertMember,
+  getMembers, getMember, addMember, deleteMember, upsertMember,
   getMemberStats, getMemberStatsMulti, getAllMemberStats,
   upsertMemberStats, batchUpsertMemberStats, resetStreak, batchResetStreak,
   getTopMembers, getServerStats,

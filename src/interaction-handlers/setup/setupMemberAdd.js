@@ -2,6 +2,7 @@
 // Handles: setup:mem:add (Button) — mở modal thêm thành viên
 'use strict';
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
+const { requireAdmin } = require('../../../utils/permissions.js');
 const { MemberView } = require('../../commands/setup/_views/_MemberView.js');
 
 class SetupMemberAddHandler extends InteractionHandler {
@@ -12,7 +13,9 @@ class SetupMemberAddHandler extends InteractionHandler {
     if (interaction.customId === 'setup:mem:add') return this.some();
     return this.none();
   }
-  run(interaction) {
+  async run(interaction) {
+    const { ok } = await requireAdmin(interaction, { context: 'thêm thành viên' });
+    if (!ok) return;
     return interaction.showModal(MemberView.buildAddModal());
   }
 }

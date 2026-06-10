@@ -7,7 +7,7 @@ const { MessageFlags, SlashCommandBuilder, PermissionFlagsBits } = require('disc
 const configService    = require('../../../services/configService.js');
 const scheduledService = require('../../../services/scheduledService.js');
 const memberService    = require('../../../services/memberService.js');
-const sessionService   = require('../../../services/sessionService.js');
+const { getActiveSessions } = require('../../../services/sessionService.js');
 const log = require('../../../utils/logger.js');
 const { HomeView } = require('./_views/_HomeView.js'); // [FIX-SETUP] đường dẫn mới
 
@@ -43,13 +43,13 @@ class SetupCommand extends Command {
     }
 
     const { guild } = interaction;
-    const [cfg, schedules, members, session] = await Promise.all([
+    const [cfg, schedules, members, sessions] = await Promise.all([
       configService.getGuildConfig(guild.id),
       scheduledService.getScheduledSessions(guild.id),
       memberService.getMembers(guild.id),
-      sessionService.getActiveSession(guild.id),
+      getActiveSessions(guild.id),
     ]);
-    const view = HomeView.render({ guild, cfg, schedules, members, session });
+    const view = HomeView.render({ guild, cfg, schedules, members, sessions });
     return interaction.editReply(view);
   }
 }

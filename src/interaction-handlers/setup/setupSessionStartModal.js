@@ -1,8 +1,5 @@
 // src/interaction-handlers/setup/setupSessionStartModal.js
 // Handles: setup:session:start:modal (ModalSubmit) — tạo phiên mới từ form
-// [FIX-SELECT] buildAttendanceSelectRow() + buildSessionActionRow() đã được xóa khỏi SessionView
-//             → build inline tại đây hoặc dùng SessionView.renderActive()
-// [FIX-PATH]  ../../../ → ../../../../
 'use strict';
 const { EmbedBuilder, MessageFlags } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
@@ -15,7 +12,7 @@ const {
   COLORS,
 } = require('../../../utils/embeds.js');
 const { fmtTs }          = require('../../../utils/format.js');
-const { datHenGioDong, startAutoRefresh } = require('../../../utils/timers.js');
+const { startAutoRefresh } = require('../../../utils/timers.js');
 
 const MODAL_ID = 'setup:session:start:modal';
 
@@ -36,44 +33,26 @@ class SetupSessionStartModalHandler extends InteractionHandler {
     const { guild } = interaction;
 
     try {
-      const ten     = interaction.fields.getTextInputValue('ten').trim();
-      const gioDong = interaction.fields.getTextInputValue('gio_dong')?.trim();
+      const ten     = interaction.fields.getTextInputValue('ten_phien')?.trim() || '';
+      const phutDong = interaction.fields.getTextInputValue('phut_dong')?.trim();
+      const phaiRole = interaction.fields.getTextInputValue('phai_role')?.trim();
 
       const cfg = await configService.getGuildConfig(guild.id);
       const tz  = cfg?.timezone ?? 'Asia/Ho_Chi_Minh';
 
-      const session = await sessionService.startSession(guild.id, {
-        ten,
-        gio_dong: gioDong || null,
-        timezone: tz,
-      });
-
-      // Lên lịch tự đóng nếu có giờ đóng
-      if (gioDong) {
-        datHenGioDong(session.id, gioDong, tz, async () => {
-          try {
-            await sessionService.closeSession(guild.id, session.id);
-          } catch (err) {
-            log.error('SESSION_AUTO_CLOSE', guild.id, 'Lỗi tự đóng phiên %s: %s', session.id, err.message);
-          }
-        });
-      }
-
-      // Auto-refresh embed mỗi phút
-      startAutoRefresh(session.id, 60_000, async () => {
-        try {
-          const active = await sessionService.getActiveSession(guild.id);
-          if (!active) return false; // dừng refresh
-          return true;
-        } catch { return false; }
+      const session = await sessionService.createSession({
+        guild_id:      guild.id,
+        session_name:  ten || `Phiên ${new Date().toLocaleDateString('vi-VN')}`,
+        auto_close_at: phutDong ? new Date(Date.now() + parseInt(phutDong, 10) * 60_000).toISOString() : null,
+        phai_role_ids: phaiRole ? [phaiRole] : null,
       });
 
       const embed = new EmbedBuilder()
-        .setTitle(`✅ Đã mở phiên: ${session.ten ?? 'Không tên'}`)
+        .setTitle(`✅ Đã mở phiên: ${session.session_name ?? 'Không tên'}`)
         .setColor(COLORS.SUCCESS)
         .addFields(
-          { name: 'Bắt đầu', value: fmtTs(session.bat_dau, tz), inline: true },
-          { name: 'Đóng lúc', value: gioDong ? fmtTs(gioDong, tz) : 'Thủ công', inline: true },
+          { name: 'Bắt đầu', value: fmtTs(session.started_at ?? new Date().toISOString(), tz), inline: true },
+          { name: 'Đóng lúc', value: session.auto_close_at ? fmtTs(session.auto_close_at, tz) : 'Thủ công', inline: true },
         )
         .setFooter({ text: `${FOOTER_DEFAULT} · Session ID: ${session.id}` });
 

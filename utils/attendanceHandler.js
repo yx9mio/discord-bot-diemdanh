@@ -18,7 +18,8 @@ const {
   buildAttendanceSelectRow,
   buildAttendConfirmEmbed,
 } = require('./embeds.js');
-const { thongBaoStreakMilestone, STREAK_MILESTONES } = require('./session.js');
+const { announceStreakMilestone } = require('./session.js');
+const STREAK_MILESTONES = [5, 10, 20, 50];
 
 /**
  * Shared attendance logic - tái dùng cho cả slash command và SelectMenu
@@ -120,7 +121,7 @@ async function markAttendance({ guild, member, user, status, interaction, sessio
     if (STREAK_MILESTONES.includes(projectedStreak) && ['tham_gia', 'tre'].includes(status)) {
       try {
         const ch = guild.channels.cache.get(session.channel_id);
-        if (ch) await thongBaoStreakMilestone(guild, ch, user.id, projectedStreak);
+        if (ch) await announceStreakMilestone(guild, ch, user.id, projectedStreak);
       } catch (_) {}
     }
 

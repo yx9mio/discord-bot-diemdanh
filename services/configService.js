@@ -30,4 +30,8 @@ async function ensureGuildConfig(guildId) {
 
 const getConfig = getGuildConfig;
 
-module.exports = { getGuildConfig, upsertGuildConfig, setGuildConfig, ensureGuildConfig, getConfig };
+async function setConfigField(guildId, field, value) {
+  return upsertGuildConfig({ guild_id: guildId, [field]: value });
+}
+
+module.exports = { getGuildConfig, upsertGuildConfig, setGuildConfig, ensureGuildConfig, getConfig, setConfigField };

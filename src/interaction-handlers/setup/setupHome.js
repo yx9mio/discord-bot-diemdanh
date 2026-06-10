@@ -1,12 +1,9 @@
-// interaction-handlers/setup/setupHome.js
-// Handles: setup:home, setup:home:refresh
-// [FIX-PATH] ../../../ → ../../../../
 'use strict';
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const { getGuildConfig } = require('../../../services/configService.js');
 const { getScheduledSessions } = require('../../../services/scheduledService.js');
 const { getMembers } = require('../../../services/memberService.js');
-const { getActiveSession } = require('../../../services/sessionService.js');
+const { getActiveSessions } = require('../../../services/sessionService.js');
 const { HomeView } = require('../../commands/setup/_views/_HomeView.js');
 const { CUSTOM_ID } = HomeView;
 
@@ -24,13 +21,13 @@ class SetupHomeHandler extends InteractionHandler {
   async run(interaction) {
     await interaction.deferUpdate();
     const { guild } = interaction;
-    const [cfg, schedules, members, session] = await Promise.all([
+    const [cfg, schedules, members, sessions] = await Promise.all([
       getGuildConfig(guild.id),
       getScheduledSessions(guild.id),
       getMembers(guild.id),
-      getActiveSession(guild.id),
+      getActiveSessions(guild.id),
     ]);
-    return interaction.editReply(HomeView.render({ guild, cfg, schedules, members, session }));
+    return interaction.editReply(HomeView.render({ guild, cfg, schedules, members, sessions }));
   }
 }
 

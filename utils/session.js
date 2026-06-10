@@ -45,7 +45,7 @@ const PRESENT_STATUSES = new Set(['tham_gia', 'tre']);
  *
  * @returns {Promise<Map<userId, {total, streak, max}>>}
  */
-async function ketThucPhien(guild, session, attended) {
+async function endSession(guild, session, attended) {
   const statsMap = new Map();
   const patchMap = new Map();
 
@@ -123,9 +123,11 @@ async function ketThucPhien(guild, session, attended) {
   return statsMap;
 }
 
+const ketThucPhien = endSession;
+
 const STREAK_MILESTONES = [5, 10, 20, 50];
 
-async function thongBaoStreakMilestone(guild, channel, userId, streak) {
+async function announceStreakMilestone(guild, channel, userId, streak) {
   if (!STREAK_MILESTONES.includes(streak)) return;
   const embed = new EmbedBuilder()
     .setTitle('🔥 Chuỗi điểm danh mới!')
@@ -134,13 +136,15 @@ async function thongBaoStreakMilestone(guild, channel, userId, streak) {
     .setFooter({ text: FOOTER_DEFAULT })
     .setTimestamp();
   await channel.send({ embeds: [embed] }).catch(e => {
-    log.warn('STREAK', guild.id, 'thongBaoStreakMilestone lỗi: %s', e.message);
+    log.warn('STREAK', guild.id, 'announceStreakMilestone lỗi: %s', e.message);
   });
 }
 
-async function thongBaoHuyHieu(guild, channel, guildId, sessionId, attended, statsMap) {
+const thongBaoStreakMilestone = announceStreakMilestone;
+
+async function announceBadges(guild, channel, guildId, sessionId, attended, statsMap) {
   if (!statsMap || !(statsMap instanceof Map) || !statsMap.size) {
-    log.warn('BADGE', guildId, 'thongBaoHuyHieu: statsMap is null/empty, bỏ qua');
+    log.warn('BADGE', guildId, 'announceBadges: statsMap is null/empty, skip');
     return;
   }
   const badges = await getBadgeList(guildId);
@@ -162,7 +166,7 @@ async function thongBaoHuyHieu(guild, channel, guildId, sessionId, attended, sta
           await memberService.upsertMemberBadge(guildId, userId, badge.threshold);
           newBadges.push({ userId, badge });
         } catch (e) {
-          log.warn('BADGE', guildId, 'upsertMemberBadge lỗi uid=%s th=%d: %s', userId, badge.threshold, e.message);
+          log.warn('BADGE', guildId, 'upsertMemberBadge error uid=%s th=%d: %s', userId, badge.threshold, e.message);
         }
       }
     }
@@ -180,28 +184,32 @@ async function thongBaoHuyHieu(guild, channel, guildId, sessionId, attended, sta
   await channel.send({ embeds: [embed] });
 }
 
+const thongBaoHuyHieu = announceBadges;
+
 /**
  * Vô hiệu hoá nút điểm danh, cập nhật embed → đã đóng.
  * [FIX] buildSessionActionRow(false) — false = isOpen=false → tất cả nút disabled
  * [FIX-SELECT] buildAttendanceSelectRow(false) — disable select menu khi đóng phiên
  *   Thứ tự rows: selectRow(disabled) → adminRows(disabled) — tối đa 5 rows
  */
-async function voHieuHoaNutDiemDanh(client, channel, session, attended = []) {
+async function disableAttendanceUI(client, channel, session, attended = []) {
   if (!session.message_id) return;
   try {
     const msg = await channel.messages.fetch(session.message_id);
     if (!msg) return;
     const closedEmbed  = await buildClosedSessionEmbed(session, attended, channel.guild ?? null);
-    const selectRow    = buildAttendanceSelectRow(false); // disabled
-    const adminRows    = buildSessionActionRow(false);    // disabled
+    const selectRow    = buildAttendanceSelectRow(false);
+    const adminRows    = buildSessionActionRow(false);
     const disabledComponents = [selectRow, ...adminRows].slice(0, 5);
     await msg.edit({ embeds: [closedEmbed], components: disabledComponents });
   } catch (e) {
-    log.warn('SESSION', session.guild_id, 'Không vô hiệu hoá được nút: %s', e.message);
+    log.warn('SESSION', session.guild_id, 'Could not disable UI: %s', e.message);
   }
 }
 
-async function guiCsvDinhKem(channel, session, attended) {
+const voHieuHoaNutDiemDanh = disableAttendanceUI;
+
+async function sendCsv(channel, session, attended) {
   try {
     const lines = [
       'user_id,username,status,time',
@@ -217,11 +225,17 @@ async function guiCsvDinhKem(channel, session, attended) {
       files:   [{ attachment: buf, name }],
     });
   } catch (e) {
-    log.warn('SESSION', session.guild_id, 'guiCsvDinhKem lỗi: %s', e.message);
+    log.warn('SESSION', session.guild_id, 'sendCsv lỗi: %s', e.message);
   }
 }
 
+const guiCsvDinhKem = sendCsv;
+
 module.exports = {
-  ketThucPhien, thongBaoHuyHieu, thongBaoStreakMilestone, voHieuHoaNutDiemDanh,
-  getBadgeList, guiCsvDinhKem, STREAK_MILESTONES,
+  endSession, ketThucPhien,
+  announceBadges, thongBaoHuyHieu,
+  announceStreakMilestone, thongBaoStreakMilestone,
+  disableAttendanceUI, voHieuHoaNutDiemDanh,
+  sendCsv, guiCsvDinhKem,
+  getBadgeList, STREAK_MILESTONES,
 };

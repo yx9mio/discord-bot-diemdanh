@@ -90,10 +90,84 @@ function xoaLichCoDinh(guildId, id) {
   return deleteScheduledSession(guildId, id);
 }
 
+// Wrappers to match caller expectations
+
+const getActiveSchedules = getScheduledSessions;
+
+async function getDueReminders(now) {
+  const { data, error } = await getClient()
+    .from('reminders').select('*').lte('due_at', now.toISOString());
+  _throwSupabase(error, 'getDueReminders');
+  return data ?? [];
+}
+
+async function markReminderSent(id) {
+  const { error } = await getClient()
+    .from('reminders').update({ sent_at: new Date().toISOString() }).eq('id', id);
+  _throwSupabase(error, 'markReminderSent');
+}
+
+function addRecurringSession(guildId, { thu, gio_bat_dau, gio_ket_thuc, ten, timezone }) {
+  const [hour, minute] = gio_bat_dau.split(':').map(Number);
+  let closeHour = null, closeMinute = null;
+  if (gio_ket_thuc) {
+    const [ch, cm] = gio_ket_thuc.split(':').map(Number);
+    closeHour = ch;
+    closeMinute = cm;
+  }
+  return createScheduledSession({
+    guild_id:          guildId,
+    day_of_week:       thu,
+    hour,
+    minute,
+    session_name:      ten || 'Điểm danh',
+    close_hour:        closeHour,
+    close_minute:      closeMinute,
+    phai_role_ids:     [],
+    allowed_role_id:   null,
+    channel_id:        null,
+    is_active:         true,
+    reminder_enabled:  true,
+    reminder_1_min:    30,
+    reminder_2_min:    10,
+    type:              'recurring_weekly',
+  });
+}
+
+function addOnetimeSession(guildId, { ngay, gio_bat_dau, gio_ket_thuc, ten, timezone }) {
+  const [hour, minute] = gio_bat_dau.split(':').map(Number);
+  let closeHour = null, closeMinute = null;
+  if (gio_ket_thuc) {
+    const [ch, cm] = gio_ket_thuc.split(':').map(Number);
+    closeHour = ch;
+    closeMinute = cm;
+  }
+  const [yyyy, mm, dd] = ngay.includes('-') ? ngay.split('-').map(Number) : ngay.split('/').reverse().map(Number);
+  return createScheduledSession({
+    guild_id:          guildId,
+    hour,
+    minute,
+    session_name:      ten || 'Điểm danh',
+    scheduled_date:    `${yyyy}-${String(mm).padStart(2, '0')}-${String(dd).padStart(2, '0')}`,
+    close_hour:        closeHour,
+    close_minute:      closeMinute,
+    phai_role_ids:     [],
+    allowed_role_id:   null,
+    channel_id:        null,
+    is_active:         true,
+    reminder_enabled:  true,
+    reminder_1_min:    30,
+    reminder_2_min:    10,
+    type:              'one_time',
+  });
+}
+
 module.exports = {
   getScheduledSessions, getScheduledSessionById,
   createScheduledSession, updateScheduledSession, deleteScheduledSession, skipScheduledSession,
   getLichCoDinh, getLichCoDinhById,
   createLichCoDinh, updateLichCoDinh, deleteLichCoDinh,
   themLichCoDinh, suaLichCoDinh, xoaLichCoDinh,
+  getActiveSchedules, getDueReminders, markReminderSent,
+  addRecurringSession, addOnetimeSession,
 };

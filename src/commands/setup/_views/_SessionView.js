@@ -1,5 +1,3 @@
-// src/commands/setup/_views/_SessionView.js
-// [Phase-C] SessionView — hiển thị phiên điểm danh hiện tại + nút điều khiển
 'use strict';
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { COLORS, ICONS }  = require('../../../../utils/theme.js');
@@ -8,110 +6,97 @@ const { fmtTs }          = require('../../../../utils/format.js');
 
 const CUSTOM_ID = {
   SESSION_START:   'setup:session:start',
-  SESSION_CLOSE:   'setup:session:close',
-  SESSION_EXPORT:  'setup:session:export',
+  SESSION_CLOSE:   'setup:session:close:',
+  SESSION_EXPORT:  'setup:session:export:',
   SESSION_REFRESH: 'setup:session:refresh',
   BACK_HOME:       'setup:home',
 };
 
-/**
- * @param {object} opts
- * @param {import('discord.js').Guild}  opts.guild
- * @param {object|null}                 opts.session  - phiên đang mở (null nếu chưa có)
- * @param {object|null}                 opts.cfg      - guild config
- * @param {object[]}                    opts.members  - danh sách thành viên
- */
-function render({ guild, session, cfg, members = [] }) {
-  const isActive = !!session;
+const PAGE_SIZE = 5;
 
-  // ─── Build embed ───
-  const embed = new EmbedBuilder()
-    .setColor(isActive ? COLORS.SUCCESS : COLORS.PRIMARY)
-    .setTitle(`${isActive ? '\uD83D\uDFE2' : '\u26AA'} Phiên điểm danh — ${guild.name}`)
-    .setFooter({ text: FOOTER_DEFAULT })
-    .setTimestamp();
-
-  if (isActive) {
-    const totalEligible = session.eligible_count ?? members.length;
-    const totalIn       = session.attended_count  ?? 0;
-    const totalLate     = session.late_count       ?? 0;
-    const totalAbsent   = session.absent_count     ?? 0;
-    const pct = totalEligible > 0 ? Math.round((totalIn / totalEligible) * 100) : 0;
-    const bar = _progressBar(totalIn, totalEligible);
-
-    embed.setDescription(
-      `### ✅ Phiên đang mở\n` +
-      `**${session.session_name ?? 'Phiên điểm danh'}**\n` +
-      (session.description ? `_${session.description}_\n` : '') +
-      `\n${bar} **${pct}%**`,
-    );
-    // [SEC] Session ID (UUID) bị ẩn khỏi embed public — chỉ admin cần biết,
-    //       có thể xem tại /setup hoặc ephemeral reply khi mở phiên.
-    embed.addFields(
-      { name: `⏱️ Bắt đầu`,  value: fmtTs(session.started_at),       inline: true },
-      { name: `👥 Bắt buộc`, value: `${totalEligible} thành viên`,    inline: true },
-      { name: `✅ Đúng giờ`, value: `${totalIn}`,                     inline: true },
-      { name: `⏰ Trễ`,      value: `${totalLate}`,                   inline: true },
-      { name: `❌ Vắng`,     value: `${totalAbsent}`,                  inline: true },
-    );
-    if (cfg?.notification_channel_id) {
-      embed.addFields({ name: `📢 Kênh điểm danh`, value: `<#${cfg.notification_channel_id}>`, inline: true });
-    }
-  } else {
-    embed.setDescription(
-      `### ⚪ Chưa có phiên nào đang mở\n` +
-      `Nhấn **Mở phiên** để bắt đầu điểm danh.\n\n` +
-      `> 💡 Bạn có thể đặt tên, thêm mô tả, giới hạn role và thời gian tự đóng sau khi mở.`,
-    );
-    if (members.length > 0) {
-      embed.addFields({ name: `👥 Thành viên hiện tại`, value: `${members.length} người`, inline: true });
-    }
-  }
-
-  // ─── Build components ───
-  const row1 = new ActionRowBuilder();
-
-  if (isActive) {
-    row1.addComponents(
-      new ButtonBuilder()
-        .setCustomId(CUSTOM_ID.SESSION_CLOSE)
-        .setLabel('\u23F9️ Đóng phiên')
-        .setStyle(ButtonStyle.Danger),
-      new ButtonBuilder()
-        .setCustomId(CUSTOM_ID.SESSION_EXPORT)
-        .setLabel('\ud83d\udce4 Xuất CSV')
-        .setStyle(ButtonStyle.Secondary),
-    );
-  } else {
-    row1.addComponents(
-      new ButtonBuilder()
-        .setCustomId(CUSTOM_ID.SESSION_START)
-        .setLabel('\ud83d\udfe2 Mở phiên')
-        .setStyle(ButtonStyle.Success),
-    );
-  }
-
-  const row2 = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId(CUSTOM_ID.SESSION_REFRESH)
-      .setLabel('Làm mới')
-      .setEmoji(ICONS.REFRESH)
-      .setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder()
-      .setCustomId(CUSTOM_ID.BACK_HOME)
-      .setLabel('← Dashboard')
-      .setEmoji(ICONS.HOME)
-      .setStyle(ButtonStyle.Secondary),
-  );
-
-  return { embeds: [embed], components: [row1, row2] };
-}
-
-/** Mini progress bar 10 bước */
 function _progressBar(value, max) {
   if (!max || max <= 0) return '░'.repeat(10);
   const filled = Math.round((value / max) * 10);
   return '█'.repeat(filled) + '░'.repeat(10 - filled);
+}
+
+function _sessionCard(session, idx) {
+  const totalEligible = session.eligible_count ?? 0;
+  const totalIn       = session.attended_count ?? 0;
+  const totalLate     = session.late_count     ?? 0;
+  const totalAbsent   = session.absent_count   ?? 0;
+  const pct = totalEligible > 0 ? Math.round((totalIn / totalEligible) * 100) : 0;
+  const bar = _progressBar(totalIn, totalEligible || 1);
+
+  return [
+    `**#${idx} — ${session.session_name ?? 'Phiên điểm danh'}**`,
+    session.description ? `_${session.description}_` : null,
+    `${bar} **${pct}%** điểm danh (${totalIn}/${totalEligible})`,
+    `▸ Bắt đầu: ${fmtTs(session.started_at)}`,
+    session.auto_close_at ? `▸ Tự đóng: ${fmtTs(session.auto_close_at)}` : null,
+    totalLate > 0 || totalAbsent > 0 ? `▸ ⏰ Trễ ${totalLate} · ❌ Vắng ${totalAbsent}` : null,
+  ].filter(Boolean).join('\n');
+}
+
+function render({ sessions, page = 0, guild, cfg, members = [] }) {
+  const all   = Array.isArray(sessions) ? sessions.filter(s => s.is_active) : [];
+  const total = all.length;
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const cPage      = Math.max(0, Math.min(page, totalPages - 1));
+  const start      = cPage * PAGE_SIZE;
+  const slice      = all.slice(start, start + PAGE_SIZE);
+
+  const embed = new EmbedBuilder()
+    .setColor(total > 0 ? COLORS.SUCCESS : COLORS.PRIMARY)
+    .setTitle(`${total > 0 ? ICONS.SESSION : '⚪'} Quản lý phiên — ${guild.name}`)
+    .setFooter({ text: `${FOOTER_DEFAULT} · Trang ${cPage + 1}/${totalPages} · Tổng ${total} phiên` })
+    .setTimestamp();
+
+  if (total === 0) {
+    embed.setDescription('_Không có phiên nào đang mở._\nNhấn **Mở phiên mới** để bắt đầu điểm danh.');
+    if (members.length > 0) {
+      embed.addFields({ name: '👥 Thành viên', value: `${members.length} người`, inline: true });
+    }
+  } else {
+    const desc = slice.map((s, i) => _sessionCard(s, start + i + 1)).join('\n\n');
+    embed.setDescription(desc);
+  }
+
+  const components = [];
+
+  if (total > 0) {
+    const closeRow = new ActionRowBuilder();
+    for (const s of slice) {
+      closeRow.addComponents(
+        new ButtonBuilder()
+          .setCustomId(`${CUSTOM_ID.SESSION_CLOSE}${s.id}`)
+          .setLabel(`✖ #${start + slice.indexOf(s) + 1}`)
+          .setStyle(ButtonStyle.Danger),
+      );
+    }
+    components.push(closeRow);
+
+    const exportRow = new ActionRowBuilder();
+    for (const s of slice) {
+      exportRow.addComponents(
+        new ButtonBuilder()
+          .setCustomId(`${CUSTOM_ID.SESSION_EXPORT}${s.id}`)
+          .setLabel(`📥 #${start + slice.indexOf(s) + 1}`)
+          .setStyle(ButtonStyle.Secondary),
+      );
+    }
+    components.push(exportRow);
+  }
+
+  const ctrlRow = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(CUSTOM_ID.SESSION_START).setLabel('Mở phiên mới').setEmoji(ICONS.PLUS).setStyle(ButtonStyle.Success),
+    new ButtonBuilder().setCustomId(CUSTOM_ID.SESSION_REFRESH).setLabel('Làm mới').setEmoji(ICONS.REFRESH).setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(CUSTOM_ID.BACK_HOME).setLabel('← Dashboard').setEmoji(ICONS.HOME).setStyle(ButtonStyle.Secondary),
+  );
+  components.push(ctrlRow);
+
+  return { embeds: [embed], components, _page: cPage, _totalPages: totalPages };
 }
 
 module.exports = { SessionView: { render, CUSTOM_ID } };

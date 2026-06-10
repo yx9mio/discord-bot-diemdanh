@@ -3,7 +3,7 @@
 // [MERGE] setupMembers.js đã được hợp nhất vào đây — xóa setupMembers.js
 // [FIX-BUG-1]  Loại bỏ duplicate handler (setupMembers.js bị xóa)
 // [FIX-BUG-2]  requireAdmin: truyền interaction, không phải member
-// [FIX-BUG-3]  deleteMember → removeMember (tên đúng trong memberService)
+// [FIX-BUG-3]  removeMember → deleteMember (tên hàm trong memberService)
 // [FIX-PATH]   ../../../ → ../../../../
 const {
   ActionRowBuilder,
@@ -28,12 +28,11 @@ class SetupMemberHandler extends InteractionHandler {
       interaction.customId === CUSTOM_ID.PAGE_NEXT ||
       interaction.customId === CUSTOM_ID.PAGE_PREV ||
       interaction.customId === CUSTOM_ID.REFRESH ||
-      interaction.customId === CUSTOM_ID.ADD ||
       interaction.customId.startsWith(CUSTOM_ID.EDIT_PREFIX) ||
-      interaction.customId.startsWith(CUSTOM_ID.DELETE_PREFIX) ||
-      interaction.customId.startsWith(CUSTOM_ID.DELETE_CONFIRM_PREFIX) ||
-      interaction.customId.startsWith(CUSTOM_ID.DELETE_CANCEL_PREFIX) ||
-      interaction.customId.startsWith(CUSTOM_ID.STREAK_RESET_PREFIX)
+      interaction.customId.startsWith(CUSTOM_ID.DEL_PREFIX) ||
+      interaction.customId.startsWith(CUSTOM_ID.DEL_CONFIRM_PREFIX) ||
+      interaction.customId.startsWith(CUSTOM_ID.DEL_CANCEL_PREFIX) ||
+      interaction.customId.startsWith(CUSTOM_ID.RESET_PREFIX)
     ) return this.some();
     return this.none();
   }
@@ -62,14 +61,6 @@ class SetupMemberHandler extends InteractionHandler {
       return interaction.editReply(MemberView.render({ members, guild, page: nextPage }));
     }
 
-    // ── Thêm thành viên ───────────────────────────────────────────────
-    if (customId === CUSTOM_ID.ADD) {
-      const { ok } = await requireAdmin(interaction, { context: 'thêm thành viên', deferred: false });
-      if (!ok) return;
-      const { MemberView: MV } = require('../../commands/setup/_views/_MemberView.js');
-      return interaction.showModal(MV.buildAddModal());
-    }
-
     // ── Sửa thành viên ────────────────────────────────────────────────
     if (customId.startsWith(CUSTOM_ID.EDIT_PREFIX)) {
       const { ok } = await requireAdmin(interaction, { context: 'sửa thành viên', deferred: false });
@@ -81,32 +72,32 @@ class SetupMemberHandler extends InteractionHandler {
     }
 
     // ── Xoá thành viên (bước 1: confirm) ─────────────────────────────
-    if (customId.startsWith(CUSTOM_ID.DELETE_PREFIX) && !customId.startsWith(CUSTOM_ID.DELETE_CONFIRM_PREFIX) && !customId.startsWith(CUSTOM_ID.DELETE_CANCEL_PREFIX)) {
+    if (customId.startsWith(CUSTOM_ID.DEL_PREFIX) && !customId.startsWith(CUSTOM_ID.DEL_CONFIRM_PREFIX) && !customId.startsWith(CUSTOM_ID.DEL_CANCEL_PREFIX)) {
       const { ok } = await requireAdmin(interaction, { context: 'xoá thành viên', deferred: false });
       if (!ok) return;
       await interaction.deferUpdate();
-      const userId = customId.slice(CUSTOM_ID.DELETE_PREFIX.length);
+      const userId = customId.slice(CUSTOM_ID.DEL_PREFIX.length);
       const gMember = guild.members.cache.get(userId);
       const name = gMember?.displayName ?? `<@${userId}>`;
       return interaction.editReply({
         content: `⚠️ Xác nhận xoá thành viên **${name}** khỏi danh sách điểm danh?`,
         components: [
           new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`${CUSTOM_ID.DELETE_CONFIRM_PREFIX}${userId}`).setLabel('Xác nhận xoá').setStyle(ButtonStyle.Danger),
-            new ButtonBuilder().setCustomId(`${CUSTOM_ID.DELETE_CANCEL_PREFIX}${userId}`).setLabel('Huỷ').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`${CUSTOM_ID.DEL_CONFIRM_PREFIX}${userId}`).setLabel('Xác nhận xoá').setStyle(ButtonStyle.Danger),
+            new ButtonBuilder().setCustomId(`${CUSTOM_ID.DEL_CANCEL_PREFIX}${userId}`).setLabel('Huỷ').setStyle(ButtonStyle.Secondary),
           ),
         ],
       });
     }
 
     // ── Xoá thành viên (bước 2: thực hiện) ───────────────────────────
-    if (customId.startsWith(CUSTOM_ID.DELETE_CONFIRM_PREFIX)) {
+    if (customId.startsWith(CUSTOM_ID.DEL_CONFIRM_PREFIX)) {
       const { ok } = await requireAdmin(interaction, { context: 'xoá thành viên', deferred: false });
       if (!ok) return;
       await interaction.deferUpdate();
-      const userId = customId.slice(CUSTOM_ID.DELETE_CONFIRM_PREFIX.length);
+      const userId = customId.slice(CUSTOM_ID.DEL_CONFIRM_PREFIX.length);
       try {
-        await memberService.removeMember(guild.id, userId);
+        await memberService.deleteMember(guild.id, userId);
         const members = await memberService.getMembers(guild.id);
         return interaction.editReply(MemberView.render({ members, guild, page: 0 }));
       } catch (e) {
@@ -116,18 +107,18 @@ class SetupMemberHandler extends InteractionHandler {
     }
 
     // ── Huỷ xoá ──────────────────────────────────────────────────────
-    if (customId.startsWith(CUSTOM_ID.DELETE_CANCEL_PREFIX)) {
+    if (customId.startsWith(CUSTOM_ID.DEL_CANCEL_PREFIX)) {
       await interaction.deferUpdate();
       const members = await memberService.getMembers(guild.id);
       return interaction.editReply(MemberView.render({ members, guild, page: 0 }));
     }
 
     // ── Reset streak ──────────────────────────────────────────────────
-    if (customId.startsWith(CUSTOM_ID.STREAK_RESET_PREFIX)) {
+    if (customId.startsWith(CUSTOM_ID.RESET_PREFIX)) {
       const { ok } = await requireAdmin(interaction, { context: 'reset streak', deferred: false });
       if (!ok) return;
       await interaction.deferUpdate();
-      const userId = customId.slice(CUSTOM_ID.STREAK_RESET_PREFIX.length);
+      const userId = customId.slice(CUSTOM_ID.RESET_PREFIX.length);
       try {
         await memberService.resetStreak(guild.id, userId);
         const members = await memberService.getMembers(guild.id);

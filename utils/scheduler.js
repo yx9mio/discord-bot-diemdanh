@@ -30,48 +30,46 @@ function clearGuildTimers(guildId) {
 }
 
 // ─── Restore close timer sau khi restart ─────────────────────────────────────
-async function _khoiPhucCloseTimer(client, guild, session, lich) {
+async function _restoreCloseTimer(client, guild, session, lich) {
   const msRemaining = msToCloseFromNow(
     lich.day_of_week, lich.hour, lich.minute,
     lich.close_day_of_week, lich.close_hour, lich.close_minute,
-    session.created_at  // [FIX-BUG4] truyền sessionCreatedAt để tính đúng thời gian còn lại
+    session.created_at
   );
   if (msRemaining == null || msRemaining <= 0) {
-    log.info('SCHEDULER', guild.id, 'Close timer hết hạn — đóng ngay');
+    log.info('SCHEDULER', guild.id, 'Close timer expired — closing now');
     const ch = await _getAnnounceCh(client, guild);
-    return _dongPhienVaThongKe(guild, session, ch, lich, client);
+    return _closeSessionAndAnnounce(guild, session, ch, lich, client);
   }
   log.info('SCHEDULER', guild.id, 'Restore close timer: %dms', msRemaining);
   const ch = await _getAnnounceCh(client, guild);
-  _setTimer(guild.id, 'close', () => _dongPhienVaThongKe(guild, session, ch, lich, client), msRemaining);
+  _setTimer(guild.id, 'close', () => _closeSessionAndAnnounce(guild, session, ch, lich, client), msRemaining);
 }
 
 // ─── Đóng phiên + thống kê ───────────────────────────────────────────────────
-async function _dongPhienVaThongKe(guild, session, ch, lich, client, silent = false) {
+async function _closeSessionAndAnnounce(guild, session, ch, lich, client, silent = false) {
   const { stopAutoRefresh } = require('./timers.js');
   stopAutoRefresh(session.id);
-  // [FIX-BUG7] closeSession atomic: nếu đã đóng rồi (double-close race) thì abort
   let closedSession;
   try {
     closedSession = await sessionService.closeSession(session.id);
   } catch (e) {
-    log.warn('SCHEDULER', guild.id, 'closeSession %s thất bại (có thể đã đóng): %s', session.id, e.message);
-    return; // abort — phiên đã được đóng bởi timer khác
+    log.warn('SCHEDULER', guild.id, 'closeSession %s failed (maybe already closed): %s', session.id, e.message);
+    return;
   }
   if (!closedSession) {
-    log.warn('SCHEDULER', guild.id, 'closeSession %s trả về null — bỏ qua double close', session.id);
+    log.warn('SCHEDULER', guild.id, 'closeSession %s returned null — skip double close', session.id);
     return;
   }
   _clearTimer(guild.id, 'close');
   _clearTimer(guild.id, 'preclose');
   if (!silent && ch) {
-    try { await ch.send({ content: '🔒 Phiên điểm danh đã kết thúc.' }); } catch {}
+    try { await ch.send({ content: '🔒 Session ended.' }); } catch {}
   }
 }
 
 // ─── Mở phiên ────────────────────────────────────────────────────────────────
-async function _moPhien(guild, lich) {
-  // [FIX-BUG8] Kiểm tra skip_until trước khi mở phiên
+async function _openSession(guild, lich) {
   if (lich.skip_until) {
     const skipUntil = new Date(lich.skip_until);
     if (!isNaN(skipUntil.getTime()) && skipUntil > new Date()) {
@@ -136,7 +134,7 @@ async function scheduleLichCoDinh(client, guildId, lichRaw) {
     try {
       const guild = client.guilds.cache.get(guildId);
       if (!guild) return;
-      const result = await _moPhien(guild, lich);
+      const result = await _openSession(guild, lich);
       if (!result.ok) {
         // [FIX-BUG1] one_time không reschedule — chỉ recurring_weekly mới lặp lại
         if (lich.type !== 'one_time') await scheduleLichCoDinh(client, guildId, lich);
@@ -171,7 +169,7 @@ async function scheduleLichCoDinh(client, guildId, lichRaw) {
             if (!guild2) return;
             const sess2 = await sessionService.getActiveSession(guildId).catch(() => null);
             if (!sess2) return;
-            await _dongPhienVaThongKe(guild2, sess2, ch, lich, client);
+            await _closeSessionAndAnnounce(guild2, sess2, ch, lich, client);
           }, msClose);
         }
       }
@@ -197,7 +195,7 @@ async function initGuildScheduler(client, guildId) {
     const lich = lichs.find(l => l.id === session.schedule_id);
     if (lich) {
       const guild = client.guilds.cache.get(guildId);
-      if (guild) await _khoiPhucCloseTimer(client, guild, session, lich);
+      if (guild) await _restoreCloseTimer(client, guild, session, lich);
     }
   }
   log.info('SCHEDULER', guildId, 'Khởi tạo %d lịch', lichs.length);

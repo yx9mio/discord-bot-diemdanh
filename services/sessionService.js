@@ -33,6 +33,17 @@ async function getActiveSession(guildId) {
   return _validateSession(data, 'getActiveSession');
 }
 
+async function getActiveSessions(guildId) {
+  const { data, error } = await getClient()
+    .from('sessions').select('*')
+    .eq('guild_id', guildId).eq('is_active', true).eq('cancelled', false)
+    .order('started_at', { ascending: false });
+  _throwSupabase(error, 'getActiveSessions');
+  if (!data) return [];
+  data.forEach(row => _validateSession(row, 'getActiveSessions'));
+  return data;
+}
+
 async function getSessionById(sessionId) {
   const { data, error } = await getClient()
     .from('sessions').select('*').eq('id', sessionId).maybeSingle();
@@ -132,7 +143,7 @@ async function getAllSessions(guildId) {
 const getSessionHistory = getRecentSessions;
 
 module.exports = {
-  createSession, getActiveSession, getSessionById, getSessionByMessageId, getSessionByIdRaw,
+  createSession, getActiveSession, getActiveSessions, getSessionById, getSessionByMessageId, getSessionByIdRaw,
   closeSession, cancelSession,
   updateSessionMessage, updateSessionName, updateSessionEligible,
   getRecentSessions, getAllSessions, getSessionHistory,

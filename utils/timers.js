@@ -1,32 +1,32 @@
 'use strict';
-// [B-3] Migrate từ db.js → sessionService + attendanceService
 const { EmbedBuilder } = require('discord.js');
 const sessionService    = require('../services/sessionService.js');
 const attendanceService = require('../services/attendanceService.js');
 const log = require('./logger.js');
-const { ketThucPhien, thongBaoHuyHieu, voHieuHoaNutDiemDanh, guiCsvDinhKem } = require('./session.js');
+const { endSession, announceBadges, disableAttendanceUI, sendCsv } = require('./session.js');
 const {
   buildSummaryEmbed, FOOTER_DEFAULT, buildSessionEmbed,
   buildSessionActionRow, buildAttendanceSelectRow,
 } = require('./embeds.js');
 
-const timers = new Map(); // guildId → { remind15, remind5, autoClose }
+// timers: Map<sessionId, { remind15, remind5, autoClose, guildId }>
+const timers = new Map();
 const refreshTimers = new Map(); // sessionId → intervalId
 
-function datHenGioDong(client, guild, session, channelId, ms) {
-  huyHenGio(guild.id);
+function scheduleCloseTimer(client, guild, session, channelId, ms) {
+  // Hủy timer cũ cho session này nếu có
+  cancelSessionTimer(session.id);
 
-  const t = {};
+  const t = { guildId: guild.id };
 
-  // ── 15 phút ──────────────────────────────────────────────────────────────────────────
   const ms15 = ms - 15 * 60_000;
   if (ms15 > 0) {
     t.remind15 = setTimeout(async () => {
       try {
         const ch = await guild.channels.fetch(channelId).catch(() => null);
         if (!ch) return;
-        const cur = await sessionService.getActiveSession(guild.id);
-        if (!cur || cur.id !== session.id) return;
+        const cur = await sessionService.getSessionById(session.id);
+        if (!cur?.is_active || cur.id !== session.id) return;
         await ch.send({ embeds: [
           new EmbedBuilder()
             .setColor(0xF1C40F)
@@ -37,15 +37,14 @@ function datHenGioDong(client, guild, session, channelId, ms) {
     }, ms15);
   }
 
-  // ── 5 phút ───────────────────────────────────────────────────────────────────────────
   const ms5 = ms - 5 * 60_000;
   if (ms5 > 0) {
     t.remind5 = setTimeout(async () => {
       try {
         const ch = await guild.channels.fetch(channelId).catch(() => null);
         if (!ch) return;
-        const cur = await sessionService.getActiveSession(guild.id);
-        if (!cur || cur.id !== session.id) return;
+        const cur = await sessionService.getSessionById(session.id);
+        if (!cur?.is_active || cur.id !== session.id) return;
         await ch.send({ embeds: [
           new EmbedBuilder()
             .setColor(0xE67E22)
@@ -56,11 +55,10 @@ function datHenGioDong(client, guild, session, channelId, ms) {
     }, ms5);
   }
 
-  // ── Tự đóng ────────────────────────────────────────────────────────────────────────────
   t.autoClose = setTimeout(async () => {
     try {
-      const cur = await sessionService.getActiveSession(guild.id);
-      if (!cur || cur.id !== session.id) return;
+      const cur = await sessionService.getSessionById(session.id);
+      if (!cur?.is_active || cur.id !== session.id) return;
 
       const ch = await guild.channels.fetch(channelId).catch(() => null);
 
@@ -72,45 +70,63 @@ function datHenGioDong(client, guild, session, channelId, ms) {
       }
 
       const attended = await attendanceService.getAttendances(session.id);
-      const statsMap = await ketThucPhien(guild, session, attended);
+      const statsMap = await endSession(guild, session, attended);
 
       if (ch) {
-        await voHieuHoaNutDiemDanh(client, ch, session, attended);
-        const thongBao = new EmbedBuilder()
+        await disableAttendanceUI(client, ch, session, attended);
+        const msg = new EmbedBuilder()
           .setColor(0x99AAB5)
           .setDescription('🔒 Phiên điểm danh đã tự động kết thúc.')
           .setFooter({ text: FOOTER_DEFAULT });
-        // [FIX] await buildSummaryEmbed vì là async function
         const summaryEmbed = await buildSummaryEmbed(session, attended, guild, session.phai_role_ids ?? []);
-        await ch.send({ embeds: [thongBao, summaryEmbed] });
-        await thongBaoHuyHieu(guild, ch, guild.id, session.id, attended, statsMap);
-        await guiCsvDinhKem(ch, session, attended);
+        await ch.send({ embeds: [msg, summaryEmbed] });
+        await announceBadges(guild, ch, guild.id, session.id, attended, statsMap);
+        await sendCsv(ch, session, attended);
       } else {
         log.warn('TIMER', guild.id, 'autoClose: channel %s không tồn tại, bỏ qua gửi embed', channelId);
       }
 
       stopAutoRefresh(session.id);
-      timers.delete(guild.id);
+      cancelSessionTimer(session.id);
     } catch (e) { log.error('TIMER', guild.id, 'Tự đóng lỗi: %s', e.message); }
   }, ms);
 
-  timers.set(guild.id, t);
+  timers.set(session.id, t);
 }
 
-function huyHenGio(guildId) {
-  const t = timers.get(guildId);
+function cancelSessionTimer(sessionId) {
+  const t = timers.get(sessionId);
   if (!t) return;
   clearTimeout(t.remind15);
   clearTimeout(t.remind5);
   clearTimeout(t.autoClose);
-  timers.delete(guildId);
+  timers.delete(sessionId);
 }
 
-function coHenGio(guildId) {
-  return timers.has(guildId);
+function cancelTimers(guildId) {
+  for (const [sessionId, t] of timers) {
+    if (t.guildId === guildId) {
+      clearTimeout(t.remind15);
+      clearTimeout(t.remind5);
+      clearTimeout(t.autoClose);
+      timers.delete(sessionId);
+    }
+  }
 }
 
-// ─── Auto-refresh embed (C3) ─────────────────────────────────────────────────
+const huyHenGio = cancelTimers;
+
+function hasTimers(guildId) {
+  for (const t of timers.values()) {
+    if (t.guildId === guildId) return true;
+  }
+  return false;
+}
+
+const coHenGio = hasTimers;
+
+// ─── Auto-refresh embed ─────────────────────────────────────────
+
 function startAutoRefresh(sessionId, channelId, messageId, client) {
   stopAutoRefresh(sessionId);
 
@@ -130,8 +146,6 @@ function startAutoRefresh(sessionId, channelId, messageId, client) {
       }
 
       const { embed, components: pagComponents } = buildSessionEmbed(guild, session, attended, session.phai_role_ids ?? []);
-      // [FIX-SELECT] Giữ nguyên select menu sau mỗi lần auto-refresh
-      //   Thứ tự: selectRow → adminRows → pagComponents, tối đa 5 rows
       const selectRow = buildAttendanceSelectRow(true);
       const adminRows = buildSessionActionRow(true);
       const components = [selectRow, ...adminRows, ...pagComponents].slice(0, 5);
@@ -172,6 +186,8 @@ function stopAllAutoRefresh() {
 }
 
 module.exports = {
-  datHenGioDong, huyHenGio, coHenGio, xoaHenGio: huyHenGio,
+  scheduleCloseTimer, datHenGioDong: scheduleCloseTimer,
+  cancelTimers, huyHenGio, coHenGio, xoaHenGio: cancelTimers, hasTimers,
+  cancelSessionTimer,
   startAutoRefresh, stopAutoRefresh, stopAllAutoRefresh,
 };

@@ -1,6 +1,6 @@
 // src/interaction-handlers/setup/setupScheduleAddDetailModal.js
 // Handles: setup:sch:add:recurring:detail + setup:sch:add:onetime:detail (ModalSubmit)
-// [BUG-FIX] One-time modal đọc field 'ngay' (không phải 'ngay_gio')
+// [SYNC] Đọc đúng field IDs từ modal — modal có day_of_week, gio_mo, phut_bu, pre_close
 // [FIX-PATH] ../../../ → ../../../../
 'use strict';
 const { MessageFlags } = require('discord.js');
@@ -12,6 +12,17 @@ const { requireAdmin } = require('../../../utils/permissions.js');
 
 const MODAL_RECURRING_ID = 'setup:sch:add:recurring:detail';
 const MODAL_ONETIME_ID   = 'setup:sch:add:onetime:detail';
+
+const DAY_MAP = { t2:2, t3:3, t4:4, t5:5, t6:6, t7:7, cn:1 };
+
+function parseDay(v) {
+  const n = parseInt(v, 10);
+  if (!isNaN(n)) return n;
+  const mapped = DAY_MAP[v.toLowerCase()];
+  if (mapped) return mapped;
+  const eng = { mon:1, tue:2, wed:3, thu:4, fri:5, sat:6, sun:7 };
+  return eng[v.toLowerCase()] ?? null;
+}
 
 class SetupScheduleAddDetailModalHandler extends InteractionHandler {
   constructor(ctx, options) {
@@ -34,23 +45,54 @@ class SetupScheduleAddDetailModalHandler extends InteractionHandler {
       const tz = cfg?.timezone ?? 'Asia/Ho_Chi_Minh';
 
       if (customId === MODAL_RECURRING_ID) {
-        const thu        = interaction.fields.getTextInputValue('thu').trim();
-        const gio_bat_dau = interaction.fields.getTextInputValue('gio_bat_dau').trim();
-        const gio_ket_thuc = interaction.fields.getTextInputValue('gio_ket_thuc').trim();
-        const ten        = interaction.fields.getTextInputValue('ten')?.trim() ?? '';
+        const day_raw   = interaction.fields.getTextInputValue('day_of_week').trim();
+        const gio_mo    = interaction.fields.getTextInputValue('gio_mo').trim();
+        const phut_bu   = interaction.fields.getTextInputValue('phut_bu')?.trim();
+        const pre_close = interaction.fields.getTextInputValue('pre_close')?.trim();
+
+        const dayOfWeek = parseDay(day_raw);
+        if (!dayOfWeek) throw new Error(`Ngày không hợp lệ: "${day_raw}"`);
+
+        const [hour, minute] = gio_mo.split(':').map(Number);
+        if (isNaN(hour) || isNaN(minute)) throw new Error(`Giờ không hợp lệ: "${gio_mo}"`);
+
+        const durationMin = phut_bu ? parseInt(phut_bu, 10) : 0;
+        let closeHour = null, closeMinute = null;
+        if (durationMin > 0) {
+          const total = hour * 60 + minute + durationMin;
+          closeHour = Math.floor(total / 60) % 24;
+          closeMinute = total % 60;
+        }
+
+        const reminderMin = pre_close ? parseInt(pre_close, 10) : 30;
 
         await scheduledService.addRecurringSession(guild.id, {
-          thu, gio_bat_dau, gio_ket_thuc, ten, timezone: tz,
+          thu: dayOfWeek, gio_bat_dau: `${hour}:${String(minute).padStart(2, '0')}`,
+          gio_ket_thuc: closeHour != null ? `${closeHour}:${String(closeMinute).padStart(2, '0')}` : null,
+          ten: 'Điểm danh', timezone: tz,
         });
       } else {
-        // MODAL_ONETIME_ID
         const ngay       = interaction.fields.getTextInputValue('ngay').trim();
-        const gio_bat_dau = interaction.fields.getTextInputValue('gio_bat_dau').trim();
-        const gio_ket_thuc = interaction.fields.getTextInputValue('gio_ket_thuc').trim();
-        const ten        = interaction.fields.getTextInputValue('ten')?.trim() ?? '';
+        const gio_mo     = interaction.fields.getTextInputValue('gio_mo').trim();
+        const phut_bu    = interaction.fields.getTextInputValue('phut_bu')?.trim();
+        const pre_close  = interaction.fields.getTextInputValue('pre_close')?.trim();
+
+        const [hour, minute] = gio_mo.split(':').map(Number);
+        if (isNaN(hour) || isNaN(minute)) throw new Error(`Giờ không hợp lệ: "${gio_mo}"`);
+
+        const durationMin = phut_bu ? parseInt(phut_bu, 10) : 0;
+        let closeHour = null, closeMinute = null;
+        if (durationMin > 0) {
+          const total = hour * 60 + minute + durationMin;
+          closeHour = Math.floor(total / 60) % 24;
+          closeMinute = total % 60;
+        }
 
         await scheduledService.addOnetimeSession(guild.id, {
-          ngay, gio_bat_dau, gio_ket_thuc, ten, timezone: tz,
+          ngay,
+          gio_bat_dau: `${hour}:${String(minute).padStart(2, '0')}`,
+          gio_ket_thuc: closeHour != null ? `${closeHour}:${String(closeMinute).padStart(2, '0')}` : null,
+          ten: 'Điểm danh', timezone: tz,
         });
       }
 

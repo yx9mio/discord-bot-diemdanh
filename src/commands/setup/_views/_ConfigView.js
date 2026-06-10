@@ -1,5 +1,3 @@
-// src/commands/setup/_views/_ConfigView.js
-// [REDESIGN] Rewrite: fix import path 4 levels, chuẩn hóa
 'use strict';
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { COLORS, ICONS } = require('../../../../utils/theme.js');
@@ -16,34 +14,45 @@ const CUSTOM_ID = {
   BACK_HOME:            'setup:home',
 };
 
-function _renderFields(cfg) {
+function _phaiRoles(cfg) {
+  const ids = cfg?.phai_role_ids ?? [];
+  if (!ids.length) return '_Tất cả_';
+  return ids.map(id => `<@&${id}>`).join(' ');
+}
+
+function render({ cfg, guild }) {
   const tz        = cfg?.timezone ?? 'Asia/Ho_Chi_Minh';
   const channel   = cfg?.notification_channel_id ? `<#${cfg.notification_channel_id}>` : '_chưa cài_';
-  const phai      = (cfg?.phai_role_ids ?? []).length
-    ? cfg.phai_role_ids.map(r => `<@&${r}>`).join(' ')
-    : '_Tất cả_';
+  const phai      = _phaiRoles(cfg);
   const adminRole = cfg?.admin_role_id ? `<@&${cfg.admin_role_id}>` : '_chưa cài_';
   const attRole   = cfg?.attendance_role_id ? `<@&${cfg.attendance_role_id}>` : '_chưa cài_';
   const reminder  = cfg?.reminder_enabled === false
     ? '⛔ Tắt'
     : `✅ ${cfg?.reminder_minutes ?? 10} phút trước`;
-  return [
-    `▸ ${ICONS.CHANNEL} **Kênh thông báo:** ${channel}`,
-    `▸ 🛡️ **Role Quản lý:** ${adminRole}`,
-    `▸ ${ICONS.ROLE} **Phái:** ${phai}`,
-    `▸ ${ICONS.CHECK} **Role Điểm danh:** ${attRole}`,
-    `▸ ${ICONS.GLOBE} **Timezone:** \`${tz}\``,
-    `▸ ${ICONS.BELL} **Nhắc nhở:** ${reminder}`,
-  ].join('\n');
-}
 
-function render({ cfg, guild }) {
+  // Role icon làm thumbnail nếu có
+  const phaiRole = (cfg?.phai_role_ids ?? [])
+    .map(id => guild?.roles?.cache?.get(id))
+    .find(r => r?.icon);
+
   const embed = new EmbedBuilder()
     .setColor(COLORS.PRIMARY)
     .setTitle(`${ICONS.GEAR} Cài đặt chung — ${guild.name}`)
-    .setDescription(_renderFields(cfg))
     .setFooter({ text: FOOTER_DEFAULT })
     .setTimestamp();
+
+  if (phaiRole?.icon) {
+    embed.setThumbnail(phaiRole.iconURL({ size: 64 }));
+  }
+
+  embed.addFields(
+    { name: `${ICONS.CHANNEL} Kênh thông báo`, value: channel, inline: true },
+    { name: '🛡️ Role Quản lý', value: adminRole, inline: true },
+    { name: `${ICONS.CHECK} Role Điểm danh`, value: attRole, inline: true },
+    { name: `**Phái**`, value: phai, inline: false },
+    { name: `${ICONS.GLOBE} Timezone`, value: `\`${tz}\``, inline: true },
+    { name: `${ICONS.BELL} Nhắc nhở`, value: reminder, inline: true },
+  );
 
   const editRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId(CUSTOM_ID.EDIT_CHANNEL).setLabel('Kênh thông báo').setEmoji(ICONS.CHANNEL).setStyle(ButtonStyle.Secondary),
