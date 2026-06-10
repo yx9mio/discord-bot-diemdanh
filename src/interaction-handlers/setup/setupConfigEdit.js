@@ -25,46 +25,49 @@ const EDIT_IDS = new Set([
 const MODAL_PREFIX  = 'setup:cfg:modal:';
 const SELECT_PREFIX = 'setup:cfg:select:';
 
-function handleButton(interaction) {
+async function handleButton(interaction) {
   const id = interaction.customId;
 
   if (id === EDIT_CHANNEL) {
+    await interaction.deferUpdate();
     const menu = new ChannelSelectMenuBuilder()
       .setCustomId(SELECT_PREFIX + 'channel')
       .setPlaceholder('Chọn kênh thông báo điểm danh...')
       .addChannelTypes(ChannelType.GuildText)
       .setMinValues(1)
       .setMaxValues(1);
-    return interaction.reply({
+    return interaction.editReply({
+      embeds: [],
       content: '📢 Chọn kênh sẽ dùng làm **kênh thông báo điểm danh**:',
       components: [new ActionRowBuilder().addComponents(menu)],
-      flags: MessageFlags.Ephemeral,
     });
   }
 
   if (id === EDIT_ADMIN_ROLE) {
+    await interaction.deferUpdate();
     const menu = new RoleSelectMenuBuilder()
       .setCustomId(SELECT_PREFIX + 'admin_role')
       .setPlaceholder('Chọn role quản lý...')
       .setMinValues(0)
       .setMaxValues(1);
-    return interaction.reply({
+    return interaction.editReply({
+      embeds: [],
       content: '🛡️ Chọn **role quản lý** (bỏ trống = xoá):',
       components: [new ActionRowBuilder().addComponents(menu)],
-      flags: MessageFlags.Ephemeral,
     });
   }
 
   if (id === EDIT_ATTENDANCE_ROLE) {
+    await interaction.deferUpdate();
     const menu = new RoleSelectMenuBuilder()
       .setCustomId(SELECT_PREFIX + 'attendance_role')
       .setPlaceholder('Chọn role điểm danh...')
       .setMinValues(0)
       .setMaxValues(1);
-    return interaction.reply({
+    return interaction.editReply({
+      embeds: [],
       content: '✅ Chọn **role điểm danh** (bỏ trống = xoá):',
       components: [new ActionRowBuilder().addComponents(menu)],
-      flags: MessageFlags.Ephemeral,
     });
   }
 
@@ -101,8 +104,8 @@ class SetupConfigEditHandler extends InteractionHandler {
     return this.none();
   }
 
-  run(interaction) {
-    return handleButton(interaction);
+  async run(interaction) {
+    await handleButton(interaction);
   }
 }
 

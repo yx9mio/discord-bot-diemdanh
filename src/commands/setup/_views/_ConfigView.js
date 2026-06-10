@@ -3,6 +3,16 @@ const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('
 const { COLORS, ICONS } = require('../../../../utils/theme.js');
 const { FOOTER_DEFAULT } = require('../../../../utils/embeds.js');
 
+// Lưu messageId của ConfigView để các edit handler có thể fetch và update
+const _configMsgIds = new Map(); // guildId → messageId
+
+function storeMessageId(guildId, messageId) {
+  _configMsgIds.set(guildId, messageId);
+}
+function getMessageId(guildId) {
+  return _configMsgIds.get(guildId);
+}
+
 const CUSTOM_ID = {
   EDIT_CHANNEL:         'setup:cfg:edit:channel',
   EDIT_TZ:              'setup:cfg:edit:tz',
@@ -50,4 +60,4 @@ function render({ cfg, guild }) {
   return { embeds: [embed], components: [editRow, roleRow, navRow] };
 }
 
-module.exports = { ConfigView: { render, CUSTOM_ID } };
+module.exports = { ConfigView: { render, CUSTOM_ID, storeMessageId, getMessageId } };

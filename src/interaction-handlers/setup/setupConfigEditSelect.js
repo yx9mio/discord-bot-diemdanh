@@ -38,6 +38,7 @@ class SetupConfigEditSelectHandler extends InteractionHandler {
       await configService.setConfigField(guildId, col, value);
       const cfg = await configService.getGuildConfig(guildId);
       const { ConfigView } = require('../../commands/setup/_views/_ConfigView.js');
+      ConfigView.storeMessageId(guildId, interaction.message.id);
       return interaction.editReply(ConfigView.render({ cfg, guild: interaction.guild }));
     } catch (e) {
       log.error('CFG_EDIT_SELECT', guildId, 'Lỗi lưu field %s: %s', suffix, e.message);
