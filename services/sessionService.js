@@ -9,8 +9,8 @@ async function createSession(payload) {
     guild_id:            payload.guild_id            ?? payload.guildId,
     session_name:        payload.session_name        ?? payload.sessionName,
     description:         payload.description         ?? null,
-    eligible_member_ids: payload.eligible_member_ids ?? payload.eligibleMemberIds ?? null,
-    phai_role_ids:       payload.phai_role_ids       ?? payload.phaiRoleIds ?? null,
+    eligible_member_ids: payload.eligible_member_ids ?? payload.eligibleMemberIds ?? [],
+    phai_role_ids:       payload.phai_role_ids       ?? payload.phaiRoleIds ?? [],
     is_active:           payload.is_active           ?? true,
     cancelled:           payload.cancelled           ?? false,
   };

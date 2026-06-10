@@ -44,7 +44,7 @@ class SetupSessionStartModalHandler extends InteractionHandler {
         guild_id:      guild.id,
         session_name:  ten || `Phiên ${new Date().toLocaleDateString('vi-VN')}`,
         auto_close_at: phutDong ? new Date(Date.now() + parseInt(phutDong, 10) * 60_000).toISOString() : null,
-        phai_role_ids: phaiRole ? [phaiRole] : null,
+        phai_role_ids: phaiRole ? [phaiRole] : [],
       });
 
       const embed = new EmbedBuilder()

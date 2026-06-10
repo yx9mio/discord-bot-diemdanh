@@ -82,7 +82,10 @@ CREATE TABLE IF NOT EXISTS attendances (
 
 ALTER TABLE attendances DROP CONSTRAINT IF EXISTS attendances_session_id_key;
 ALTER TABLE attendances DROP CONSTRAINT IF EXISTS attendances_user_id_key;
-ALTER TABLE attendances ADD CONSTRAINT IF NOT EXISTS attendances_session_user_unique UNIQUE (session_id, user_id);
+DO $$ BEGIN
+  ALTER TABLE attendances ADD CONSTRAINT attendances_session_user_unique UNIQUE (session_id, user_id);
+EXCEPTION WHEN duplicate_table THEN NULL;
+END $$;
 
 CREATE INDEX IF NOT EXISTS idx_attendances_session ON attendances (session_id);
 CREATE INDEX IF NOT EXISTS idx_attendances_guild ON attendances (guild_id);
