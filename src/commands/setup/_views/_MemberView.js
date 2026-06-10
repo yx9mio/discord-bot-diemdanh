@@ -1,169 +1,159 @@
+// src/commands/setup/_views/_MemberView.js
+// [FIX] + buildEditModal(userId, currentData)
+//       + per-user reset-streak button (thay thế nút reset sai logic đầu trang)
 'use strict';
-// _MemberView.js — Redesign: Select menu per-page + Search + Bulk import
-// Fix: hiển thị đúng tất cả thành viên trong trang (không giới hạn cứng 5)
 const {
   EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle,
-  StringSelectMenuBuilder, StringSelectMenuOptionBuilder,
+  ModalBuilder, TextInputBuilder, TextInputStyle,
 } = require('discord.js');
-const { COLORS, ICONS } = require('../../../utils/theme.js');
-const { FOOTER_DEFAULT } = require('../../../utils/embeds.js');
-const memberService = require('../../../services/memberService.js');
+const { COLORS, ICONS } = require('../../../../utils/theme.js');
+const { FOOTER_DEFAULT } = require('../../../../utils/embeds.js');
+const memberService = require('../../../../services/memberService.js');
 
 const CUSTOM_ID = {
-  ADD:           'setup:mem:add',
-  BULK_IMPORT:   'setup:mem:bulk',
-  SEARCH:        'setup:mem:search',
-  SEARCH_CLEAR:  'setup:mem:search:clear',
-  PAGE_NEXT:     'setup:mem:page:next',
-  PAGE_PREV:     'setup:mem:page:prev',
-  DEL_PREFIX:    'setup:mem:del:',
-  EDIT_PREFIX:   'setup:mem:edit:',
-  RESET_PREFIX:  'setup:mem:reset:',
-  SELECT_ACTION: 'setup:mem:action:select',
-  REFRESH:       'setup:mem:refresh',
-  BACK_HOME:     'setup:home',
+  ADD:          'setup:mem:add',
+  PAGE_NEXT:    'setup:mem:page:next',
+  PAGE_PREV:    'setup:mem:page:prev',
+  DEL_PREFIX:   'setup:mem:del:',
+  EDIT_PREFIX:  'setup:mem:edit:',
+  RESET_PREFIX: 'setup:mem:reset:',
+  RESET_ALL:    'setup:mem:reset:all',
+  REFRESH:      'setup:mem:refresh',
+  BACK_HOME:    'setup:home',
 };
 
-const PAGE_SIZE = 8; // giảm xuống 8 để tránh tràn embed
+const PAGE_SIZE = 10;
+// Discord giới hạn 5 nút/row và tối đa 5 rows
+// del+edit+reset = 3 rows × 5 thành viên → còn 2 rows cho action + nav
+const BTN_LIMIT = 5;
 
+// ─── Modal chỉnh sửa thành viên ──────────────────────────────────────
 /**
- * render({ members, page, guild, query })
- * - members: toàn bộ danh sách từ DB
- * - page: trang hiện tại (0-indexed)
- * - guild: Guild object
- * - query: chuỗi tìm kiếm (optional)
+ * Trả về ModalBuilder để handler gọi interaction.showModal(modal).
+ * @param {string} userId
+ * @param {{ username?: string, phong_ban?: string, ghi_chu?: string }} currentData
  */
-function render({ members, page = 0, guild, query = '' }) {
-  // Filter theo query nếu có
-  const filtered = query
-    ? members.filter(m =>
-        (m.username ?? '').toLowerCase().includes(query.toLowerCase()) ||
-        m.user_id.includes(query) ||
-        (m.phong_ban ?? '').toLowerCase().includes(query.toLowerCase())
-      )
-    : members;
+function buildEditModal(userId, currentData = {}) {
+  return new ModalBuilder()
+    .setCustomId(`setup:mem:edit:modal:${userId}`)
+    .setTitle('Chỉnh sửa thành viên')
+    .addComponents(
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('username')
+          .setLabel('Tên hiển thị (để trống = giữ nguyên)')
+          .setStyle(TextInputStyle.Short)
+          .setRequired(false)
+          .setMaxLength(80)
+          .setValue(currentData.username ?? ''),
+      ),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('phong_ban')
+          .setLabel('Phòng ban')
+          .setStyle(TextInputStyle.Short)
+          .setRequired(false)
+          .setMaxLength(60)
+          .setValue(currentData.phong_ban ?? ''),
+      ),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('ghi_chu')
+          .setLabel('Ghi chú')
+          .setStyle(TextInputStyle.Paragraph)
+          .setRequired(false)
+          .setMaxLength(200)
+          .setValue(currentData.ghi_chu ?? ''),
+      ),
+    );
+}
 
-  const total = filtered.length;
-  const totalAll = members.length;
+// ─── Render view ─────────────────────────────────────────────────────
+function render({ members, page = 0, guild }) {
+  const total      = members.length;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const clampedPage = Math.max(0, Math.min(page, totalPages - 1));
-  const start = clampedPage * PAGE_SIZE;
-  const slice = filtered.slice(start, start + PAGE_SIZE);
+  const cPage      = Math.max(0, Math.min(page, totalPages - 1));
+  const start      = cPage * PAGE_SIZE;
+  const slice      = members.slice(start, start + PAGE_SIZE);
+  // [FIX] btnSlice = đúng 5 item của trang hiện tại
+  const btnSlice   = slice.slice(0, BTN_LIMIT);
 
-  // ── Embed ──────────────────────────────────────────────────────────────────
-  const titleSuffix = query ? ` · 🔍 "${query.slice(0, 20)}"` : '';
+  const desc = total === 0
+    ? `*Chưa có thành viên nào.*\n> Bấm **${ICONS.PLUS} Thêm thành viên** để bắt đầu.`
+    : slice.map((m, i) => {
+        const phong = m.phong_ban ? ` _(${m.phong_ban})_` : '';
+        const note  = m.ghi_chu   ? ` · 📝 ${m.ghi_chu}` : '';
+        return `${start + i + 1}. <@${m.user_id}>${phong}${note}`;
+      }).join('\n');
+
   const embed = new EmbedBuilder()
     .setColor(COLORS.PRIMARY)
-    .setTitle(`${ICONS.MEMBER} Thành viên — ${guild.name}${titleSuffix}`)
-    .setDescription(
-      total === 0
-        ? (query
-            ? `*Không tìm thấy thành viên nào khớp với "${query}".*\n> Nhấn **Xóa tìm kiếm** để quay lại danh sách đầy đủ.`
-            : `*Chưa có thành viên nào.*\n> Bấm **${ICONS.PLUS} Thêm** để bắt đầu.`
-          )
-        : slice.map((m, i) => {
-            const phong = m.phong_ban ? ` \`${m.phong_ban}\`` : '';
-            const note  = m.ghi_chu  ? ` · 📝 _${m.ghi_chu}_` : '';
-            return `\`${start + i + 1}.\` <@${m.user_id}>${phong}${note}`;
-          }).join('\n')
-    )
-    .setFooter({
-      text: [
-        FOOTER_DEFAULT,
-        query ? `Kết quả ${total}/${totalAll}` : `Tổng ${totalAll} thành viên`,
-        `Trang ${clampedPage + 1}/${totalPages}`,
-      ].join(' · '),
-    })
+    .setTitle(`${ICONS.MEMBER} Thành viên — ${guild.name}`)
+    .setDescription(desc)
+    .setFooter({ text: `${FOOTER_DEFAULT} · Trang ${cPage + 1}/${totalPages} · Tổng ${total} thành viên` })
     .setTimestamp();
 
   const components = [];
 
-  // ── Row 1: Select menu chọn thành viên để thao tác ────────────────────────
-  if (slice.length > 0) {
-    const selectMenu = new StringSelectMenuBuilder()
-      .setCustomId(CUSTOM_ID.SELECT_ACTION)
-      .setPlaceholder('👆 Chọn thành viên để Sửa / Xóa / Reset streak...')
-      .addOptions(
-        slice.map(m => {
-          const label = (m.username ?? m.user_id).slice(0, 25);
-          const desc  = [m.phong_ban, m.ghi_chu].filter(Boolean).join(' · ').slice(0, 50) || m.user_id;
-          return new StringSelectMenuOptionBuilder()
-            .setLabel(label)
-            .setValue(m.user_id)
-            .setDescription(desc);
-        })
+  if (btnSlice.length > 0) {
+    // Row 1: Nút xoá per-user
+    const delRow = new ActionRowBuilder();
+    for (const m of btnSlice)
+      delRow.addComponents(
+        new ButtonBuilder()
+          .setCustomId(`${CUSTOM_ID.DEL_PREFIX}${m.user_id}`)
+          .setLabel(`✕ ${(m.username ?? m.user_id).slice(0, 10)}`)
+          .setStyle(ButtonStyle.Danger),
       );
-    components.push(new ActionRowBuilder().addComponents(selectMenu));
+    components.push(delRow);
+
+    // Row 2: Nút chỉnh sửa per-user
+    const editRow = new ActionRowBuilder();
+    for (const m of btnSlice)
+      editRow.addComponents(
+        new ButtonBuilder()
+          .setCustomId(`${CUSTOM_ID.EDIT_PREFIX}${m.user_id}`)
+          .setLabel(`✎ ${(m.username ?? m.user_id).slice(0, 10)}`)
+          .setStyle(ButtonStyle.Secondary),
+      );
+    components.push(editRow);
+
+    // Row 3: Nút reset streak per-user
+    // [FIX] Thay thế nút reset sai logic (slice[0]?.user_id cứng) bằng per-user row
+    const resetRow = new ActionRowBuilder();
+    for (const m of btnSlice)
+      resetRow.addComponents(
+        new ButtonBuilder()
+          .setCustomId(`${CUSTOM_ID.RESET_PREFIX}${m.user_id}`)
+          .setLabel(`↺ ${(m.username ?? m.user_id).slice(0, 10)}`)
+          .setStyle(ButtonStyle.Primary),
+      );
+    components.push(resetRow);
   }
 
-  // ── Row 2: Thêm / Bulk import / Search / Clear search ─────────────────────
+  // Row 4: Actions (thêm + reset-all)
+  // [FIX] Bỏ nút reset-streak đầu trang sai logic khỏi đây
   const actionRow = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId(CUSTOM_ID.ADD)
-      .setLabel('Thêm')
-      .setEmoji(ICONS.PLUS)
-      .setStyle(ButtonStyle.Success),
-    new ButtonBuilder()
-      .setCustomId(CUSTOM_ID.BULK_IMPORT)
-      .setLabel('Import nhiều')
-      .setEmoji('📥')
-      .setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId(CUSTOM_ID.ADD).setLabel('Thêm thành viên').setEmoji(ICONS.PLUS).setStyle(ButtonStyle.Success),
+    new ButtonBuilder().setCustomId(CUSTOM_ID.RESET_ALL).setLabel('Reset tất cả').setEmoji(ICONS.WARN).setStyle(ButtonStyle.Danger),
   );
-  if (query) {
-    actionRow.addComponents(
-      new ButtonBuilder()
-        .setCustomId(CUSTOM_ID.SEARCH_CLEAR)
-        .setLabel('✖ Xóa tìm kiếm')
-        .setStyle(ButtonStyle.Danger),
-    );
-  } else {
-    actionRow.addComponents(
-      new ButtonBuilder()
-        .setCustomId(CUSTOM_ID.SEARCH)
-        .setLabel('Tìm kiếm')
-        .setEmoji('🔍')
-        .setStyle(ButtonStyle.Secondary),
-    );
-  }
-  components.push(actionRow);
 
-  // ── Row 3: Reset All + Nav ─────────────────────────────────────────────────
+  // Row 5: Nav
   const navRow = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId(CUSTOM_ID.PAGE_PREV)
-      .setLabel('◀')
-      .setStyle(ButtonStyle.Secondary)
-      .setDisabled(clampedPage === 0),
-    new ButtonBuilder()
-      .setCustomId(CUSTOM_ID.PAGE_NEXT)
-      .setLabel('▶')
-      .setStyle(ButtonStyle.Secondary)
-      .setDisabled(clampedPage >= totalPages - 1),
-    new ButtonBuilder()
-      .setCustomId(CUSTOM_ID.REFRESH)
-      .setLabel('Làm mới')
-      .setEmoji(ICONS.REFRESH)
-      .setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder()
-      .setCustomId('setup:mem:reset:all')
-      .setLabel('Reset all streak')
-      .setEmoji('⚠️')
-      .setStyle(ButtonStyle.Danger),
-    new ButtonBuilder()
-      .setCustomId(CUSTOM_ID.BACK_HOME)
-      .setLabel('← Bảng điều khiển')
-      .setEmoji(ICONS.HOME)
-      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(CUSTOM_ID.PAGE_PREV).setLabel('◀ Trước').setStyle(ButtonStyle.Secondary).setDisabled(cPage === 0),
+    new ButtonBuilder().setCustomId(CUSTOM_ID.PAGE_NEXT).setLabel('Sau ▶').setStyle(ButtonStyle.Secondary).setDisabled(cPage >= totalPages - 1),
+    new ButtonBuilder().setCustomId(CUSTOM_ID.REFRESH).setLabel('Làm mới').setEmoji(ICONS.REFRESH).setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(CUSTOM_ID.BACK_HOME).setLabel('← Dashboard').setEmoji(ICONS.HOME).setStyle(ButtonStyle.Secondary),
   );
-  components.push(navRow);
 
-  return { embeds: [embed], components, _page: clampedPage, _totalPages: totalPages, _query: query };
+  components.push(actionRow, navRow);
+  return { embeds: [embed], components, _page: cPage, _totalPages: totalPages };
 }
 
-async function handleRefresh(interaction, page = 0, query = '') {
+async function handleRefresh(interaction, page = 0) {
   await interaction.deferUpdate();
   const members = await memberService.getMembers(interaction.guild.id);
-  return interaction.editReply(render({ members, page, guild: interaction.guild, query }));
+  return interaction.editReply(render({ members, page, guild: interaction.guild }));
 }
 
-module.exports = { MemberView: { render, handleRefresh, CUSTOM_ID, PAGE_SIZE } };
+module.exports = { MemberView: { render, handleRefresh, buildEditModal, CUSTOM_ID, PAGE_SIZE } };

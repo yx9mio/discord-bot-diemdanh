@@ -5,7 +5,10 @@ const sessionService    = require('../services/sessionService.js');
 const attendanceService = require('../services/attendanceService.js');
 const log = require('./logger.js');
 const { ketThucPhien, thongBaoHuyHieu, voHieuHoaNutDiemDanh, guiCsvDinhKem } = require('./session.js');
-const { buildSummaryEmbed, FOOTER_DEFAULT, buildSessionEmbed, buildSessionActionRow } = require('./embeds.js');
+const {
+  buildSummaryEmbed, FOOTER_DEFAULT, buildSessionEmbed,
+  buildSessionActionRow, buildAttendanceSelectRow,
+} = require('./embeds.js');
 
 const timers = new Map(); // guildId → { remind15, remind5, autoClose }
 const refreshTimers = new Map(); // sessionId → intervalId
@@ -15,7 +18,7 @@ function datHenGioDong(client, guild, session, channelId, ms) {
 
   const t = {};
 
-  // ── 15 phút ──────────────────────────────────────────────────────────────
+  // ── 15 phút ──────────────────────────────────────────────────────────────────────────
   const ms15 = ms - 15 * 60_000;
   if (ms15 > 0) {
     t.remind15 = setTimeout(async () => {
@@ -34,7 +37,7 @@ function datHenGioDong(client, guild, session, channelId, ms) {
     }, ms15);
   }
 
-  // ── 5 phút ───────────────────────────────────────────────────────────────
+  // ── 5 phút ───────────────────────────────────────────────────────────────────────────
   const ms5 = ms - 5 * 60_000;
   if (ms5 > 0) {
     t.remind5 = setTimeout(async () => {
@@ -53,7 +56,7 @@ function datHenGioDong(client, guild, session, channelId, ms) {
     }, ms5);
   }
 
-  // ── Tự đóng ──────────────────────────────────────────────────────────────
+  // ── Tự đóng ────────────────────────────────────────────────────────────────────────────
   t.autoClose = setTimeout(async () => {
     try {
       const cur = await sessionService.getActiveSession(guild.id);
@@ -65,7 +68,6 @@ function datHenGioDong(client, guild, session, channelId, ms) {
         await sessionService.closeSession(session.id);
       } catch (e) {
         log.error('TIMER', guild.id, 'closeSession thất bại %s: %s', session.id, e.message);
-        // [#9] Dừng lại khi closeSession lỗi — không tiếp tục xử lý với session chưa đóng được
         return;
       }
 
@@ -78,7 +80,8 @@ function datHenGioDong(client, guild, session, channelId, ms) {
           .setColor(0x99AAB5)
           .setDescription('🔒 Phiên điểm danh đã tự động kết thúc.')
           .setFooter({ text: FOOTER_DEFAULT });
-        const summaryEmbed = buildSummaryEmbed(session, attended, guild, session.phai_role_ids ?? []);
+        // [FIX] await buildSummaryEmbed vì là async function
+        const summaryEmbed = await buildSummaryEmbed(session, attended, guild, session.phai_role_ids ?? []);
         await ch.send({ embeds: [thongBao, summaryEmbed] });
         await thongBaoHuyHieu(guild, ch, guild.id, session.id, attended, statsMap);
         await guiCsvDinhKem(ch, session, attended);
@@ -86,7 +89,7 @@ function datHenGioDong(client, guild, session, channelId, ms) {
         log.warn('TIMER', guild.id, 'autoClose: channel %s không tồn tại, bỏ qua gửi embed', channelId);
       }
 
-      stopAutoRefresh(session.id); // [C3]
+      stopAutoRefresh(session.id);
       timers.delete(guild.id);
     } catch (e) { log.error('TIMER', guild.id, 'Tự đóng lỗi: %s', e.message); }
   }, ms);
@@ -107,9 +110,9 @@ function coHenGio(guildId) {
   return timers.has(guildId);
 }
 
-// ─── Auto-refresh embed (C3) ─────────────────────────────────────────────────────
+// ─── Auto-refresh embed (C3) ─────────────────────────────────────────────────
 function startAutoRefresh(sessionId, channelId, messageId, client) {
-  stopAutoRefresh(sessionId); // Đảm bảo không duplicate
+  stopAutoRefresh(sessionId);
 
   const intervalId = setInterval(async () => {
     try {
@@ -126,22 +129,18 @@ function startAutoRefresh(sessionId, channelId, messageId, client) {
         return;
       }
 
-      // [#6] Destructure đủ cả embed lẫn paginationComponents từ buildSessionEmbed
-      const { embed, components: paginationComponents } = await buildSessionEmbed(guild, session, attended, session.phai_role_ids ?? []);
-      // [#6] Spread đủ: ActionRow chính (disabled=false) + pagination rows
-      const components = [...buildSessionActionRow(false), ...paginationComponents];
+      const { embed, components: pagComponents } = buildSessionEmbed(guild, session, attended, session.phai_role_ids ?? []);
+      // [FIX-SELECT] Giữ nguyên select menu sau mỗi lần auto-refresh
+      //   Thứ tự: selectRow → adminRows → pagComponents, tối đa 5 rows
+      const selectRow = buildAttendanceSelectRow(true);
+      const adminRows = buildSessionActionRow(true);
+      const components = [selectRow, ...adminRows, ...pagComponents].slice(0, 5);
 
       const ch = await guild.channels.fetch(channelId).catch(() => null);
-      if (!ch) {
-        stopAutoRefresh(sessionId);
-        return;
-      }
+      if (!ch) { stopAutoRefresh(sessionId); return; }
 
       const msg = await ch.messages.fetch(messageId).catch(() => null);
-      if (!msg) {
-        stopAutoRefresh(sessionId);
-        return;
-      }
+      if (!msg) { stopAutoRefresh(sessionId); return; }
 
       await msg.edit({ embeds: [embed], components }).catch(() => {
         stopAutoRefresh(sessionId);
@@ -150,7 +149,7 @@ function startAutoRefresh(sessionId, channelId, messageId, client) {
       log.error('AUTO_REFRESH', sessionId, 'Lỗi refresh embed: %s', e.message);
       stopAutoRefresh(sessionId);
     }
-  }, 60_000); // 60 giây
+  }, 60_000);
 
   refreshTimers.set(sessionId, intervalId);
   log.info('AUTO_REFRESH', sessionId, 'Đã bật auto-refresh mỗi 60s');
@@ -159,7 +158,6 @@ function startAutoRefresh(sessionId, channelId, messageId, client) {
 function stopAutoRefresh(sessionId) {
   const intervalId = refreshTimers.get(sessionId);
   if (!intervalId) return;
-
   clearInterval(intervalId);
   refreshTimers.delete(sessionId);
   log.info('AUTO_REFRESH', sessionId, 'Đã tắt auto-refresh');
@@ -175,5 +173,5 @@ function stopAllAutoRefresh() {
 
 module.exports = {
   datHenGioDong, huyHenGio, coHenGio, xoaHenGio: huyHenGio,
-  startAutoRefresh, stopAutoRefresh, stopAllAutoRefresh, // [BUG-8]
+  startAutoRefresh, stopAutoRefresh, stopAllAutoRefresh,
 };

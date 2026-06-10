@@ -1,13 +1,12 @@
 // services/attendanceService.js — Data access cho điểm danh
 'use strict';
-const crypto = require('crypto');
 const { addBreadcrumb } = require('../utils/sentry.js');
 const { getClient, _throwSupabase, _validateAttendances } = require('./_client.js');
 
-function _hashString(str) {
-  const hash = crypto.createHash('md5').update(str).digest();
-  return hash.readUInt32BE(0);
-}
+// [BUG-LOCK] In-memory lock thay thế pg_advisory_lock RPC (chưa tồn tại trong Supabase)
+// Key: `${sessionId}:${userId}` — đủ để chặn double-click từ cùng 1 user trong 1 phiên
+// Bot chạy single-process → in-memory Map là đủ, không cần distributed lock
+const _attendanceLocks = new Map();
 
 async function upsertAttendance(payload) {
   const { data, error } = await getClient()
@@ -37,7 +36,8 @@ async function getAttendances(sessionId) {
   return _validateAttendances(data ?? [], 'getAttendances');
 }
 
-async function getAttendancesByUser(guildId, userId, limit = 50) {
+// [BUG-FIX] Tăng default limit 50 → 200 để tránh cắt lịch sử của user điểm danh nhiều
+async function getAttendancesByUser(guildId, userId, limit = 200) {
   const { data, error } = await getClient()
     .from('attendances')
     .select('session_id, status, checked_in_at, sessions!inner(session_name, started_at, cancelled)')
@@ -65,24 +65,48 @@ async function getAllAttendances(guildId, limit = 5000) {
   return _validateAttendances(data ?? [], 'getAllAttendances');
 }
 
-async function tryAcquireAttendanceLock(sessionId, userId) {
-  const key1 = _hashString(sessionId);
-  const key2 = _hashString(userId);
-  const { data, error } = await getClient().rpc('try_advisory_lock', { key1, key2 });
-  _throwSupabase(error, 'tryAcquireAttendanceLock');
-  return data === true;
+/**
+ * [BUG-FIX] Bulk insert khong_tham_gia cho eligible members chưa có record.
+ * Dùng ignoreDuplicates=true → safe nếu user đã điểm danh rồi (không ghi đè).
+ */
+async function bulkInsertAbsent(sessionId, guildId, rows) {
+  if (!rows.length) return;
+  const payload = rows.map(r => ({
+    session_id:  sessionId,
+    guild_id:    guildId,
+    user_id:     r.user_id,
+    username:    r.username ?? r.user_id,
+    status:      'khong_tham_gia',
+    marked_by:   'system',
+  }));
+  const { error } = await getClient()
+    .from('attendances')
+    .upsert(payload, { onConflict: 'session_id,user_id', ignoreDuplicates: true });
+  _throwSupabase(error, 'bulkInsertAbsent');
 }
 
-async function releaseAttendanceLock(sessionId, userId) {
-  const key1 = _hashString(sessionId);
-  const key2 = _hashString(userId);
-  const { data, error } = await getClient().rpc('advisory_unlock', { key1, key2 });
-  _throwSupabase(error, 'releaseAttendanceLock');
-  return data === true;
+/**
+ * [BUG-LOCK] Thay thế pg_advisory_lock bằng in-memory Map.
+ * Trả về true nếu acquire thành công, false nếu đang bị lock.
+ */
+function tryAcquireAttendanceLock(sessionId, userId) {
+  const key = `${sessionId}:${userId}`;
+  if (_attendanceLocks.has(key)) return false;
+  _attendanceLocks.set(key, true);
+  return true;
+}
+
+/**
+ * Release lock sau khi xử lý xong (gọi trong finally block).
+ */
+function releaseAttendanceLock(sessionId, userId) {
+  _attendanceLocks.delete(`${sessionId}:${userId}`);
+  return true;
 }
 
 module.exports = {
   upsertAttendance, upsertAttendanceNoTime,
   getAttendances, getAttendancesByUser, getAttendanceStats, getAllAttendances,
+  bulkInsertAbsent,
   tryAcquireAttendanceLock, releaseAttendanceLock,
 };

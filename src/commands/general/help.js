@@ -1,5 +1,7 @@
 // src/commands/general/help.js
 // Hiển thị danh sách lệnh với 2 trang: USER (mặc định) + ADMIN.
+// Nút bấm ở footer chuyển trang. Dùng metadata từ utils/commands.js.
+
 'use strict';
 const { Command } = require('@sapphire/framework');
 const {
@@ -7,6 +9,7 @@ const {
 } = require('discord.js');
 const { CATEGORIES, byAudience } = require('../../../utils/commands.js');
 const { FOOTER_DEFAULT } = require('../../../utils/embeds.js');
+const log = require('../../../utils/logger.js');
 
 const CUSTOM_ID = {
   USER_PAGE:  'help:page:user',
@@ -16,35 +19,20 @@ const CUSTOM_ID = {
 const COLOR = {
   USER:  0x57f287,
   ADMIN: 0xfee75c,
+  BOTH:  0x01696f,
 };
 
-function buildQuickStartUser() {
+function buildQuickStart() {
   return [
-    '> Đây là **Quản Gia — Bot Điểm Danh**. Dưới đây là các thác tác bạn có thể làm khi có phiên đang mở.',
+    '**👋 Chào mừng đến với Quản Gia — Bot Điểm Danh!**',
     '',
-    '**\uD83D\uDFE2 Cách điểm danh:**',
-    '1\uFE0F\u20E3 Vào kênh điểm danh khi có embed phiên mới',
-    '2\uFE0F\u20E3 Chọn trạng thái từ menu **\uD83D\uDC46 Chọn trạng thái điểm danh...**',
-    '   ✅ Tham gia \u00b7 \uD83D\uDD52 Trễ \u00b7 \uD83D\uDDD2\uFE0F Có phép \u00b7 \u274C Vắng',
-    '3\uFE0F\u20E3 Bot gửi xác nhận riêng tư cho bạn',
+    '**🟢 Bắt đầu nhanh:**',
+    '1️⃣ Admin mở **Bảng điều khiển** với `/setup`',
+    '2️⃣ Bấm **Mở phiên mới** → nhập tên → gửi embed điểm danh',
+    '3️⃣ Thành viên chọn trạng thái từ menu dropdown trong embed',
+    '4️⃣ Admin bấm **⏹️ Đóng phiên** để kết thúc và xem báo cáo',
     '',
-    '\uD83D\uDC40 Nhấn **Xem danh sách** để kiểm tra ai đã điểm danh.',
-  ].join('\n');
-}
-
-function buildQuickStartAdmin() {
-  return [
-    '> Hướng dẫn nhanh dành cho **Admin / Quản lý server**.',
-    '',
-    '**\uD83D\uDE80 Bắt đầu:**',
-    '1\uFE0F\u20E3 Gõ `/setup` → Bảng điều khiển xuất hiện',
-    '2\uFE0F\u20E3 Nhấn **\u2699\uFE0F Cài đặt** → chọn kênh log, vai trò Phái, timezone',
-    '3\uFE0F\u20E3 Nhấn **\uD83D\uDC65 Thành viên** → thêm người vào danh sách eligible',
-    '4\uFE0F\u20E3 Nhấn **\uD83D\uDCC5 Lịch cố định** → thiết lập giờ tự động mở phiên hàng tuần',
-    '5\uFE0F\u20E3 Nhấn **\u2795 Mở phiên mới** → nhập tên phiên, thời gian → bot gửi embed',
-    '6\uFE0F\u20E3 Nhấn **\uD83D\uDD12 Đóng phiên** trong embed → bot gửi tổng kết + CSV',
-    '',
-    '\uD83D\uDCA1 *Mọi thao tác quản trị đều nằm trong `/setup` — không cần nhớ lệnh phụ.*',
+    '💡 *Mọi thao tác quản trị (lịch, thành viên, cấu hình) đều làm trong `/setup`.*',
   ].join('\n');
 }
 
@@ -65,21 +53,23 @@ function buildEmbed(audience) {
       const cmds = groupedByCat[catId];
       const lines = cmds.map(c => {
         const ex = c.examples?.length
-          ? `\n   \uD83D\uDCA1 \`${c.examples[0]}\`` : '';
-        // Slash command dùng backtick, UI button dùng bullet bình thường
-        const isSlash = c.name === c.name.toLowerCase() && !c.name.includes(' ');
-        const nameStr = isSlash ? `**\`/${c.name}\`**` : `**${c.name}**`;
-        return `${nameStr} \u2014 ${c.desc}${ex}`;
+          ? `\n   💡 \`${c.examples[0]}\`${c.examples.length > 1 ? '  ·  …' : ''}`
+          : '';
+        return `**/${c.name}** — ${c.desc}${ex}`;
       });
       return { name: `${cat.emoji} ${cat.label}`, value: lines.join('\n'), inline: false };
     });
 
   return new EmbedBuilder()
     .setColor(isAdmin ? COLOR.ADMIN : COLOR.USER)
-    .setTitle(isAdmin ? '\uD83D\uDEE1\uFE0F Lệnh cho Admin' : '\uD83D\uDC64 Lệnh cho mọi người')
-    .setDescription(isAdmin ? buildQuickStartAdmin() : buildQuickStartUser())
+    .setTitle(isAdmin ? '🛡️ Lệnh cho Admin' : '👤 Lệnh cho mọi người')
+    .setDescription(
+      isAdmin
+        ? '🛡️ *Cần quyền **Quản lý Server** (Manage Guild).*\n' + buildQuickStart()
+        : '✅ *Bạn có thể dùng các lệnh này mà không cần quyền admin.*',
+    )
     .addFields(...fields)
-    .setFooter({ text: `${FOOTER_DEFAULT} \u00b7 ${items.length} mục` })
+    .setFooter({ text: `${FOOTER_DEFAULT} · ${items.length} lệnh` })
     .setTimestamp();
 }
 
@@ -87,12 +77,12 @@ function buildActionRow(activeAudience) {
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(CUSTOM_ID.USER_PAGE)
-      .setLabel('\uD83D\uDC64 Cho mọi người')
+      .setLabel('👤 Cho mọi người')
       .setStyle(activeAudience === 'user' ? ButtonStyle.Success : ButtonStyle.Secondary)
       .setDisabled(activeAudience === 'user'),
     new ButtonBuilder()
       .setCustomId(CUSTOM_ID.ADMIN_PAGE)
-      .setLabel('\uD83D\uDEE1\uFE0F Cho Admin')
+      .setLabel('🛡️ Cho Admin')
       .setStyle(activeAudience === 'admin' ? ButtonStyle.Success : ButtonStyle.Secondary)
       .setDisabled(activeAudience === 'admin'),
   );
@@ -112,13 +102,23 @@ class HelpCommand extends Command {
   }
 
   async chatInputRun(interaction) {
-    await interaction.reply({
-      embeds: [buildEmbed('user')],
-      components: [buildActionRow('user')],
-      flags: MessageFlags.Ephemeral,
-    });
+    // [FIX] Guard stale interaction (40060) khi bot restart
+    try {
+      await interaction.reply({
+        embeds: [buildEmbed('user')],
+        components: [buildActionRow('user')],
+        flags: MessageFlags.Ephemeral,
+      });
+    } catch (e) {
+      if (e.code === 40060) {
+        log.warn('HELP', interaction.guildId, 'Stale interaction bỏ qua (40060): %s', interaction.id);
+        return;
+      }
+      throw e;
+    }
   }
 
+  // Public — gọi từ interaction handler
   static render(audience, target) {
     return target.update({
       embeds: [buildEmbed(audience)],

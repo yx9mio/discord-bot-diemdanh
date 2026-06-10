@@ -1,4 +1,4 @@
-// index.js — Entry point (Sapphire JS Edition v3)
+// index.js — Entry point (Sapphire JS Edition v4)
 // [DATADOG] dd-trace được load qua --require dd-trace/init trong package.json
 // KHÔNG require thủ công ở đây — tránh DeprecationWarning từ dd-trace hook discord.js
 'use strict';
@@ -9,9 +9,9 @@ const Sentry = require('@sentry/node');
 
 if (process.env.SENTRY_DSN) {
   Sentry.init({
-    dsn:              process.env.SENTRY_DSN,
-    environment:      process.env.NODE_ENV ?? 'development',
-    tracesSampleRate:  0.2,
+    dsn:             process.env.SENTRY_DSN,
+    environment:     process.env.NODE_ENV ?? 'development',
+    tracesSampleRate: 0.2,
   });
 }
 
@@ -41,16 +41,17 @@ const client = new SapphireClient({
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
   ],
-  partials:                    [Partials.Message, Partials.Channel],
-  loadMessageCommandListeners:  false,
-  baseUserDirectory:            null,
+  partials:                   [Partials.Message, Partials.Channel],
+  loadMessageCommandListeners: false,
+  baseUserDirectory:           null,
   logger: { level: process.env.NODE_ENV === 'production' ? 30 : 20 },
 });
 
-client.stores.get('commands').registerPath(path.join(__dirname, 'src', 'commands'));
-client.stores.get('listeners').registerPath(path.join(__dirname, 'listeners'));
-client.stores.get('interaction-handlers').registerPath(path.join(__dirname, 'interaction-handlers'));
-client.stores.get('preconditions').registerPath(path.join(__dirname, 'preconditions'));
+// [cleanup] Tất cả stores đều nằm trong src/
+client.stores.get('commands')             .registerPath(path.join(__dirname, 'src', 'commands'));
+client.stores.get('listeners')            .registerPath(path.join(__dirname, 'src', 'listeners'));
+client.stores.get('interaction-handlers') .registerPath(path.join(__dirname, 'src', 'interaction-handlers'));
+client.stores.get('preconditions')        .registerPath(path.join(__dirname, 'src', 'preconditions'));
 
 startHealthServer(client);
 

@@ -1,8 +1,10 @@
+// src/commands/setup/_views/_ConfigView.js
+// [REDESIGN] Rewrite: fix import path 4 levels, chuẩn hóa
 'use strict';
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const { COLORS, ICONS } = require('../../../utils/theme.js'); // [PATH] _views/ →3 levels
-const { FOOTER_DEFAULT } = require('../../../utils/embeds.js');
-const configService = require('../../../services/configService.js');
+const { COLORS, ICONS } = require('../../../../utils/theme.js');
+const { FOOTER_DEFAULT } = require('../../../../utils/embeds.js');
+const configService = require('../../../../services/configService.js');
 
 const CUSTOM_ID = {
   EDIT_CHANNEL:         'setup:cfg:edit:channel',
@@ -15,13 +17,17 @@ const CUSTOM_ID = {
   BACK_HOME:            'setup:home',
 };
 
-function renderConfigSection(cfg) {
-  const tz      = cfg?.timezone ?? 'Asia/Ho_Chi_Minh';
-  const channel = cfg?.notification_channel_id ? `<#${cfg.notification_channel_id}>` : '_chưa cài_';
-  const phai    = (cfg?.phai_role_ids ?? []).length ? cfg.phai_role_ids.map(r => `<@&${r}>`).join(' ') : '_Tất cả_';
+function _renderFields(cfg) {
+  const tz        = cfg?.timezone ?? 'Asia/Ho_Chi_Minh';
+  const channel   = cfg?.notification_channel_id ? `<#${cfg.notification_channel_id}>` : '_chưa cài_';
+  const phai      = (cfg?.phai_role_ids ?? []).length
+    ? cfg.phai_role_ids.map(r => `<@&${r}>`).join(' ')
+    : '_Tất cả_';
   const adminRole = cfg?.admin_role_id ? `<@&${cfg.admin_role_id}>` : '_chưa cài_';
   const attRole   = cfg?.attendance_role_id ? `<@&${cfg.attendance_role_id}>` : '_chưa cài_';
-  const reminder  = cfg?.reminder_enabled === false ? '⛔ Tắt' : `✅ ${cfg?.reminder_minutes ?? 10} phút trước`;
+  const reminder  = cfg?.reminder_enabled === false
+    ? '⛔ Tắt'
+    : `✅ ${cfg?.reminder_minutes ?? 10} phút trước`;
   return [
     `▸ ${ICONS.CHANNEL} **Kênh thông báo:** ${channel}`,
     `▸ 🛡️ **Role Quản lý:** ${adminRole}`,
@@ -36,7 +42,7 @@ function render({ cfg, guild }) {
   const embed = new EmbedBuilder()
     .setColor(COLORS.PRIMARY)
     .setTitle(`${ICONS.GEAR} Cài đặt chung — ${guild.name}`)
-    .setDescription(renderConfigSection(cfg))
+    .setDescription(_renderFields(cfg))
     .setFooter({ text: FOOTER_DEFAULT })
     .setTimestamp();
 
@@ -46,14 +52,17 @@ function render({ cfg, guild }) {
     new ButtonBuilder().setCustomId(CUSTOM_ID.EDIT_TZ).setLabel('Timezone').setEmoji(ICONS.GLOBE).setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId(CUSTOM_ID.EDIT_REMINDER).setLabel('Nhắc nhở').setEmoji(ICONS.BELL).setStyle(ButtonStyle.Secondary),
   );
+
   const roleRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId(CUSTOM_ID.EDIT_ADMIN_ROLE).setLabel('Role Quản lý').setEmoji('🛡️').setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId(CUSTOM_ID.EDIT_ATTENDANCE_ROLE).setLabel('Role Điểm danh').setEmoji(ICONS.CHECK).setStyle(ButtonStyle.Secondary),
   );
+
   const navRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId(CUSTOM_ID.REFRESH).setLabel('Làm mới').setEmoji(ICONS.REFRESH).setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId(CUSTOM_ID.BACK_HOME).setLabel('← Bảng điều khiển').setEmoji(ICONS.HOME).setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(CUSTOM_ID.BACK_HOME).setLabel('← Dashboard').setEmoji(ICONS.HOME).setStyle(ButtonStyle.Secondary),
   );
+
   return { embeds: [embed], components: [editRow, roleRow, navRow] };
 }
 

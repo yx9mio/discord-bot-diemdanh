@@ -25,6 +25,13 @@ ENV TZ=Asia/Ho_Chi_Minh \
     NODE_ENV=production \
     NODE_OPTIONS="--max-old-space-size=256"
 
+# Expose port cho Railway health check (giá trị mặc định, Railway sẽ override bằng $PORT)
+EXPOSE 8080
+
 USER botuser
+
+# Health check: gọi /health endpoint, cho 30s grace period khởi động bot
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+  CMD wget -qO- http://localhost:${PORT:-8080}/health || exit 1
 
 CMD ["node", "index.js"]
