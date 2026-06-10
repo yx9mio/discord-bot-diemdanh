@@ -7,6 +7,7 @@ const { MessageFlags } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const { getMemberStats, getMemberBadges } = require('../../../services/memberService.js');
 const log = require('../../../utils/logger.js');
+const { replyErrEdit } = require('../../../utils/embeds.js');
 const { StatsView } = require('../../commands/setup/_views/_StatsView.js');
 
 const MODAL_ID = 'setup:stats:xem:modal';
@@ -41,10 +42,7 @@ class SetupStatsModalHandler extends InteractionHandler {
       }
 
       if (!targetUserId) {
-        return interaction.editReply({
-          content: '❌ Không tìm thấy thành viên. Nhập User ID (số) hoặc @username chính xác.',
-          flags: MessageFlags.Ephemeral,
-        });
+        return interaction.editReply(replyErrEdit('Không tìm thấy thành viên. Nhập User ID (số) hoặc @username chính xác.'));
       }
 
       const [stats, badges] = await Promise.all([
@@ -62,10 +60,7 @@ class SetupStatsModalHandler extends InteractionHandler {
       );
     } catch (e) {
       log.error('STATS_MODAL', guild?.id, 'xem người khác thất bại: %s', e.message);
-      return interaction.editReply({
-        content: '❌ Không thể tải stats, thử lại sau.',
-        flags: MessageFlags.Ephemeral,
-      });
+      return interaction.editReply(replyErrEdit('Không thể tải stats, thử lại sau.'));
     }
   }
 }

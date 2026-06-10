@@ -9,6 +9,7 @@ const scheduledService = require('../../../services/scheduledService.js');
 const configService    = require('../../../services/configService.js');
 const log = require('../../../utils/logger.js');
 const { requireAdmin } = require('../../../utils/permissions.js');
+const { replyErrEdit } = require('../../../utils/embeds.js');
 
 const MODAL_RECURRING_ID = 'setup:sch:add:recurring:detail';
 const MODAL_ONETIME_ID   = 'setup:sch:add:onetime:detail';
@@ -102,7 +103,7 @@ class SetupScheduleAddDetailModalHandler extends InteractionHandler {
       return interaction.editReply({ content: '✅ Đã thêm lịch.' });
     } catch (e) {
       log.error('SCH_ADD_DETAIL', guild.id, 'Lỗi thêm lịch: %s', e.message);
-      return interaction.editReply({ content: `❌ Không thể thêm lịch: ${e.message}` });
+      return interaction.editReply(replyErrEdit(`Không thể thêm lịch: ${e.message}`));
     }
   }
 }

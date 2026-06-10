@@ -8,6 +8,7 @@ const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/frame
 const memberService = require('../../../services/memberService.js');
 const log = require('../../../utils/logger.js');
 const { requireAdmin } = require('../../../utils/permissions.js');
+const { replyErrEdit } = require('../../../utils/embeds.js');
 const { MemberView } = require('../../commands/setup/_views/_MemberView.js');
 
 const MODAL_EDIT = 'setup:mem:edit:modal:';
@@ -29,7 +30,7 @@ class SetupMemEditModalHandler extends InteractionHandler {
 
     const { guild } = interaction;
     const userId = interaction.customId.slice(MODAL_EDIT.length);
-    if (!userId) return interaction.editReply({ content: '❌ Không xác định được thành viên.' });
+    if (!userId) return interaction.editReply(replyErrEdit('Không xác định được thành viên.'));
 
     const username = interaction.fields.getTextInputValue('username')?.trim()  || null;
     const phongBan = interaction.fields.getTextInputValue('phong_ban')?.trim() || null;
@@ -53,7 +54,7 @@ class SetupMemEditModalHandler extends InteractionHandler {
       log.info('MEM_EDIT', guild.id, 'Sửa thành viên %s: username=%s phongBan=%s ghiChu=%s', userId, currentUsername, phongBan, ghiChu);
     } catch (e) {
       log.error('MEM_EDIT', guild.id, 'upsertMember thất bại: %s', e.message);
-      return interaction.editReply({ content: '❌ Không thể cập nhật, thử lại sau.' });
+      return interaction.editReply(replyErrEdit('Không thể cập nhật, thử lại sau.'));
     }
 
     const members = await memberService.getMembers(guild.id).catch(() => []);

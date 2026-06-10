@@ -7,7 +7,7 @@ const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/frame
 const { getGuildConfig } = require('../../../services/configService.js');
 const log = require('../../../utils/logger.js');
 const { requireAdmin } = require('../../../utils/permissions.js');
-const { FOOTER_DEFAULT } = require('../../../utils/embeds.js');
+const { FOOTER_DEFAULT, replyErrEdit } = require('../../../utils/embeds.js');
 
 const BROADCAST_MODAL_ID = 'setup:session:broadcast:modal';
 
@@ -28,9 +28,9 @@ class SetupBroadcastModalHandler extends InteractionHandler {
 
     const { guild, channel } = interaction;
     const content = interaction.fields.getTextInputValue('message').trim();
-    if (!content) return interaction.editReply({ content: '❌ Nội dung tin nhắn không được để trống.' });
+    if (!content) return interaction.editReply(replyErrEdit('Nội dung tin nhắn không được để trống.'));
     if (content.length > 4000) {
-      return interaction.editReply({ content: `❌ Nội dung quá dài (${content.length}/4000 ký tự tối đa).` });
+      return interaction.editReply(replyErrEdit(`Nội dung quá dài (${content.length}/4000 ký tự tối đa).`));
     }
 
     const authorName = interaction.member?.displayName ?? interaction.user.username;

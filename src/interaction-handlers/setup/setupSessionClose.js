@@ -2,7 +2,7 @@
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const { MessageFlags } = require('discord.js');
 const { requireAdmin } = require('../../../utils/permissions.js');
-const { replyConfirm } = require('../../../utils/embeds.js');
+const { replyConfirm, replyErrEdit } = require('../../../utils/embeds.js');
 const sessionService = require('../../../services/sessionService.js');
 const log = require('../../../utils/logger.js');
 
@@ -37,7 +37,7 @@ class SetupSessionCloseHandler extends InteractionHandler {
     }
 
     if (!session) {
-      return interaction.editReply({ content: '\uD83D\uDEAB Không tìm thấy phiên yêu cầu.' });
+      return interaction.editReply(replyErrEdit('Không tìm thấy phiên yêu cầu.'));
     }
 
     log.info('SESSION_CLOSE', guild.id,

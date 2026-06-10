@@ -7,7 +7,7 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const {
   COLORS, ICONS, FOOTER_DEFAULT,
-  buildRichProgressBar, pctEmoji, pctLabel,
+  buildRichProgressBar, pctEmoji, pctLabel, formatDuration,
   buildPhaiStatsText, chunkLines,
 } = require('../_helpers');
 
@@ -50,9 +50,17 @@ function buildSessionEmbed(guild, session, attended = [], phaiRoleIds = [], isEd
   const startTs = Math.floor(new Date(session.started_at ?? Date.now()).getTime() / 1000);
   const ch = session.channel_id ? `<#${session.channel_id}>` : '_?_';
 
+  let countdownLine = '';
+  if (session.auto_close_at) {
+    const msLeft = new Date(session.auto_close_at).getTime() - Date.now();
+    if (msLeft > 0) {
+      countdownLine = `\n⏳ Tự động đóng sau **${formatDuration(Math.floor(msLeft / 1000))}** — <t:${Math.floor(new Date(session.auto_close_at).getTime() / 1000)}:R>`;
+    }
+  }
+
   const descParts = [
     `${ICONS.SESSION_OPEN} **${session.session_name ?? 'Phiên điểm danh'}**`,
-    `▸ Bắt đầu: <t:${startTs}:R>  ·  Kênh: ${ch}`,
+    `▸ Bắt đầu: <t:${startTs}:R>  ·  Kênh: ${ch}${countdownLine}`,
     '',
     `${pctEmoji(pct)} **Tỉ lệ: ${pct}%** — ${pctLabel(pct)}`,
     `\`${bar}\``,

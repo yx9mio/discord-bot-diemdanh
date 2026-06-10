@@ -6,6 +6,7 @@ const { MessageFlags, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const memberService = require('../../../services/memberService.js');
 const { requireAdmin } = require('../../../utils/permissions.js');
+const { replyErrEdit } = require('../../../utils/embeds.js');
 const log = require('../../../utils/logger.js');
 
 const RESET_PREFIX   = 'setup:mem:reset:';
@@ -59,7 +60,7 @@ class SetupResetStreakHandler extends InteractionHandler {
         return interaction.editReply({ content: `✅ Đã reset streak của **${members.length}** thành viên về 0.`, components: [] });
       } catch (e) {
         log.error('SETUP_RESET_STREAK_ALL', guild.id, 'Reset all streak thất bại: %s', e.message);
-        return interaction.editReply({ content: '❌ Không thể reset streak, thử lại sau.', components: [] });
+        return interaction.editReply(replyErrEdit('Không thể reset streak, thử lại sau.'));
       }
     }
 
@@ -79,7 +80,7 @@ class SetupResetStreakHandler extends InteractionHandler {
         return interaction.editReply({ content: `✅ Đã reset streak của <@${userId}>.`, components: [] });
       } catch (e) {
         log.error('SETUP_RESET_STREAK', guild.id, 'Reset streak thất bại userId=%s: %s', userId, e.message);
-        return interaction.editReply({ content: '❌ Reset thất bại, thử lại sau.', components: [] });
+        return interaction.editReply(replyErrEdit('Reset thất bại, thử lại sau.'));
       }
     }
 

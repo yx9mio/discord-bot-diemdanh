@@ -4,6 +4,7 @@ const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/frame
 const configService = require('../../../services/configService.js');
 const log = require('../../../utils/logger.js');
 const { requireAdmin } = require('../../../utils/permissions.js');
+const { replyErrEdit } = require('../../../utils/embeds.js');
 
 const MODAL_PREFIX = 'setup:cfg:edit:modal:';
 
@@ -33,7 +34,7 @@ class SetupConfigEditModalHandler extends InteractionHandler {
       return interaction.editReply({ content: '✅ Đã lưu cấu hình.' });
     } catch (e) {
       log.error('CFG_EDIT_MODAL', guildId, 'Lỗi lưu field %s: %s', field, e.message);
-      return interaction.editReply({ content: `❌ Không thể lưu cấu hình: ${e.message}` });
+      return interaction.editReply(replyErrEdit(`Không thể lưu cấu hình: ${e.message}`));
     }
   }
 }

@@ -1,5 +1,3 @@
-// src/interaction-handlers/setup/setupSessionStartModal.js
-// Handles: setup:session:start:modal (ModalSubmit) — tạo phiên mới từ form
 'use strict';
 const { EmbedBuilder, MessageFlags } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
@@ -8,8 +6,7 @@ const configService  = require('../../../services/configService.js');
 const log            = require('../../../utils/logger.js');
 const { requireAdmin }   = require('../../../utils/permissions.js');
 const {
-  FOOTER_DEFAULT,
-  COLORS,
+  FOOTER_DEFAULT, COLORS, replyErrEdit,
 } = require('../../../utils/embeds.js');
 const { fmtTs }          = require('../../../utils/format.js');
 const { startAutoRefresh } = require('../../../utils/timers.js');
@@ -33,9 +30,15 @@ class SetupSessionStartModalHandler extends InteractionHandler {
     const { guild } = interaction;
 
     try {
-      const ten     = interaction.fields.getTextInputValue('ten_phien')?.trim() || '';
+      const ten      = interaction.fields.getTextInputValue('ten_phien')?.trim() || '';
       const phutDong = interaction.fields.getTextInputValue('phut_dong')?.trim();
       const phaiRole = interaction.fields.getTextInputValue('phai_role')?.trim();
+
+      if (!ten) return interaction.editReply(replyErrEdit('Tên phiên không được để trống.'));
+      if (phutDong) {
+        const n = parseInt(phutDong, 10);
+        if (isNaN(n) || n < 1 || n > 1440) return interaction.editReply(replyErrEdit('Số phút không hợp lệ (1–1440).'));
+      }
 
       const cfg = await configService.getGuildConfig(guild.id);
       const tz  = cfg?.timezone ?? 'Asia/Ho_Chi_Minh';
@@ -59,7 +62,7 @@ class SetupSessionStartModalHandler extends InteractionHandler {
       return interaction.editReply({ embeds: [embed], components: [] });
     } catch (e) {
       log.error('SESSION_START_MODAL', guild.id, 'Lỗi tạo phiên: %s', e.message);
-      return interaction.editReply({ content: `❌ Không thể tạo phiên: ${e.message}` });
+      return interaction.editReply(replyErrEdit(`Không thể tạo phiên: ${e.message}`));
     }
   }
 }
