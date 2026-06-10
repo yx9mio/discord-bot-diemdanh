@@ -6,7 +6,6 @@
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const { getGuildConfig } = require('../../../services/configService.js');
 const { ConfigView } = require('../../commands/setup/_views/_ConfigView.js');
-const { CUSTOM_ID } = ConfigView;
 
 class SetupConfigHandler extends InteractionHandler {
   constructor(ctx, options) {
@@ -14,7 +13,7 @@ class SetupConfigHandler extends InteractionHandler {
   }
 
   parse(interaction) {
-    if (interaction.customId === CUSTOM_ID.CFG || interaction.customId === CUSTOM_ID.REFRESH) return this.some();
+    if (interaction.customId === 'setup:cfg' || interaction.customId === 'setup:cfg:refresh') return this.some();
     return this.none();
   }
 
