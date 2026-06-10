@@ -41,7 +41,6 @@ async function getMemberStats(guildId, userId) {
       .select('status, sessions!inner(cancelled)')
       .eq('guild_id', guildId)
       .eq('user_id', userId)
-      .eq('sessions.cancelled', false),
   ]);
   _throwSupabase(statsRes.error, 'getMemberStats');
   _throwSupabase(attRes.error, 'getMemberStats.attendance');
@@ -49,7 +48,7 @@ async function getMemberStats(guildId, userId) {
   const base = statsRes.data;
   if (!base) return null;
 
-  const atts          = attRes.data ?? [];
+  const atts          = (attRes.data ?? []).filter(a => a.sessions?.cancelled === false);
   const total_late    = atts.filter(a => a.status === 'tre').length;
   const total_absent  = atts.filter(a => a.status === 'khong_tham_gia').length;
   const total_excused = atts.filter(a => a.status === 'co_phep').length;
@@ -128,7 +127,7 @@ async function getServerStats(guildId) {
       .eq('guild_id', guildId).eq('cancelled', false),
     getClient().from('members').select('user_id')
       .eq('guild_id', guildId),
-    getClient().from('attendances').select('status')
+    getClient().from('attendances').select('status, sessions!inner(cancelled)')
       .eq('guild_id', guildId),
   ]);
   _throwSupabase(sessionsRes.error, 'getServerStats.sessions');
@@ -137,7 +136,7 @@ async function getServerStats(guildId) {
 
   const totalSessions = sessionsRes.data?.length  ?? 0;
   const totalMembers  = membersRes.data?.length   ?? 0;
-  const atts          = attRes.data ?? [];
+  const atts          = (attRes.data ?? []).filter(a => a.sessions?.cancelled === false);
   const totalAtt      = atts.length;
 
   const present = atts.filter(a => a.status === 'tham_gia').length;
