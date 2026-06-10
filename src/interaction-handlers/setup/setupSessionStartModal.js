@@ -6,16 +6,16 @@
 'use strict';
 const { MessageFlags, EmbedBuilder } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
-const sessionService = require('../../../../services/sessionService.js');
-const configService  = require('../../../../services/configService.js');
-const log            = require('../../../../utils/logger.js');
-const { requireAdmin }   = require('../../../../utils/permissions.js');
+const sessionService = require('../../services/sessionService.js');
+const configService  = require('../../services/configService.js');
+const log            = require('../../utils/logger.js');
+const { requireAdmin }   = require('../../utils/permissions.js');
 const {
   FOOTER_DEFAULT,
   COLORS,
-} = require('../../../../utils/embeds.js');
-const { fmtTs }          = require('../../../../utils/format.js');
-const { datHenGioDong, startAutoRefresh } = require('../../../../utils/timers.js');
+} = require('../../utils/embeds.js');
+const { fmtTs }          = require('../../utils/format.js');
+const { datHenGioDong, startAutoRefresh } = require('../../utils/timers.js');
 
 const MODAL_ID = 'setup:session:start:modal';
 

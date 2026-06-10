@@ -3,8 +3,8 @@
 // [FIX] Đọc targetUserId từ footer `uid:XXXXXXX` để phân trang đúng khi admin xem người khác
 'use strict';
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
-const { getAttendancesByUser } = require('../../../../services/attendanceService.js');
-const log = require('../../../../utils/logger.js');
+const { getAttendancesByUser } = require('../../services/attendanceService.js');
+const log = require('../../utils/logger.js');
 const { StatsView } = require('../../commands/setup/_views/_StatsView.js');
 
 const LICHSU_NEXT = 'setup:stats:lichsu:next';

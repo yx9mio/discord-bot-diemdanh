@@ -4,10 +4,10 @@
 'use strict';
 const { MessageFlags, EmbedBuilder } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
-const { getGuildConfig } = require('../../../../services/configService.js');
-const log = require('../../../../utils/logger.js');
-const { requireAdmin } = require('../../../../utils/permissions.js');
-const { FOOTER_DEFAULT } = require('../../../../utils/embeds.js');
+const { getGuildConfig } = require('../../services/configService.js');
+const log = require('../../utils/logger.js');
+const { requireAdmin } = require('../../utils/permissions.js');
+const { FOOTER_DEFAULT } = require('../../utils/embeds.js');
 
 const BROADCAST_MODAL_ID = 'setup:session:broadcast:modal';
 

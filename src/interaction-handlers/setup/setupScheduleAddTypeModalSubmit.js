@@ -3,7 +3,7 @@
 'use strict';
 const { MessageFlags, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
-const log = require('../../../../utils/logger.js');
+const log = require('../../utils/logger.js');
 
 const TYPE_MODAL_ID = 'setup:sch:add:type';
 

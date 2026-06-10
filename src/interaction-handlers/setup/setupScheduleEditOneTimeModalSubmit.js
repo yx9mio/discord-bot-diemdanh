@@ -3,8 +3,8 @@
 'use strict';
 const { MessageFlags } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
-const scheduledService = require('../../../../services/scheduledService.js');
-const log = require('../../../../utils/logger.js');
+const scheduledService = require('../../services/scheduledService.js');
+const log = require('../../utils/logger.js');
 
 const EDIT_ONETIME_PREFIX = 'setup:sch:edit:onetime:';
 

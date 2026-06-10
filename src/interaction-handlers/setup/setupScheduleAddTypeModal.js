@@ -3,7 +3,7 @@
 'use strict';
 const { ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
-const { requireAdmin } = require('../../../../utils/permissions.js');
+const { requireAdmin } = require('../../utils/permissions.js');
 
 const CUSTOM_ID = {
   ADD: 'setup:sch:add',

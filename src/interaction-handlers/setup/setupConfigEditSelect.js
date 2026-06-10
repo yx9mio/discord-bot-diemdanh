@@ -2,9 +2,9 @@
 // interaction-handlers/setup/setupConfigEditSelect.js
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const { MessageFlags } = require('discord.js');
-const configService = require('../../../../services/configService.js');
-const log = require('../../../../utils/logger.js');
-const { requireAdmin } = require('../../../../utils/permissions.js');
+const configService = require('../../services/configService.js');
+const log = require('../../utils/logger.js');
+const { requireAdmin } = require('../../utils/permissions.js');
 
 const SELECT_PREFIX = 'setup:cfg:edit:select:';
 

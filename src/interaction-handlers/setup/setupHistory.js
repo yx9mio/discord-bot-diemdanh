@@ -5,7 +5,7 @@
 'use strict';
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const { HistoryView } = require('../../commands/setup/_views/_HistoryView.js');
-const sessionService = require('../../../../services/sessionService.js');
+const sessionService = require('../../services/sessionService.js');
 const { CUSTOM_ID } = HistoryView;
 
 class SetupHistoryHandler extends InteractionHandler {

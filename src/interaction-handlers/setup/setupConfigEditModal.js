@@ -2,9 +2,9 @@
 // interaction-handlers/setup/setupConfigEditModal.js
 const { MessageFlags } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
-const configService = require('../../../../services/configService.js');
-const log = require('../../../../utils/logger.js');
-const { requireAdmin } = require('../../../../utils/permissions.js');
+const configService = require('../../services/configService.js');
+const log = require('../../utils/logger.js');
+const { requireAdmin } = require('../../utils/permissions.js');
 
 const MODAL_PREFIX = 'setup:cfg:edit:modal:';
 
