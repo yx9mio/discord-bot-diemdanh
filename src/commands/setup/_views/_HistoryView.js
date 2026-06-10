@@ -5,9 +5,9 @@ const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('
 const { COLORS, ICONS } = require('../../../../utils/theme.js');
 const { FOOTER_DEFAULT } = require('../../../../utils/embeds.js');
 const { fmtTs, durationStr } = require('../../../../utils/format.js');
-const sessionService = require('../../../../services/sessionService.js');
 
 const CUSTOM_ID = {
+  HISTORY:   'setup:history',
   PAGE_NEXT: 'setup:history:page:next',
   PAGE_PREV: 'setup:history:page:prev',
   REFRESH:   'setup:history:refresh',
@@ -17,11 +17,12 @@ const CUSTOM_ID = {
 const PAGE_SIZE = 5;
 
 function render({ sessions, page = 0, guild }) {
-  const total      = sessions.length;
+  const safe      = Array.isArray(sessions) ? sessions : [];
+  const total      = safe.length;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const cPage      = Math.max(0, Math.min(page, totalPages - 1));
   const start      = cPage * PAGE_SIZE;
-  const slice      = sessions.slice(start, start + PAGE_SIZE);
+  const slice      = safe.slice(start, start + PAGE_SIZE);
 
   const desc = total === 0
     ? '*Chưa có phiên nào.*'
@@ -54,11 +55,4 @@ function render({ sessions, page = 0, guild }) {
   return { embeds: [embed], components: [navRow], _page: cPage, _totalPages: totalPages };
 }
 
-async function handleRefresh(interaction, page = 0) {
-  await interaction.deferUpdate();
-  // [FIX] getAllSessions thay vì getSessions (hàm không tồn tại)
-  const sessions = await sessionService.getAllSessions(interaction.guild.id);
-  return interaction.editReply(render({ sessions, page, guild: interaction.guild }));
-}
-
-module.exports = { HistoryView: { render, handleRefresh, CUSTOM_ID, PAGE_SIZE } };
+module.exports = { HistoryView: { render, CUSTOM_ID, PAGE_SIZE } };

@@ -1,11 +1,8 @@
-// src/interaction-handlers/setup/setupHistory.js
-// Handles: setup:history, PAGE_NEXT, PAGE_PREV, REFRESH
-// [FIX-PATH] '../../../services/' (3 cấp = root, không phải 4 cấp)
-// [FIX-METHOD] getSessionsByGuild thay vì getSessionHistory (tên cũ không tồn tại)
 'use strict';
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const { HistoryView } = require('../../commands/setup/_views/_HistoryView.js');
 const sessionService = require('../../../services/sessionService.js');
+const log = require('../../../utils/logger.js');
 const { CUSTOM_ID } = HistoryView;
 
 class SetupHistoryHandler extends InteractionHandler {
@@ -23,17 +20,22 @@ class SetupHistoryHandler extends InteractionHandler {
     await interaction.deferUpdate();
     const { guild, customId } = interaction;
 
-    const footer = interaction.message?.embeds?.[0]?.footer?.text ?? '';
-    let currentPage = 0;
-    const m = footer.match(/Trang (\d+)\/(\d+)/);
-    if (m) currentPage = parseInt(m[1], 10) - 1;
+    try {
+      const footer = interaction.message?.embeds?.[0]?.footer?.text ?? '';
+      let currentPage = 0;
+      const m = footer.match(/Trang (\d+)\/(\d+)/);
+      if (m) currentPage = parseInt(m[1], 10) - 1;
 
-    let nextPage = currentPage;
-    if (customId === CUSTOM_ID.PAGE_NEXT) nextPage = currentPage + 1;
-    if (customId === CUSTOM_ID.PAGE_PREV) nextPage = currentPage - 1;
+      let nextPage = currentPage;
+      if (customId === CUSTOM_ID.PAGE_NEXT) nextPage = currentPage + 1;
+      if (customId === CUSTOM_ID.PAGE_PREV) nextPage = currentPage - 1;
 
-    const sessions = await sessionService.getSessionsByGuild(guild.id);
-    return interaction.editReply(HistoryView.render(sessions, nextPage));
+      const sessions = await sessionService.getAllSessions(guild.id);
+      return interaction.editReply(HistoryView.render({ sessions, page: nextPage, guild }));
+    } catch (e) {
+      log.error('HISTORY', guild?.id, 'run thất bại: %s', e?.message ?? e);
+      return interaction.editReply({ content: '❌ Không thể tải nhật ký. Vui lòng thử lại sau.', embeds: [], components: [] });
+    }
   }
 }
 
