@@ -2,6 +2,7 @@
 // Handles: setup:mem:add:modal (ModalSubmit)
 // [FIX-PATH] ../../../services/ (3 cấp từ src/interaction-handlers/setup/)
 'use strict';
+const { MessageFlags } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const memberService = require('../../../services/memberService.js');
 const log = require('../../../utils/logger.js');
@@ -21,9 +22,9 @@ class SetupMemberAddModalHandler extends InteractionHandler {
   }
 
   async run(interaction) {
-    const { ok } = await requireAdmin(interaction, { context: 'thêm thành viên', deferred: false });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    const { ok } = await requireAdmin(interaction, { context: 'thêm thành viên', deferred: true });
     if (!ok) return;
-    await interaction.deferUpdate();
     const { guild } = interaction;
 
     const userId = interaction.fields.getTextInputValue('user_id').trim().replace(/[<@>]/g, '');
@@ -34,7 +35,8 @@ class SetupMemberAddModalHandler extends InteractionHandler {
     try {
       await memberService.upsertMember({ guildId: guild.id, userId, username, phongBan, ghiChu });
       const members = await memberService.getMembers(guild.id);
-      return interaction.editReply(MemberView.render({ members, guild, page: 0 }));
+      await interaction.message?.edit(MemberView.render({ members, guild, page: 0 })).catch(() => null);
+      return interaction.editReply({ content: '✅ Đã thêm thành viên.' });
     } catch (e) {
       log.error('MEMBER_ADD', guild.id, 'Lỗi thêm %s: %s', userId, e.message);
       return interaction.editReply({ content: `❌ Không thể thêm thành viên: ${e.message}` });

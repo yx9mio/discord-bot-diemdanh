@@ -22,7 +22,7 @@ class SetupStatsModalHandler extends InteractionHandler {
   }
 
   async run(interaction) {
-    await interaction.deferUpdate();
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const { guild } = interaction;
 
     try {

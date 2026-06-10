@@ -4,7 +4,7 @@
 //             → build inline tại đây hoặc dùng SessionView.renderActive()
 // [FIX-PATH]  ../../../ → ../../../../
 'use strict';
-const { EmbedBuilder } = require('discord.js');
+const { EmbedBuilder, MessageFlags } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const sessionService = require('../../../services/sessionService.js');
 const configService  = require('../../../services/configService.js');
@@ -30,9 +30,9 @@ class SetupSessionStartModalHandler extends InteractionHandler {
   }
 
   async run(interaction) {
-    const { ok } = await requireAdmin(interaction, { context: 'mở phiên', deferred: false });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    const { ok } = await requireAdmin(interaction, { context: 'mở phiên', deferred: true });
     if (!ok) return;
-    await interaction.deferUpdate();
     const { guild } = interaction;
 
     try {

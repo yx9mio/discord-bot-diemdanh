@@ -1,5 +1,5 @@
 'use strict';
-// interaction-handlers/setup/setupConfigEditModal.js
+const { MessageFlags } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const configService = require('../../../services/configService.js');
 const log = require('../../../utils/logger.js');
@@ -18,9 +18,9 @@ class SetupConfigEditModalHandler extends InteractionHandler {
   }
 
   async run(interaction) {
-    const { ok } = await requireAdmin(interaction, { context: 'sửa cấu hình', deferred: false });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    const { ok } = await requireAdmin(interaction, { context: 'sửa cấu hình', deferred: true });
     if (!ok) return;
-    await interaction.deferUpdate();
     const field = interaction.customId.slice(MODAL_PREFIX.length);
     const value = interaction.fields.getTextInputValue('value').trim();
     const guildId = interaction.guild.id;
@@ -29,7 +29,8 @@ class SetupConfigEditModalHandler extends InteractionHandler {
       await configService.setConfigField(guildId, field, value);
       const cfg = await configService.getGuildConfig(guildId);
       const { ConfigView } = require('../../commands/setup/_views/_ConfigView.js');
-      return interaction.editReply(ConfigView.render({ cfg, guild: interaction.guild }));
+      await interaction.message?.edit(ConfigView.render({ cfg, guild: interaction.guild })).catch(() => null);
+      return interaction.editReply({ content: '✅ Đã lưu cấu hình.' });
     } catch (e) {
       log.error('CFG_EDIT_MODAL', guildId, 'Lỗi lưu field %s: %s', field, e.message);
       return interaction.editReply({ content: `❌ Không thể lưu cấu hình: ${e.message}` });

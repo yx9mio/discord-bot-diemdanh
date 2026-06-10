@@ -8,7 +8,6 @@ const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/frame
 const scheduledService = require('../../../services/scheduledService.js');
 const configService    = require('../../../services/configService.js');
 const log = require('../../../utils/logger.js');
-const { CUSTOM_ID } = require('./setupScheduleAddTypeModal.js');
 const { requireAdmin } = require('../../../utils/permissions.js');
 
 const MODAL_RECURRING_ID = 'setup:sch:add:recurring:detail';
@@ -25,7 +24,7 @@ class SetupScheduleAddDetailModalHandler extends InteractionHandler {
   }
 
   async run(interaction) {
-    await interaction.deferUpdate();
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const { ok } = await requireAdmin(interaction, { deferred: true, context: 'thêm lịch' });
     if (!ok) return;
     const { guild, customId } = interaction;
@@ -57,7 +56,8 @@ class SetupScheduleAddDetailModalHandler extends InteractionHandler {
 
       const { ScheduleView } = require('../../commands/setup/_views/_ScheduleView.js');
       const sessions = await scheduledService.getScheduledSessions(guild.id);
-      return interaction.editReply(ScheduleView.render({ schedules: sessions, guild, page: 0 }));
+      await interaction.message?.edit(ScheduleView.render({ schedules: sessions, guild, page: 0 })).catch(() => null);
+      return interaction.editReply({ content: '✅ Đã thêm lịch.' });
     } catch (e) {
       log.error('SCH_ADD_DETAIL', guild.id, 'Lỗi thêm lịch: %s', e.message);
       return interaction.editReply({ content: `❌ Không thể thêm lịch: ${e.message}` });

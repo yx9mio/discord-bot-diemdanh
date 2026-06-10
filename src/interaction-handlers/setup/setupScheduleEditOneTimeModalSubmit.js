@@ -1,6 +1,7 @@
 // src/interaction-handlers/setup/setupScheduleEditOneTimeModalSubmit.js
 // Handles: setup:sch:edit:onetime:* (ModalSubmit) — lưu sửa lịch one-time
 'use strict';
+const { MessageFlags } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const scheduledService = require('../../../services/scheduledService.js');
 const log = require('../../../utils/logger.js');
@@ -18,7 +19,7 @@ class SetupScheduleEditOneTimeModalSubmitHandler extends InteractionHandler {
   }
 
   async run(interaction) {
-    await interaction.deferUpdate();
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const scheduleId = interaction.customId.slice(EDIT_ONETIME_PREFIX.length);
     const { guild } = interaction;
 
@@ -34,7 +35,8 @@ class SetupScheduleEditOneTimeModalSubmitHandler extends InteractionHandler {
 
       const { ScheduleView } = require('../../commands/setup/_views/_ScheduleView.js');
       const sessions = await scheduledService.getScheduledSessions(guild.id);
-      return interaction.editReply(ScheduleView.render({ schedules: sessions, guild, page: 0 }));
+      await interaction.message?.edit(ScheduleView.render({ schedules: sessions, guild, page: 0 })).catch(() => null);
+      return interaction.editReply({ content: '✅ Đã cập nhật lịch.' });
     } catch (e) {
       log.error('SCH_EDIT_SUBMIT', guild.id, 'Lỗi lưu sửa %s: %s', scheduleId, e.message);
       return interaction.editReply({ content: `❌ Không thể lưu thay đổi: ${e.message}` });
