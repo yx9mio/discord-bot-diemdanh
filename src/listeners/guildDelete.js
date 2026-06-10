@@ -2,7 +2,6 @@
 const { Listener, Events } = require('@sapphire/framework');
 const log = require('../../utils/logger.js');
 const { cancelTimers, stopAutoRefresh } = require('../../utils/timers.js');
-const { clearGuildTimers } = require('../../utils/scheduler.js');
 const sessionService   = require('../../services/sessionService.js');
 
 class GuildDeleteListener extends Listener {
@@ -15,7 +14,6 @@ class GuildDeleteListener extends Listener {
     cancelTimers(guild.id);
     const activeSession = await sessionService.getActiveSession(guild.id).catch(() => null);
     if (activeSession) stopAutoRefresh(activeSession.id);
-    clearGuildTimers(guild.id);
   }
 }
 

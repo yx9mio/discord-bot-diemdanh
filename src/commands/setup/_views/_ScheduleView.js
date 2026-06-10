@@ -55,16 +55,21 @@ function render({ schedules, page = 0, guild }) {
 
   const components = [];
 
-  // Nút xóa — mỗi lịch trong trang hiện tại
+  // Nút sửa + xóa — mỗi lịch trong trang hiện tại
   if (slice.length > 0) {
+    const editRow = new ActionRowBuilder();
     const delRow = new ActionRowBuilder();
     for (const s of slice) {
-      const label = `✕ ${DAY_VI[s.day_of_week]} ${String(s.hour).padStart(2, '0')}:${String(s.minute).padStart(2, '0')}`;
+      const dayLabel = DAY_VI[s.day_of_week] ?? '?';
+      const timeLabel = `${String(s.hour).padStart(2, '0')}:${String(s.minute).padStart(2, '0')}`;
+      editRow.addComponents(
+        new ButtonBuilder().setCustomId(`${CUSTOM_ID.EDIT_PREFIX}${s.id}`).setLabel(`✎ ${dayLabel} ${timeLabel}`).setStyle(ButtonStyle.Secondary),
+      );
       delRow.addComponents(
-        new ButtonBuilder().setCustomId(`${CUSTOM_ID.DEL_PREFIX}${s.id}`).setLabel(label).setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId(`${CUSTOM_ID.DEL_PREFIX}${s.id}`).setLabel(`✕ ${dayLabel} ${timeLabel}`).setStyle(ButtonStyle.Danger),
       );
     }
-    components.push(delRow);
+    components.push(editRow, delRow);
   }
 
   const ctrlRow = new ActionRowBuilder().addComponents(

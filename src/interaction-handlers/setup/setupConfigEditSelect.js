@@ -4,8 +4,15 @@ const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/frame
 const configService = require('../../../services/configService.js');
 const log = require('../../../utils/logger.js');
 const { requireAdmin } = require('../../../utils/permissions.js');
+const { replyErrEdit } = require('../../../utils/embeds.js');
 
-const SELECT_PREFIX = 'setup:cfg:edit:select:';
+const SELECT_PREFIX = 'setup:cfg:select:';
+
+const SELECT_FIELD_MAP = {
+  channel:          'notification_channel_id',
+  admin_role:       'admin_role_id',
+  attendance_role:  'attendance_role_id',
+};
 
 class SetupConfigEditSelectHandler extends InteractionHandler {
   constructor(ctx, options) {
@@ -21,18 +28,20 @@ class SetupConfigEditSelectHandler extends InteractionHandler {
     const { ok } = await requireAdmin(interaction, { context: 'sửa cấu hình', deferred: false });
     if (!ok) return;
     await interaction.deferUpdate();
-    const field = interaction.customId.slice(SELECT_PREFIX.length);
-    const value = interaction.values[0];
+    const suffix = interaction.customId.slice(SELECT_PREFIX.length);
     const guildId = interaction.guild.id;
+    const col = SELECT_FIELD_MAP[suffix];
+    if (!col) return interaction.editReply(replyErrEdit(`Loại cấu hình không xác định: "${suffix}"`));
 
+    const value = interaction.values[0];
     try {
-      await configService.setConfigField(guildId, field, value);
+      await configService.setConfigField(guildId, col, value);
       const cfg = await configService.getGuildConfig(guildId);
       const { ConfigView } = require('../../commands/setup/_views/_ConfigView.js');
       return interaction.editReply(ConfigView.render({ cfg, guild: interaction.guild }));
     } catch (e) {
-      log.error('CFG_EDIT_SELECT', guildId, 'Lỗi lưu field %s: %s', field, e.message);
-      return interaction.editReply({ content: `❌ Không thể lưu cấu hình: ${e.message}` });
+      log.error('CFG_EDIT_SELECT', guildId, 'Lỗi lưu field %s: %s', suffix, e.message);
+      return interaction.editReply(replyErrEdit(`Không thể lưu cấu hình: ${e.message}`));
     }
   }
 }

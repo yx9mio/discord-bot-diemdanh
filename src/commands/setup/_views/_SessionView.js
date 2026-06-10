@@ -5,11 +5,13 @@ const { FOOTER_DEFAULT } = require('../../../../utils/embeds.js');
 const { fmtTs }          = require('../../../../utils/format.js');
 
 const CUSTOM_ID = {
-  SESSION_START:   'setup:session:start',
-  SESSION_CLOSE:   'setup:session:close:',
-  SESSION_EXPORT:  'setup:session:export:',
-  SESSION_REFRESH: 'setup:session:refresh',
-  BACK_HOME:       'setup:home',
+  SESSION_START:     'setup:session:start',
+  SESSION_CLOSE:     'setup:session:close:',
+  SESSION_CLOSE_ALL: 'setup:session:close:all',
+  SESSION_EXPORT:    'setup:session:export:',
+  SESSION_DETAIL:    'setup:session:detail:',
+  SESSION_REFRESH:   'setup:session:refresh',
+  BACK_HOME:         'setup:home',
 };
 
 const PAGE_SIZE = 5;
@@ -38,7 +40,19 @@ function _sessionCard(session, idx) {
   ].filter(Boolean).join('\n');
 }
 
-function render({ sessions, page = 0, guild, cfg, members = [] }) {
+function _sessionCardExpanded(session, idx, phaiRoles) {
+  const card = _sessionCard(session, idx);
+  const extra = [
+    `▸ ID: \`${session.id}\``,
+    `▸ Tạo bởi: <@${session.created_by}>`,
+    session.phai_role_ids?.length ? `▸ Phái: ${session.phai_role_ids.map(r => `<@&${r}>`).join(' ')}` : null,
+    session.eligible_member_ids?.length ? `▸ Thành viên: ${session.eligible_member_ids.length} người` : null,
+    session.created_at ? `▸ Tạo lúc: ${fmtTs(session.created_at)}` : null,
+  ].filter(Boolean).join('\n');
+  return card + '\n' + extra;
+}
+
+function render({ sessions, page = 0, guild, cfg, members = [], detailId = null }) {
   const all   = Array.isArray(sessions) ? sessions.filter(s => s.is_active) : [];
   const total = all.length;
 
@@ -59,7 +73,12 @@ function render({ sessions, page = 0, guild, cfg, members = [] }) {
       embed.addFields({ name: '👥 Thành viên', value: `${members.length} người`, inline: true });
     }
   } else {
-    const desc = slice.map((s, i) => _sessionCard(s, start + i + 1)).join('\n\n');
+    const desc = slice.map((s, i) => {
+      const idx = start + i + 1;
+      return s.id === detailId
+        ? _sessionCardExpanded(s, idx)
+        : _sessionCard(s, idx);
+    }).join('\n\n');
     embed.setDescription(desc);
   }
 
@@ -67,26 +86,24 @@ function render({ sessions, page = 0, guild, cfg, members = [] }) {
 
   if (total > 0) {
     const closeRow = new ActionRowBuilder();
+    const detailRow = new ActionRowBuilder();
     for (const s of slice) {
+      const idx = start + slice.indexOf(s) + 1;
+      const isExpanded = s.id === detailId;
       closeRow.addComponents(
         new ButtonBuilder()
           .setCustomId(`${CUSTOM_ID.SESSION_CLOSE}${s.id}`)
-          .setLabel(`✖ #${start + slice.indexOf(s) + 1}`)
+          .setLabel(`✖ #${idx}`)
           .setStyle(ButtonStyle.Danger),
       );
-    }
-    components.push(closeRow);
-
-    const exportRow = new ActionRowBuilder();
-    for (const s of slice) {
-      exportRow.addComponents(
+      detailRow.addComponents(
         new ButtonBuilder()
-          .setCustomId(`${CUSTOM_ID.SESSION_EXPORT}${s.id}`)
-          .setLabel(`📥 #${start + slice.indexOf(s) + 1}`)
+          .setCustomId(`${CUSTOM_ID.SESSION_DETAIL}${s.id}`)
+          .setLabel(isExpanded ? `▴ #${idx}` : `▾ #${idx}`)
           .setStyle(ButtonStyle.Secondary),
       );
     }
-    components.push(exportRow);
+    components.push(detailRow, closeRow);
   }
 
   const ctrlRow = new ActionRowBuilder().addComponents(
@@ -94,9 +111,16 @@ function render({ sessions, page = 0, guild, cfg, members = [] }) {
     new ButtonBuilder().setCustomId(CUSTOM_ID.SESSION_REFRESH).setLabel('Làm mới').setEmoji(ICONS.REFRESH).setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId(CUSTOM_ID.BACK_HOME).setLabel('← Dashboard').setEmoji(ICONS.HOME).setStyle(ButtonStyle.Secondary),
   );
+
+  if (total > 1) {
+    ctrlRow.addComponents(
+      new ButtonBuilder().setCustomId(CUSTOM_ID.SESSION_CLOSE_ALL).setLabel(`✖ Đóng tất cả (${total})`).setEmoji(ICONS.CLOSE).setStyle(ButtonStyle.Danger),
+    );
+  }
+
   components.push(ctrlRow);
 
-  return { embeds: [embed], components, _page: cPage, _totalPages: totalPages };
+  return { embeds: [embed], components, _page: cPage, _totalPages: totalPages, _detailId: detailId };
 }
 
 module.exports = { SessionView: { render, CUSTOM_ID } };

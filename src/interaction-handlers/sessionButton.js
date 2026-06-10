@@ -27,6 +27,7 @@ const SESSION_BUTTON_IDS = new Set([
   'session:export_csv',
   'session:cancel', 'session:confirm_cancel', 'session:cancel_cancel',
   'session:confirm_close', 'session:cancel_close',
+  'session:confirm_close:all', 'session:cancel_close:all',
 ]);
 
 class SessionButtonHandler extends InteractionHandler {
@@ -276,6 +277,36 @@ class SessionButtonHandler extends InteractionHandler {
     // ── session:cancel_close ────────────────────────────────────────────────────
     if (customId === 'session:cancel_close') {
       return interaction.update({ content: '↩️ Đã hủy. Phiên vẫn đang mở.', embeds: [], components: [] });
+    }
+
+    // ── session:confirm_close:all (batch) ───────────────────────────────────────
+    if (customId === 'session:confirm_close:all') {
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+      const { ok: okBatch } = await requireAdmin(interaction, { context: 'đóng tất cả phiên', deferred: true });
+      if (!okBatch) return;
+
+      const sessions = await sessionService.getActiveSessions(guild.id);
+      if (!sessions.length) return interaction.editReply(replyErrEdit('Không có phiên nào để đóng.'));
+
+      let closed = 0;
+      for (const s of sessions) {
+        try {
+          stopAutoRefresh(s.id);
+          cancelTimers(guild.id);
+          await sessionService.closeSession(s.id);
+          closed++;
+        } catch (e) {
+          log.warn('CLOSE_ALL', guild.id, 'Đóng phiên %s thất bại: %s', s.id, e.message);
+        }
+      }
+
+      log.info('CLOSE_ALL', guild.id, 'Đã đóng %d/%d phiên', closed, sessions.length);
+      return interaction.editReply(replyOkEdit(`Đã đóng **${closed}/${sessions.length}** phiên đang mở.`));
+    }
+
+    // ── session:cancel_close:all (batch) ─────────────────────────────────────────
+    if (customId === 'session:cancel_close:all') {
+      return interaction.update({ content: '↩️ Đã hủy. Các phiên vẫn đang mở.', embeds: [], components: [] });
     }
   }
 }

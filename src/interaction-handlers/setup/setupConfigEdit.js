@@ -13,14 +13,13 @@ const {
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 
 const EDIT_CHANNEL         = 'setup:cfg:edit:channel';
-const EDIT_PHAI            = 'setup:cfg:edit:phai';
 const EDIT_TZ              = 'setup:cfg:edit:tz';
 const EDIT_REMINDER        = 'setup:cfg:edit:reminder';
 const EDIT_ADMIN_ROLE      = 'setup:cfg:edit:admin_role';
 const EDIT_ATTENDANCE_ROLE = 'setup:cfg:edit:attendance_role';
 
 const EDIT_IDS = new Set([
-  EDIT_CHANNEL, EDIT_PHAI, EDIT_TZ,
+  EDIT_CHANNEL, EDIT_TZ,
   EDIT_REMINDER, EDIT_ADMIN_ROLE, EDIT_ATTENDANCE_ROLE,
 ]);
 
@@ -39,19 +38,6 @@ function handleButton(interaction) {
       .setMaxValues(1);
     return interaction.reply({
       content: '📢 Chọn kênh sẽ dùng làm **kênh thông báo điểm danh**:',
-      components: [new ActionRowBuilder().addComponents(menu)],
-      flags: MessageFlags.Ephemeral,
-    });
-  }
-
-  if (id === EDIT_PHAI) {
-    const menu = new RoleSelectMenuBuilder()
-      .setCustomId(SELECT_PREFIX + 'phai')
-      .setPlaceholder('Chọn các role phái...')
-      .setMinValues(0)
-      .setMaxValues(20);
-    return interaction.reply({
-      content: '⚔️ Chọn các **role phái** (có thể chọn nhiều, bỏ trống để xoá hết):',
       components: [new ActionRowBuilder().addComponents(menu)],
       flags: MessageFlags.Ephemeral,
     });

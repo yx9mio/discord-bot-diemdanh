@@ -7,6 +7,7 @@ const sessionService = require('../../../services/sessionService.js');
 const log = require('../../../utils/logger.js');
 
 const PREFIX = 'setup:session:close:';
+const CLOSE_ALL = 'setup:session:close:all';
 
 class SetupSessionCloseHandler extends InteractionHandler {
   constructor(ctx, options) {
@@ -15,8 +16,9 @@ class SetupSessionCloseHandler extends InteractionHandler {
 
   parse(interaction) {
     const id = interaction.customId;
+    if (id === CLOSE_ALL)         return this.some();
     if (id === 'setup:session:close') return this.some();
-    if (id.startsWith(PREFIX)) return this.some();
+    if (id.startsWith(PREFIX) && id !== CLOSE_ALL) return this.some();
     return this.none();
   }
 
@@ -27,6 +29,22 @@ class SetupSessionCloseHandler extends InteractionHandler {
 
     const id = interaction.customId;
     const guild = interaction.guild;
+
+    if (id === CLOSE_ALL) {
+      const sessions = await sessionService.getActiveSessions(guild.id);
+      if (!sessions.length) return interaction.editReply(replyErrEdit('Không có phiên nào đang mở.'));
+
+      log.info('SESSION_CLOSE_ALL', guild.id,
+        '%s yêu cầu đóng tất cả %d phiên', interaction.user.tag, sessions.length);
+
+      return interaction.editReply(
+        replyConfirm(
+          `Bạn có chắc muốn đóng **tất cả ${sessions.length} phiên** đang mở?\n> Hành động này không thể hoàn tác.`,
+          'session:confirm_close:all',
+          'session:cancel_close:all',
+        ),
+      );
+    }
 
     let session;
     if (id.startsWith(PREFIX)) {

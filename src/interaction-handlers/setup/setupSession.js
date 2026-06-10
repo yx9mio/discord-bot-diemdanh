@@ -12,6 +12,7 @@ const log = require('../../../utils/logger.js');
 
 const PREFIX_REFRESH = 'setup:session:refresh';
 const PREFIX_EXPORT  = 'setup:session:export:';
+const PREFIX_DETAIL  = 'setup:session:detail:';
 
 class SetupSessionHandler extends InteractionHandler {
   constructor(ctx, options) {
@@ -23,15 +24,23 @@ class SetupSessionHandler extends InteractionHandler {
     if (id === 'setup:session') return this.some();
     if (id === PREFIX_REFRESH) return this.some();
     if (id.startsWith(PREFIX_EXPORT)) return this.some();
+    if (id.startsWith(PREFIX_DETAIL)) return this.some();
     return this.none();
   }
 
   async run(interaction) {
-    const { customId, guild } = interaction;
+    const { customId, guild, component } = interaction;
 
     if (customId.startsWith(PREFIX_EXPORT)) {
       const sessionId = customId.slice(PREFIX_EXPORT.length);
       return this._handleExport(interaction, guild, sessionId);
+    }
+
+    let detailId = null;
+    if (customId.startsWith(PREFIX_DETAIL)) {
+      const sessionId = customId.slice(PREFIX_DETAIL.length);
+      const wasExpanded = component?.label?.startsWith('▴') ?? false;
+      detailId = wasExpanded ? null : sessionId;
     }
 
     await interaction.deferUpdate();
@@ -42,7 +51,7 @@ class SetupSessionHandler extends InteractionHandler {
       getMembers(guild.id),
     ]);
     const { SessionView } = require('../../commands/setup/_views/_SessionView.js');
-    return interaction.editReply(SessionView.render({ sessions: allSessions, guild, cfg, members }));
+    return interaction.editReply(SessionView.render({ sessions: allSessions, guild, cfg, members, detailId }));
   }
 
   async _handleExport(interaction, guild, sessionId) {

@@ -24,12 +24,6 @@ function _fmtSchedule(s) {
   return `**${day} ${time}** — ${s.session_name ?? 'Phiên'}${remind}`;
 }
 
-function _phaiRoles(cfg) {
-  const ids = cfg?.phai_role_ids ?? [];
-  if (!ids.length) return '_Tất cả_';
-  return ids.map(id => `<@&${id}>`).join(' ');
-}
-
 function _buildStatusBanner(cfg, members) {
   const steps = [];
   const hasChannel = !!cfg?.notification_channel_id;
@@ -48,25 +42,14 @@ function _buildStatusBanner(cfg, members) {
 }
 
 function render({ guild, cfg, schedules, members, session, sessions }) {
-  const phaiText = _phaiRoles(cfg);
-
   const activeSessions = sessions ?? (session ? [session] : []);
-
-  const phaiRole = (cfg?.phai_role_ids ?? [])
-    .map(id => guild?.roles?.cache?.get(id))
-    .find(r => r?.icon);
 
   const embed = new EmbedBuilder()
     .setColor(COLORS.PRIMARY)
     .setTitle(`${ICONS.HOME} Bảng điều khiển — ${guild.name}`)
+    .setThumbnail(guild.iconURL({ size: 64 }) ?? null)
     .setFooter({ text: FOOTER_DEFAULT })
     .setTimestamp();
-
-  if (phaiRole?.icon) {
-    embed.setThumbnail(phaiRole.iconURL({ size: 64 }));
-  } else {
-    embed.setThumbnail(guild.iconURL({ size: 64 }) ?? null);
-  }
 
   const hasChannel = !!cfg?.notification_channel_id;
   const hasMembers = (members?.length ?? 0) > 0;
@@ -98,7 +81,6 @@ function render({ guild, cfg, schedules, members, session, sessions }) {
     name: `${ICONS.GEAR} Cài đặt chung`,
     value: [
       `▸ ${ICONS.CHANNEL} **Kênh log:** ${channel}`,
-      `▸ **Phái:** ${phaiText}`,
       `▸ ${ICONS.GLOBE} **Timezone:** \`${tz}\``,
     ].join('\n'),
   });

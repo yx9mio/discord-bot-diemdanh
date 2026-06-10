@@ -67,14 +67,61 @@ async function processOneReminder(guild, cfg, sched, now, tz) {
       if (now < skipUntil) return;
     }
 
-    // [BUG-C] Dùng notification_channel_id
-    const ch = await guild.channels.fetch(cfg.notification_channel_id).catch(() => null);
-    if (!ch) return;
+    const msg = `⏰ **Nhắc lịch:** Phiên **${sched.session_name}** sẽ mở sau **${minsToOpen} phút**.`;
 
-    await ch.send(`⏰ **Nhắc lịch:** Phiên **${sched.session_name}** sẽ mở sau **${minsToOpen} phút**.`);
+    // Gửi vào kênh thông báo
+    const ch = await guild.channels.fetch(cfg.notification_channel_id).catch(() => null);
+    if (ch) {
+      await ch.send(msg).catch(() => {});
+    }
+
+    // Gửi DM cho thành viên đủ điều kiện
+    await _sendDmReminders(guild, cfg, sched, msg);
+
     log.info('REMINDER', guild.id, 'Sent %dmin reminder for %s', minsToOpen, sched.session_name);
   } catch (e) {
     log.error('REMINDER', guild.id, 'processOneReminder: %s', e.message);
+  }
+}
+
+async function _sendDmReminders(guild, cfg, sched, msg) {
+  try {
+    await guild.members.fetch().catch(() => {});
+    const targetIds = new Set();
+
+    // Ưu tiên: allowed_role_id → phai_role_ids → attendance_role_id → tất cả
+    if (sched.allowed_role_id) {
+      const role = guild.roles.cache.get(sched.allowed_role_id);
+      if (role) role.members.forEach(m => targetIds.add(m.id));
+    }
+    if (targetIds.size === 0 && sched.phai_role_ids?.length) {
+      for (const rid of sched.phai_role_ids) {
+        const role = guild.roles.cache.get(rid);
+        if (role) role.members.forEach(m => targetIds.add(m.id));
+      }
+    }
+    if (targetIds.size === 0 && cfg.attendance_role_id) {
+      const role = guild.roles.cache.get(cfg.attendance_role_id);
+      if (role) role.members.forEach(m => targetIds.add(m.id));
+    }
+    if (targetIds.size === 0) {
+      guild.members.cache.forEach(m => { if (!m.user.bot) targetIds.add(m.id); });
+    }
+
+    let sent = 0;
+    for (const uid of targetIds) {
+      const member = guild.members.cache.get(uid);
+      if (!member) continue;
+      try {
+        await member.send(msg);
+        sent++;
+      } catch {} // DM tắt hoặc blocked
+    }
+    if (sent > 0) {
+      log.info('REMINDER_DM', guild.id, 'Đã gửi DM nhắc cho %d/%d thành viên', sent, targetIds.size);
+    }
+  } catch (e) {
+    log.warn('REMINDER_DM', guild.id, 'Lỗi gửi DM: %s', e.message);
   }
 }
 
