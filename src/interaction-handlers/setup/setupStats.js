@@ -72,7 +72,7 @@ class SetupStatsHandler extends InteractionHandler {
           getServerStats(guild.id),
           getTopMembers(guild.id, 5),
         ]);
-        return interaction.editReply(StatsView.renderServerStats(stats, top, guild));
+        return interaction.editReply(await StatsView.renderServerStats(stats, top, guild));
       } catch (e) {
         log.error('SETUP_STATS', guild.id, 'getServerStats thất bại: %s', e.message);
         return interaction.editReply({ content: '❌ Không thể tải stats server, thử lại sau.' });
@@ -113,8 +113,9 @@ class SetupStatsHandler extends InteractionHandler {
     if (customId === CUSTOM_ID.LICHSU) {
       await interaction.deferUpdate();
       try {
-        const records = await getAttendancesByUser(guild.id, interaction.user.id);
-        return interaction.editReply(StatsView.renderLichSu(records, interaction.user.id, guild, 0));
+        let records = await getAttendancesByUser(guild.id, interaction.user.id);
+        if (!Array.isArray(records)) records = [];
+        return interaction.editReply(await StatsView.renderLichSu(records, interaction.user.id, guild, 0));
       } catch (e) {
         log.error('SETUP_STATS', guild.id, 'getLichSu thất bại: %s', e.message);
         return interaction.editReply({ content: '❌ Không thể tải lịch sử, thử lại sau.' });
@@ -153,8 +154,9 @@ class SetupStatsHandler extends InteractionHandler {
             getMemberBadges(guild.id, targetId),
           ]);
           let member;
-          try { member = await guild.members.fetch(targetId); } catch { member = null; }
-          const viewerId = targetId !== interaction.user.id ? interaction.user.id : targetId;
+          const userId = stats?.user_id ?? targetId;
+          try { member = await guild.members.fetch(userId); } catch { member = null; }
+          const viewerId = userId !== interaction.user.id ? interaction.user.id : userId;
           return interaction.editReply(StatsView.renderToi(stats, member, guild, badges, viewerId));
         }
 
@@ -168,19 +170,20 @@ class SetupStatsHandler extends InteractionHandler {
             getServerStats(guild.id),
             getTopMembers(guild.id, 5),
           ]);
-          return interaction.editReply(StatsView.renderServerStats(stats, top, guild));
+          return interaction.editReply(await StatsView.renderServerStats(stats, top, guild));
         }
 
         if (ctx === 'lichsu') {
           const targetId = _readUid(interaction) ?? interaction.user.id;
-          const records = await getAttendancesByUser(guild.id, targetId);
+          let records = await getAttendancesByUser(guild.id, targetId);
+          if (!Array.isArray(records)) records = [];
           let currentPage = 0;
           try {
             const footer = interaction.message?.embeds?.[0]?.footer?.text ?? '';
             const m = footer.match(/Trang (\d+)\/(\d+)/);
             if (m) currentPage = parseInt(m[1], 10) - 1;
           } catch { /* keep 0 */ }
-          return interaction.editReply(StatsView.renderLichSu(records, targetId, guild, currentPage));
+          return interaction.editReply(await StatsView.renderLichSu(records, targetId, guild, currentPage));
         }
 
         return interaction.editReply(StatsView.renderStatsMenu());

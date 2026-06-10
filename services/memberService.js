@@ -188,7 +188,7 @@ const getBadges = getBadgeDefinitions;
 
 async function getMemberBadges(guildId, userId) {
   const rows = await getUserBadges(guildId, userId);
-  return rows.map(r => ({ ...r, threshold: r.badges?.threshold ?? r.threshold }));
+  return rows.filter(r => r.badges != null).map(r => ({ ...r, threshold: r.badges.threshold ?? r.threshold }));
 }
 
 function upsertMemberBadge(guildId, userId, threshold) {
@@ -201,9 +201,9 @@ async function getMemberBadgesMulti(guildId, userIds) {
     .from('member_badges').select('*, badges(*)').eq('guild_id', guildId).in('user_id', userIds);
   _throwSupabase(error, 'getMemberBadgesMulti');
   const result = {};
-  for (const row of data ?? []) {
+  for (const row of (data ?? []).filter(r => r.badges != null)) {
     if (!result[row.user_id]) result[row.user_id] = [];
-    result[row.user_id].push({ ...row, threshold: row.badges?.threshold ?? row.threshold });
+    result[row.user_id].push({ ...row, threshold: row.badges.threshold ?? row.threshold });
   }
   return result;
 }

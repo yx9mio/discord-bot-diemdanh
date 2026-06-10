@@ -186,9 +186,7 @@ async function renderRank(rows, guild, topN = 10) {
     const medal   = medals[i] ?? `\`${String(i + 1).padStart(2)}.\``;
     const gMember = guild?.members?.cache?.get(r.user_id);
     const name    = gMember?.displayName ?? `<@${r.user_id}>`;
-    const phong   = r.phong_ban ?? gMember?.roles?.cache
-      ?.filter(role => role.name !== '@everyone')
-      ?.first()?.name ?? '';
+    const phong   = r.phong_ban ?? '';
     const joined  = r.total_joined   ?? 0;
     const streak  = r.current_streak ?? 0;
     const totalS  = r.total_sessions ?? joined;
@@ -207,7 +205,7 @@ async function renderRank(rows, guild, topN = 10) {
 }
 
 // ─── Lịch sử cá nhân ─────────────────────────────────────────────────
-function renderLichSu(records, userId, guild, page = 0) {
+async function renderLichSu(records, userId, guild, page = 0) {
   const PAGE_SIZE  = 10;
   const total      = records.length;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -215,6 +213,9 @@ function renderLichSu(records, userId, guild, page = 0) {
   const start      = cPage * PAGE_SIZE;
   const slice      = records.slice(start, start + PAGE_SIZE);
 
+  if (!guild?.members?.cache?.has(userId) && guild) {
+    try { await guild.members.fetch(userId); } catch { /* not in guild */ }
+  }
   const gMember = guild?.members?.cache?.get(userId);
   const name    = gMember?.displayName ?? `<@${userId}>`;
 
@@ -283,7 +284,7 @@ function renderLichSu(records, userId, guild, page = 0) {
  * @param {Array}  top    — mảng từ getTopMembers()
  * @param {object} guild  — Guild object
  */
-function renderServerStats(stats, top, guild) {
+async function renderServerStats(stats, top, guild) {
   const pct      = stats?.rate_present      ?? 0;
   const total    = stats?.total_sessions    ?? 0;
   const members  = stats?.total_members     ?? 0;
@@ -327,8 +328,12 @@ function renderServerStats(stats, top, guild) {
     }
   }
 
-  // Mini top-5
+  // Mini top-5 — fetch uncached trước khi render
   if (Array.isArray(top) && top.length > 0) {
+    const uncached = top.filter(r => !guild?.members?.cache?.has(r.user_id)).map(r => r.user_id);
+    if (uncached.length && guild) {
+      await guild.members.fetch({ user: uncached }).catch(() => null);
+    }
     const medals = ['🥇', '🥈', '🥉', '`4.`', '`5.`'];
     const lines = top.slice(0, 5).map((r, i) => {
       const nm     = guild?.members?.cache?.get(r.user_id)?.displayName ?? `<@${r.user_id}>`;

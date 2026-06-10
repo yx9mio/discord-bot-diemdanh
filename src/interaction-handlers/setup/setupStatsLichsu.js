@@ -37,8 +37,9 @@ class SetupStatsLichsuHandler extends InteractionHandler {
 
       const nextPage = customId === LICHSU_NEXT ? currentPage + 1 : currentPage - 1;
 
-      const records = await getAttendancesByUser(guild.id, targetUserId);
-      return interaction.editReply(StatsView.renderLichSu(records, targetUserId, guild, nextPage));
+      let records = await getAttendancesByUser(guild.id, targetUserId);
+      if (!Array.isArray(records)) records = [];
+      return interaction.editReply(await StatsView.renderLichSu(records, targetUserId, guild, nextPage));
     } catch (e) {
       log.error('STATS_LICHSU', guild?.id, 'pagination thất bại: %s', e.message);
       return interaction.editReply({ content: '❌ Không thể tải trang, thử lại sau.' });
