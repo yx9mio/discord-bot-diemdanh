@@ -206,12 +206,13 @@ async function renderRank(rows, guild, topN = 10) {
 
 // ─── Lịch sử cá nhân ─────────────────────────────────────────────────
 async function renderLichSu(records, userId, guild, page = 0) {
+  const safeRecords = Array.isArray(records) ? records : [];
   const PAGE_SIZE  = 10;
-  const total      = records.length;
+  const total      = safeRecords.length;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const cPage      = Math.max(0, Math.min(page, totalPages - 1));
   const start      = cPage * PAGE_SIZE;
-  const slice      = records.slice(start, start + PAGE_SIZE);
+  const slice      = safeRecords.slice(start, start + PAGE_SIZE);
 
   if (!guild?.members?.cache?.has(userId) && guild) {
     try { await guild.members.fetch(userId); } catch { /* not in guild */ }
@@ -238,7 +239,7 @@ async function renderLichSu(records, userId, guild, page = 0) {
 
   // Tóm tắt trạng thái toàn bộ records
   const summary = { tham_gia: 0, tre: 0, khong_tham_gia: 0, co_phep: 0 };
-  for (const r of records) {
+  for (const r of safeRecords) {
     if (summary[r.status] !== undefined) summary[r.status]++;
   }
   const summaryStr = [
