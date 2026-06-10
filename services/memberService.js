@@ -171,10 +171,14 @@ async function getBadgeDefinitions(guildId) {
 }
 
 async function getUserBadges(guildId, userId) {
-  const { data, error } = await getClient()
-    .from('member_badges').select('*, badges(*)').eq('guild_id', guildId).eq('user_id', userId);
-  _throwSupabase(error, 'getUserBadges');
-  return data ?? [];
+  const [rowsRes, badgesRes] = await Promise.all([
+    getClient().from('member_badges').select('*').eq('guild_id', guildId).eq('user_id', userId),
+    getClient().from('badges').select('*').eq('guild_id', guildId),
+  ]);
+  _throwSupabase(rowsRes.error, 'getUserBadges');
+  _throwSupabase(badgesRes.error, 'getUserBadges.badges');
+  const badgeMap = new Map((badgesRes.data ?? []).map(b => [b.threshold, b]));
+  return (rowsRes.data ?? []).map(r => ({ ...r, badges: badgeMap.get(r.threshold) ?? null }));
 }
 
 async function upsertUserBadge(payload) {
@@ -197,13 +201,19 @@ function upsertMemberBadge(guildId, userId, threshold) {
 
 async function getMemberBadgesMulti(guildId, userIds) {
   if (!userIds?.length) return {};
-  const { data, error } = await getClient()
-    .from('member_badges').select('*, badges(*)').eq('guild_id', guildId).in('user_id', userIds);
-  _throwSupabase(error, 'getMemberBadgesMulti');
+  const [rowsRes, badgesRes] = await Promise.all([
+    getClient().from('member_badges').select('*').eq('guild_id', guildId).in('user_id', userIds),
+    getClient().from('badges').select('*').eq('guild_id', guildId),
+  ]);
+  _throwSupabase(rowsRes.error, 'getMemberBadgesMulti');
+  _throwSupabase(badgesRes.error, 'getMemberBadgesMulti.badges');
+  const badgeMap = new Map((badgesRes.data ?? []).map(b => [b.threshold, b]));
   const result = {};
-  for (const row of (data ?? []).filter(r => r.badges != null)) {
+  for (const row of (rowsRes.data ?? [])) {
+    const badge = badgeMap.get(row.threshold);
+    if (!badge) continue;
     if (!result[row.user_id]) result[row.user_id] = [];
-    result[row.user_id].push({ ...row, threshold: row.badges.threshold ?? row.threshold });
+    result[row.user_id].push({ ...row, badges: badge, threshold: badge.threshold ?? row.threshold });
   }
   return result;
 }
