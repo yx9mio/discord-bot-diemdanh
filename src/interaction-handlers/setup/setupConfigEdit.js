@@ -14,13 +14,12 @@ const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/frame
 
 const EDIT_CHANNEL         = 'setup:cfg:edit:channel';
 const EDIT_TZ              = 'setup:cfg:edit:tz';
-const EDIT_REMINDER        = 'setup:cfg:edit:reminder';
 const EDIT_ADMIN_ROLE      = 'setup:cfg:edit:admin_role';
 const EDIT_ATTENDANCE_ROLE = 'setup:cfg:edit:attendance_role';
 
 const EDIT_IDS = new Set([
   EDIT_CHANNEL, EDIT_TZ,
-  EDIT_REMINDER, EDIT_ADMIN_ROLE, EDIT_ATTENDANCE_ROLE,
+  EDIT_ADMIN_ROLE, EDIT_ATTENDANCE_ROLE,
 ]);
 
 const MODAL_PREFIX  = 'setup:cfg:modal:';
@@ -81,23 +80,6 @@ function handleButton(interaction) {
             .setStyle(TextInputStyle.Short)
             .setPlaceholder('Asia/Ho_Chi_Minh')
             .setRequired(true),
-        ),
-      );
-    return interaction.showModal(modal);
-  }
-
-  if (id === EDIT_REMINDER) {
-    const modal = new ModalBuilder()
-      .setCustomId(MODAL_PREFIX + 'reminder')
-      .setTitle('Cài đặt Nhắc nhở')
-      .addComponents(
-        new ActionRowBuilder().addComponents(
-          new TextInputBuilder()
-            .setCustomId('reminder_minutes')
-            .setLabel('Số phút nhắc trước giờ mở (0 = tắt)')
-            .setStyle(TextInputStyle.Short)
-            .setRequired(true)
-            .setPlaceholder('5 / 10 / 15 / 30 / 60'),
         ),
       );
     return interaction.showModal(modal);

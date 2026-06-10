@@ -9,8 +9,7 @@ const { replyErrEdit } = require('../../../utils/embeds.js');
 const MODAL_PREFIX = 'setup:cfg:modal:';
 
 const FIELD_MAP = {
-  tz:       { col: 'timezone',               inputId: 'timezone' },
-  reminder: { col: 'notification_channel_id', inputId: 'reminder_minutes' },
+  tz: { col: 'timezone', inputId: 'timezone' },
 };
 
 class SetupConfigEditModalHandler extends InteractionHandler {
