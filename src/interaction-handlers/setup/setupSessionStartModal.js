@@ -46,6 +46,7 @@ class SetupSessionStartModalHandler extends InteractionHandler {
       const session = await sessionService.createSession({
         guild_id:      guild.id,
         session_name:  ten || `Phiên ${new Date().toLocaleDateString('vi-VN')}`,
+        started_by:    interaction.user.id,
         auto_close_at: phutDong ? new Date(Date.now() + parseInt(phutDong, 10) * 60_000).toISOString() : null,
         phai_role_ids: phaiRole ? [phaiRole] : [],
       });
