@@ -48,7 +48,7 @@ function buildSessionEmbed(guild, session, attended = [], phaiRoleIds = [], isEd
   });
 
   const startTs = Math.floor(new Date(session.started_at ?? Date.now()).getTime() / 1000);
-  const ch = session.channel_id ? `<#${session.channel_id}>` : '_?_';
+  const ch = session.channel_id ? `<#${session.channel_id}>` : '_Chưa có kênh_';
 
   let countdownLine = '';
   if (session.auto_close_at) {
