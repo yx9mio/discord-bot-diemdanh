@@ -36,7 +36,13 @@ function upsertMember({ guildId, userId, phongBan = null, ghiChu = null, usernam
 
 // ─── Member Stats ─────────────────────────────────────────────────────────────
 async function getMemberStats(guildId, userId) {
-  const [statsRes, attRes] = await Promise.all([
+  const [memberRes, statsRes, attRes] = await Promise.all([
+    getClient()
+      .from('members')
+      .select('phong_ban')
+      .eq('guild_id', guildId)
+      .eq('user_id', userId)
+      .maybeSingle(),
     getClient()
       .from('member_stats')
       .select('*')
@@ -60,7 +66,7 @@ async function getMemberStats(guildId, userId) {
   const total_absent  = atts.filter(a => a.status === 'khong_tham_gia').length;
   const total_excused = atts.filter(a => a.status === 'co_phep').length;
 
-  return { ...base, total_late, total_absent, total_excused };
+  return { ...base, phong_ban: memberRes.data?.phong_ban ?? null, total_late, total_absent, total_excused };
 }
 
 async function getMemberStatsMulti(guildId, userIds) {
@@ -74,11 +80,16 @@ async function getMemberStatsMulti(guildId, userIds) {
 }
 
 async function getAllMemberStats(guildId) {
-  const { data, error } = await getClient()
-    .from('member_stats').select('*').eq('guild_id', guildId)
-    .order('total_joined', { ascending: false });
-  _throwSupabase(error, 'getAllMemberStats');
-  return data ?? [];
+  const [statsRes, membersRes] = await Promise.all([
+    getClient()
+      .from('member_stats').select('*').eq('guild_id', guildId)
+      .order('total_joined', { ascending: false }),
+    getClient()
+      .from('members').select('user_id, phong_ban').eq('guild_id', guildId),
+  ]);
+  _throwSupabase(statsRes.error, 'getAllMemberStats');
+  const phongMap = new Map((membersRes.data ?? []).map(m => [m.user_id, m.phong_ban]));
+  return (statsRes.data ?? []).map(r => ({ ...r, phong_ban: phongMap.get(r.user_id) ?? null }));
 }
 
 async function upsertMemberStats(payload) {
@@ -116,11 +127,16 @@ async function batchResetStreak(guildId, userIds) {
 }
 
 async function getTopMembers(guildId, limit = 10) {
-  const { data, error } = await getClient()
-    .from('member_stats').select('*').eq('guild_id', guildId)
-    .order('total_joined', { ascending: false }).limit(limit);
-  _throwSupabase(error, 'getTopMembers');
-  return data ?? [];
+  const [statsRes, membersRes] = await Promise.all([
+    getClient()
+      .from('member_stats').select('*').eq('guild_id', guildId)
+      .order('total_joined', { ascending: false }).limit(limit),
+    getClient()
+      .from('members').select('user_id, phong_ban').eq('guild_id', guildId),
+  ]);
+  _throwSupabase(statsRes.error, 'getTopMembers');
+  const phongMap = new Map((membersRes.data ?? []).map(m => [m.user_id, m.phong_ban]));
+  return (statsRes.data ?? []).map(r => ({ ...r, phong_ban: phongMap.get(r.user_id) ?? null }));
 }
 
 /**
