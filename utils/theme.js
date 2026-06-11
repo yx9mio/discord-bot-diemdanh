@@ -45,6 +45,7 @@ const ICONS = {
   ATTEND_NO:    '❌',
   ATTEND_LATE:  '⏰',
   ATTEND_EXCUSE:'📋',
+  SWORD:        '⚔️',
   INACTIVE:     '💤',
 };
 
