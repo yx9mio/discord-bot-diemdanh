@@ -71,9 +71,6 @@ class AttendanceSelectHandler extends InteractionHandler {
 
       try {
         const ch = guild.channels.cache.get(session.channel_id);
-        log.info('ATTEND_DEBUG', guild.id,
-          'channel_id=%s message_id=%s ch=%s',
-          session.channel_id, session.message_id, !!ch);
         if (ch && session.message_id) {
           const msg = await ch.messages.fetch(session.message_id).catch(() => null);
           if (msg) {
@@ -87,15 +84,9 @@ class AttendanceSelectHandler extends InteractionHandler {
               embeds: [embed],
               components: [selectRow, ...adminRows, ...pagComponents].slice(0, 5),
             }).catch(() => null);
-          } else {
-            log.warn('ATTEND_DEBUG', guild.id, 'msg=null — message not found');
           }
-        } else {
-          log.warn('ATTEND_DEBUG', guild.id, 'skip — ch=%s msgId=%s', !!ch, session.message_id);
         }
-      } catch (e) {
-        log.error('ATTEND_DEBUG', guild.id, 'Lỗi update embed: %s', e.message);
-      }
+      } catch (_) {}
 
       log.info('ATTEND', guild.id, '%s điểm danh: %s', user.tag, status);
       return interaction.editReply({ content: `${statusLabel} — Đã ghi nhận điểm danh của bạn.` });

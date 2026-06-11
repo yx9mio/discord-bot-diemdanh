@@ -30,7 +30,7 @@ async function upsertAttendanceNoTime(sessionId, guildId, userId, username, stat
 async function getAttendances(sessionId) {
   const { data, error } = await getClient()
     .from('attendances')
-    .select('user_id, username, status, marked_by, checked_in_at')
+    .select('id, session_id, guild_id, user_id, username, status, marked_by, checked_in_at')
     .eq('session_id', sessionId);
   _throwSupabase(error, 'getAttendances');
   return _validateAttendances(data ?? [], 'getAttendances');
