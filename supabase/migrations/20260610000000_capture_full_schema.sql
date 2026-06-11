@@ -20,6 +20,7 @@ ALTER TABLE guild_configs ADD COLUMN IF NOT EXISTS admin_role_id          TEXT D
 ALTER TABLE guild_configs ADD COLUMN IF NOT EXISTS attendance_role_id     TEXT DEFAULT NULL;
 ALTER TABLE guild_configs ADD COLUMN IF NOT EXISTS log_channel_id         TEXT DEFAULT NULL;
 ALTER TABLE guild_configs ADD COLUMN IF NOT EXISTS default_role_id        TEXT DEFAULT NULL;
+ALTER TABLE guild_configs ADD COLUMN IF NOT EXISTS phai_role_ids          TEXT[] DEFAULT '{}';
 
 ALTER TABLE guild_configs DROP COLUMN IF EXISTS schedules;
 ALTER TABLE guild_configs DROP COLUMN IF EXISTS auto_schedule_enabled;

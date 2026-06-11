@@ -12,7 +12,10 @@ const SELECT_FIELD_MAP = {
   channel:          'notification_channel_id',
   admin_role:       'admin_role_id',
   attendance_role:  'attendance_role_id',
+  phai:             'phai_role_ids',
 };
+
+const SELECT_FIELD_IS_ARRAY = new Set(['phai']);
 
 class SetupConfigEditSelectHandler extends InteractionHandler {
   constructor(ctx, options) {
@@ -33,7 +36,9 @@ class SetupConfigEditSelectHandler extends InteractionHandler {
     const col = SELECT_FIELD_MAP[suffix];
     if (!col) return interaction.editReply(replyErrEdit(`Loại cấu hình không xác định: "${suffix}"`));
 
-    const value = interaction.values[0];
+    const value = SELECT_FIELD_IS_ARRAY.has(suffix)
+      ? interaction.values
+      : interaction.values[0];
     try {
       await configService.setConfigField(guildId, col, value);
       const cfg = await configService.getGuildConfig(guildId);

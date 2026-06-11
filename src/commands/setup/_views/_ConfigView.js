@@ -18,6 +18,7 @@ const CUSTOM_ID = {
   EDIT_TZ:              'setup:cfg:edit:tz',
   EDIT_ADMIN_ROLE:      'setup:cfg:edit:admin_role',
   EDIT_ATTENDANCE_ROLE: 'setup:cfg:edit:attendance_role',
+  EDIT_PHAI:            'setup:cfg:edit:phai',
   REFRESH:              'setup:cfg:refresh',
   BACK_HOME:            'setup:home',
 };
@@ -27,6 +28,11 @@ function render({ cfg, guild }) {
   const channel   = cfg?.notification_channel_id ? `<#${cfg.notification_channel_id}>` : '_chưa cài_';
   const adminRole = cfg?.admin_role_id ? `<@&${cfg.admin_role_id}>` : '_chưa cài_';
   const attRole   = cfg?.attendance_role_id ? `<@&${cfg.attendance_role_id}>` : '_chưa cài_';
+
+  const phaiIds = cfg?.phai_role_ids ?? [];
+  const phaiStr = phaiIds.length
+    ? phaiIds.map(id => `<@&${id}>`).join(' ')
+    : '_Không có_';
 
   const embed = new EmbedBuilder()
     .setColor(COLORS.PRIMARY)
@@ -40,6 +46,14 @@ function render({ cfg, guild }) {
     { name: '🛡️ Role Quản lý', value: adminRole, inline: true },
     { name: `${ICONS.CHECK} Role Điểm danh`, value: attRole, inline: true },
     { name: `${ICONS.GLOBE} Timezone`, value: `\`${tz}\``, inline: true },
+    { name: `${ICONS.GEAR} Phái / Nhóm`, value: phaiStr, inline: false },
+  );
+
+  // Role edit row — max 5 buttons per row
+  const roleRow = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(CUSTOM_ID.EDIT_ADMIN_ROLE).setLabel('Role Quản lý').setEmoji('🛡️').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(CUSTOM_ID.EDIT_ATTENDANCE_ROLE).setLabel('Role Điểm danh').setEmoji(ICONS.CHECK).setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(CUSTOM_ID.EDIT_PHAI).setLabel('Phái / Nhóm').setEmoji(ICONS.GEAR).setStyle(ButtonStyle.Secondary),
   );
 
   const editRow = new ActionRowBuilder().addComponents(
@@ -47,17 +61,12 @@ function render({ cfg, guild }) {
     new ButtonBuilder().setCustomId(CUSTOM_ID.EDIT_TZ).setLabel('Timezone').setEmoji(ICONS.GLOBE).setStyle(ButtonStyle.Secondary),
   );
 
-  const roleRow = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId(CUSTOM_ID.EDIT_ADMIN_ROLE).setLabel('Role Quản lý').setEmoji('🛡️').setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId(CUSTOM_ID.EDIT_ATTENDANCE_ROLE).setLabel('Role Điểm danh').setEmoji(ICONS.CHECK).setStyle(ButtonStyle.Secondary),
-  );
-
   const navRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId(CUSTOM_ID.REFRESH).setLabel('Làm mới').setEmoji(ICONS.REFRESH).setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId(CUSTOM_ID.BACK_HOME).setLabel('← Dashboard').setEmoji(ICONS.HOME).setStyle(ButtonStyle.Secondary),
   );
 
-  return { embeds: [embed], components: [editRow, roleRow, navRow] };
+  return { embeds: [embed], components: [roleRow, editRow, navRow] };
 }
 
 module.exports = { ConfigView: { render, CUSTOM_ID, storeMessageId, getMessageId } };

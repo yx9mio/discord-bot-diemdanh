@@ -16,10 +16,12 @@ const EDIT_CHANNEL         = 'setup:cfg:edit:channel';
 const EDIT_TZ              = 'setup:cfg:edit:tz';
 const EDIT_ADMIN_ROLE      = 'setup:cfg:edit:admin_role';
 const EDIT_ATTENDANCE_ROLE = 'setup:cfg:edit:attendance_role';
+const EDIT_PHAI            = 'setup:cfg:edit:phai';
 
 const EDIT_IDS = new Set([
   EDIT_CHANNEL, EDIT_TZ,
   EDIT_ADMIN_ROLE, EDIT_ATTENDANCE_ROLE,
+  EDIT_PHAI,
 ]);
 
 const MODAL_PREFIX  = 'setup:cfg:modal:';
@@ -67,6 +69,20 @@ async function handleButton(interaction) {
     return interaction.editReply({
       embeds: [],
       content: '✅ Chọn **role điểm danh** (bỏ trống = xoá):',
+      components: [new ActionRowBuilder().addComponents(menu)],
+    });
+  }
+
+  if (id === EDIT_PHAI) {
+    await interaction.deferUpdate();
+    const menu = new RoleSelectMenuBuilder()
+      .setCustomId(SELECT_PREFIX + 'phai')
+      .setPlaceholder('Chọn phái / nhóm...')
+      .setMinValues(0)
+      .setMaxValues(10);
+    return interaction.editReply({
+      embeds: [],
+      content: '⚔️ Chọn **phái / nhóm** (có thể chọn nhiều, bỏ trống = xoá hết):',
       components: [new ActionRowBuilder().addComponents(menu)],
     });
   }
