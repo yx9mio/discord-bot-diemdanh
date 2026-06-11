@@ -218,7 +218,28 @@ async function getMemberBadges(guildId, userId) {
   return rows.filter(r => r.badges != null).map(r => ({ ...r, threshold: r.badges.threshold ?? r.threshold }));
 }
 
-function upsertMemberBadge(guildId, userId, threshold) {
+const DEFAULT_BADGES = [
+  { threshold:   5, emoji: '🌱', label: 'Lính Mới'     },
+  { threshold:  10, emoji: '⭐', label: 'Cần Cù'        },
+  { threshold:  20, emoji: '🌟', label: 'Chuyên Cần'    },
+  { threshold:  30, emoji: '💪', label: 'Kiên Trì'      },
+  { threshold:  50, emoji: '🏆', label: 'Huyền Thoại'   },
+  { threshold: 100, emoji: '👑', label: 'Vua Điểm Danh' },
+];
+
+async function ensureBadgeDefinition(guildId, threshold) {
+  const { data } = await getClient()
+    .from('badges').select('id').eq('guild_id', guildId).eq('threshold', threshold).maybeSingle();
+  if (data) return;
+  const badge = DEFAULT_BADGES.find(b => b.threshold === threshold);
+  if (!badge) return;
+  const { error } = await getClient()
+    .from('badges').upsert({ guild_id: guildId, threshold, emoji: badge.emoji, label: badge.label }, { onConflict: 'guild_id,threshold' });
+  _throwSupabase(error, 'ensureBadgeDefinition');
+}
+
+async function upsertMemberBadge(guildId, userId, threshold) {
+  await ensureBadgeDefinition(guildId, threshold);
   return upsertUserBadge({ guild_id: guildId, user_id: userId, threshold });
 }
 

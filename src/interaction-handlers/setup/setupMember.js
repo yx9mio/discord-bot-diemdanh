@@ -72,9 +72,9 @@ class SetupMemberHandler extends InteractionHandler {
 
     // ── Xoá thành viên (bước 1: confirm) ─────────────────────────────
     if (customId.startsWith(CUSTOM_ID.DEL_PREFIX) && !customId.startsWith(CUSTOM_ID.DEL_CONFIRM_PREFIX) && !customId.startsWith(CUSTOM_ID.DEL_CANCEL_PREFIX)) {
-      const { ok } = await requireAdmin(interaction, { context: 'xoá thành viên', deferred: false });
-      if (!ok) return;
       await interaction.deferUpdate();
+      const { ok } = await requireAdmin(interaction, { context: 'xoá thành viên', deferred: true });
+      if (!ok) return;
       const userId = customId.slice(CUSTOM_ID.DEL_PREFIX.length);
       const gMember = guild.members.cache.get(userId);
       const name = gMember?.displayName ?? `<@${userId}>`;
@@ -91,9 +91,9 @@ class SetupMemberHandler extends InteractionHandler {
 
     // ── Xoá thành viên (bước 2: thực hiện) ───────────────────────────
     if (customId.startsWith(CUSTOM_ID.DEL_CONFIRM_PREFIX)) {
-      const { ok } = await requireAdmin(interaction, { context: 'xoá thành viên', deferred: false });
-      if (!ok) return;
       await interaction.deferUpdate();
+      const { ok } = await requireAdmin(interaction, { context: 'xoá thành viên', deferred: true });
+      if (!ok) return;
       const userId = customId.slice(CUSTOM_ID.DEL_CONFIRM_PREFIX.length);
       try {
         await memberService.deleteMember(guild.id, userId);

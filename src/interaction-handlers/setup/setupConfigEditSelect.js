@@ -28,9 +28,9 @@ class SetupConfigEditSelectHandler extends InteractionHandler {
   }
 
   async run(interaction) {
-    const { ok } = await requireAdmin(interaction, { context: 'sửa cấu hình', deferred: false });
-    if (!ok) return;
     await interaction.deferUpdate();
+    const { ok } = await requireAdmin(interaction, { context: 'sửa cấu hình', deferred: true });
+    if (!ok) return;
     const suffix = interaction.customId.slice(SELECT_PREFIX.length);
     const guildId = interaction.guild.id;
     const col = SELECT_FIELD_MAP[suffix];

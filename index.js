@@ -14,7 +14,6 @@ if (!process.env.DISCORD_TOKEN) {
 }
 
 ApplicationCommandRegistries.setDefaultBehaviorWhenNotIdentical(RegisterBehavior.BulkOverwrite);
-if (process.env.GUILD_ID) ApplicationCommandRegistries.setDefaultGuildIds([process.env.GUILD_ID]);
 
 const client = new SapphireClient({
   intents: [
@@ -36,7 +35,7 @@ client.stores.get('preconditions')       .registerPath(path.join(__dirname, 'src
 
 startHealthServer(client);
 
-client.once('clientReady', () => {
+client.once('ready', () => {
   const handlerStore = client.stores.get('interaction-handlers');
   log.info('BOOT', null, 'interaction-handlers loaded: %d', handlerStore.size);
   for (const [name] of handlerStore) log.info('BOOT', null, '  handler: %s', name);

@@ -1,6 +1,7 @@
 'use strict';
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const sessionService = require('../../../services/sessionService.js');
+const attendanceService = require('../../../services/attendanceService.js');
 const { getGuildConfig } = require('../../../services/configService.js');
 const { getMembers } = require('../../../services/memberService.js');
 
@@ -37,8 +38,23 @@ class SetupSessionHandler extends InteractionHandler {
       getGuildConfig(guild.id),
       getMembers(guild.id),
     ]);
+
+    const sessionsWithStats = await Promise.all(allSessions.map(async (s) => {
+      const atts = await attendanceService.getAttendances(s.id).catch(() => []);
+      const eligible = s.eligible_member_ids?.length ?? 0;
+      return {
+        ...s,
+        eligible_count:  eligible,
+        attended_count:  atts.filter(a => a.status === 'tham_gia' || a.status === 'tre').length,
+        late_count:      atts.filter(a => a.status === 'tre').length,
+        absent_count:    atts.filter(a => a.status === 'khong_tham_gia').length,
+        created_by:      s.started_by,
+        created_at:      s.started_at,
+      };
+    }));
+
     const { SessionView } = require('../../commands/setup/_views/_SessionView.js');
-    return interaction.editReply(SessionView.render({ sessions: allSessions, guild, cfg, members, detailId }));
+    return interaction.editReply(SessionView.render({ sessions: sessionsWithStats, guild, cfg, members, detailId }));
   }
 }
 

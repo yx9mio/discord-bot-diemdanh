@@ -1,6 +1,6 @@
 'use strict';
 const { Listener, Events } = require('@sapphire/framework');
-const { getActiveSessions, closeSession } = require('../../services/sessionService.js');
+const { getActiveSession, getActiveSessions, closeSession } = require('../../services/sessionService.js');
 const { getAttendances } = require('../../services/attendanceService.js');
 const scheduledService = require('../../services/scheduledService.js');
 const configService = require('../../services/configService.js');
@@ -29,8 +29,9 @@ class ReadyListener extends Listener {
           if (sched.type !== 'one_time' || !sched.scheduled_date) continue;
           const today = now.toISODate();
           if (sched.scheduled_date !== today) continue;
-          // getMinutesToOpen returns null when time has passed → catch-up open
           if (getMinutesToOpen(sched, now) !== null) continue;
+          const alreadyActive = await getActiveSession(guild.id).catch(() => null);
+          if (alreadyActive) continue;
           await autoOpenSession(guild, cfg, sched);
         }
       }

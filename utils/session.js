@@ -113,6 +113,9 @@ async function endSession(guild, session, attended) {
         total_joined:     stats.total_joined   ?? 0,
         current_streak:   0,
         best_streak:      stats.best_streak    ?? 0,
+        total_absent:     (stats.total_absent  ?? 0) + 1,
+        total_late:       stats.total_late     ?? 0,
+        total_excused:    stats.total_excused  ?? 0,
         total_sessions:   (stats.total_sessions ?? 0) + 1,
       });
       log.info('SESSION', guild.id, 'Reset streak: %s (vắng %s)', uid, session.session_name);

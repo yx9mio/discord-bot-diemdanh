@@ -109,6 +109,7 @@ function cancelTimers(guildId) {
       clearTimeout(t.remind5);
       clearTimeout(t.autoClose);
       timers.delete(sessionId);
+      stopAutoRefresh(sessionId);
     }
   }
 }

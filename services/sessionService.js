@@ -71,7 +71,7 @@ async function closeSession(sessionId, guildId) {
     .from('sessions')
     .update({ is_active: false, ended_at: new Date().toISOString() })
     .eq('id', sessionId);
-  if (guildId) q.eq('guild_id', guildId);
+  q.eq('guild_id', guildId);
   const { data, error } = await q.select().single();
   _throwSupabase(error, 'closeSession');
   addBreadcrumb('session', 'closeSession', { sessionId, guildId });
@@ -83,8 +83,8 @@ async function cancelSession(sessionId, guildId) {
   const q = getClient()
     .from('sessions')
     .update({ is_active: false, cancelled: true, ended_at: new Date().toISOString() })
-    .eq('id', sessionId);
-  if (guildId) q.eq('guild_id', guildId);
+    .eq('id', sessionId)
+    .eq('guild_id', guildId);
   const { data, error } = await q.select().single();
   _throwSupabase(error, 'cancelSession');
   return _validateSession(data, 'cancelSession');

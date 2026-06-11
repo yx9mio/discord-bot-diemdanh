@@ -10,14 +10,14 @@ const log = require('../../../utils/logger.js');
 const EDIT_ONETIME_PREFIX    = 'setup:sch:edit:onetime:';
 const EDIT_RECURRING_PREFIX  = 'setup:sch:edit:recurring:';
 
-const DAY_MAP = { t2:2, t3:3, t4:4, t5:5, t6:6, t7:7, cn:1 };
+const DAY_MAP = { t2:1, t3:2, t4:3, t5:4, t6:5, t7:6, cn:0 };
 
 function parseDay(v) {
   const n = parseInt(v, 10);
-  if (!isNaN(n)) return n;
+  if (!isNaN(n)) return n - 1;
   const mapped = DAY_MAP[v.toLowerCase()];
   if (mapped) return mapped;
-  const eng = { mon:1, tue:2, wed:3, thu:4, fri:5, sat:6, sun:7 };
+  const eng = { mon:1, tue:2, wed:3, thu:4, fri:5, sat:6, sun:0 };
   return eng[v.toLowerCase()] ?? null;
 }
 

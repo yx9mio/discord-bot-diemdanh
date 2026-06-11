@@ -92,7 +92,6 @@ class AdminEditModalHandler extends InteractionHandler {
         username,
         status:        statusField,
         marked_by:     user.id,
-        checked_in_at: new Date().toISOString(),
       });
     } catch (e) {
       log.error('ADMIN_EDIT', guild.id, 'upsertAttendance thất bại: %s', e.message);
