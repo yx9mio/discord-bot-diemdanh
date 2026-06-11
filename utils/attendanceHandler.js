@@ -8,6 +8,7 @@
 'use strict';
 const { MessageFlags } = require('discord.js');
 const log = require('./logger.js');
+const { getSessionChannel } = require('./channel.js');
 const attendanceService = require('../services/attendanceService.js');
 const memberService     = require('../services/memberService.js');
 const configService     = require('../services/configService.js');
@@ -100,7 +101,7 @@ async function markAttendance({ guild, member, user, status, interaction, sessio
 
     // Cập nhật embed chính
     try {
-      const ch = guild.channels.cache.get(session.channel_id);
+      const ch = await getSessionChannel(guild, session);
       if (ch && session.message_id) {
         const msg = await ch.messages.fetch(session.message_id).catch(() => null);
         if (msg) {
@@ -116,11 +117,13 @@ async function markAttendance({ guild, member, user, status, interaction, sessio
           }).catch(() => null);
         }
       }
-    } catch (_) {}
+    } catch (e) {
+      log.warn('ATTENDANCE', guild.id, 'Update embed lỗi: %s', e.message);
+    }
 
     if (STREAK_MILESTONES.includes(projectedStreak) && ['tham_gia', 'tre'].includes(status)) {
       try {
-        const ch = guild.channels.cache.get(session.channel_id);
+        const ch = await getSessionChannel(guild, session);
         if (ch) await announceStreakMilestone(guild, ch, user.id, projectedStreak);
       } catch (_) {}
     }

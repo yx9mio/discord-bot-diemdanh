@@ -16,7 +16,7 @@ const STATUS_LABEL = {
   co_phep:        `${ICONS.ATTEND_EXCUSE} Có phép`,
 };
 
-function buildSessionEmbed(guild, session, attended = [], phaiRoleIds = [], isEditing = false, page = 1, phaiRoleIcons = {}) {
+function buildSessionEmbed(guild, session, attended = [], phaiRoleIds = [], _isEditing = false, page = 1, phaiRoleIcons = {}) {
   const total   = attended.length;
   const joined  = attended.filter(a => a.status === 'tham_gia' || a.status === 'tre').length;
   const late    = attended.filter(a => a.status === 'tre').length;
@@ -110,7 +110,7 @@ function buildSessionEmbed(guild, session, attended = [], phaiRoleIds = [], isEd
   return { embed, components, totalPages };
 }
 
-function buildClosedSessionEmbed(session, attended = [], guild) {
+function buildClosedSessionEmbed(session, attended = [], _guild) {
   const total   = attended.length;
   const joined  = attended.filter(a => a.status === 'tham_gia' || a.status === 'tre').length;
   const late    = attended.filter(a => a.status === 'tre').length;

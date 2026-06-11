@@ -1,13 +1,8 @@
 'use strict';
-const { MessageFlags } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const sessionService = require('../../../services/sessionService.js');
-const attendanceService = require('../../../services/attendanceService.js');
 const { getGuildConfig } = require('../../../services/configService.js');
 const { getMembers } = require('../../../services/memberService.js');
-const { requireAdmin } = require('../../../utils/permissions.js');
-const { replyErrEdit } = require('../../../utils/embeds.js');
-const log = require('../../../utils/logger.js');
 
 const PREFIX_REFRESH = 'setup:session:refresh';
 const PREFIX_DETAIL  = 'setup:session:detail:';

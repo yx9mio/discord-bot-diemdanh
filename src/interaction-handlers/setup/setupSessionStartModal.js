@@ -66,6 +66,12 @@ class SetupSessionStartModalHandler extends InteractionHandler {
           const adminRows = buildSessionActionRow(true);
           const msg = await ch.send({ embeds: [sessionEmbed], components: [selectRow, ...adminRows, ...components].slice(0, 5) });
           await sessionService.updateSessionMessage(session.id, { message_id: msg.id });
+
+          // Ping attendance role
+          if (cfg?.attendance_role_id) {
+            await ch.send({ content: `<@&${cfg.attendance_role_id}> Phiên điểm danh **${session.session_name}** đã mở!` }).catch(() => null);
+          }
+
           startAutoRefresh(session.id, ch.id, msg.id, interaction.client);
 
           if (session.auto_close_at) {

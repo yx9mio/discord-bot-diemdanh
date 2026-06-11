@@ -28,17 +28,17 @@ function _throwSupabase(error, ctx) {
 function _validateSession(row, ctx) {
   if (!row) return null;
   const v = safeParse(SessionSchema, row);
-  if (!v.ok) log.warn('DB', null, '[%s] SessionSchema warn: %s', ctx, v.error);
+  if (!v.ok) log.error('DB', null, '[%s] SessionSchema invalid: %s', ctx, v.error);
   return row;
 }
 
 function _validateAttendances(rows, ctx) {
   if (!Array.isArray(rows)) return [];
-  return rows.filter(row => {
+  for (const row of rows) {
     const v = safeParse(AttendanceSchema, row);
     if (!v.ok) log.warn('DB', null, '[%s] AttendanceSchema warn for user %s: %s', ctx, row?.user_id, v.error);
-    return v.ok;
-  });
+  }
+  return rows;
 }
 
 // [BUG-HISTORY] public.sessions thực tế không có created_at, chỉ có started_at.

@@ -9,6 +9,7 @@ const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/frame
 const sessionService    = require('../../services/sessionService.js');
 const attendanceService = require('../../services/attendanceService.js');
 const log               = require('../../utils/logger.js');
+const { getSessionChannel } = require('../../utils/channel.js');
 const { replyErr, buildSessionEmbed, buildAttendanceSelectRow, buildSessionActionRow } = require('../../utils/embeds.js');
 
 const SELECT_CUSTOM_ID = 'attendance:select';
@@ -70,7 +71,7 @@ class AttendanceSelectHandler extends InteractionHandler {
       }[status] ?? status;
 
       try {
-        const ch = guild.channels.cache.get(session.channel_id);
+        const ch = await getSessionChannel(guild, session);
         if (ch && session.message_id) {
           const msg = await ch.messages.fetch(session.message_id).catch(() => null);
           if (msg) {
@@ -86,7 +87,9 @@ class AttendanceSelectHandler extends InteractionHandler {
             }).catch(() => null);
           }
         }
-      } catch (_) {}
+      } catch (e) {
+        log.error('ATTEND', guild.id, 'Lỗi update embed: %s', e.message);
+      }
 
       log.info('ATTEND', guild.id, '%s điểm danh: %s', user.tag, status);
       return interaction.editReply({ content: `${statusLabel} — Đã ghi nhận điểm danh của bạn.` });
