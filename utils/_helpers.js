@@ -22,7 +22,7 @@ const ICONS = {
   SESSION_OPEN:   '🟢',
   SESSION_CLOSED: '🔴',
   ATTEND_YES:     '✅',
-  ATTEND_LATE:    '🕐',
+  ATTEND_LATE:    '⏰',
   ATTEND_NO:      '❌',
   ATTEND_ABSENT:  '💭',
   ATTEND_EXCUSE:  '📋',
@@ -55,8 +55,8 @@ const COLOR_GOLD = COLORS.GOLD;
 // ─── [#2] Attendance options — single source of truth ────────────────────────
 const ATTENDANCE_OPTIONS = [
   { label: '✅ Tham gia', description: 'Điểm danh đúng giờ', value: 'tham_gia'        },
-  { label: '🕐 Đến trễ', description: 'Điểm danh muộn',      value: 'tre'             },
-  { label: '❌ Vắng',    description: 'Báo vắng mặt',         value: 'khong_tham_gia' },
+  { label: '⏰ Trễ',      description: 'Điểm danh muộn',      value: 'tre'             },
+  { label: '❌ Vắng',    description: 'Báo vắng mặt',        value: 'khong_tham_gia' },
   { label: '📋 Có phép', description: 'Vắng mặt có lý do',   value: 'co_phep'        },
 ];
 

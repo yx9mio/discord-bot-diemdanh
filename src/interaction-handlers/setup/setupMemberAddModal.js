@@ -29,6 +29,7 @@ class SetupMemberAddModalHandler extends InteractionHandler {
     const { guild } = interaction;
 
     const userId = interaction.fields.getTextInputValue('user_id').trim().replace(/[<@>]/g, '');
+    if (!userId) return interaction.editReply(replyErrEdit('Vui lòng nhập ID hoặc mention thành viên.'));
     const username = interaction.fields.getTextInputValue('username').trim();
     const phongBan = interaction.fields.getTextInputValue('phong_ban')?.trim() ?? '';
     const ghiChu = interaction.fields.getTextInputValue('ghi_chu')?.trim() ?? '';

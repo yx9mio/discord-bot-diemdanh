@@ -66,7 +66,7 @@ class AttendanceSelectHandler extends InteractionHandler {
         tham_gia:       '✅ Tham gia',
         tre:            '⏰ Trễ',
         co_phep:        '📋 Có phép',
-        khong_tham_gia: '❌ Không tham gia',
+        khong_tham_gia: '❌ Vắng',
       }[status] ?? status;
 
       log.info('ATTEND', guild.id, '%s điểm danh: %s', user.tag, status);

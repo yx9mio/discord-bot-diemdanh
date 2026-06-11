@@ -9,7 +9,9 @@ const {
   FOOTER_DEFAULT, COLORS, replyErrEdit,
 } = require('../../../utils/embeds.js');
 const { fmtTs }          = require('../../../utils/format.js');
-const { startAutoRefresh } = require('../../../utils/timers.js');
+const { startAutoRefresh, scheduleCloseTimer } = require('../../../utils/timers.js');
+const { buildSessionEmbed } = require('../../../utils/_views/sessionView.js');
+const { buildAttendanceSelectRow, buildSessionActionRow } = require('../../../utils/_views/rows.js');
 
 const MODAL_ID = 'setup:session:start:modal';
 
@@ -50,6 +52,29 @@ class SetupSessionStartModalHandler extends InteractionHandler {
         auto_close_at: phutDong ? new Date(Date.now() + parseInt(phutDong, 10) * 60_000).toISOString() : null,
         phai_role_ids: phaiRole ? [phaiRole] : [],
       });
+
+      // Gửi bảng điểm danh lên kênh thông báo
+      const notifChannelId = cfg?.notification_channel_id;
+      if (notifChannelId) {
+        const ch = await guild.channels.fetch(notifChannelId).catch(() => null);
+        if (ch) {
+          const { embed: sessionEmbed, components } = buildSessionEmbed(guild, session, [], session.phai_role_ids ?? []);
+          const selectRow = buildAttendanceSelectRow(true);
+          const adminRows = buildSessionActionRow(true);
+          const msg = await ch.send({ embeds: [sessionEmbed], components: [selectRow, ...adminRows, ...components].slice(0, 5) });
+          await sessionService.updateSessionMessage(session.id, { message_id: msg.id, channel_id: ch.id });
+          startAutoRefresh(session.id, ch.id, msg.id, interaction.client);
+
+          if (session.auto_close_at) {
+            const msLeft = new Date(session.auto_close_at).getTime() - Date.now();
+            if (msLeft > 0) scheduleCloseTimer(interaction.client, guild, session, ch.id, msLeft);
+          }
+        } else {
+          log.warn('SESSION_START_MODAL', guild.id, 'Không tìm thấy kênh thông báo %s', notifChannelId);
+        }
+      } else {
+        log.warn('SESSION_START_MODAL', guild.id, 'Chưa cấu hình kênh thông báo, bỏ qua gửi embed');
+      }
 
       const embed = new EmbedBuilder()
         .setTitle(`✅ Đã mở phiên: ${session.session_name ?? 'Không tên'}`)

@@ -10,7 +10,7 @@ const STATUS_LABEL = {
   tham_gia:       '✅ Tham gia',
   tre:            '⏰ Trễ',
   khong_tham_gia: '❌ Vắng',
-  co_phep:        '🟡 Có phép',
+  co_phep:        '📋 Có phép',
 };
 
 const STATUS_COLOR = {

@@ -16,7 +16,7 @@ const { ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, S
 function buildConfirmRow(customIdConfirm = 'confirm', customIdCancel = 'cancel') {
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId(customIdConfirm).setLabel('✅ Xác nhận').setStyle(ButtonStyle.Success),
-    new ButtonBuilder().setCustomId(customIdCancel).setLabel('↩️ Huỷ').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(customIdCancel).setLabel('↩️ Hủy').setStyle(ButtonStyle.Secondary),
   );
 }
 
@@ -32,9 +32,9 @@ function buildAttendanceSelectRow(isOpen = true) {
       .setPlaceholder('👆 Chọn trạng thái điểm danh...')
       .setDisabled(!isOpen)
       .addOptions(
-        new StringSelectMenuOptionBuilder().setLabel('✅ Điểm danh').setDescription('Điểm danh đúng giờ').setValue('tham_gia'),
+        new StringSelectMenuOptionBuilder().setLabel('✅ Tham gia').setDescription('Điểm danh đúng giờ').setValue('tham_gia'),
         new StringSelectMenuOptionBuilder().setLabel('⏰ Trễ').setDescription('Điểm danh muộn').setValue('tre'),
-        new StringSelectMenuOptionBuilder().setLabel('❌ Không tham gia').setDescription('Báo vắng mặt').setValue('khong_tham_gia'),
+        new StringSelectMenuOptionBuilder().setLabel('❌ Vắng').setDescription('Báo vắng mặt').setValue('khong_tham_gia'),
       ),
   );
 }
@@ -72,7 +72,7 @@ function buildSessionActionRow(isOpen = true) {
     new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId('session:cancel')
-        .setLabel('🗑️ Huỷ phiên')
+        .setLabel('🗑️ Hủy phiên')
         .setStyle(ButtonStyle.Danger)
         .setDisabled(disabled),
       new ButtonBuilder()
@@ -95,12 +95,12 @@ function buildHistoryNavRow(page = 0, maxPage = 0, prefix = 'hist') {
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(`${prefix}_prev_${page}`)
-      .setLabel('◀ Trang trước')
+      .setLabel('◀ Trước')
       .setStyle(ButtonStyle.Secondary)
       .setDisabled(page <= 0),
     new ButtonBuilder()
       .setCustomId(`${prefix}_next_${page}`)
-      .setLabel('Trang sau ▶')
+      .setLabel('Sau ▶')
       .setStyle(ButtonStyle.Secondary)
       .setDisabled(page >= maxPage),
   );

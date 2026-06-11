@@ -63,7 +63,7 @@ function scheduleCloseTimer(client, guild, session, channelId, ms) {
       const ch = await guild.channels.fetch(channelId).catch(() => null);
 
       try {
-        await sessionService.closeSession(session.id);
+        await sessionService.closeSession(session.id, guild.id);
       } catch (e) {
         log.error('TIMER', guild.id, 'closeSession thất bại %s: %s', session.id, e.message);
         return;

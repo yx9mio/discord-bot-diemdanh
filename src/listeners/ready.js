@@ -39,7 +39,7 @@ class ReadyListener extends Listener {
               const { buildSummaryEmbed } = require('../../utils/embeds.js');
               try {
                 stopAutoRefresh(session.id);
-                await closeSession(session.id);
+                await closeSession(session.id, guild.id);
                 const attended = await getAttendances(session.id);
                 const ch2 = session.channel_id
                   ? await guild.channels.fetch(session.channel_id).catch(() => null)

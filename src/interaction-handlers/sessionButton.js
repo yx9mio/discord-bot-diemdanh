@@ -145,7 +145,7 @@ class SessionButtonHandler extends InteractionHandler {
 
       try {
         stopAutoRefresh(session.id);
-        await sessionService.cancelSession(session.id);
+        await sessionService.cancelSession(session.id, guild.id);
         cancelTimers(guild.id);
       } catch (e) {
         log.error('CANCEL', guild.id, 'cancelSession thất bại %s: %s', session.id, e.message);
@@ -223,7 +223,7 @@ class SessionButtonHandler extends InteractionHandler {
 
       try {
         stopAutoRefresh(session.id);
-        await sessionService.closeSession(session.id);
+        await sessionService.closeSession(session.id, guild.id);
         cancelTimers(guild.id);
       } catch (e) {
         log.error('CLOSE', guild.id, 'closeSession thất bại %s: %s', session.id, e.message);
@@ -293,7 +293,7 @@ class SessionButtonHandler extends InteractionHandler {
         try {
           stopAutoRefresh(s.id);
           cancelTimers(guild.id);
-          await sessionService.closeSession(s.id);
+          await sessionService.closeSession(s.id, guild.id);
           closed++;
         } catch (e) {
           log.warn('CLOSE_ALL', guild.id, 'Đóng phiên %s thất bại: %s', s.id, e.message);

@@ -75,11 +75,12 @@ async function endSession(guild, session, attended) {
     const lat    = (stats.total_late ?? 0) + (record.status === 'tre' ? 1 : 0);
     statsMap.set(uid, { total, streak, max: maxS });
     mergePatch(uid, {
-      total_joined:   total,
-      current_streak: streak,
-      best_streak:    maxS,
-      total_late:     lat,
-      total_sessions: (stats.total_sessions ?? 0) + 1,
+      total_joined:     total,
+      current_streak:   streak,
+      best_streak:      maxS,
+      total_late:       lat,
+      total_sessions:   (stats.total_sessions ?? 0) + 1,
+      last_attended_at: new Date().toISOString(),
     });
   }
 

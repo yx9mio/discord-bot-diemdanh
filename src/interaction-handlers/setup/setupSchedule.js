@@ -76,7 +76,7 @@ class SetupScheduleHandler extends InteractionHandler {
         components: [
           new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`${CUSTOM_ID.DEL_CONFIRM}${schId}`).setLabel('✅ Xoá').setStyle(ButtonStyle.Danger),
-            new ButtonBuilder().setCustomId(`${CUSTOM_ID.DEL_CANCEL}${schId}`).setLabel('↩️ Huỷ').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`${CUSTOM_ID.DEL_CANCEL}${schId}`).setLabel('↩️ Hủy').setStyle(ButtonStyle.Secondary),
           ),
         ],
       });

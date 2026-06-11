@@ -107,7 +107,7 @@ async function markReminderSent(id) {
   _throwSupabase(error, 'markReminderSent');
 }
 
-function addRecurringSession(guildId, { thu, gio_bat_dau, gio_ket_thuc, ten, timezone }) {
+function addRecurringSession(guildId, { thu, gio_bat_dau, gio_ket_thuc, ten, timezone, pre_close_minutes }) {
   const [hour, minute] = gio_bat_dau.split(':').map(Number);
   let closeHour = null, closeMinute = null;
   if (gio_ket_thuc) {
@@ -128,13 +128,14 @@ function addRecurringSession(guildId, { thu, gio_bat_dau, gio_ket_thuc, ten, tim
     channel_id:        null,
     is_active:         true,
     reminder_enabled:  true,
-    reminder_1_min:    30,
+    pre_close_minutes: pre_close_minutes ?? 30,
+    reminder_1_min:    pre_close_minutes ?? 30,
     reminder_2_min:    10,
     type:              'recurring_weekly',
   });
 }
 
-function addOnetimeSession(guildId, { ngay, gio_bat_dau, gio_ket_thuc, ten, timezone }) {
+function addOnetimeSession(guildId, { ngay, gio_bat_dau, gio_ket_thuc, ten, timezone, pre_close_minutes }) {
   const [hour, minute] = gio_bat_dau.split(':').map(Number);
   let closeHour = null, closeMinute = null;
   if (gio_ket_thuc) {
@@ -156,7 +157,8 @@ function addOnetimeSession(guildId, { ngay, gio_bat_dau, gio_ket_thuc, ten, time
     channel_id:        null,
     is_active:         true,
     reminder_enabled:  true,
-    reminder_1_min:    30,
+    pre_close_minutes: pre_close_minutes ?? 30,
+    reminder_1_min:    pre_close_minutes ?? 30,
     reminder_2_min:    10,
     type:              'one_time',
   });

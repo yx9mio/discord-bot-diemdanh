@@ -93,12 +93,12 @@ function buildSessionEmbed(guild, session, attended = [], phaiRoleIds = [], isEd
     const paginationRow = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId(`attend_view:prev:${clampedPage}`)
-        .setLabel('◀ Trang trước')
+        .setLabel('◀ Trước')
         .setStyle(ButtonStyle.Secondary)
         .setDisabled(clampedPage <= 1),
       new ButtonBuilder()
         .setCustomId(`attend_view:next:${clampedPage}`)
-        .setLabel('Trang sau ▶')
+        .setLabel('Sau ▶')
         .setStyle(ButtonStyle.Secondary)
         .setDisabled(clampedPage >= totalPages),
     );

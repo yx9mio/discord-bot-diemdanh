@@ -24,12 +24,12 @@ const CUSTOM_ID = {
 };
 
 const BADGE_THRESHOLDS = [
-  { threshold: 100, label: 'Vua Điểm Danh', emoji: '👑' },
+  { threshold: 5,   label: 'Lính Mới',     emoji: '🌱' },
+  { threshold: 10,  label: 'Cần Cù',        emoji: '⭐' },
+  { threshold: 20,  label: 'Chuyên Cần',    emoji: '🌟' },
+  { threshold: 30,  label: 'Kiên Trì',      emoji: '💪' },
   { threshold: 50,  label: 'Huyền Thoại',   emoji: '🏆' },
-  { threshold: 30,  label: 'Kiên Trì',       emoji: '🥇' },
-  { threshold: 20,  label: 'Chuyên Cần',     emoji: '🥈' },
-  { threshold: 10,  label: 'Cần Cù',         emoji: '🥉' },
-  { threshold: 5,   label: 'Lính Mới',       emoji: '⭐' },
+  { threshold: 100, label: 'Vua Điểm Danh', emoji: '👑' },
 ];
 
 // ─── ctx helpers ─────────────────────────────────────────────────────
@@ -260,8 +260,8 @@ async function renderLichSu(records, userId, guild, page = 0) {
 
   // navRow: prev/next + REFRESH + BACK_HOME
   const navRow = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId('setup:stats:lichsu:prev').setLabel('◄ Trang trước').setStyle(ButtonStyle.Secondary).setDisabled(cPage === 0),
-    new ButtonBuilder().setCustomId('setup:stats:lichsu:next').setLabel('Trang sau ►').setStyle(ButtonStyle.Secondary).setDisabled(cPage >= totalPages - 1),
+    new ButtonBuilder().setCustomId('setup:stats:lichsu:prev').setLabel('◀ Trước').setStyle(ButtonStyle.Secondary).setDisabled(cPage === 0),
+    new ButtonBuilder().setCustomId('setup:stats:lichsu:next').setLabel('Sau ▶').setStyle(ButtonStyle.Secondary).setDisabled(cPage >= totalPages - 1),
     new ButtonBuilder().setCustomId(CUSTOM_ID.REFRESH).setLabel('Làm mới').setEmoji(ICONS.REFRESH).setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId(CUSTOM_ID.BACK_HOME).setLabel('← Dashboard').setEmoji(ICONS.HOME).setStyle(ButtonStyle.Secondary),
   );

@@ -25,20 +25,20 @@ function _fmtSchedule(s) {
 }
 
 function _buildStatusBanner(cfg, members) {
-  const steps = [];
   const hasChannel = !!cfg?.notification_channel_id;
   const hasMembers = (members?.length ?? 0) > 0;
+  const allDone = hasChannel && hasMembers;
 
-  steps.push(`${hasChannel ? '✅' : '⬜'} **Cài đặt chung** — chọn kênh log + timezone`);
-  steps.push(`${hasMembers ? '✅' : '⬜'} **Thành viên** — thêm người vào hệ thống`);
-  steps.push(`📌 **Lịch cố định** — (tùy chọn) tạo lịch tự động`);
+  if (allDone) {
+    return `🎉 **Sẵn sàng!** Nhấn **${ICONS.PLUS} Mở phiên mới** để bắt đầu điểm danh.`;
+  }
 
-  const done = steps.every(s => s.startsWith('✅'));
-  const header = done
-    ? `**🎉 Sẵn sàng!** Nhấn **${ICONS.PLUS} Mở phiên mới** để bắt đầu.`
-    : '**📋 Bắt đầu nhanh:**';
+  const steps = [];
+  if (!hasChannel) steps.push(`⬜ \`───\` **Cài đặt chung**: chọn kênh thông báo + timezone`);
+  if (!hasMembers) steps.push(`⬜ \`───\` **Thành viên**: thêm người vào hệ thống`);
+  steps.push(`📌 \`───\` **Lịch cố định**: (tùy chọn) tạo lịch tự động`);
 
-  return [`${header}`, ...steps.map(s => `▸ ${s}`)].join('\n');
+  return steps.join('\n');
 }
 
 function render({ guild, cfg, schedules, members, session, sessions }) {
@@ -55,35 +55,36 @@ function render({ guild, cfg, schedules, members, session, sessions }) {
   const hasMembers = (members?.length ?? 0) > 0;
 
   if (!hasChannel || !hasMembers) {
-    embed.addFields({ name: '📋 Bắt đầu nhanh', value: _buildStatusBanner(cfg, members) });
+    embed.addFields({ name: '📋 Bắt đầu nhanh', value: _buildStatusBanner(cfg, members), inline: false });
   }
 
   const cnt = activeSessions.length;
   if (cnt > 0) {
     const s    = activeSessions[0];
-    const ch   = s.channel_id ? `<#${s.channel_id}>` : '_chưa có_';
+    const ch   = s.channel_id ? `<#${s.channel_id}>` : 'Chưa có kênh';
     const by   = s.started_by ? `<@${s.started_by}>` : 'không rõ';
     const name = s.session_name ?? 'Phiên';
+    const sessionLine = cnt === 1
+      ? `**${name}** · ${ch} · bởi ${by}`
+      : `**${name}** + ${cnt - 1} phiên khác · ${ch} · bởi ${by}`;
     embed.addFields({
       name: `${ICONS.SESSION} Phiên đang mở`,
-      value: `**${cnt} phiên đang mở**${cnt > 1 ? ` (hiện: **${name}**)` : ` — **${name}**`}\n▸ ${ch} · bởi ${by}`,
+      value: sessionLine,
+      inline: false,
     });
   } else {
     embed.addFields({
       name: `${ICONS.SESSION} Phiên đang mở`,
-      value: `_Chưa có phiên nào._ Bấm **${ICONS.PLUS} Mở phiên mới** để bắt đầu.`,
+      value: `Chưa có phiên nào. Bấm **${ICONS.PLUS} Mở phiên mới** để bắt đầu.`,
+      inline: false,
     });
   }
 
   const tz      = cfg?.timezone ?? 'Asia/Ho_Chi_Minh';
-  const channel = cfg?.notification_channel_id ? `<#${cfg.notification_channel_id}>` : '_chưa cài_';
-  embed.addFields({
-    name: `${ICONS.GEAR} Cài đặt chung`,
-    value: [
-      `▸ ${ICONS.CHANNEL} **Kênh log:** ${channel}`,
-      `▸ ${ICONS.GLOBE} **Timezone:** \`${tz}\``,
-    ].join('\n'),
-  });
+  const channel = cfg?.notification_channel_id ? `<#${cfg.notification_channel_id}>` : 'Chưa cài';
+  embed.addFields(
+    { name: `${ICONS.GEAR} Cài đặt chung`, value: `${ICONS.CHANNEL} ${channel} ${ICONS.GLOBE} \`${tz}\``, inline: false },
+  );
 
   if (schedules?.length) {
     const top  = schedules.slice(0, 3).map((s, i) => `${i + 1}. ${_fmtSchedule(s)}`).join('\n');
@@ -91,17 +92,20 @@ function render({ guild, cfg, schedules, members, session, sessions }) {
     embed.addFields({
       name: `${ICONS.CALENDAR} Lịch cố định`,
       value: `${top}${more}`,
+      inline: false,
     });
   } else {
     embed.addFields({
       name: `${ICONS.CALENDAR} Lịch cố định`,
-      value: `_Chưa có lịch._ Bấm **${ICONS.PLUS} Quản lý lịch** để thêm.`,
+      value: `Chưa có lịch. Bấm **${ICONS.PLUS} Quản lý lịch** để thêm.`,
+      inline: false,
     });
   }
 
   embed.addFields({
     name: `${ICONS.MEMBER} Thành viên`,
-    value: `**${members?.length ?? 0} thành viên** đang quản lý`,
+    value: `${members?.length ?? 0} người`,
+    inline: false,
   });
 
   const navRow = new ActionRowBuilder().addComponents(

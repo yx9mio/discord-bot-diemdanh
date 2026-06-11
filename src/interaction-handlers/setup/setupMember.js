@@ -83,7 +83,7 @@ class SetupMemberHandler extends InteractionHandler {
         components: [
           new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`${CUSTOM_ID.DEL_CONFIRM_PREFIX}${userId}`).setLabel('Xác nhận xoá').setStyle(ButtonStyle.Danger),
-            new ButtonBuilder().setCustomId(`${CUSTOM_ID.DEL_CANCEL_PREFIX}${userId}`).setLabel('Huỷ').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`${CUSTOM_ID.DEL_CANCEL_PREFIX}${userId}`).setLabel('Hủy').setStyle(ButtonStyle.Secondary),
           ),
         ],
       });

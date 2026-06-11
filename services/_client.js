@@ -37,7 +37,7 @@ function _validateAttendances(rows, ctx) {
   return rows.filter(row => {
     const v = safeParse(AttendanceSchema, row);
     if (!v.ok) log.warn('DB', null, '[%s] AttendanceSchema warn for user %s: %s', ctx, row?.user_id, v.error);
-    return true;
+    return v.ok;
   });
 }
 

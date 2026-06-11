@@ -70,13 +70,15 @@ class SetupScheduleAddDetailModalHandler extends InteractionHandler {
         await scheduledService.addRecurringSession(guild.id, {
           thu: dayOfWeek, gio_bat_dau: `${hour}:${String(minute).padStart(2, '0')}`,
           gio_ket_thuc: closeHour != null ? `${closeHour}:${String(closeMinute).padStart(2, '0')}` : null,
-          ten: 'Điểm danh', timezone: tz,
+          ten: 'Điểm danh', timezone: tz, pre_close_minutes: reminderMin,
         });
       } else {
         const ngay       = interaction.fields.getTextInputValue('ngay').trim();
         const gio_mo     = interaction.fields.getTextInputValue('gio_mo').trim();
         const phut_bu    = interaction.fields.getTextInputValue('phut_bu')?.trim();
         const pre_close  = interaction.fields.getTextInputValue('pre_close')?.trim();
+
+        const reminderMin = pre_close ? parseInt(pre_close, 10) : 30;
 
         const [hour, minute] = gio_mo.split(':').map(Number);
         if (isNaN(hour) || isNaN(minute)) throw new Error(`Giờ không hợp lệ: "${gio_mo}"`);
@@ -93,7 +95,7 @@ class SetupScheduleAddDetailModalHandler extends InteractionHandler {
           ngay,
           gio_bat_dau: `${hour}:${String(minute).padStart(2, '0')}`,
           gio_ket_thuc: closeHour != null ? `${closeHour}:${String(closeMinute).padStart(2, '0')}` : null,
-          ten: 'Điểm danh', timezone: tz,
+          ten: 'Điểm danh', timezone: tz, pre_close_minutes: reminderMin,
         });
       }
 

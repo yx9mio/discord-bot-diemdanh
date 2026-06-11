@@ -14,10 +14,10 @@ const { requireAdmin } = require('../../utils/permissions.js');
 const { addBreadcrumb } = require('../../utils/sentry.js');
 
 const STATUS_LABELS = {
-  'tham_gia': '✅ Điểm danh',
+  'tham_gia': '✅ Tham gia',
   'tre': '⏰ Trễ',
-  'khong_tham_gia': '❌ Không tham gia',
-  'co_phep': '🏥 Có phép',
+  'khong_tham_gia': '❌ Vắng',
+  'co_phep': '📋 Có phép',
 };
 
 class AdminMarkModalHandler extends InteractionHandler {

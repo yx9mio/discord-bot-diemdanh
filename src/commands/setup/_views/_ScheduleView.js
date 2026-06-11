@@ -75,8 +75,8 @@ function render({ schedules, page = 0, guild }) {
   const ctrlRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId(CUSTOM_ID.ADD_R).setLabel('+ Hằng tuần').setStyle(ButtonStyle.Success),
     new ButtonBuilder().setCustomId(CUSTOM_ID.ADD_O).setLabel('+ Một lần').setStyle(ButtonStyle.Primary),
-    new ButtonBuilder().setCustomId(CUSTOM_ID.PAGE_PREV).setLabel('◀').setStyle(ButtonStyle.Secondary).setDisabled(cPage === 0),
-    new ButtonBuilder().setCustomId(CUSTOM_ID.PAGE_NEXT).setLabel('▶').setStyle(ButtonStyle.Secondary).setDisabled(cPage >= totalPages - 1),
+    new ButtonBuilder().setCustomId(CUSTOM_ID.PAGE_PREV).setLabel('◀ Trước').setStyle(ButtonStyle.Secondary).setDisabled(cPage === 0),
+    new ButtonBuilder().setCustomId(CUSTOM_ID.PAGE_NEXT).setLabel('Sau ▶').setStyle(ButtonStyle.Secondary).setDisabled(cPage >= totalPages - 1),
   );
 
   const navRow = new ActionRowBuilder().addComponents(
