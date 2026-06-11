@@ -1,9 +1,7 @@
 {
-  "watch": ["."],
+  "watch": ["index.js", "src/", "services/", "utils/", "events/"],
   "ext": "js,json",
-  "ignore": ["node_modules/**", "tests/**", "*.test.js"],
+  "ignore": ["node_modules/", "dist/"],
   "delay": 1000,
-  "env": {
-    "NODE_ENV": "development"
-  }
+  "signal": "SIGTERM"
 }

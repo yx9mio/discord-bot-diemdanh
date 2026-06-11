@@ -1,6 +1,5 @@
 'use strict';
-const js       = require('@eslint/js');
-const nPlugin  = require('eslint-plugin-n');
+const js = require('@eslint/js');
 
 module.exports = [
   {
@@ -10,11 +9,8 @@ module.exports = [
 
   // ── Base config cho tất cả file CJS ──────────────────────────────────────────
   {
-    plugins: { n: nPlugin },
+    plugins: {},
     rules: {
-      'n/no-process-exit':     'warn',
-      'n/handle-callback-err': 'error',
-
       'no-unused-vars': ['warn', {
         argsIgnorePattern:         '^_',
         varsIgnorePattern:         '^_',

@@ -1,0 +1,16 @@
+{
+  "files.exclude": {
+    "node_modules/": true,
+    "dist/": true,
+    ".git/": true
+  },
+  "search.exclude": {
+    "node_modules/": true,
+    "dist/": true
+  },
+  "editor.renderWhitespace": "boundary",
+  "editor.tabSize": 2,
+  "files.insertFinalNewline": true,
+  "files.trimTrailingWhitespace": true,
+  "javascript.preferences.quoteStyle": "single"
+}
