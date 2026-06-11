@@ -22,7 +22,7 @@ const LichSchema = z.object({
   guild_id:           z.string().min(1),
   channel_id:         z.string().min(1),
   session_name:       z.string().min(1).max(100),
-  day_of_week:        z.number().int().min(0).max(6),
+  day_of_week:        z.number().int().min(0).max(6).nullable().optional(),
   hour:               z.number().int().min(0).max(23),
   minute:             z.number().int().min(0).max(59),
   close_day_of_week:  z.number().int().min(0).max(6).nullable().optional(),
@@ -32,6 +32,12 @@ const LichSchema = z.object({
   allowed_role_id:    z.string().nullable().optional(),
   phai_role_ids:      z.array(z.string()).nullable().optional(),
   is_active:          z.boolean().optional(),
+  type:               z.enum(['recurring_weekly', 'one_time']).optional().default('recurring_weekly'),
+  scheduled_date:     z.string().nullable().optional(),
+  reminder_enabled:   z.boolean().optional(),
+  reminder_1_min:     z.number().int().min(0).optional().default(60),
+  reminder_2_min:     z.number().int().min(0).optional().default(15),
+  skip_until:         z.string().nullable().optional(),
 });
 
 // ─── Session row (từ DB) ──────────────────────────────────────────────────────

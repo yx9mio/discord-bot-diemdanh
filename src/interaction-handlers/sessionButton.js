@@ -18,10 +18,11 @@ const {
 const { endSession, announceBadges, disableAttendanceUI } = require('../../utils/session.js');
 const { cancelTimers, stopAutoRefresh } = require('../../utils/timers.js');
 const { buildAdminMarkModal } = require('../../utils/adminMarkModal.js');
+const { buildAdminEditModal } = require('../../utils/adminEditModal.js');
 
 // [BUG-FIX] Đồng bộ với tất cả customId được dùng trong file này
 const SESSION_BUTTON_IDS = new Set([
-  'attend_view', 'attend_close', 'attend_refresh', 'admin:mark',
+  'attend_view', 'attend_close', 'attend_refresh', 'admin:mark', 'admin:edit',
   'attend_view:prev', 'attend_view:next',
   'session:cancel', 'session:confirm_cancel', 'session:cancel_cancel',
   'session:confirm_close', 'session:cancel_close',
@@ -113,6 +114,13 @@ class SessionButtonHandler extends InteractionHandler {
       const { ok } = await requireAdmin(interaction, { context: 'điểm danh thay' });
       if (!ok) return;
       return interaction.showModal(buildAdminMarkModal());
+    }
+
+    // ── admin:edit ─────────────────────────────────────────────────────────────────
+    if (customId === 'admin:edit') {
+      const { ok } = await requireAdmin(interaction, { context: 'sửa điểm danh' });
+      if (!ok) return;
+      return interaction.showModal(buildAdminEditModal());
     }
 
     // ── session:cancel ──────────────────────────────────────────────────────────

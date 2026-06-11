@@ -2,9 +2,12 @@
 const { Listener, Events } = require('@sapphire/framework');
 const { getActiveSessions, closeSession } = require('../../services/sessionService.js');
 const { getAttendances } = require('../../services/attendanceService.js');
+const scheduledService = require('../../services/scheduledService.js');
+const configService = require('../../services/configService.js');
 const log = require('../../utils/logger.js');
 const { scheduleCloseTimer, startAutoRefresh, stopAutoRefresh } = require('../../utils/timers.js');
-const { startReminderScheduler } = require('../../services/reminderScheduler.js');
+const { startReminderScheduler, getMinutesToOpen, autoOpenSession } = require('../../services/reminderScheduler.js');
+const { DateTime } = require('luxon');
 
 class ReadyListener extends Listener {
   constructor(context) {
@@ -16,6 +19,23 @@ class ReadyListener extends Listener {
 
     let restored = 0;
     for (const guild of client.guilds.cache.values()) {
+      // ── Catch-up: auto-open các one-time schedule đáng lẽ đã mở ─────────
+      const cfg = await configService.getGuildConfig(guild.id).catch(() => null);
+      if (cfg?.notification_channel_id) {
+        const tz = cfg.timezone ?? 'Asia/Ho_Chi_Minh';
+        const now = DateTime.now().setZone(tz);
+        const schedules = await scheduledService.getScheduledSessions(guild.id);
+        for (const sched of schedules) {
+          if (sched.type !== 'one_time' || !sched.scheduled_date) continue;
+          const today = now.toISODate();
+          if (sched.scheduled_date !== today) continue;
+          // getMinutesToOpen returns null when time has passed → catch-up open
+          if (getMinutesToOpen(sched, now) !== null) continue;
+          await autoOpenSession(guild, cfg, sched);
+        }
+      }
+
+      // ── Restore active sessions ────────────────────────────────────────────
       const sessions = await getActiveSessions(guild.id);
       if (!sessions.length) continue;
 

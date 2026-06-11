@@ -60,7 +60,12 @@ function buildSessionActionRow(isOpen = true) {
         .setDisabled(disabled),
       new ButtonBuilder()
         .setCustomId('admin:mark')
-        .setLabel('✏️ Điểm danh thay')
+        .setLabel('📝 Điểm danh thay')
+        .setStyle(ButtonStyle.Primary)
+        .setDisabled(disabled),
+      new ButtonBuilder()
+        .setCustomId('admin:edit')
+        .setLabel('✏️ Sửa điểm danh')
         .setStyle(ButtonStyle.Primary)
         .setDisabled(disabled),
     ),

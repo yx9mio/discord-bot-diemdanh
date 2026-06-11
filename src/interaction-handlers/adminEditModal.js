@@ -1,7 +1,5 @@
-// interaction-handlers/adminMarkModal.js
-// [B3] Modal cho admin điểm danh thay cho member khác
-// [BUG-E] Guard role mention <@&...> để tránh fetch member với role ID
-// [EDIT] Thêm update embed sau khi điểm danh (giống attendanceSelect.js pattern)
+// interaction-handlers/adminEditModal.js
+// Modal cho admin sửa điểm danh của member — upsert + update embed
 'use strict';
 const { MessageFlags } = require('discord.js');
 const {
@@ -10,48 +8,45 @@ const {
 const { getActiveSession } = require('../../services/sessionService.js');
 const { getAttendances, upsertAttendance } = require('../../services/attendanceService.js');
 const log = require('../../utils/logger.js');
-const metrics = require('../../utils/metrics.js');
 const { requireAdmin } = require('../../utils/permissions.js');
 const { addBreadcrumb } = require('../../utils/sentry.js');
 const { getSessionChannel } = require('../../utils/channel.js');
 const { buildSessionEmbed, buildAttendanceSelectRow, buildSessionActionRow } = require('../../utils/embeds.js');
 
 const STATUS_LABELS = {
-  'tham_gia': '✅ Tham gia',
-  'tre': '⏰ Trễ',
-  'khong_tham_gia': '❌ Vắng',
-  'co_phep': '📋 Có phép',
+  tham_gia:       '✅ Tham gia',
+  tre:            '⏰ Trễ',
+  khong_tham_gia: '❌ Vắng',
+  co_phep:        '📋 Có phép',
 };
 
-class AdminMarkModalHandler extends InteractionHandler {
+class AdminEditModalHandler extends InteractionHandler {
   constructor(ctx, options) {
     super(ctx, { ...options, interactionHandlerType: InteractionHandlerTypes.ModalSubmit });
   }
 
   parse(interaction) {
-    if (interaction.customId === 'admin:mark:modal') return this.some();
+    if (interaction.customId === 'admin:edit:modal') return this.some();
     return this.none();
   }
 
   async run(interaction) {
-    addBreadcrumb('interaction', 'adminMarkModal', {
+    addBreadcrumb('interaction', 'adminEditModal', {
       customId: interaction.customId,
       userId: interaction.user?.id,
     });
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const { guild, user } = interaction;
-    const { ok } = await requireAdmin(interaction, { context: 'điểm danh thay', deferred: true });
+    const { ok } = await requireAdmin(interaction, { context: 'sửa điểm danh', deferred: true });
     if (!ok) return;
 
     const session = await getActiveSession(guild.id);
     if (!session) {
       return interaction.editReply({ content: '🚫 Không có phiên điểm danh nào đang mở.' });
     }
-
-    // [BUG-12] Defensive assert — lớp bảo vệ thứ hai bổ sung cho getActiveSession
     if (session.guild_id !== guild.id) {
-      log.warn('ADMIN_MARK', guild.id, 'SECURITY: session.guild_id=%s !== guild.id=%s user=%s', session.guild_id, guild.id, user.id);
+      log.warn('ADMIN_EDIT', guild.id, 'SECURITY: guild mismatch user=%s', user.id);
       return interaction.editReply({ content: '❌ Phiên không hợp lệ.' });
     }
 
@@ -64,9 +59,7 @@ class AdminMarkModalHandler extends InteractionHandler {
         content: `❌ Trạng thái không hợp lệ. Vui lòng dùng: ${validStatuses.join(', ')}`,
       });
     }
-    const status = statusField;
 
-    // [BUG-E] Guard: từ chối role mention <@&roleId>
     if (userField.startsWith('<@&')) {
       return interaction.editReply({ content: '❌ Vui lòng mention user (không phải role), hoặc nhập thẳng User ID.' });
     }
@@ -86,7 +79,7 @@ class AdminMarkModalHandler extends InteractionHandler {
     }
 
     if (targetMember.user.bot) {
-      return interaction.editReply({ content: '❌ Không thể điểm danh cho bot.' });
+      return interaction.editReply({ content: '❌ Không thể sửa điểm danh cho bot.' });
     }
 
     const username = targetMember.nickname ?? targetMember.user.displayName ?? targetMember.user.username;
@@ -97,19 +90,17 @@ class AdminMarkModalHandler extends InteractionHandler {
         guild_id:      guild.id,
         user_id:       targetUserId,
         username,
-        status,
+        status:        statusField,
         marked_by:     user.id,
         checked_in_at: new Date().toISOString(),
       });
     } catch (e) {
-      log.error('ADMIN_MARK', guild.id, 'upsertAttendance thất bại: %s', e.message);
+      log.error('ADMIN_EDIT', guild.id, 'upsertAttendance thất bại: %s', e.message);
       return interaction.editReply({ content: '❌ Không thể lưu điểm danh, thử lại sau.' });
     }
 
-    metrics.attendanceMarked(guild.id, status, { markedBy: 'admin' });
-    log.info('ADMIN_MARK', guild.id, '%s điểm danh thay cho %s: %s', user.tag, targetUserId, status);
+    log.info('ADMIN_EDIT', guild.id, '%s sửa điểm danh %s → %s', user.tag, targetUserId, statusField);
 
-    // Update embed trong kênh
     try {
       const ch = await getSessionChannel(guild, session);
       if (ch && session.message_id) {
@@ -128,13 +119,13 @@ class AdminMarkModalHandler extends InteractionHandler {
         }
       }
     } catch (e) {
-      log.error('ADMIN_MARK', guild.id, 'Lỗi update embed: %s', e.message);
+      log.error('ADMIN_EDIT', guild.id, 'Lỗi update embed: %s', e.message);
     }
 
     return interaction.editReply({
-      content: `✅ Đã điểm danh thay cho **${username}** (${STATUS_LABELS[status]})`,
+      content: `✅ Đã sửa điểm danh của **${username}** → ${STATUS_LABELS[statusField]}`,
     });
   }
 }
 
-module.exports = { AdminMarkModalHandler };
+module.exports = { AdminEditModalHandler };

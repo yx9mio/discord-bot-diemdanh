@@ -1,7 +1,12 @@
 // services/reminderScheduler.js
-// Scan scheduled_sessions mỗi phút, gửi reminder vào kênh thông báo trước giờ mở phiên.
+// Scan scheduled_sessions mỗi phút, gửi reminder + auto-open phiên đúng giờ.
 // Hỗ trợ timezone per-guild (lưu trong guild_configs.timezone, IANA string).
 // Hỗ trợ 2 mốc nhắc (reminder_1_min, reminder_2_min) và skip_until.
+// Hỗ trợ auto-open cho cả recurring_weekly và one_time.
+//
+// [AUTO-OPEN] Khi minsToOpen === 0, tự động mở phiên điểm danh.
+//   - one_time: deactivate schedule sau khi mở (is_active = false)
+//   - recurring_weekly: set skip_until = tomorrow để tránh mở lại cùng ngày
 //
 // [BUG-C] Fix: cfg.log_channel_id → cfg.notification_channel_id (đúng column trong guild_configs)
 // [BUG-E] Formula luxonWeekday % 7 đúng sẵn — không cần fix.
@@ -9,8 +14,12 @@
 'use strict';
 const configService    = require('./configService.js');
 const scheduledService = require('./scheduledService.js');
+const sessionService   = require('./sessionService.js');
 const log = require('../utils/logger.js');
 const { DateTime } = require('luxon');
+const { buildSessionEmbed } = require('../utils/_views/sessionView.js');
+const { buildAttendanceSelectRow, buildSessionActionRow } = require('../utils/_views/rows.js');
+const { startAutoRefresh } = require('../utils/timers.js');
 
 let _client = null;
 
@@ -57,16 +66,22 @@ async function processOneReminder(guild, cfg, sched, now, tz) {
     const minsToOpen = getMinutesToOpen(sched, now);
     if (minsToOpen === null) return;
 
+    if (sched.skip_until) {
+      const skipUntil = DateTime.fromISO(sched.skip_until, { zone: tz });
+      if (now < skipUntil) return;
+    }
+
+    // ── Auto-open khi đến giờ ────────────────────────────────────────────────
+    if (minsToOpen === 0) {
+      await autoOpenSession(guild, cfg, sched);
+      return;
+    }
+
     const remind1 = sched.reminder_1_min ?? 60;
     const remind2 = sched.reminder_2_min ?? 15;
 
     const shouldRemind = (minsToOpen === remind1) || (minsToOpen === remind2);
     if (!shouldRemind) return;
-
-    if (sched.skip_until) {
-      const skipUntil = DateTime.fromISO(sched.skip_until, { zone: tz });
-      if (now < skipUntil) return;
-    }
 
     const msg = `⏰ **Nhắc lịch:** Phiên **${sched.session_name}** sẽ mở sau **${minsToOpen} phút**.`;
 
@@ -82,6 +97,71 @@ async function processOneReminder(guild, cfg, sched, now, tz) {
     log.info('REMINDER', guild.id, 'Sent %dmin reminder for %s', minsToOpen, sched.session_name);
   } catch (e) {
     log.error('REMINDER', guild.id, 'processOneReminder: %s', e.message);
+  }
+}
+
+async function autoOpenSession(guild, cfg, sched) {
+  try {
+    const notifChannelId = cfg?.notification_channel_id;
+    if (!notifChannelId) {
+      log.warn('AUTO_OPEN', guild.id, 'Không có kênh thông báo, bỏ qua auto-open cho %s', sched.session_name);
+      return;
+    }
+    const ch = await guild.channels.fetch(notifChannelId).catch(() => null);
+    if (!ch) {
+      log.warn('AUTO_OPEN', guild.id, 'Kênh %s không tìm thấy', notifChannelId);
+      return;
+    }
+
+    // Kiểm tra không có phiên đang mở
+    const activeSession = await sessionService.getActiveSession(guild.id);
+    if (activeSession) {
+      log.info('AUTO_OPEN', guild.id, 'Đã có phiên đang mở, bỏ qua auto-open');
+      return;
+    }
+
+    const session = await sessionService.createSession({
+      guild_id:      guild.id,
+      session_name:  sched.session_name || 'Điểm danh',
+      started_by:    guild.members.me?.id,
+      auto_close_at: null,
+      phai_role_ids: sched.phai_role_ids ?? [],
+    });
+
+    session.channel_id = ch.id;
+    session.phai_role_icons = cfg?.phai_role_icons ?? {};
+    await sessionService.updateSessionMessage(session.id, { channel_id: ch.id });
+
+    const { embed: sessionEmbed, components } = buildSessionEmbed(guild, session, [], session.phai_role_ids ?? []);
+    const selectRow = buildAttendanceSelectRow(true);
+    const adminRows = buildSessionActionRow(true);
+    const msg = await ch.send({
+      embeds: [sessionEmbed],
+      components: [selectRow, ...adminRows, ...components].slice(0, 5),
+    });
+    await sessionService.updateSessionMessage(session.id, { message_id: msg.id });
+
+    if (cfg?.attendance_role_id) {
+      await ch.send({
+        content: `<@&${cfg.attendance_role_id}> Phiên điểm danh **${session.session_name}** đã tự động mở!`,
+      }).catch(() => null);
+    }
+
+    startAutoRefresh(session.id, ch.id, msg.id, _client);
+    log.info('AUTO_OPEN', guild.id, 'Đã auto-open phiên: %s', session.session_name);
+
+    // Deactivate schedule
+    if (sched.type === 'one_time') {
+      await scheduledService.deleteScheduledSession(guild.id, sched.id);
+      log.info('AUTO_OPEN', guild.id, 'Đã xoá one-time schedule %s', sched.id);
+    } else {
+      // recurring: skip until tomorrow để tránh mở lại
+      const tomorrow = DateTime.now().setZone(cfg.timezone ?? 'Asia/Ho_Chi_Minh').plus({ days: 1 }).startOf('day');
+      await scheduledService.skipScheduledSession(sched.id, tomorrow.toISO());
+      log.info('AUTO_OPEN', guild.id, 'Đã skip recurring schedule %s đến %s', sched.id, tomorrow.toISODate());
+    }
+  } catch (e) {
+    log.error('AUTO_OPEN', guild.id, 'autoOpenSession thất bại: %s', e.message);
   }
 }
 
@@ -129,7 +209,18 @@ async function _sendDmReminders(guild, cfg, sched, msg) {
 function getMinutesToOpen(sched, now) {
   try {
     if (sched.hour == null) return null;
-    if (sched.day_of_week != null && (now.weekday % 7) !== sched.day_of_week) return null;
+
+    if (sched.type === 'one_time') {
+      // One-time: kiểm tra scheduled_date
+      if (!sched.scheduled_date) return null;
+      const today = now.toISODate();
+      if (sched.scheduled_date !== today) return null;
+      // Không check day_of_week cho one_time
+    } else {
+      // Recurring: kiểm tra day_of_week
+      if (sched.day_of_week != null && (now.weekday % 7) !== sched.day_of_week) return null;
+    }
+
     const target  = now.set({ hour: sched.hour, minute: sched.minute ?? 0, second: 0, millisecond: 0 });
     const diffMin = Math.round(target.diff(now, 'minutes').minutes);
     return diffMin >= 0 ? diffMin : null;
@@ -138,4 +229,4 @@ function getMinutesToOpen(sched, now) {
   }
 }
 
-module.exports = { startReminderScheduler };
+module.exports = { startReminderScheduler, getMinutesToOpen, autoOpenSession };
