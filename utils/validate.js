@@ -65,12 +65,12 @@ const AttendanceSchema = z.object({
 });
 
 // ─── Guild config ─────────────────────────────────────────────────────────────
+// NOTE: DB also has default_role_id column (reserved, unused)
 const ConfigSchema = z.object({
   guild_id:           z.string().min(1),
   log_channel_id:     z.string().nullable().optional(),
   admin_role_id:      z.string().nullable().optional(),
   attendance_role_id: z.string().nullable().optional(),
-  default_role_id:    z.string().nullable().optional(),
 });
 
 // ─── Slash command inputs ─────────────────────────────────────────────────────
@@ -84,7 +84,6 @@ const CaiDatInputSchema = z.object({
   log_channel_id:     z.string().nullable().optional(),
   admin_role_id:      z.string().nullable().optional(),
   attendance_role_id: z.string().nullable().optional(),
-  default_role_id:    z.string().nullable().optional(),
 });
 
 /**

@@ -53,6 +53,7 @@ async function processGuildReminders(guild) {
 
 async function processOneReminder(guild, cfg, sched, now, tz) {
   try {
+    if (sched.reminder_enabled === false) return;
     const minsToOpen = getMinutesToOpen(sched, now);
     if (minsToOpen === null) return;
 
