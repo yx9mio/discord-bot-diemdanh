@@ -210,33 +210,10 @@ async function disableAttendanceUI(client, channel, session, attended = []) {
 
 const voHieuHoaNutDiemDanh = disableAttendanceUI;
 
-async function sendCsv(channel, session, attended) {
-  try {
-    const lines = [
-      'user_id,username,status,time',
-      ...attended.map(a =>
-        [a.user_id, (a.username ?? '').replace(/,/g, ' '), a.status, a.checked_in_at ?? a.created_at ?? ''].join(',')
-      ),
-    ];
-    const buf  = Buffer.from(lines.join('\n'), 'utf-8');
-    const ts   = new Date().toISOString().slice(0, 10);
-    const name = `diemdanh-${(session.session_name ?? session.id.slice(0, 8)).replace(/[^a-z0-9]/gi, '_')}-${ts}.csv`;
-    await channel.send({
-      content: `📎 Báo cáo điểm danh: **${session.session_name}**`,
-      files:   [{ attachment: buf, name }],
-    });
-  } catch (e) {
-    log.warn('SESSION', session.guild_id, 'sendCsv lỗi: %s', e.message);
-  }
-}
-
-const guiCsvDinhKem = sendCsv;
-
 module.exports = {
   endSession, ketThucPhien,
   announceBadges, thongBaoHuyHieu,
   announceStreakMilestone, thongBaoStreakMilestone,
   disableAttendanceUI, voHieuHoaNutDiemDanh,
-  sendCsv, guiCsvDinhKem,
   getBadgeList, STREAK_MILESTONES,
 };

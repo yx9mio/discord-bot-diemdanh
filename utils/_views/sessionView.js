@@ -1,8 +1,5 @@
 // utils/_views/sessionView.js
-// [FIX] Implement đầy đủ buildSessionEmbed — signature đúng với callers:
-//   buildSessionEmbed(guild, session, attended, phaiRoleIds, isEditing, page)
-//   → { embed: EmbedBuilder, components: ActionRowBuilder[], totalPages: number }
-//   buildClosedSessionEmbed(session, attended, guild) → EmbedBuilder
+// Option B "Dashboard": clean layout, bởi @user, progress bar + % 1 dòng, phái stats
 'use strict';
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const {
@@ -10,7 +7,7 @@ const {
   buildRichProgressBar, pctEmoji, pctLabel, formatDuration,
 } = require('../_helpers');
 
-const PAGE_SIZE = 15; // số người hiển thị mỗi trang
+const PAGE_SIZE = 15;
 
 const STATUS_LABEL = {
   tham_gia:       `${ICONS.ATTEND_YES} Tham gia`,
@@ -19,15 +16,6 @@ const STATUS_LABEL = {
   co_phep:        `${ICONS.ATTEND_EXCUSE} Có phép`,
 };
 
-/**
- * @param {import('discord.js').Guild} guild
- * @param {object} session
- * @param {Array}  attended    – rows từ attendanceService.getAttendances()
- * @param {string[]} phaiRoleIds
- * @param {boolean} isEditing  – true khi đang edit message cũ (không dùng, reserved)
- * @param {number}  page       – 1-indexed
- * @returns {{ embed: EmbedBuilder, components: ActionRowBuilder[], totalPages: number }}
- */
 function buildSessionEmbed(guild, session, attended = [], phaiRoleIds = [], isEditing = false, page = 1, phaiRoleIcons = {}) {
   const total   = attended.length;
   const joined  = attended.filter(a => a.status === 'tham_gia' || a.status === 'tre').length;
@@ -47,14 +35,15 @@ function buildSessionEmbed(guild, session, attended = [], phaiRoleIds = [], isEd
     return `${label} — **${name}**`;
   });
 
-  const startTs = Math.floor(new Date(session.started_at ?? Date.now()).getTime() / 1000);
-  const ch = session.channel_id ? `<#${session.channel_id}>` : '_Chưa có kênh_';
+  const startTs  = Math.floor(new Date(session.started_at ?? Date.now()).getTime() / 1000);
+  const ch       = session.channel_id ? `<#${session.channel_id}>` : '_Chưa có kênh_';
+  const startedBy = session.started_by ? `<@${session.started_by}>` : '';
 
   let countdownLine = '';
   if (session.auto_close_at) {
     const msLeft = new Date(session.auto_close_at).getTime() - Date.now();
     if (msLeft > 0) {
-      countdownLine = `\n⏳ Đóng sau **${formatDuration(Math.floor(msLeft / 1000))}** — <t:${Math.floor(new Date(session.auto_close_at).getTime() / 1000)}:R>`;
+      countdownLine = `\n⏳ Còn **${formatDuration(Math.floor(msLeft / 1000))}** — <t:${Math.floor(new Date(session.auto_close_at).getTime() / 1000)}:R>`;
     }
   }
 
@@ -65,15 +54,13 @@ function buildSessionEmbed(guild, session, attended = [], phaiRoleIds = [], isEd
     .setTitle(`📊 Điểm danh — ${session.session_name ?? 'Phiên'}`)
     .setDescription([
       `${ICONS.SESSION_OPEN} **${session.session_name ?? 'Phiên'}**`,
-      `▸ <t:${startTs}:R>  ·  ${ch}${countdownLine}`,
+      `▸ ${ch} · <t:${startTs}:R>${startedBy ? ` · bởi ${startedBy}` : ''}${countdownLine}`,
       '',
-      `${pctEmoji(pct)} **${pct}%** — ${pctLabel(pct)}`,
-      `\`${bar}\``,
+      `${pctEmoji(pct)} **${pct}%** — ${pctLabel(pct)}   \`${bar}\``,
     ].join('\n'))
     .setFooter({ text: `${FOOTER_DEFAULT} · Cập nhật lúc` })
     .setTimestamp();
 
-  // Status inline fields
   const fields = [
     { name: `${ICONS.ATTEND_YES} Tham gia`, value: `**${joined - late}**`, inline: true },
     { name: `${ICONS.ATTEND_LATE} Trễ`,     value: `**${late}**`,         inline: true },
@@ -81,7 +68,7 @@ function buildSessionEmbed(guild, session, attended = [], phaiRoleIds = [], isEd
     { name: `${ICONS.ATTEND_EXCUSE} Có phép`, value: `**${excused}**`,    inline: true },
   ];
 
-  // Phái stats inline fields
+  // Phái stats
   const icons = phaiRoleIcons ?? session.phai_role_icons ?? {};
   const safeEligible = session.eligible_member_ids ?? [];
   const eligibleSet = new Set(safeEligible.map ? safeEligible.map(m => m.id ?? m) : []);
@@ -98,32 +85,31 @@ function buildSessionEmbed(guild, session, attended = [], phaiRoleIds = [], isEd
     fields.push({ name: `${icon} ${role.name}`, value: `**${rPresent}/${rTotal}** (${rPct}%)`, inline: true });
   }
 
-  embed.addFields(...fields, {
-    name: `📋 Danh sách${totalPages > 1 ? ` (trang ${clampedPage}/${totalPages})` : ''}`,
-    value: lines.length ? lines.join('\n') : '_Chưa có ai điểm danh_',
-    inline: false,
-  });
+  const listTitle = total > 0
+    ? `📋 Danh sách (${total}${totalPages > 1 ? ` · trang ${clampedPage}/${totalPages}` : ''})`
+    : '📋 Danh sách';
+  const listValue = lines.length ? lines.join('\n') : '_Chưa có ai điểm danh_';
+  embed.addFields(...fields, { name: listTitle, value: listValue, inline: false });
 
-  // Pagination
   const components = [];
   if (totalPages > 1) {
-    const paginationRow = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId(`attend_view:prev:${clampedPage}`).setLabel('◀ Trước').setStyle(ButtonStyle.Secondary).setDisabled(clampedPage <= 1),
-      new ButtonBuilder().setCustomId(`attend_view:next:${clampedPage}`).setLabel('Sau ▶').setStyle(ButtonStyle.Secondary).setDisabled(clampedPage >= totalPages),
+    components.push(
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`attend_view:prev:${clampedPage}`)
+          .setLabel('◀ Trước').setStyle(ButtonStyle.Secondary)
+          .setDisabled(clampedPage <= 1),
+        new ButtonBuilder()
+          .setCustomId(`attend_view:next:${clampedPage}`)
+          .setLabel('Sau ▶').setStyle(ButtonStyle.Secondary)
+          .setDisabled(clampedPage >= totalPages),
+      )
     );
-    components.push(paginationRow);
   }
 
   return { embed, components, totalPages };
 }
 
-/**
- * Embed hiển thị sau khi phiên đã đóng (disable buttons)
- * @param {object} session
- * @param {Array}  attended
- * @param {import('discord.js').Guild} guild
- * @returns {EmbedBuilder}
- */
 function buildClosedSessionEmbed(session, attended = [], guild) {
   const total   = attended.length;
   const joined  = attended.filter(a => a.status === 'tham_gia' || a.status === 'tre').length;
@@ -132,16 +118,16 @@ function buildClosedSessionEmbed(session, attended = [], guild) {
   const excused = attended.filter(a => a.status === 'co_phep').length;
   const pct     = total > 0 ? Math.round(joined / total * 100) : 0;
   const bar     = buildRichProgressBar(pct);
+  const color   = pct >= 80 ? COLORS.GREEN : pct >= 50 ? COLORS.YELLOW : COLORS.RED;
 
-  const color = pct >= 80 ? COLORS.GREEN : pct >= 50 ? COLORS.YELLOW : COLORS.RED;
+  const startedBy = session?.started_by ? `<@${session.started_by}>` : '';
 
   return new EmbedBuilder()
     .setColor(color)
     .setTitle(`${ICONS.SESSION_CLOSED} Đã kết thúc — ${session?.session_name ?? 'Phiên'}`)
     .setDescription([
-      `${pctEmoji(pct)} **Kết quả: ${pct}%**`,
-      `\`${bar}\``,
-      `Tổng số: **${joined}/${total}**`,
+      `${pctEmoji(pct)} **${pct}%** — ${pctLabel(pct)}   \`${bar}\``,
+      `Tổng số: **${joined}/${total}**${startedBy ? ` · bởi ${startedBy}` : ''}`,
     ].join('\n'))
     .addFields(
       { name: `${ICONS.ATTEND_YES} Tham gia`,  value: `**${joined - late}**`, inline: true },

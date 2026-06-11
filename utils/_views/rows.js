@@ -63,11 +63,6 @@ function buildSessionActionRow(isOpen = true) {
         .setLabel('✏️ Điểm danh thay')
         .setStyle(ButtonStyle.Primary)
         .setDisabled(disabled),
-      new ButtonBuilder()
-        .setCustomId('session:export_csv')
-        .setLabel('📄 Xuất CSV')
-        .setStyle(ButtonStyle.Secondary)
-        .setDisabled(disabled),
     ),
     new ActionRowBuilder().addComponents(
       new ButtonBuilder()

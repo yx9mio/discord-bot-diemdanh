@@ -3,13 +3,12 @@
 // [FIX-SELECT] attend_view pagination + attend_refresh: thêm buildAttendanceSelectRow(true)
 //   để select menu không bị mất sau khi paginate hoặc refresh
 'use strict';
-const { MessageFlags, AttachmentBuilder } = require('discord.js');
+const { MessageFlags } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const sessionService = require('../../services/sessionService.js');
 const attendanceService = require('../../services/attendanceService.js');
 const log = require('../../utils/logger.js');
 const metrics = require('../../utils/metrics.js');
-const { buildCsvBuffer, buildCsvFilename } = require('../../utils/csvHelper.js');
 const { requireAdmin } = require('../../utils/permissions.js');
 const {
   buildSessionEmbed, buildSummaryEmbed,
@@ -24,7 +23,6 @@ const { buildAdminMarkModal } = require('../../utils/adminMarkModal.js');
 const SESSION_BUTTON_IDS = new Set([
   'attend_view', 'attend_close', 'attend_refresh', 'admin:mark',
   'attend_view:prev', 'attend_view:next',
-  'session:export_csv',
   'session:cancel', 'session:confirm_cancel', 'session:cancel_cancel',
   'session:confirm_close', 'session:cancel_close',
   'session:confirm_close:all', 'session:cancel_close:all',
@@ -168,31 +166,6 @@ class SessionButtonHandler extends InteractionHandler {
     // ── session:cancel_cancel ───────────────────────────────────────────────────
     if (customId === 'session:cancel_cancel') {
       return interaction.update({ content: '↩️ Đã hủy. Phiên vẫn đang mở.', embeds: [], components: [] });
-    }
-
-    // ── session:export_csv ───────────────────────────────────────────────────────
-    if (customId === 'session:export_csv') {
-      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-      const { ok } = await requireAdmin(interaction, { context: 'xuất CSV', deferred: true });
-      if (!ok) return;
-      const session = await sessionService.getActiveSession(guild.id);
-      if (!session) return interaction.editReply(replyErrEdit('🚫 Không có phiên nào đang mở.'));
-
-      const attended = await attendanceService.getAttendances(session.id);
-      if (!attended.length) return interaction.editReply(replyErrEdit('🚫 Chưa có ai điểm danh trong phiên này.'));
-
-      try {
-        const csvBuffer = buildCsvBuffer(attended);
-        const filename = buildCsvFilename(session.session_name ?? session.id, session.id);
-        const attachment = new AttachmentBuilder(csvBuffer, { name: filename });
-        return interaction.editReply({
-          content: `📄 File CSV điểm danh phiên **${session.session_name}** (${attended.length} bản ghi)`,
-          files: [attachment],
-        });
-      } catch (e) {
-        log.error('EXPORT_CSV', guild.id, 'Lỗi tạo CSV: %s', e.message);
-        return interaction.editReply(replyErrEdit('❌ Không thể tạo file CSV, thử lại sau.'));
-      }
     }
 
     // ── attend_close ─────────────────────────────────────────────────────────────

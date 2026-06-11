@@ -3,7 +3,7 @@ const { EmbedBuilder } = require('discord.js');
 const sessionService    = require('../services/sessionService.js');
 const attendanceService = require('../services/attendanceService.js');
 const log = require('./logger.js');
-const { endSession, announceBadges, disableAttendanceUI, sendCsv } = require('./session.js');
+const { endSession, announceBadges, disableAttendanceUI } = require('./session.js');
 const {
   buildSummaryEmbed, FOOTER_DEFAULT, buildSessionEmbed,
   buildSessionActionRow, buildAttendanceSelectRow,
@@ -81,7 +81,6 @@ function scheduleCloseTimer(client, guild, session, channelId, ms) {
         const summaryEmbed = await buildSummaryEmbed(session, attended, guild, session.phai_role_ids ?? []);
         await ch.send({ embeds: [msg, summaryEmbed] });
         await announceBadges(guild, ch, guild.id, session.id, attended, statsMap);
-        await sendCsv(ch, session, attended);
       } else {
         log.warn('TIMER', guild.id, 'autoClose: channel %s không tồn tại, bỏ qua gửi embed', channelId);
       }
