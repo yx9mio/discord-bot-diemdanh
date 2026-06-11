@@ -133,7 +133,7 @@ function chunkLines(lines, maxLen = 1020) {
   return chunks;
 }
 
-function buildPhaiStatsText(guild, phaiRoleIds, attended, eligibleArr) {
+function buildPhaiStatsText(guild, phaiRoleIds, attended, eligibleArr, phaiRoleIcons = {}) {
   if (!phaiRoleIds || !phaiRoleIds.length || !guild) return null;
   const safe = eligibleArr ?? [];
   const eligibleSet = new Set(safe.map ? safe.map(m => m.id ?? m) : []);
@@ -147,7 +147,8 @@ function buildPhaiStatsText(guild, phaiRoleIds, attended, eligibleArr) {
       roleMembers.includes(a.user_id) && ['tham_gia', 'tre'].includes(a.status)
     ).length;
     const pct = total > 0 ? Math.round(present / total * 100) : 0;
-    lines.push(`${ICONS.SWORD} **${role.name}**: ${present}/${total} (${pct}%)`);
+    const icon = phaiRoleIcons[roleId] ?? ICONS.SWORD;
+    lines.push(`${icon} **${role.name}**: ${present}/${total} (${pct}%)`);
   }
   return lines.length ? lines.join('\n') : null;
 }

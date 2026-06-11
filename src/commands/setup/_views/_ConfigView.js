@@ -19,6 +19,7 @@ const CUSTOM_ID = {
   EDIT_ADMIN_ROLE:      'setup:cfg:edit:admin_role',
   EDIT_ATTENDANCE_ROLE: 'setup:cfg:edit:attendance_role',
   EDIT_PHAI:            'setup:cfg:edit:phai',
+  EDIT_PHAI_ICON:       'setup:cfg:edit:phai_icon',
   REFRESH:              'setup:cfg:refresh',
   BACK_HOME:            'setup:home',
 };
@@ -30,8 +31,9 @@ function render({ cfg, guild }) {
   const attRole   = cfg?.attendance_role_id ? `<@&${cfg.attendance_role_id}>` : '_chưa cài_';
 
   const phaiIds = cfg?.phai_role_ids ?? [];
+  const phaiIcons = cfg?.phai_role_icons ?? {};
   const phaiStr = phaiIds.length
-    ? phaiIds.map(id => `<@&${id}>`).join(' ')
+    ? phaiIds.map(id => `${phaiIcons[id] ?? ICONS.SWORD} <@&${id}>`).join(' ')
     : '_Không có_';
 
   const embed = new EmbedBuilder()
@@ -53,10 +55,11 @@ function render({ cfg, guild }) {
   const roleRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId(CUSTOM_ID.EDIT_ADMIN_ROLE).setLabel('Role Quản lý').setEmoji('🛡️').setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId(CUSTOM_ID.EDIT_ATTENDANCE_ROLE).setLabel('Role Điểm danh').setEmoji(ICONS.CHECK).setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId(CUSTOM_ID.EDIT_PHAI).setLabel('Phái / Nhóm').setEmoji(ICONS.GEAR).setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(CUSTOM_ID.EDIT_PHAI).setLabel('Phái / Nhóm').setEmoji(ICONS.SWORD).setStyle(ButtonStyle.Secondary),
   );
 
-  const editRow = new ActionRowBuilder().addComponents(
+  const phaiRow = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(CUSTOM_ID.EDIT_PHAI_ICON).setLabel('Icon phái').setEmoji('🎨').setStyle(ButtonStyle.Secondary).setDisabled(!phaiIds.length),
     new ButtonBuilder().setCustomId(CUSTOM_ID.EDIT_CHANNEL).setLabel('Kênh thông báo').setEmoji(ICONS.CHANNEL).setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId(CUSTOM_ID.EDIT_TZ).setLabel('Timezone').setEmoji(ICONS.GLOBE).setStyle(ButtonStyle.Secondary),
   );
@@ -66,7 +69,7 @@ function render({ cfg, guild }) {
     new ButtonBuilder().setCustomId(CUSTOM_ID.BACK_HOME).setLabel('← Dashboard').setEmoji(ICONS.HOME).setStyle(ButtonStyle.Secondary),
   );
 
-  return { embeds: [embed], components: [roleRow, editRow, navRow] };
+  return { embeds: [embed], components: [roleRow, phaiRow, navRow] };
 }
 
 module.exports = { ConfigView: { render, CUSTOM_ID, storeMessageId, getMessageId } };

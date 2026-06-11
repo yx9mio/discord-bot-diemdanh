@@ -29,7 +29,7 @@ const STATUS_LABEL = {
  * @param {number}  page       – 1-indexed
  * @returns {{ embed: EmbedBuilder, components: ActionRowBuilder[], totalPages: number }}
  */
-function buildSessionEmbed(guild, session, attended = [], phaiRoleIds = [], isEditing = false, page = 1) {
+function buildSessionEmbed(guild, session, attended = [], phaiRoleIds = [], isEditing = false, page = 1, phaiRoleIcons = {}) {
   const total   = attended.length;
   const joined  = attended.filter(a => a.status === 'tham_gia' || a.status === 'tre').length;
   const absent  = attended.filter(a => a.status === 'khong_tham_gia').length;
@@ -67,7 +67,7 @@ function buildSessionEmbed(guild, session, attended = [], phaiRoleIds = [], isEd
   ];
 
   // Thống kê phái nếu có
-  const phaiText = buildPhaiStatsText(guild, phaiRoleIds, attended, session.eligible_member_ids ?? []);
+  const phaiText = buildPhaiStatsText(guild, phaiRoleIds, attended, session.eligible_member_ids ?? [], phaiRoleIcons ?? session.phai_role_icons);
   if (phaiText) descParts.push('', phaiText);
 
   const embed = new EmbedBuilder()

@@ -58,7 +58,8 @@ class SetupSessionStartModalHandler extends InteractionHandler {
       if (notifChannelId) {
         const ch = await guild.channels.fetch(notifChannelId).catch(() => null);
         if (ch) {
-          session.channel_id = ch.id; // ghi đè để buildSessionEmbed hiển thị #kênh đúng
+          session.channel_id = ch.id;
+          session.phai_role_icons = cfg?.phai_role_icons ?? {};
           const { embed: sessionEmbed, components } = buildSessionEmbed(guild, session, [], session.phai_role_ids ?? []);
           const selectRow = buildAttendanceSelectRow(true);
           const adminRows = buildSessionActionRow(true);

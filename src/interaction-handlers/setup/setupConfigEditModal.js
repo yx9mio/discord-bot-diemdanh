@@ -9,7 +9,8 @@ const { replyErrEdit } = require('../../../utils/embeds.js');
 const MODAL_PREFIX = 'setup:cfg:modal:';
 
 const FIELD_MAP = {
-  tz: { col: 'timezone', inputId: 'timezone' },
+  tz:        { col: 'timezone', inputId: 'timezone' },
+  phai_icon: { col: 'phai_role_icons', inputId: null },
 };
 
 class SetupConfigEditModalHandler extends InteractionHandler {
@@ -31,8 +32,20 @@ class SetupConfigEditModalHandler extends InteractionHandler {
     const mapping = FIELD_MAP[suffix];
     if (!mapping) return interaction.editReply(replyErrEdit(`Loại cấu hình không xác định: "${suffix}"`));
 
-    const value = interaction.fields.getTextInputValue(mapping.inputId).trim();
-    if (!value) return interaction.editReply(replyErrEdit('Giá trị không được để trống.'));
+    let value;
+    if (suffix === 'phai_icon') {
+      const icons = {};
+      for (const [customId, field] of interaction.fields.fields) {
+        if (!customId.startsWith('phai_icon:')) continue;
+        const roleId = customId.slice('phai_icon:'.length);
+        const emoji = field.value.trim();
+        if (emoji) icons[roleId] = emoji;
+      }
+      value = icons;
+    } else {
+      value = interaction.fields.getTextInputValue(mapping.inputId).trim();
+      if (!value) return interaction.editReply(replyErrEdit('Giá trị không được để trống.'));
+    }
 
     try {
       await configService.setConfigField(guildId, mapping.col, value);
