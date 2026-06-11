@@ -35,7 +35,7 @@ client.stores.get('preconditions')       .registerPath(path.join(__dirname, 'src
 
 startHealthServer(client);
 
-client.once('ready', () => {
+client.once('clientReady', () => {
   const handlerStore = client.stores.get('interaction-handlers');
   log.info('BOOT', null, 'interaction-handlers loaded: %d', handlerStore.size);
   for (const [name] of handlerStore) log.info('BOOT', null, '  handler: %s', name);
