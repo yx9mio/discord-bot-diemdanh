@@ -9,7 +9,7 @@ const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/frame
 const sessionService    = require('../../services/sessionService.js');
 const attendanceService = require('../../services/attendanceService.js');
 const log               = require('../../utils/logger.js');
-const { replyErr }      = require('../../utils/embeds.js');
+const { replyErr, buildSessionEmbed, buildAttendanceSelectRow, buildSessionActionRow } = require('../../utils/embeds.js');
 
 const SELECT_CUSTOM_ID = 'attendance:select';
 
@@ -68,6 +68,25 @@ class AttendanceSelectHandler extends InteractionHandler {
         co_phep:        '📋 Có phép',
         khong_tham_gia: '❌ Vắng',
       }[status] ?? status;
+
+      try {
+        const ch = guild.channels.cache.get(session.channel_id);
+        if (ch && session.message_id) {
+          const msg = await ch.messages.fetch(session.message_id).catch(() => null);
+          if (msg) {
+            const attended = await attendanceService.getAttendances(session.id);
+            const { embed, components: pagComponents } = buildSessionEmbed(
+              guild, session, attended, session.phai_role_ids ?? []
+            );
+            const selectRow = buildAttendanceSelectRow(true);
+            const adminRows = buildSessionActionRow(true);
+            await msg.edit({
+              embeds: [embed],
+              components: [selectRow, ...adminRows, ...pagComponents].slice(0, 5),
+            }).catch(() => null);
+          }
+        }
+      } catch (_) {}
 
       log.info('ATTEND', guild.id, '%s điểm danh: %s', user.tag, status);
       return interaction.editReply({ content: `${statusLabel} — Đã ghi nhận điểm danh của bạn.` });
