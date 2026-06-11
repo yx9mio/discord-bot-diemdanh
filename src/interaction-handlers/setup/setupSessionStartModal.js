@@ -60,11 +60,12 @@ class SetupSessionStartModalHandler extends InteractionHandler {
         if (ch) {
           session.channel_id = ch.id;
           session.phai_role_icons = cfg?.phai_role_icons ?? {};
+          await sessionService.updateSessionMessage(session.id, { channel_id: ch.id });
           const { embed: sessionEmbed, components } = buildSessionEmbed(guild, session, [], session.phai_role_ids ?? []);
           const selectRow = buildAttendanceSelectRow(true);
           const adminRows = buildSessionActionRow(true);
           const msg = await ch.send({ embeds: [sessionEmbed], components: [selectRow, ...adminRows, ...components].slice(0, 5) });
-          await sessionService.updateSessionMessage(session.id, { message_id: msg.id, channel_id: ch.id });
+          await sessionService.updateSessionMessage(session.id, { message_id: msg.id });
           startAutoRefresh(session.id, ch.id, msg.id, interaction.client);
 
           if (session.auto_close_at) {
