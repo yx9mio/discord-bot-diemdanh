@@ -1,7 +1,7 @@
 -- 20260610000000_capture_full_schema.sql
--- Captures ALL tables, columns, constraints, triggers, RLS policies
--- that exist in the Supabase project but were applied via dashboard
--- before CLI adoption. Idempotent (IF NOT EXISTS) for safety.
+-- Full schema for the attendance bot. Idempotent (IF NOT EXISTS).
+-- This is the sole init migration — old granular migrations have been
+-- squashed into this file. (supabase migration repair --status reverted)
 
 -- ── 1. guild_configs ────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS guild_configs (

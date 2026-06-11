@@ -9,7 +9,17 @@
     "dev": "nodemon index.js",
     "lint": "eslint . --ext .js",
     "lint:fix": "eslint . --ext .js --fix",
-    "reload": "node -e \"process.exit(0)\""
+    "reload": "node -e \"process.exit(0)\"",
+    "supabase:start": "supabase start",
+    "supabase:stop": "supabase stop",
+    "supabase:reset": "supabase db reset",
+    "supabase:link": "supabase link",
+    "supabase:push": "supabase db push",
+    "supabase:pull": "supabase db pull",
+    "supabase:types": "supabase gen types typescript --local > supabase/types.ts",
+    "supabase:remote-types": "supabase gen types typescript --linked > supabase/types.ts",
+    "db:reset": "supabase db reset",
+    "db:seed": "supabase db reset"
   },
   "dependencies": {
     "@sapphire/framework": "^5.3.4",
@@ -26,6 +36,7 @@
   "devDependencies": {
     "eslint": "^9.27.0",
     "nodemon": "^3.1.10",
-    "pino-pretty": "^13.0.0"
+    "pino-pretty": "^13.0.0",
+    "supabase": "^2.105.0"
   }
 }
