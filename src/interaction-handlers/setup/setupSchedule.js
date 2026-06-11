@@ -2,12 +2,10 @@
 // [FIX-PATH] ../../../ → ../../../../
 'use strict';
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
-const { ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags,
-        ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
+const { ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } = require('discord.js');
 const scheduledService = require('../../../services/scheduledService.js');
 const log = require('../../../utils/logger.js');
 const { ScheduleView } = require('../../commands/setup/_views/_ScheduleView.js');
-const { MODAL_RECURRING_ID, MODAL_ONETIME_ID } = require('./setupScheduleAddDetailModal.js');
 const { CUSTOM_ID } = ScheduleView;
 const { requireAdmin } = require('../../../utils/permissions.js');
 
@@ -19,8 +17,6 @@ class SetupScheduleHandler extends InteractionHandler {
   parse(interaction) {
     const id = interaction.customId;
     if (id === 'setup:sch')           return this.some();
-    if (id === CUSTOM_ID.ADD_R)       return this.some();
-    if (id === CUSTOM_ID.ADD_O)       return this.some();
     if (id === CUSTOM_ID.PAGE_NEXT || id === CUSTOM_ID.PAGE_PREV) return this.some();
     if (id === CUSTOM_ID.REFRESH)     return this.some();
     if (id?.startsWith(CUSTOM_ID.DEL_PREFIX) &&
@@ -33,66 +29,6 @@ class SetupScheduleHandler extends InteractionHandler {
 
   async run(interaction) {
     const { customId, guild } = interaction;
-
-    if (customId === CUSTOM_ID.ADD_R) {
-      return interaction.showModal(
-        new ModalBuilder()
-          .setCustomId(MODAL_RECURRING_ID)
-          .setTitle('Thêm lịch hàng tuần')
-          .addComponents(
-            new ActionRowBuilder().addComponents(
-              new TextInputBuilder().setCustomId('day_of_week')
-                .setLabel('Ngày trong tuần (t2, t3, t4, t5, t6, t7, cn)')
-                .setStyle(TextInputStyle.Short).setPlaceholder('t7').setRequired(true),
-            ),
-            new ActionRowBuilder().addComponents(
-              new TextInputBuilder().setCustomId('gio_mo')
-                .setLabel('Giờ mở phiên (HH:MM)')
-                .setStyle(TextInputStyle.Short).setPlaceholder('21:00').setRequired(true),
-            ),
-            new ActionRowBuilder().addComponents(
-              new TextInputBuilder().setCustomId('phut_bu')
-                .setLabel('Phiên dài bao nhiêu phút? (0 = không tự đóng)')
-                .setStyle(TextInputStyle.Short).setPlaceholder('30').setRequired(false),
-            ),
-            new ActionRowBuilder().addComponents(
-              new TextInputBuilder().setCustomId('pre_close')
-                .setLabel('Nhắc trước bao nhiêu phút? (mặc định 30)')
-                .setStyle(TextInputStyle.Short).setPlaceholder('30').setRequired(false),
-            ),
-          ),
-      );
-    }
-
-    if (customId === CUSTOM_ID.ADD_O) {
-      return interaction.showModal(
-        new ModalBuilder()
-          .setCustomId(MODAL_ONETIME_ID)
-          .setTitle('Thêm lịch một lần')
-          .addComponents(
-            new ActionRowBuilder().addComponents(
-              new TextInputBuilder().setCustomId('ngay')
-                .setLabel('Ngày (DD/MM/YYYY hoặc YYYY-MM-DD)')
-                .setStyle(TextInputStyle.Short).setPlaceholder('07/06/2026').setRequired(true),
-            ),
-            new ActionRowBuilder().addComponents(
-              new TextInputBuilder().setCustomId('gio_mo')
-                .setLabel('Giờ mở phiên (HH:MM)')
-                .setStyle(TextInputStyle.Short).setPlaceholder('21:00').setRequired(true),
-            ),
-            new ActionRowBuilder().addComponents(
-              new TextInputBuilder().setCustomId('phut_bu')
-                .setLabel('Phiên dài bao nhiêu phút? (0 = không tự đóng)')
-                .setStyle(TextInputStyle.Short).setPlaceholder('30').setRequired(false),
-            ),
-            new ActionRowBuilder().addComponents(
-              new TextInputBuilder().setCustomId('pre_close')
-                .setLabel('Nhắc trước bao nhiêu phút? (mặc định 30)')
-                .setStyle(TextInputStyle.Short).setPlaceholder('30').setRequired(false),
-            ),
-          ),
-      );
-    }
 
     if (customId === CUSTOM_ID.REFRESH) {
       await interaction.deferUpdate();

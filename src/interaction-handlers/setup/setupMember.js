@@ -31,8 +31,7 @@ class SetupMemberHandler extends InteractionHandler {
       interaction.customId.startsWith(CUSTOM_ID.EDIT_PREFIX) ||
       interaction.customId.startsWith(CUSTOM_ID.DEL_PREFIX) ||
       interaction.customId.startsWith(CUSTOM_ID.DEL_CONFIRM_PREFIX) ||
-      interaction.customId.startsWith(CUSTOM_ID.DEL_CANCEL_PREFIX) ||
-      interaction.customId.startsWith(CUSTOM_ID.RESET_PREFIX)
+      interaction.customId.startsWith(CUSTOM_ID.DEL_CANCEL_PREFIX)
     ) return this.some();
     return this.none();
   }
@@ -113,21 +112,7 @@ class SetupMemberHandler extends InteractionHandler {
       return interaction.editReply(MemberView.render({ members, guild, page: 0 }));
     }
 
-    // ── Reset streak ──────────────────────────────────────────────────
-    if (customId.startsWith(CUSTOM_ID.RESET_PREFIX)) {
-      const { ok } = await requireAdmin(interaction, { context: 'reset streak', deferred: false });
-      if (!ok) return;
-      await interaction.deferUpdate();
-      const userId = customId.slice(CUSTOM_ID.RESET_PREFIX.length);
-      try {
-        await memberService.resetStreak(guild.id, userId);
-        const members = await memberService.getMembers(guild.id);
-        return interaction.editReply(MemberView.render({ members, guild, page: 0 }));
-      } catch (e) {
-        log.error('MEMBER_STREAK_RESET', guild.id, 'Lỗi reset streak %s: %s', userId, e.message);
-        return interaction.editReply({ content: `❌ Không thể reset streak: ${e.message}` });
-      }
-    }
+    // ── Reset streak (handled by setupResetStreak.js) ─────────────────
   }
 }
 
