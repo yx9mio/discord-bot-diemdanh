@@ -102,7 +102,7 @@ async function processOneReminder(guild, cfg, sched, now, tz) {
 
 async function autoOpenSession(guild, cfg, sched) {
   try {
-    const notifChannelId = cfg?.notification_channel_id;
+    const notifChannelId = sched.channel_id || cfg?.notification_channel_id;
     if (!notifChannelId) {
       log.warn('AUTO_OPEN', guild.id, 'Không có kênh thông báo, bỏ qua auto-open cho %s', sched.session_name);
       return;

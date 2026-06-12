@@ -8,16 +8,25 @@ const { FOOTER_DEFAULT } = require('../../../../utils/embeds.js');
 const { DAY_NAMES: DAY_VI } = require('../../../../utils/format.js');
 
 const CUSTOM_ID = {
-  ADD_R:       'setup:sch:add:r',
-  ADD_O:       'setup:sch:add:o',
-  PAGE_NEXT:   'setup:sch:page:next',
-  PAGE_PREV:   'setup:sch:page:prev',
-  DEL_PREFIX:  'setup:sch:del:',
-  DEL_CONFIRM: 'setup:sch:del:yes:',
-  DEL_CANCEL:  'setup:sch:del:no:',
-  EDIT_PREFIX: 'setup:sch:edit:',
-  REFRESH:     'setup:sch:refresh',
-  BACK_HOME:   'setup:home',
+  ADD_R:         'setup:sch:add:r',
+  ADD_O:         'setup:sch:add:o',
+  ADD_R_DAY:     'setup:sch:add:r:day',
+  ADD_R_HOUR:    'setup:sch:add:r:hour',
+  ADD_R_MIN:     'setup:sch:add:r:min',
+  ADD_R_DURATION:'setup:sch:add:r:duration',
+  ADD_R_CHANNEL: 'setup:sch:add:r:channel',
+  ADD_R_NEXT:    'setup:sch:add:r:step1:next',
+  ADD_R_CONFIRM: 'setup:sch:add:r:step2:confirm',
+  ADD_R_CANCEL1: 'setup:sch:add:r:step1:cancel',
+  ADD_R_CANCEL2: 'setup:sch:add:r:step2:cancel',
+  PAGE_NEXT:     'setup:sch:page:next',
+  PAGE_PREV:     'setup:sch:page:prev',
+  DEL_PREFIX:    'setup:sch:del:',
+  DEL_CONFIRM:   'setup:sch:del:yes:',
+  DEL_CANCEL:    'setup:sch:del:no:',
+  EDIT_PREFIX:   'setup:sch:edit:',
+  REFRESH:       'setup:sch:refresh',
+  BACK_HOME:     'setup:home',
 };
 
 const PAGE_SIZE = 5;

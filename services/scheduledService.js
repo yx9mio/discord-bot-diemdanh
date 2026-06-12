@@ -107,7 +107,7 @@ async function markReminderSent(id) {
   _throwSupabase(error, 'markReminderSent');
 }
 
-function addRecurringSession(guildId, { thu, gio_bat_dau, gio_ket_thuc, ten, timezone, pre_close_minutes }) {
+function addRecurringSession(guildId, { thu, gio_bat_dau, gio_ket_thuc, ten, timezone, pre_close_minutes, channel_id }) {
   const [hour, minute] = gio_bat_dau.split(':').map(Number);
   let closeHour = null, closeMinute = null;
   if (gio_ket_thuc) {
@@ -125,7 +125,7 @@ function addRecurringSession(guildId, { thu, gio_bat_dau, gio_ket_thuc, ten, tim
     close_minute:      closeMinute,
     phai_role_ids:     [],
     allowed_role_id:   null,
-    channel_id:        null,
+    channel_id:        channel_id ?? null,
     is_active:         true,
     reminder_enabled:  true,
     pre_close_minutes: pre_close_minutes ?? 30,

@@ -14,6 +14,7 @@ if (!process.env.DISCORD_TOKEN) {
 }
 
 ApplicationCommandRegistries.setDefaultBehaviorWhenNotIdentical(RegisterBehavior.BulkOverwrite);
+if (process.env.GUILD_ID) ApplicationCommandRegistries.setDefaultGuildIds([process.env.GUILD_ID]);
 
 const client = new SapphireClient({
   intents: [
