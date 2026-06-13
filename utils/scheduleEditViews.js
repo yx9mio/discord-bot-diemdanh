@@ -6,14 +6,15 @@ const { FOOTER_DEFAULT } = require('./embeds.js');
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 const MINUTES = Array.from({ length: 12 }, (_, i) => i * 5);
-const DURATIONS = [
-  { label: '15 phút', value: '15' },
-  { label: '30 phút', value: '30' },
-  { label: '45 phút', value: '45' },
-  { label: '1 giờ', value: '60' },
-  { label: '1 giờ 30', value: '90' },
-  { label: '2 giờ', value: '120' },
-  { label: 'Không tự đóng', value: '0' },
+const CLOSE_DAY_OFFSETS = [
+  { label: 'Không tự đóng', value: '-1' },
+  { label: 'Cùng ngày', value: '0' },
+  { label: 'Hôm sau (+1 ngày)', value: '1' },
+  { label: '2 ngày sau (+2)', value: '2' },
+  { label: '3 ngày sau (+3)', value: '3' },
+  { label: '4 ngày sau (+4)', value: '4' },
+  { label: '5 ngày sau (+5)', value: '5' },
+  { label: '6 ngày sau (+6)', value: '6' },
 ];
 const DAYS = [
   { label: 'Thứ Hai (T2)', value: '1', emoji: '1️⃣' },
@@ -74,44 +75,80 @@ function renderEditViewStep1(guild, state) {
   return { embeds: [embed], components: [row1, row2, row3, row4] };
 }
 
+function _closeLabel(state) {
+  if (state.closeDayOffset == null) return '❓';
+  const offset = parseInt(state.closeDayOffset, 10);
+  if (offset === -1) return 'Không tự đóng';
+  if (state.closeHour == null || state.closeMinute == null) return '❓';
+  const closeDay = state.day != null ? (state.day + offset) % 7 : -1;
+  const dayName = closeDay >= 0 ? DAY_LABELS[closeDay] : '?';
+  return `${dayName} ${String(state.closeHour).padStart(2, '0')}:${String(state.closeMinute).padStart(2, '0')}`;
+}
+
 function renderEditViewStep2(guild, state) {
   const sid = state.scheduleId ? ` · sid:${state.scheduleId}` : '';
+  const closeStr = _closeLabel(state);
   const embed = new EmbedBuilder()
     .setColor(COLORS.PRIMARY)
     .setTitle(`${ICONS.CALENDAR} Sửa lịch định kỳ — Bước 2/2`)
     .setDescription([
       `• Thứ: **${_label(state.day, DAY_LABELS)}**`,
       `• Giờ: **${String(state.hour).padStart(2, '0')} : ${String(state.minute).padStart(2, '0')}**`,
-      `• Thời lượng: **${state.duration != null ? (state.duration === 0 ? 'Không tự đóng' : state.duration + ' phút') : '❓'}**`,
+      `• Đóng: **${closeStr}**`,
       state.channel ? `• Kênh: <#${state.channel}>` : `• Kênh: **mặc định (cấu hình)**`,
       '',
-      'Chọn **thời lượng** và **kênh thông báo** (tuỳ chọn), sau đó Xác nhận.',
+      'Chọn **ngày kết thúc**, **giờ**, **phút** và **kênh** (tuỳ chọn), sau đó Lưu.',
     ].join('\n'))
     .setFooter({ text: `${FOOTER_DEFAULT}${sid}` })
     .setTimestamp();
 
-  const durOpts = DURATIONS.map(o => new StringSelectMenuOptionBuilder()
-    .setLabel(o.label).setValue(o.value)
-    .setDefault(String(state.duration) === o.value));
+  const closeDayOpts = CLOSE_DAY_OFFSETS.map(o => {
+    const opt = new StringSelectMenuOptionBuilder().setLabel(o.label).setValue(o.value);
+    if (String(state.closeDayOffset) === o.value) opt.setDefault(true);
+    return opt;
+  });
+  const closeDaySelect = new StringSelectMenuBuilder()
+    .setCustomId('setup:sch:edit:r:close_day').setPlaceholder('Chọn ngày kết thúc...')
+    .addOptions(closeDayOpts);
 
-  const durSelect = new StringSelectMenuBuilder()
-    .setCustomId('setup:sch:edit:r:duration').setPlaceholder('Chọn thời lượng...')
-    .addOptions(durOpts);
+  const closeHourOpts = HOURS.map(h => {
+    const opt = new StringSelectMenuOptionBuilder().setLabel(String(h).padStart(2, '0')).setValue(String(h));
+    if (state.closeHour === h) opt.setDefault(true);
+    return opt;
+  });
+  const closeHourSelect = new StringSelectMenuBuilder()
+    .setCustomId('setup:sch:edit:r:close_hour').setPlaceholder('Chọn giờ kết thúc...')
+    .addOptions(closeHourOpts);
+
+  const closeMinOpts = MINUTES.map(m => {
+    const opt = new StringSelectMenuOptionBuilder().setLabel(String(m).padStart(2, '0')).setValue(String(m));
+    if (state.closeMinute === m) opt.setDefault(true);
+    return opt;
+  });
+  const closeMinSelect = new StringSelectMenuBuilder()
+    .setCustomId('setup:sch:edit:r:close_min').setPlaceholder('Chọn phút kết thúc...')
+    .addOptions(closeMinOpts);
 
   const channelSelect = new ChannelSelectMenuBuilder()
     .setCustomId('setup:sch:edit:r:channel')
     .setPlaceholder('Chọn kênh thông báo (tuỳ chọn)')
     .setChannelTypes(ChannelType.GuildText);
 
-  const row1 = new ActionRowBuilder().addComponents(durSelect);
-  const row2 = new ActionRowBuilder().addComponents(channelSelect);
-  const row3 = new ActionRowBuilder().addComponents(
+  const noAutoClose = state.closeDayOffset === '-1';
+  const allCloseSet = state.closeDayOffset != null && state.closeHour != null && state.closeMinute != null;
+  const canConfirm = noAutoClose || allCloseSet;
+
+  const row1 = new ActionRowBuilder().addComponents(closeDaySelect);
+  const row2 = new ActionRowBuilder().addComponents(closeHourSelect);
+  const row3 = new ActionRowBuilder().addComponents(closeMinSelect);
+  const row4 = new ActionRowBuilder().addComponents(channelSelect);
+  const row5 = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId('setup:sch:edit:r:step2:confirm').setLabel('✅ Lưu thay đổi').setStyle(ButtonStyle.Success)
-      .setDisabled(state.duration == null),
+      .setDisabled(!canConfirm),
     new ButtonBuilder().setCustomId('setup:sch:edit:r:step2:cancel').setLabel('Hủy').setStyle(ButtonStyle.Secondary),
   );
 
-  return { embeds: [embed], components: [row1, row2, row3] };
+  return { embeds: [embed], components: [row1, row2, row3, row4, row5] };
 }
 
 module.exports = { renderEditViewStep1, renderEditViewStep2 };

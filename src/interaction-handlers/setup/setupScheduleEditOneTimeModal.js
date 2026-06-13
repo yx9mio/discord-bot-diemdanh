@@ -49,13 +49,26 @@ class SetupScheduleEditOneTimeModalHandler extends InteractionHandler {
 
       // ── Recurring: use select menu flow (like creation) ─────────────
       if (isRecurring) {
-        const dur = computeDuration(session.hour, session.minute, session.close_hour, session.close_minute);
+        let closeDayOffset = null, closeHour = null, closeMinute = null;
+        if (session.close_day_of_week != null) {
+          closeDayOffset = String((session.close_day_of_week - session.day_of_week + 7) % 7);
+          closeHour = session.close_hour;
+          closeMinute = session.close_minute;
+        } else if (session.close_hour != null && session.close_minute != null) {
+          const startMin = session.hour * 60 + session.minute;
+          const endMin = session.close_hour * 60 + session.close_minute;
+          closeDayOffset = endMin > startMin ? '0' : '1';
+          closeHour = session.close_hour;
+          closeMinute = session.close_minute;
+        }
         setState(guild.id, scheduleId, {
           step: 1,
           day: session.day_of_week,
           hour: session.hour,
           minute: session.minute,
-          duration: dur !== '' ? parseInt(dur, 10) : 0,
+          closeDayOffset,
+          closeHour,
+          closeMinute,
           channel: session.channel_id ?? null,
           scheduleId,
         });

@@ -107,22 +107,17 @@ async function markReminderSent(id) {
   _throwSupabase(error, 'markReminderSent');
 }
 
-function addRecurringSession(guildId, { thu, gio_bat_dau, gio_ket_thuc, ten, timezone, pre_close_minutes, channel_id }) {
+function addRecurringSession(guildId, { thu, gio_bat_dau, close_day_of_week, close_hour, close_minute, ten, timezone, pre_close_minutes, channel_id }) {
   const [hour, minute] = gio_bat_dau.split(':').map(Number);
-  let closeHour = null, closeMinute = null;
-  if (gio_ket_thuc) {
-    const [ch, cm] = gio_ket_thuc.split(':').map(Number);
-    closeHour = ch;
-    closeMinute = cm;
-  }
   return createScheduledSession({
     guild_id:          guildId,
     day_of_week:       thu,
     hour,
     minute,
     session_name:      ten || 'Điểm danh',
-    close_hour:        closeHour,
-    close_minute:      closeMinute,
+    close_day_of_week: close_day_of_week ?? null,
+    close_hour:        close_hour ?? null,
+    close_minute:      close_minute ?? null,
     phai_role_ids:     [],
     allowed_role_id:   null,
     channel_id:        channel_id ?? null,

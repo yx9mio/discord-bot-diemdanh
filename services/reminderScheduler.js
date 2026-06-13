@@ -120,14 +120,20 @@ async function autoOpenSession(guild, cfg, sched) {
       return;
     }
 
-    // Compute auto_close_at from schedule's close_hour/close_minute
+    // Compute auto_close_at from schedule's close_day_of_week / close_hour / close_minute
     let autoCloseAt = null;
     if (sched.close_hour != null && sched.close_minute != null) {
-      const closeAt = DateTime.now().setZone(cfg.timezone ?? 'Asia/Ho_Chi_Minh')
-        .set({ hour: sched.close_hour, minute: sched.close_minute, second: 0, millisecond: 0 });
-      if (closeAt > DateTime.now().setZone(cfg.timezone ?? 'Asia/Ho_Chi_Minh')) {
-        autoCloseAt = closeAt.toISO();
+      const now = DateTime.now().setZone(cfg.timezone ?? 'Asia/Ho_Chi_Minh');
+      const startAt = now.set({ hour: sched.hour, minute: sched.minute, second: 0, millisecond: 0 });
+      let closeAt = startAt.set({ hour: sched.close_hour, minute: sched.close_minute, second: 0, millisecond: 0 });
+      if (sched.close_day_of_week != null) {
+        let dayOffset = (sched.close_day_of_week - sched.day_of_week + 7) % 7;
+        if (dayOffset === 0 && closeAt <= startAt) dayOffset = 7;
+        closeAt = closeAt.plus({ days: dayOffset });
+      } else if (closeAt <= startAt) {
+        closeAt = closeAt.plus({ days: 1 });
       }
+      autoCloseAt = closeAt.toISO();
     }
 
     const session = await sessionService.createSession({

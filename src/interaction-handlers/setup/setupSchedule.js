@@ -95,24 +95,34 @@ class SetupScheduleHandler extends InteractionHandler {
     if (customId === 'setup:sch:add:r:step2:confirm') {
       await interaction.deferUpdate();
       const state = getState(guild.id);
-      if (state.day == null || state.hour == null || state.minute == null || state.duration == null) {
+      if (state.day == null || state.hour == null || state.minute == null) {
         clearState(guild.id);
         const schedules = await scheduledService.getScheduledSessions(guild.id).catch(() => []);
         return interaction.editReply({ content: '❌ Thiếu thông tin, vui lòng thử lại.', ...ScheduleView.render({ schedules, guild, page: 0 }) });
       }
-      const gioBatDau = `${String(state.hour).padStart(2, '0')}:${String(state.minute).padStart(2, '0')}`;
-      let gioKetThuc = null;
-      if (state.duration > 0) {
-        const totalMin = state.hour * 60 + state.minute + state.duration;
-        const ch = Math.floor(totalMin / 60) % 24;
-        const cm = totalMin % 60;
-        gioKetThuc = `${String(ch).padStart(2, '0')}:${String(cm).padStart(2, '0')}`;
+      const noAutoClose = state.closeDayOffset === '-1';
+      if (!noAutoClose && (state.closeDayOffset == null || state.closeHour == null || state.closeMinute == null)) {
+        clearState(guild.id);
+        const schedules = await scheduledService.getScheduledSessions(guild.id).catch(() => []);
+        return interaction.editReply({ content: '❌ Vui lòng chọn ngày/giờ kết thúc hoặc chọn Không tự đóng.', ...ScheduleView.render({ schedules, guild, page: 0 }) });
       }
+
+      let closeDayOfWeek = null, closeHour = null, closeMinute = null;
+      if (!noAutoClose) {
+        const offset = parseInt(state.closeDayOffset, 10);
+        closeDayOfWeek = (state.day + offset) % 7;
+        closeHour = state.closeHour;
+        closeMinute = state.closeMinute;
+      }
+
+      const gioBatDau = `${String(state.hour).padStart(2, '0')}:${String(state.minute).padStart(2, '0')}`;
       try {
         await scheduledService.addRecurringSession(guild.id, {
           thu: state.day,
           gio_bat_dau: gioBatDau,
-          gio_ket_thuc: gioKetThuc,
+          close_day_of_week: closeDayOfWeek,
+          close_hour: closeHour,
+          close_minute: closeMinute,
           ten: 'Điểm danh',
           timezone: 'Asia/Ho_Chi_Minh',
           pre_close_minutes: 30,
@@ -164,23 +174,33 @@ class SetupScheduleHandler extends InteractionHandler {
         return interaction.editReply(ScheduleView.render({ schedules, guild, page: 0 }));
       }
       const state = getEditState(guild.id, scheduleId);
-      if (!state || state.day == null || state.hour == null || state.minute == null || state.duration == null) {
+      if (!state || state.day == null || state.hour == null || state.minute == null) {
         clearEditState(guild.id, scheduleId);
         const schedules = await scheduledService.getScheduledSessions(guild.id).catch(() => []);
         return interaction.editReply({ content: '❌ Thiếu thông tin, vui lòng thử lại.', ...ScheduleView.render({ schedules, guild, page: 0 }) });
       }
-      const gioBatDau = `${String(state.hour).padStart(2, '0')}:${String(state.minute).padStart(2, '0')}`;
-      let closeHour = null, closeMinute = null;
-      if (state.duration > 0) {
-        const totalMin = state.hour * 60 + state.minute + state.duration;
-        closeHour = Math.floor(totalMin / 60) % 24;
-        closeMinute = totalMin % 60;
+      const noAutoClose = state.closeDayOffset === '-1';
+      if (!noAutoClose && (state.closeDayOffset == null || state.closeHour == null || state.closeMinute == null)) {
+        clearEditState(guild.id, scheduleId);
+        const schedules = await scheduledService.getScheduledSessions(guild.id).catch(() => []);
+        return interaction.editReply({ content: '❌ Vui lòng chọn ngày/giờ kết thúc hoặc chọn Không tự đóng.', ...ScheduleView.render({ schedules, guild, page: 0 }) });
       }
+
+      let closeDayOfWeek = null, closeHour = null, closeMinute = null;
+      if (!noAutoClose) {
+        const offset = parseInt(state.closeDayOffset, 10);
+        closeDayOfWeek = (state.day + offset) % 7;
+        closeHour = state.closeHour;
+        closeMinute = state.closeMinute;
+      }
+
+      const gioBatDau = `${String(state.hour).padStart(2, '0')}:${String(state.minute).padStart(2, '0')}`;
       try {
         await scheduledService.updateScheduledSession(guild.id, scheduleId, {
           day_of_week: state.day,
           hour: state.hour,
           minute: state.minute,
+          close_day_of_week: closeDayOfWeek,
           close_hour: closeHour,
           close_minute: closeMinute,
           session_name: 'Điểm danh',

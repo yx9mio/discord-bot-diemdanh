@@ -6,7 +6,8 @@ const scheduledService = require('../../../services/scheduledService.js');
 const log = require('../../../utils/logger.js');
 
 const HANDLED = ['setup:sch:edit:r:day', 'setup:sch:edit:r:hour', 'setup:sch:edit:r:min',
-  'setup:sch:edit:r:duration', 'setup:sch:edit:r:channel'];
+  'setup:sch:edit:r:close_day', 'setup:sch:edit:r:close_hour', 'setup:sch:edit:r:close_min',
+  'setup:sch:edit:r:channel'];
 
 class SetupScheduleEditRecurringSelectHandler extends InteractionHandler {
   constructor(ctx, options) {
@@ -39,7 +40,9 @@ class SetupScheduleEditRecurringSelectHandler extends InteractionHandler {
       if (customId === 'setup:sch:edit:r:day') setState(guild.id, scheduleId, { day: parseInt(val, 10) });
       else if (customId === 'setup:sch:edit:r:hour') setState(guild.id, scheduleId, { hour: parseInt(val, 10) });
       else if (customId === 'setup:sch:edit:r:min') setState(guild.id, scheduleId, { minute: parseInt(val, 10) });
-      else if (customId === 'setup:sch:edit:r:duration') setState(guild.id, scheduleId, { duration: parseInt(val, 10) });
+      else if (customId === 'setup:sch:edit:r:close_day') setState(guild.id, scheduleId, { closeDayOffset: val });
+      else if (customId === 'setup:sch:edit:r:close_hour') setState(guild.id, scheduleId, { closeHour: parseInt(val, 10) });
+      else if (customId === 'setup:sch:edit:r:close_min') setState(guild.id, scheduleId, { closeMinute: parseInt(val, 10) });
       else if (customId === 'setup:sch:edit:r:channel') setState(guild.id, scheduleId, { channel: val });
 
       const state = getState(guild.id, scheduleId);
