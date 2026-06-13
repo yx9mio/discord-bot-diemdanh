@@ -28,11 +28,9 @@ class AttendanceSelectHandler extends InteractionHandler {
     const { guild, user } = interaction;
     const status = interaction.values[0];
 
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-
     const session = await sessionService.getActiveSession(guild.id);
     if (!session) {
-      return interaction.editReply({ content: '🚫 Không có phiên điểm danh nào đang mở.' });
+      return interaction.reply({ content: '🚫 Không có phiên điểm danh nào đang mở.', flags: MessageFlags.Ephemeral });
     }
 
     // [SEC-FIX-2] Validate session thuộc đúng guild
@@ -40,8 +38,38 @@ class AttendanceSelectHandler extends InteractionHandler {
       log.warn('SECURITY', guild.id,
         'attendanceSelect: guild mismatch session.guild_id=%s guild.id=%s user=%s',
         session.guild_id, guild.id, user.id);
-      return interaction.editReply({ content: '❌ Phiên không hợp lệ.' });
+      return interaction.reply({ content: '❌ Phiên không hợp lệ.', flags: MessageFlags.Ephemeral });
     }
+
+    // Kiểm tra phái role — nếu chưa có, bắt chọn phái trước
+    const phaiRoleIds = session.phai_role_ids ?? [];
+    if (phaiRoleIds.length > 0) {
+      const member = await guild.members.fetch(user.id).catch(() => null);
+      const hasPhai = member && phaiRoleIds.some(rid => member.roles.cache.has(rid));
+      if (!hasPhai) {
+        const roles = phaiRoleIds.map(rid => guild.roles.cache.get(rid)).filter(Boolean);
+        if (roles.length) {
+          const { StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ActionRowBuilder } = require('discord.js');
+          const select = new StringSelectMenuBuilder()
+            .setCustomId(`phai:select:${status}`)
+            .setPlaceholder('👤 Chọn phái / nhóm của bạn...')
+            .addOptions(
+              roles.map(r => {
+                const opt = new StringSelectMenuOptionBuilder().setLabel(r.name).setValue(r.id);
+                try { opt.setEmoji(r.icon || '👤'); } catch (_) {}
+                return opt;
+              }),
+            );
+          return interaction.reply({
+            content: '⚠️ Bạn chưa có **role phái**. Vui lòng chọn phái của bạn:',
+            components: [new ActionRowBuilder().addComponents(select)],
+            flags: MessageFlags.Ephemeral,
+          });
+        }
+      }
+    }
+
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     // [BUG-LOCK] sync lock — không dùng await
     const acquired = attendanceService.tryAcquireAttendanceLock(session.id, user.id);

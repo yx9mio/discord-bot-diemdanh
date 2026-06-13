@@ -31,9 +31,14 @@ function buildSummaryEmbed(session, attended = [], guild, phai_role_ids = []) {
   const bar     = buildRichProgressBar(pct);
 
   const lines = attended.slice(0, 20).map(a => {
-    const name  = guild?.members?.cache?.get(a.user_id)?.displayName ?? `<@${a.user_id}>`;
+    const member = guild?.members?.cache?.get(a.user_id);
+    const name   = member?.displayName ?? `<@${a.user_id}>`;
+    const phaiIcons = (phai_role_ids ?? [])
+      .filter(rid => member?.roles?.cache?.has(rid))
+      .map(rid => getPhaiIcon(rid, phai_role_ids, guild))
+      .join('');
     const label = STATUS_LABEL[a.status] ?? a.status;
-    return `${label} — **${name}**`;
+    return `${label} — **${name}**${phaiIcons ? ` ${phaiIcons}` : ''}`;
   });
   if (attended.length > 20) lines.push(`_... và ${attended.length - 20} người khác_`);
 

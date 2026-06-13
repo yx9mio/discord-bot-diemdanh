@@ -32,9 +32,14 @@ function buildSessionEmbed(guild, session, attended = [], phaiRoleIds = [], _isE
   const slice = attended.slice((clampedPage - 1) * PAGE_SIZE, clampedPage * PAGE_SIZE);
 
   const lines = slice.map(a => {
-    const name  = guild?.members?.cache?.get(a.user_id)?.displayName ?? `<@${a.user_id}>`;
+    const member = guild?.members?.cache?.get(a.user_id);
+    const name   = member?.displayName ?? `<@${a.user_id}>`;
+    const phaiIcons = (phaiRoleIds ?? [])
+      .filter(rid => member?.roles?.cache?.has(rid))
+      .map(rid => getPhaiIcon(rid, phaiRoleIds, guild))
+      .join('');
     const label = STATUS_LABEL[a.status] ?? a.status;
-    return `${label} — **${name}**`;
+    return `${label} — **${name}**${phaiIcons ? ` ${phaiIcons}` : ''}`;
   });
 
   const startTs  = Math.floor(new Date(session.started_at ?? Date.now()).getTime() / 1000);
