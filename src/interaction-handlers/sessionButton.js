@@ -31,9 +31,9 @@ const SESSION_BUTTON_IDS = new Set([
 ]);
 
 async function _phaiData(session, guildId) {
-  if (session.phai_role_ids?.length) return { phaiRoleIds: session.phai_role_ids, emojiMap: null };
   const cfg = await configService.getGuildConfig(guildId).catch(() => null);
-  return { phaiRoleIds: cfg?.phai_role_ids ?? [], emojiMap: cfg?.phai_role_icons ?? null };
+  const phaiRoleIds = session.phai_role_ids?.length ? session.phai_role_ids : cfg?.phai_role_ids ?? [];
+  return { phaiRoleIds, emojiMap: cfg?.phai_role_icons ?? null };
 }
 
 class SessionButtonHandler extends InteractionHandler {
