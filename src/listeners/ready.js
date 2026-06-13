@@ -1,5 +1,5 @@
 'use strict';
-const { Listener, Events } = require('@sapphire/framework');
+const { Listener, Events, ApplicationCommandRegistry } = require('@sapphire/framework');
 const { getActiveSession, getActiveSessions, closeSession } = require('../../services/sessionService.js');
 const { getAttendances } = require('../../services/attendanceService.js');
 const scheduledService = require('../../services/scheduledService.js');
@@ -100,8 +100,55 @@ class ReadyListener extends Listener {
     }
     if (restored) log.info('READY', null, 'Đã restore %d auto-refresh timer(s).', restored);
 
+    if (!process.env.GUILD_ID) {
+      try {
+        await registerGuildCommands(client);
+      } catch (e) {
+        log.error('READY', null, 'Guild command registration fail: %s', e.message);
+      }
+    }
+
     startReminderScheduler(client);
   }
+}
+
+async function registerGuildCommands(client) {
+  log.info('CMD_REG', null, 'GUILD_ID not set — registering commands on all guilds...');
+
+  // Build command data từ Sapphire command store
+  const commandStore = client.stores.get('commands');
+  const allData = [];
+  for (const cmd of commandStore.values()) {
+    try {
+      const registry = new ApplicationCommandRegistry(cmd.name);
+      if (typeof cmd.registerApplicationCommands === 'function') {
+        await cmd.registerApplicationCommands(registry);
+      }
+      if (registry.apiCalls?.length) {
+        for (const call of registry.apiCalls) {
+          if (call.builtData) allData.push(call.builtData);
+        }
+      }
+    } catch (e) {
+      log.warn('CMD_REG', null, 'Skip %s: %s', cmd.name, e.message);
+    }
+  }
+
+  if (!allData.length) {
+    log.warn('CMD_REG', null, 'No command data to register');
+    return;
+  }
+
+  let ok = 0;
+  for (const guild of client.guilds.cache.values()) {
+    try {
+      await guild.commands.set(allData);
+      ok++;
+    } catch (e) {
+      log.warn('CMD_REG', guild.id, 'Failed: %s', e.message);
+    }
+  }
+  log.info('CMD_REG', null, 'Registered %d commands on %d/%d guilds', allData.length, ok, client.guilds.cache.size);
 }
 
 module.exports = { ReadyListener };
