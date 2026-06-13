@@ -24,6 +24,11 @@ class SetupBroadcastHandler extends InteractionHandler {
             .setCustomId('message').setLabel('Nội dung tin nhắn').setStyle(TextInputStyle.Paragraph)
             .setMaxLength(1900).setRequired(true).setPlaceholder('Nhập nội dung cần gửi...'),
         ),
+        new ActionRowBuilder().addComponents(
+          new TextInputBuilder()
+            .setCustomId('channel_id').setLabel('Kênh đích (Channel ID, để trống = kênh hiện tại)').setStyle(TextInputStyle.Short)
+            .setRequired(false).setPlaceholder('Bỏ trống để gửi vào kênh này'),
+        ),
       );
     return interaction.showModal(modal);
   }

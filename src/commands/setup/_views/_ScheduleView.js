@@ -32,15 +32,16 @@ const CUSTOM_ID = {
 const PAGE_SIZE = 5;
 
 function _fmtSchedule(s) {
-  const day  = DAY_VI[s.day_of_week] ?? '?';
+  const isOneTime = s.type === 'one_time' || s.scheduled_date;
+  const day  = isOneTime ? (s.scheduled_date ?? '?') : (DAY_VI[s.day_of_week] ?? '?');
   const open = `${String(s.hour).padStart(2, '0')}:${String(s.minute).padStart(2, '0')}`;
   const ch   = s.channel_id ? ` · <#${s.channel_id}>` : '';
-  // [FIX] dùng close_hour/close_minute thay vì pre_close_minutes (không có trong DB)
   const closeStr = (s.close_hour != null && s.close_minute != null)
     ? ` · ⏹ đóng ${String(s.close_hour).padStart(2, '0')}:${String(s.close_minute).padStart(2, '0')}`
     : '';
   const remind = s.reminder_1_min != null ? ` · 🔔 ${s.reminder_1_min}p` : '';
-  return `**${day} ${open}** — ${s.session_name ?? 'Phiên'}${closeStr}${remind}${ch}`;
+  const label = isOneTime ? `📅 ${day}` : `${day}`;
+  return `**${label} ${open}** — ${s.session_name ?? 'Phiên'}${closeStr}${remind}${ch}`;
 }
 
 function render({ schedules, page = 0, guild }) {
@@ -69,7 +70,8 @@ function render({ schedules, page = 0, guild }) {
     const editRow = new ActionRowBuilder();
     const delRow = new ActionRowBuilder();
     for (const s of slice) {
-      const dayLabel = DAY_VI[s.day_of_week] ?? '?';
+      const isOneTime = s.type === 'one_time' || s.scheduled_date;
+      const dayLabel = isOneTime ? (s.scheduled_date ?? '?') : (DAY_VI[s.day_of_week] ?? '?');
       const timeLabel = `${String(s.hour).padStart(2, '0')}:${String(s.minute).padStart(2, '0')}`;
       editRow.addComponents(
         new ButtonBuilder().setCustomId(`${CUSTOM_ID.EDIT_PREFIX}${s.id}`).setLabel(`✎ ${dayLabel} ${timeLabel}`).setStyle(ButtonStyle.Secondary),
@@ -83,7 +85,7 @@ function render({ schedules, page = 0, guild }) {
 
   const ctrlRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId(CUSTOM_ID.ADD_R).setLabel('+ Hằng tuần').setStyle(ButtonStyle.Success),
-    new ButtonBuilder().setCustomId(CUSTOM_ID.ADD_O).setLabel('+ Một lần').setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId(CUSTOM_ID.ADD_O).setLabel('+ Một lần').setStyle(ButtonStyle.Success),
     new ButtonBuilder().setCustomId(CUSTOM_ID.PAGE_PREV).setLabel('◀ Trước').setStyle(ButtonStyle.Secondary).setDisabled(cPage === 0),
     new ButtonBuilder().setCustomId(CUSTOM_ID.PAGE_NEXT).setLabel('Sau ▶').setStyle(ButtonStyle.Secondary).setDisabled(cPage >= totalPages - 1),
   );

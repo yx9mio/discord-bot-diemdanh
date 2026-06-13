@@ -12,6 +12,7 @@ const {
 } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const memberService = require('../../../services/memberService.js');
+const { getGuildConfig } = require('../../../services/configService.js');
 const log = require('../../../utils/logger.js');
 const { requireAdmin } = require('../../../utils/permissions.js');
 const { MemberView } = require('../../commands/setup/_views/_MemberView.js');
@@ -28,6 +29,8 @@ class SetupMemberHandler extends InteractionHandler {
       interaction.customId === CUSTOM_ID.PAGE_NEXT ||
       interaction.customId === CUSTOM_ID.PAGE_PREV ||
       interaction.customId === CUSTOM_ID.REFRESH ||
+      interaction.customId === CUSTOM_ID.FILTER_ALL ||
+      interaction.customId.startsWith(CUSTOM_ID.FILTER_PHAI_PREFIX) ||
       interaction.customId.startsWith(CUSTOM_ID.EDIT_PREFIX) ||
       interaction.customId.startsWith(CUSTOM_ID.DEL_PREFIX) ||
       interaction.customId.startsWith(CUSTOM_ID.DEL_CONFIRM_PREFIX) ||
@@ -39,12 +42,19 @@ class SetupMemberHandler extends InteractionHandler {
   async run(interaction) {
     const { guild, customId } = interaction;
 
-    // ── Danh sách thành viên / navigation ─────────────────────────────
+    function _readFilterPhai(text) {
+      const phaiM = text.match(/phai:(\d+)/);
+      return phaiM ? phaiM[1] : '';
+    }
+
+    // ── Danh sách thành viên / navigation / filter ─────────────────────
     if (
       customId === CUSTOM_ID.MEMBER ||
       customId === CUSTOM_ID.PAGE_NEXT ||
       customId === CUSTOM_ID.PAGE_PREV ||
-      customId === CUSTOM_ID.REFRESH
+      customId === CUSTOM_ID.REFRESH ||
+      customId === CUSTOM_ID.FILTER_ALL ||
+      customId.startsWith(CUSTOM_ID.FILTER_PHAI_PREFIX)
     ) {
       await interaction.deferUpdate();
       const footer = interaction.message?.embeds?.[0]?.footer?.text ?? '';
@@ -56,8 +66,17 @@ class SetupMemberHandler extends InteractionHandler {
       if (customId === CUSTOM_ID.PAGE_NEXT) nextPage++;
       if (customId === CUSTOM_ID.PAGE_PREV) nextPage--;
 
-      const members = await memberService.getMembers(guild.id);
-      return interaction.editReply(MemberView.render({ members, guild, page: nextPage }));
+      const filterPhai = customId === CUSTOM_ID.FILTER_ALL
+        ? ''
+        : customId.startsWith(CUSTOM_ID.FILTER_PHAI_PREFIX)
+          ? customId.slice(CUSTOM_ID.FILTER_PHAI_PREFIX.length)
+          : _readFilterPhai(footer);
+
+      const [members, cfg] = await Promise.all([
+        memberService.getMembers(guild.id),
+        getGuildConfig(guild.id),
+      ]);
+      return interaction.editReply(MemberView.render({ members, guild, cfg, page: nextPage, filterPhai }));
     }
 
     // ── Sửa thành viên ────────────────────────────────────────────────
@@ -97,8 +116,11 @@ class SetupMemberHandler extends InteractionHandler {
       const userId = customId.slice(CUSTOM_ID.DEL_CONFIRM_PREFIX.length);
       try {
         await memberService.deleteMember(guild.id, userId);
-        const members = await memberService.getMembers(guild.id);
-        return interaction.editReply(MemberView.render({ members, guild, page: 0 }));
+        const [members, cfg] = await Promise.all([
+          memberService.getMembers(guild.id),
+          getGuildConfig(guild.id),
+        ]);
+        return interaction.editReply(MemberView.render({ members, guild, cfg, page: 0 }));
       } catch (e) {
         log.error('MEMBER_DELETE', guild.id, 'Lỗi xoá %s: %s', userId, e.message);
         return interaction.editReply({ content: `❌ Không thể xoá: ${e.message}` });
@@ -108,8 +130,11 @@ class SetupMemberHandler extends InteractionHandler {
     // ── Huỷ xoá ──────────────────────────────────────────────────────
     if (customId.startsWith(CUSTOM_ID.DEL_CANCEL_PREFIX)) {
       await interaction.deferUpdate();
-      const members = await memberService.getMembers(guild.id);
-      return interaction.editReply(MemberView.render({ members, guild, page: 0 }));
+      const [members, cfg] = await Promise.all([
+        memberService.getMembers(guild.id),
+        getGuildConfig(guild.id),
+      ]);
+      return interaction.editReply(MemberView.render({ members, guild, cfg, page: 0 }));
     }
 
     // ── Reset streak (handled by setupResetStreak.js) ─────────────────

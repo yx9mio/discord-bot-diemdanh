@@ -13,6 +13,7 @@ const {
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 
 const configService = require('../../../services/configService.js');
+const log = require('../../../utils/logger.js');
 
 const EDIT_CHANNEL         = 'setup:cfg:edit:channel';
 const EDIT_TZ              = 'setup:cfg:edit:tz';
@@ -169,7 +170,15 @@ class SetupConfigEditHandler extends InteractionHandler {
   }
 
   async run(interaction) {
-    await handleButton(interaction);
+    try {
+      await handleButton(interaction);
+    } catch (e) {
+      log.error('SETUP_CFG_EDIT', interaction.guild?.id, 'Config edit thất bại: %s', e.message);
+      if (interaction.replied || interaction.deferred) {
+        return interaction.editReply({ content: '❌ Lỗi xử lý, thử lại sau.' }).catch(() => null);
+      }
+      return interaction.reply({ content: '❌ Lỗi xử lý, thử lại sau.', flags: MessageFlags.Ephemeral }).catch(() => null);
+    }
   }
 }
 

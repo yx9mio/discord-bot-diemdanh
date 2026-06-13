@@ -6,7 +6,7 @@ const {
   EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle,
   ModalBuilder, TextInputBuilder, TextInputStyle,
 } = require('discord.js');
-const { COLORS, ICONS } = require('../../../../utils/theme.js');
+const { COLORS, ICONS, getPhaiIcon, formatPhaiList } = require('../../../../utils/theme.js');
 const { FOOTER_DEFAULT } = require('../../../../utils/embeds.js');
 
 const CUSTOM_ID = {
@@ -22,6 +22,8 @@ const CUSTOM_ID = {
   RESET_ALL:          'setup:mem:reset:all',
   REFRESH:            'setup:mem:refresh',
   BACK_HOME:          'setup:home',
+  FILTER_PHAI_PREFIX: 'setup:mem:filter:phai:',
+  FILTER_ALL:         'setup:mem:filter:all',
 };
 
 const PAGE_SIZE = 10;
@@ -33,7 +35,7 @@ const BTN_LIMIT = 5;
 /**
  * Trả về ModalBuilder để handler gọi interaction.showModal(modal).
  * @param {string} userId
- * @param {{ username?: string, phong_ban?: string, ghi_chu?: string }} currentData
+ * @param {{ username?: string, phong_ban?: string, ghi_chu?: string, phai_role_ids?: string[] }} currentData
  */
 function buildEditModal(userId, currentData = {}) {
   return new ModalBuilder()
@@ -67,6 +69,16 @@ function buildEditModal(userId, currentData = {}) {
           .setMaxLength(200)
           .setValue(currentData.ghi_chu ?? ''),
       ),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('phai_role_ids')
+          .setLabel('Role IDs của Phái (cách nhau bằng dấu phẩy)')
+          .setStyle(TextInputStyle.Short)
+          .setRequired(false)
+          .setMaxLength(200)
+          .setPlaceholder('123456789, 987654321')
+          .setValue((currentData.phai_role_ids ?? []).join(', ')),
+      ),
     );
 }
 
@@ -83,7 +95,7 @@ function buildAddModal() {
           .setStyle(TextInputStyle.Short)
           .setRequired(true)
           .setMaxLength(30)
-          .setPlaceholder('Ví dụ: 123456789012345678'),
+          .setPlaceholder('123456789012345678 hoặc @user'),
       ),
       new ActionRowBuilder().addComponents(
         new TextInputBuilder()
@@ -113,32 +125,63 @@ function buildAddModal() {
 }
 
 // ─── Render view ─────────────────────────────────────────────────────
-function render({ members, page = 0, guild }) {
+function render({ members, page = 0, guild, cfg = null, filterPhai = '' }) {
   const safe      = Array.isArray(members) ? members : [];
-  const total      = safe.length;
+  const filtered  = filterPhai ? safe.filter(m => (m.phai_role_ids ?? []).includes(filterPhai)) : safe;
+  const total      = filtered.length;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const cPage      = Math.max(0, Math.min(page, totalPages - 1));
   const start      = cPage * PAGE_SIZE;
-  const slice      = safe.slice(start, start + PAGE_SIZE);
+  const slice      = filtered.slice(start, start + PAGE_SIZE);
+  const phaiIcons  = cfg?.phai_role_icons ?? {};
   // [FIX] btnSlice = đúng 5 item của trang hiện tại
   const btnSlice   = slice.slice(0, BTN_LIMIT);
 
   const desc = total === 0
-    ? `*Chưa có thành viên nào.*\n> Bấm **${ICONS.PLUS} Thêm thành viên** để bắt đầu.`
+    ? filterPhai
+      ? `*Không có thành viên nào trong phái này.*`
+      : `*Chưa có thành viên nào.*\n> Bấm **${ICONS.PLUS} Thêm thành viên** để bắt đầu.`
     : slice.map((m, i) => {
-        const phong = m.phong_ban ? ` _(${m.phong_ban})_` : '';
-        const note  = m.ghi_chu   ? ` · 📝 ${m.ghi_chu}` : '';
-        return `${start + i + 1}. <@${m.user_id}>${phong}${note}`;
+        const phong  = m.phong_ban ? ` _(${m.phong_ban})_` : '';
+        const phaiStr = formatPhaiList(m.phai_role_ids, phaiIcons, guild);
+        const phaiLine = phaiStr ? `  ${phaiStr}` : '';
+        const note   = m.ghi_chu  ? ` · 📝 ${m.ghi_chu}` : '';
+        return `${start + i + 1}. <@${m.user_id}>${phong}${phaiLine}${note}`;
       }).join('\n');
 
+  const footerExtra = filterPhai ? `phai:${filterPhai}` : '';
   const embed = new EmbedBuilder()
     .setColor(COLORS.PRIMARY)
     .setTitle(`${ICONS.MEMBER} Thành viên — ${guild.name}`)
     .setDescription(desc)
-    .setFooter({ text: `${FOOTER_DEFAULT} · Trang ${cPage + 1}/${totalPages} · Tổng ${total} thành viên` })
+    .setFooter({ text: `${FOOTER_DEFAULT} · Trang ${cPage + 1}/${totalPages} · Tổng ${total} thành viên${footerExtra ? ` · ${footerExtra}` : ''}` })
     .setTimestamp();
 
   const components = [];
+
+  // Filter row: phái buttons
+  const phaiIds = cfg?.phai_role_ids ?? [];
+  if (phaiIds.length > 0 && phaiIds.length <= 4) {
+    const filterRow = new ActionRowBuilder();
+    filterRow.addComponents(
+      new ButtonBuilder()
+        .setCustomId(CUSTOM_ID.FILTER_ALL)
+        .setLabel('Tất cả')
+        .setStyle(filterPhai ? ButtonStyle.Secondary : ButtonStyle.Primary),
+    );
+    for (const rid of phaiIds) {
+      const icon = getPhaiIcon(rid, phaiIcons);
+      const role = guild?.roles?.cache?.get(rid);
+      filterRow.addComponents(
+        new ButtonBuilder()
+          .setCustomId(`${CUSTOM_ID.FILTER_PHAI_PREFIX}${rid}`)
+          .setLabel(role?.name ?? rid)
+          .setEmoji(icon)
+          .setStyle(filterPhai === rid ? ButtonStyle.Primary : ButtonStyle.Secondary),
+      );
+    }
+    components.push(filterRow);
+  }
 
   if (btnSlice.length > 0) {
     // Row 1: Nút xoá per-user

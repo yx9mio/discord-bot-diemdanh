@@ -1,6 +1,6 @@
 'use strict';
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const { COLORS, ICONS }  = require('../../../../utils/theme.js');
+const { COLORS, ICONS, getPhaiIcon }  = require('../../../../utils/theme.js');
 const { FOOTER_DEFAULT } = require('../../../../utils/embeds.js');
 const { fmtTs }          = require('../../../../utils/format.js');
 
@@ -40,12 +40,13 @@ function _sessionCard(session, idx) {
   ].filter(Boolean).join('\n');
 }
 
-function _sessionCardExpanded(session, idx, phaiRoles) {
+function _sessionCardExpanded(session, idx, cfg = null) {
   const card = _sessionCard(session, idx);
+  const phaiIcons = cfg?.phai_role_icons ?? {};
   const extra = [
     `▸ ID: \`${session.id}\``,
     `▸ Tạo bởi: <@${session.created_by}>`,
-    session.phai_role_ids?.length ? `▸ Phái: ${session.phai_role_ids.map(r => `<@&${r}>`).join(' ')}` : null,
+    session.phai_role_ids?.length ? `▸ Phái: ${session.phai_role_ids.map(r => `${getPhaiIcon(r, phaiIcons)} <@&${r}>`).join(' ')}` : null,
     session.eligible_member_ids?.length ? `▸ Thành viên: ${session.eligible_member_ids.length} người` : null,
     session.created_at ? `▸ Tạo lúc: ${fmtTs(session.created_at)}` : null,
   ].filter(Boolean).join('\n');
@@ -76,7 +77,7 @@ function render({ sessions, page = 0, guild, cfg, members = [], detailId = null 
     const desc = slice.map((s, i) => {
       const idx = start + i + 1;
       return s.id === detailId
-        ? _sessionCardExpanded(s, idx)
+        ? _sessionCardExpanded(s, idx, cfg)
         : _sessionCard(s, idx);
     }).join('\n\n');
     embed.setDescription(desc);

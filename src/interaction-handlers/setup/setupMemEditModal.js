@@ -6,6 +6,7 @@
 const { MessageFlags } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const memberService = require('../../../services/memberService.js');
+const { getGuildConfig } = require('../../../services/configService.js');
 const log = require('../../../utils/logger.js');
 const { requireAdmin } = require('../../../utils/permissions.js');
 const { replyErrEdit } = require('../../../utils/embeds.js');
@@ -32,9 +33,11 @@ class SetupMemEditModalHandler extends InteractionHandler {
     const userId = interaction.customId.slice(MODAL_EDIT.length);
     if (!userId) return interaction.editReply(replyErrEdit('Không xác định được thành viên.'));
 
-    const username = interaction.fields.getTextInputValue('username')?.trim()  || null;
-    const phongBan = interaction.fields.getTextInputValue('phong_ban')?.trim() || null;
-    const ghiChu   = interaction.fields.getTextInputValue('ghi_chu')?.trim()   || null;
+    const username     = interaction.fields.getTextInputValue('username')?.trim()     || null;
+    const phongBan     = interaction.fields.getTextInputValue('phong_ban')?.trim()    || null;
+    const ghiChu       = interaction.fields.getTextInputValue('ghi_chu')?.trim()      || null;
+    const phaiRaw      = interaction.fields.getTextInputValue('phai_role_ids')?.trim() || null;
+    const phaiRoleIds  = phaiRaw ? phaiRaw.split(',').map(s => s.trim()).filter(Boolean) : null;
 
     let currentUsername = username;
     if (!currentUsername) {
@@ -50,6 +53,7 @@ class SetupMemEditModalHandler extends InteractionHandler {
         username: currentUsername,
         phongBan,
         ghiChu,
+        phaiRoleIds,
       });
       log.info('MEM_EDIT', guild.id, 'Sửa thành viên %s: username=%s phongBan=%s ghiChu=%s', userId, currentUsername, phongBan, ghiChu);
     } catch (e) {
@@ -57,9 +61,12 @@ class SetupMemEditModalHandler extends InteractionHandler {
       return interaction.editReply(replyErrEdit('Không thể cập nhật, thử lại sau.'));
     }
 
-    const members = await memberService.getMembers(guild.id).catch(() => []);
+    const [members, cfg] = await Promise.all([
+      memberService.getMembers(guild.id).catch(() => []),
+      getGuildConfig(guild.id).catch(() => null),
+    ]);
     await interaction.editReply({ content: '✅ Đã cập nhật thành viên.' });
-    await interaction.message?.edit(MemberView.render({ guild, members })).catch(() => null);
+    await interaction.message?.edit(MemberView.render({ guild, members, cfg })).catch(() => null);
   }
 }
 

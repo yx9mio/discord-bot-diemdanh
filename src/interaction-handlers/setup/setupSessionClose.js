@@ -30,44 +30,49 @@ class SetupSessionCloseHandler extends InteractionHandler {
     const id = interaction.customId;
     const guild = interaction.guild;
 
-    if (id === CLOSE_ALL) {
-      const sessions = await sessionService.getActiveSessions(guild.id);
-      if (!sessions.length) return interaction.editReply(replyErrEdit('Không có phiên nào đang mở.'));
+    try {
+      if (id === CLOSE_ALL) {
+        const sessions = await sessionService.getActiveSessions(guild.id);
+        if (!sessions.length) return interaction.editReply(replyErrEdit('Không có phiên nào đang mở.'));
 
-      log.info('SESSION_CLOSE_ALL', guild.id,
-        '%s yêu cầu đóng tất cả %d phiên', interaction.user.tag, sessions.length);
+        log.info('SESSION_CLOSE_ALL', guild.id,
+          '%s yêu cầu đóng tất cả %d phiên', interaction.user.tag, sessions.length);
+
+        return interaction.editReply(
+          replyConfirm(
+            `Bạn có chắc muốn đóng **tất cả ${sessions.length} phiên** đang mở?\n> Hành động này không thể hoàn tác.`,
+            'session:confirm_close:all',
+            'session:cancel_close:all',
+          ),
+        );
+      }
+
+      let session;
+      if (id.startsWith(PREFIX)) {
+        const sessionId = id.slice(PREFIX.length);
+        session = await sessionService.getSessionByIdRaw(sessionId, guild.id);
+      } else {
+        session = await sessionService.getActiveSession(guild.id);
+      }
+
+      if (!session) {
+        return interaction.editReply(replyErrEdit('Không tìm thấy phiên yêu cầu.'));
+      }
+
+      log.info('SESSION_CLOSE', guild.id,
+        '%s yêu cầu đóng phiên "%s"', interaction.user.tag, session.session_name);
 
       return interaction.editReply(
         replyConfirm(
-          `Bạn có chắc muốn đóng **tất cả ${sessions.length} phiên** đang mở?\n> Hành động này không thể hoàn tác.`,
-          'session:confirm_close:all',
-          'session:cancel_close:all',
+          `Bạn có chắc muốn đóng phiên **"${session.session_name}"**?\n> Hành động này không thể hoàn tác.`,
+          'session:confirm_close',
+          'session:cancel_close',
         ),
       );
+    } catch (e) {
+      log.error('SESSION_CLOSE', guild.id, 'Kiểm tra phiên thất bại: %s', e.message);
+      return interaction.editReply(replyErrEdit('Không thể kiểm tra phiên, thử lại sau.'));
     }
-
-    let session;
-    if (id.startsWith(PREFIX)) {
-      const sessionId = id.slice(PREFIX.length);
-      session = await sessionService.getSessionByIdRaw(sessionId, guild.id);
-    } else {
-      session = await sessionService.getActiveSession(guild.id);
-    }
-
-    if (!session) {
-      return interaction.editReply(replyErrEdit('Không tìm thấy phiên yêu cầu.'));
-    }
-
-    log.info('SESSION_CLOSE', guild.id,
-      '%s yêu cầu đóng phiên "%s"', interaction.user.tag, session.session_name);
-
-    return interaction.editReply(
-      replyConfirm(
-        `Bạn có chắc muốn đóng phiên **"${session.session_name}"**?\n> Hành động này không thể hoàn tác.`,
-        'session:confirm_close',
-        'session:cancel_close',
-      ),
-    );
   }
 }
 

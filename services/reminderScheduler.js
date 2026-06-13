@@ -19,7 +19,7 @@ const log = require('../utils/logger.js');
 const { DateTime } = require('luxon');
 const { buildSessionEmbed } = require('../utils/_views/sessionView.js');
 const { buildAttendanceSelectRow, buildSessionActionRow } = require('../utils/_views/rows.js');
-const { startAutoRefresh } = require('../utils/timers.js');
+const { startAutoRefresh, scheduleCloseTimer } = require('../utils/timers.js');
 
 let _client = null;
 
@@ -120,11 +120,21 @@ async function autoOpenSession(guild, cfg, sched) {
       return;
     }
 
+    // Compute auto_close_at from schedule's close_hour/close_minute
+    let autoCloseAt = null;
+    if (sched.close_hour != null && sched.close_minute != null) {
+      const closeAt = DateTime.now().setZone(cfg.timezone ?? 'Asia/Ho_Chi_Minh')
+        .set({ hour: sched.close_hour, minute: sched.close_minute, second: 0, millisecond: 0 });
+      if (closeAt > DateTime.now().setZone(cfg.timezone ?? 'Asia/Ho_Chi_Minh')) {
+        autoCloseAt = closeAt.toISO();
+      }
+    }
+
     const session = await sessionService.createSession({
       guild_id:      guild.id,
       session_name:  sched.session_name || 'Điểm danh',
       started_by:    guild.members.me?.id,
-      auto_close_at: null,
+      auto_close_at: autoCloseAt,
       phai_role_ids: sched.phai_role_ids ?? [],
     });
 
@@ -148,6 +158,12 @@ async function autoOpenSession(guild, cfg, sched) {
     }
 
     startAutoRefresh(session.id, ch.id, msg.id, _client);
+
+    if (session.auto_close_at) {
+      const msLeft = new Date(session.auto_close_at).getTime() - Date.now();
+      if (msLeft > 0) scheduleCloseTimer(_client, guild, session, ch.id, msLeft);
+    }
+
     log.info('AUTO_OPEN', guild.id, 'Đã auto-open phiên: %s', session.session_name);
 
     // Deactivate schedule

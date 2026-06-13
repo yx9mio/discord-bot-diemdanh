@@ -1,6 +1,7 @@
 'use strict';
 const { MessageFlags } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
+const { DateTime } = require('luxon');
 const configService = require('../../../services/configService.js');
 const log = require('../../../utils/logger.js');
 const { requireAdmin } = require('../../../utils/permissions.js');
@@ -45,6 +46,11 @@ class SetupConfigEditModalHandler extends InteractionHandler {
     } else {
       value = interaction.fields.getTextInputValue(mapping.inputId).trim();
       if (!value) return interaction.editReply(replyErrEdit('Giá trị không được để trống.'));
+      if (suffix === 'tz') {
+        if (!DateTime.now().setZone(value).isValid) {
+          return interaction.editReply(replyErrEdit(`Múi giờ không hợp lệ: "${value}". Gợi ý: Asia/Ho_Chi_Minh, Asia/Saigon, UTC...`));
+        }
+      }
     }
 
     try {

@@ -9,8 +9,8 @@
 // [UPG] renderToi: total_absent, total_late từ getMemberStats (đã có trả về)
 // [UPG] renderLichSu: limit 200, summary 4 trạng thái, REFRESH button trong navRow
 'use strict';
-const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const { COLORS, ICONS } = require('../../../../utils/theme.js');
+const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, StringSelectMenuOptionBuilder } = require('discord.js');
+const { COLORS, ICONS, getPhaiIcon, formatPhaiList } = require('../../../../utils/theme.js');
 const { FOOTER_DEFAULT, buildRichProgressBar, pctEmoji, pctLabel } = require('../../../../utils/embeds.js');
 
 const CUSTOM_ID = {
@@ -21,6 +21,12 @@ const CUSTOM_ID = {
   SERVER:    'setup:stats:server',
   REFRESH:   'setup:stats:refresh',
   BACK_HOME: 'setup:home',
+  PHONG_BAN_SELECT:    'setup:stats:rank:pb',
+  RANK_PHAI_PREFIX:    'setup:stats:rank:phai:',
+  RANK_ALL:            'setup:stats:rank:all',
+  SERVER_PERIOD_WEEK:  'setup:stats:server:period:week',
+  SERVER_PERIOD_MONTH: 'setup:stats:server:period:month',
+  SERVER_PERIOD_ALL:   'setup:stats:server:period:all',
 };
 
 const BADGE_THRESHOLDS = [
@@ -90,8 +96,9 @@ function renderStatsMenu() {
  * @param {Guild}       guild   — Guild object
  * @param {Array}       badges  — mảng badge objects
  * @param {string}     [viewerId] — interaction.user.id; nếu khác userId thì encode uid vào footer
+ * @param {object}     [cfg]      — guild config (cho phai_role_icons)
  */
-function renderToi(stats, member, guild, badges, viewerId = null) {
+function renderToi(stats, member, guild, badges, viewerId = null, cfg = null) {
   const userId  = member?.id ?? member?.user?.id;
   const joined  = stats?.total_joined   ?? 0;
   const total   = stats?.total_sessions ?? 0;
@@ -137,8 +144,13 @@ function renderToi(stats, member, guild, badges, viewerId = null) {
   const isViewingOther = viewerId && userId && viewerId !== userId;
   const footerExtra    = isViewingOther ? `uid:${userId}` : '';
 
+  const phaiRoles = stats?.phai_role_ids ?? [];
+  const phaiIcons = cfg?.phai_role_icons ?? {};
+  const phaiStr   = formatPhaiList(phaiRoles, phaiIcons, guild);
+
   const descParts = [
     isViewingOther ? `> 🔍 Đang xem thành viên khác` : null,
+    phaiStr ? `> ${phaiStr}` : null,
     phong ? `> 📌 **${phong}**` : null,
     total === 0
       ? '> _Chưa có dữ liệu điểm danh._'
@@ -164,7 +176,7 @@ function renderToi(stats, member, guild, badges, viewerId = null) {
 
 // ─── Bảng xếp hạng ───────────────────────────────────────────────────
 // async để fetch uncached members → tránh hiển thị <@id>
-async function renderRank(rows, guild, topN = 10) {
+async function renderRank(rows, guild, topN = 10, phongBanList = [], selectedPhongBan = '', cfg = null, filterPhaiRoleId = '') {
   const medals = ['🥇', '🥈', '🥉'];
 
   if (!rows?.length) {
@@ -182,25 +194,80 @@ async function renderRank(rows, guild, topN = 10) {
     await guild.members.fetch({ user: uncached }).catch(() => null);
   }
 
+  const phaiIcons = cfg?.phai_role_icons ?? {};
   const lines = rows.slice(0, topN).map((r, i) => {
-    const medal   = medals[i] ?? `\`${String(i + 1).padStart(2)}.\``;
-    const gMember = guild?.members?.cache?.get(r.user_id);
-    const name    = gMember?.displayName ?? `<@${r.user_id}>`;
-    const phong   = r.phong_ban ?? '';
-    const joined  = r.total_joined   ?? 0;
-    const streak  = r.current_streak ?? 0;
-    const totalS  = r.total_sessions ?? joined;
-    const pct     = totalS > 0 ? Math.round((joined / totalS) * 100) : 0;
+    const medal    = medals[i] ?? `\`${String(i + 1).padStart(2)}.\``;
+    const gMember  = guild?.members?.cache?.get(r.user_id);
+    const name     = gMember?.displayName ?? `<@${r.user_id}>`;
+    const phong    = r.phong_ban ?? '';
+    const joined   = r.total_joined   ?? 0;
+    const streak   = r.current_streak ?? 0;
+    const totalS   = r.total_sessions ?? joined;
+    const pct      = totalS > 0 ? Math.round((joined / totalS) * 100) : 0;
     const phongStr = phong ? ` · 📌 ${phong}` : '';
-    return `${medal} **${name}**${phongStr}\n\`${buildRichProgressBar(pct, 8)}\` **${pct}%** · ${joined} phiên · ${ICONS.FIRE}${streak}`;
+    const phaiStr  = formatPhaiList(r.phai_role_ids, phaiIcons, guild);
+    const phaiLine = phaiStr ? ` · ${phaiStr}` : '';
+    return `${medal} **${name}**${phongStr}${phaiLine}\n\`${buildRichProgressBar(pct, 8)}\` **${pct}%** · ${joined} phiên · ${ICONS.FIRE}${streak}`;
   });
+
+  const components = [];
+
+  // Phòng ban filter select menu
+  if (phongBanList.length > 0) {
+    const selectMenu = new StringSelectMenuBuilder()
+      .setCustomId(CUSTOM_ID.PHONG_BAN_SELECT)
+      .setPlaceholder('Lọc theo phòng ban')
+      .addOptions(
+        new StringSelectMenuOptionBuilder()
+          .setLabel('Tất cả')
+          .setValue('__all')
+          .setDefault(selectedPhongBan === ''),
+        ...phongBanList.map(pb => new StringSelectMenuOptionBuilder()
+          .setLabel(pb)
+          .setValue(pb)
+          .setDefault(selectedPhongBan === pb)
+        )
+      );
+    components.push(new ActionRowBuilder().addComponents(selectMenu));
+  }
+
+  // Phái filter buttons
+  const phaiIds = cfg?.phai_role_ids ?? [];
+  if (phaiIds.length > 0 && phaiIds.length <= 4) {
+    const phaiRow = new ActionRowBuilder();
+    phaiRow.addComponents(
+      new ButtonBuilder()
+        .setCustomId(CUSTOM_ID.RANK_ALL)
+        .setLabel('Tất cả')
+        .setStyle(filterPhaiRoleId ? ButtonStyle.Secondary : ButtonStyle.Primary),
+    );
+    for (const rid of phaiIds) {
+      const icon = getPhaiIcon(rid, cfg?.phai_role_icons ?? {});
+      const role = guild?.roles?.cache?.get(rid);
+      phaiRow.addComponents(
+        new ButtonBuilder()
+          .setCustomId(`${CUSTOM_ID.RANK_PHAI_PREFIX}${rid}`)
+          .setLabel(role?.name ?? rid)
+          .setEmoji(icon)
+          .setStyle(filterPhaiRoleId === rid ? ButtonStyle.Primary : ButtonStyle.Secondary),
+      );
+    }
+    components.push(phaiRow);
+  }
+
+  components.push(_navRow());
+
+  const footerParts = [];
+  if (selectedPhongBan) footerParts.push(`pb:${selectedPhongBan}`);
+  if (filterPhaiRoleId) footerParts.push(`phai:${filterPhaiRoleId}`);
+  const footerExtra = footerParts.join(' · ');
 
   return {
     embeds: [new EmbedBuilder().setColor(COLORS.GOLD)
       .setTitle(`${ICONS.TROPHY} Top ${Math.min(rows.length, topN)} — Bảng xếp hạng`)
       .setDescription(lines.join('\n\n'))
-      .setFooter({ text: _footer(CTX.RANK) }).setTimestamp()],
-    components: [_navRow()],
+      .setFooter({ text: _footer(CTX.RANK, footerExtra) }).setTimestamp()],
+    components,
   };
 }
 
@@ -280,12 +347,19 @@ async function renderLichSu(records, userId, guild, page = 0) {
 }
 
 // ─── Thống kê server ─────────────────────────────────────────────────
+const PERIOD_LABELS = {
+  week:  'Tuần này',
+  month: 'Tháng này',
+  all:   'Tất cả',
+};
+
 /**
- * @param {object} stats  — kết quả từ getServerStats()
- * @param {Array}  top    — mảng từ getTopMembers()
- * @param {object} guild  — Guild object
+ * @param {object} stats         — kết quả từ getServerStats()
+ * @param {Array}  top           — mảng từ getTopMembers()
+ * @param {object} guild         — Guild object
+ * @param {string} [period=all]  — 'week' | 'month' | 'all'
  */
-async function renderServerStats(stats, top, guild) {
+async function renderServerStats(stats, top, guild, period = 'all') {
   const pct      = stats?.rate_present      ?? 0;
   const total    = stats?.total_sessions    ?? 0;
   const members  = stats?.total_members     ?? 0;
@@ -301,9 +375,12 @@ async function renderServerStats(stats, top, guild) {
 
   const color = pct >= 80 ? COLORS.GREEN : pct >= 50 ? COLORS.YELLOW : COLORS.RED;
 
+  const periodLabel = PERIOD_LABELS[period] ?? 'Tất cả';
+  const titleSuffix = period === 'all' ? '' : ` (${periodLabel})`;
+
   const embed = new EmbedBuilder()
     .setColor(color)
-    .setTitle(`${ICONS.CHART} Thống kê Server`)
+    .setTitle(`${ICONS.CHART} Thống kê Server${titleSuffix}`)
     .setDescription([
       `${pctEmoji(pct)} **Tỉ lệ tham gia trung bình: ${pct}%** — ${pctLabel(pct)}`,
       `\`${buildRichProgressBar(pct)}\``,
@@ -313,7 +390,7 @@ async function renderServerStats(stats, top, guild) {
       { name: '👥 Thành viên',                  value: `**${members}** người`, inline: true },
       { name: `${ICONS.ATTEND_YES} Điểm danh`, value: `**${attends}** lượt`,  inline: true },
     )
-    .setFooter({ text: _footer(CTX.SERVER) })
+    .setFooter({ text: _footer(CTX.SERVER, `period:${period}`) })
     .setTimestamp();
 
   // Breakdown chi tiết 4 trạng thái
@@ -344,10 +421,29 @@ async function renderServerStats(stats, top, guild) {
       const pctR   = totalS > 0 ? Math.round((joined / totalS) * 100) : 0;
       return `${medals[i]} **${nm}** — **${pctR}%** · ${joined} phiên · ${ICONS.FIRE}${streak}`;
     });
-    embed.addFields({ name: `${ICONS.TROPHY} Top thành viên`, value: lines.join('\n'), inline: false });
+    embed.addFields({ name: `${ICONS.TROPHY} Top thành viên (mọi thời gian)`, value: lines.join('\n'), inline: false });
   }
 
-  return { embeds: [embed], components: [_navRow()] };
+  // Period filter buttons
+  const periodRow = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(CUSTOM_ID.SERVER_PERIOD_WEEK)
+      .setLabel('Tuần này')
+      .setStyle(period === 'week' ? ButtonStyle.Primary : ButtonStyle.Secondary)
+      .setEmoji('📅'),
+    new ButtonBuilder()
+      .setCustomId(CUSTOM_ID.SERVER_PERIOD_MONTH)
+      .setLabel('Tháng này')
+      .setStyle(period === 'month' ? ButtonStyle.Primary : ButtonStyle.Secondary)
+      .setEmoji('📆'),
+    new ButtonBuilder()
+      .setCustomId(CUSTOM_ID.SERVER_PERIOD_ALL)
+      .setLabel('Tất cả')
+      .setStyle(period === 'all' ? ButtonStyle.Primary : ButtonStyle.Secondary)
+      .setEmoji('🌐'),
+  );
+
+  return { embeds: [embed], components: [periodRow, _navRow()] };
 }
 
 // ─── Xem người khác (placeholder — thực tế mở modal) ─────────────────

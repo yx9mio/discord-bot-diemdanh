@@ -1,6 +1,6 @@
 'use strict';
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const { COLORS, ICONS } = require('../../../../utils/theme.js');
+const { COLORS, ICONS, getPhaiIcon } = require('../../../../utils/theme.js');
 const { FOOTER_DEFAULT } = require('../../../../utils/embeds.js');
 const { DAY_NAMES: DAY_VI } = require('../../../../utils/format.js');
 
@@ -102,9 +102,21 @@ function render({ guild, cfg, schedules, members, session, sessions }) {
     });
   }
 
+  const phaiIds = cfg?.phai_role_ids ?? [];
+  let phaiBreakdown = '';
+  if (phaiIds.length && members?.length) {
+    const phaiIcons = cfg?.phai_role_icons ?? {};
+    phaiBreakdown = phaiIds.map(rid => {
+      const count = members.filter(m => (m.phai_role_ids ?? []).includes(rid)).length;
+      const icon  = getPhaiIcon(rid, phaiIcons);
+      const role  = guild?.roles?.cache?.get(rid);
+      return count > 0 ? `${icon} ${role?.name ?? rid}: ${count}` : null;
+    }).filter(Boolean).join('  ');
+  }
+
   embed.addFields({
     name: `${ICONS.MEMBER} Thành viên`,
-    value: `${members?.length ?? 0} người`,
+    value: `${members?.length ?? 0} người${phaiBreakdown ? `\n${phaiBreakdown}` : ''}`,
     inline: false,
   });
 

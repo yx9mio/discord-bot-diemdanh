@@ -33,13 +33,21 @@ class SetupBroadcastModalHandler extends InteractionHandler {
       return interaction.editReply(replyErrEdit(`Nội dung quá dài (${content.length}/4000 ký tự tối đa).`));
     }
 
+    const targetChannelId = interaction.fields.getTextInputValue('channel_id')?.trim() || null;
+    const targetChannel = targetChannelId
+      ? await guild.channels.fetch(targetChannelId).catch(() => null)
+      : channel;
+    if (targetChannelId && !targetChannel) {
+      return interaction.editReply(replyErrEdit(`Không tìm thấy kênh: ${targetChannelId}`));
+    }
+
     const authorName = interaction.member?.displayName ?? interaction.user.username;
     const embed = new EmbedBuilder()
       .setColor(0x5865f2).setTitle('📢 Thông báo').setDescription(content)
       .setAuthor({ name: authorName, iconURL: interaction.user.displayAvatarURL({ extension: 'png' }) })
       .setFooter({ text: FOOTER_DEFAULT }).setTimestamp();
 
-    await channel.send({ embeds: [embed] }).catch(e => log.warn('BROADCAST', guild.id, 'Gửi broadcast thất bại: %s', e.message));
+    await targetChannel.send({ embeds: [embed] }).catch(e => log.warn('BROADCAST', guild.id, 'Gửi broadcast thất bại: %s', e.message));
 
     try {
       const cfg = await getGuildConfig(guild.id);

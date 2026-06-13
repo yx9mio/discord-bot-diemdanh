@@ -30,8 +30,8 @@ async function deleteMember(guildId, userId) {
   _throwSupabase(error, 'deleteMember');
 }
 
-function upsertMember({ guildId, userId, phongBan = null, ghiChu = null, username = null }) {
-  return addMember({ guild_id: guildId, user_id: userId, phong_ban: phongBan, ghi_chu: ghiChu, username });
+function upsertMember({ guildId, userId, phongBan = null, ghiChu = null, username = null, phaiRoleIds = null }) {
+  return addMember({ guild_id: guildId, user_id: userId, phong_ban: phongBan, ghi_chu: ghiChu, username, phai_role_ids: phaiRoleIds });
 }
 
 // ─── Member Stats ─────────────────────────────────────────────────────────────
@@ -39,7 +39,7 @@ async function getMemberStats(guildId, userId) {
   const [memberRes, statsRes, attRes] = await Promise.all([
     getClient()
       .from('members')
-      .select('phong_ban')
+      .select('phong_ban, phai_role_ids')
       .eq('guild_id', guildId)
       .eq('user_id', userId)
       .maybeSingle(),
@@ -66,7 +66,7 @@ async function getMemberStats(guildId, userId) {
   const total_absent  = atts.filter(a => a.status === 'khong_tham_gia').length;
   const total_excused = atts.filter(a => a.status === 'co_phep').length;
 
-  return { ...base, phong_ban: memberRes.data?.phong_ban ?? null, total_late, total_absent, total_excused };
+  return { ...base, phong_ban: memberRes.data?.phong_ban ?? null, phai_role_ids: memberRes.data?.phai_role_ids ?? null, total_late, total_absent, total_excused };
 }
 
 async function getMemberStatsMulti(guildId, userIds) {
@@ -126,46 +126,89 @@ async function batchResetStreak(guildId, userIds) {
   _throwSupabase(error, 'batchResetStreak');
 }
 
-async function getTopMembers(guildId, limit = 10) {
+async function getTopMembers(guildId, limit = 10, phongBan = null, phaiRoleId = null) {
+  let phongFilteredIds = null;
+  if (phongBan) {
+    const { data, error } = await getClient()
+      .from('members').select('user_id').eq('guild_id', guildId).eq('phong_ban', phongBan);
+    _throwSupabase(error, 'getTopMembers.phongBan');
+    phongFilteredIds = (data ?? []).map(m => m.user_id);
+    if (!phongFilteredIds.length) return [];
+  }
+
+  let phaiFilteredIds = null;
+  if (phaiRoleId) {
+    const { data, error } = await getClient()
+      .from('members').select('user_id').eq('guild_id', guildId).contains('phai_role_ids', [phaiRoleId]);
+    _throwSupabase(error, 'getTopMembers.phaiRoleId');
+    phaiFilteredIds = (data ?? []).map(m => m.user_id);
+    if (!phaiFilteredIds.length) return [];
+  }
+
+  let mergedIds = phongFilteredIds;
+  if (phaiFilteredIds) {
+    mergedIds = mergedIds
+      ? mergedIds.filter(id => phaiFilteredIds.includes(id))
+      : phaiFilteredIds;
+  }
+  let query = getClient()
+    .from('member_stats').select('*').eq('guild_id', guildId);
+  if (mergedIds) query = query.in('user_id', mergedIds);
+  query = query.order('total_joined', { ascending: false }).limit(limit);
   const [statsRes, membersRes] = await Promise.all([
+    query,
     getClient()
-      .from('member_stats').select('*').eq('guild_id', guildId)
-      .order('total_joined', { ascending: false }).limit(limit),
-    getClient()
-      .from('members').select('user_id, phong_ban').eq('guild_id', guildId),
+      .from('members').select('user_id, phong_ban, phai_role_ids').eq('guild_id', guildId),
   ]);
   _throwSupabase(statsRes.error, 'getTopMembers');
   const phongMap = new Map((membersRes.data ?? []).map(m => [m.user_id, m.phong_ban]));
-  return (statsRes.data ?? []).map(r => ({ ...r, phong_ban: phongMap.get(r.user_id) ?? null }));
+  const phaiMap  = new Map((membersRes.data ?? []).map(m => [m.user_id, m.phai_role_ids]));
+  return (statsRes.data ?? []).map(r => ({ ...r, phong_ban: phongMap.get(r.user_id) ?? null, phai_role_ids: phaiMap.get(r.user_id) ?? null }));
+}
+
+async function getDistinctPhongBan(guildId) {
+  const { data, error } = await getClient()
+    .from('members').select('phong_ban').eq('guild_id', guildId).not('phong_ban', 'is', null);
+  _throwSupabase(error, 'getDistinctPhongBan');
+  const bans = new Set((data ?? []).map(r => r.phong_ban).filter(Boolean));
+  return [...bans].sort();
 }
 
 /**
- * [FIX] getServerStats: dùng data.length thay vì .count để tránh Supabase count quirk
- * khi select có cột cụ thể và head:false.
- * Trả về breakdown đầy đủ 4 trạng thái (present/late/absent/excused) + rates.
+ * getServerStats: breakdown 4 trạng thái (present/late/absent/excused) + rates.
+ * Hỗ trợ date-range filtering via startDate/endDate (ISO strings or null).
  */
-async function getServerStats(guildId) {
-  const [sessionsRes, membersRes, attRes] = await Promise.all([
-    getClient().from('sessions').select('id')
-      .eq('guild_id', guildId).eq('cancelled', false),
-    getClient().from('members').select('user_id')
-      .eq('guild_id', guildId),
-    getClient().from('attendances').select('status, sessions!inner(cancelled)')
-      .eq('guild_id', guildId),
+async function getServerStats(guildId, startDate = null, endDate = null) {
+  let sQuery = getClient()
+    .from('sessions').select('id').eq('guild_id', guildId).eq('cancelled', false);
+  if (startDate) sQuery = sQuery.gte('started_at', startDate);
+  if (endDate) sQuery = sQuery.lte('started_at', endDate);
+
+  const [sessionsRes, membersRes] = await Promise.all([
+    sQuery,
+    getClient().from('members').select('user_id').eq('guild_id', guildId),
   ]);
   _throwSupabase(sessionsRes.error, 'getServerStats.sessions');
   _throwSupabase(membersRes.error, 'getServerStats.members');
-  _throwSupabase(attRes.error, 'getServerStats.attendances');
 
-  const totalSessions = sessionsRes.data?.length  ?? 0;
-  const totalMembers  = membersRes.data?.length   ?? 0;
-  const atts          = (attRes.data ?? []).filter(a => a.sessions?.cancelled === false);
-  const totalAtt      = atts.length;
+  const sessionIds = (sessionsRes.data ?? []).map(s => s.id);
+  const totalSessions = sessionIds.length;
+  const totalMembers  = membersRes.data?.length ?? 0;
 
-  const present = atts.filter(a => a.status === 'tham_gia').length;
-  const late    = atts.filter(a => a.status === 'tre').length;
-  const absent  = atts.filter(a => a.status === 'khong_tham_gia').length;
-  const excused = atts.filter(a => a.status === 'co_phep').length;
+  const { data: attData, error: attError } = sessionIds.length
+    ? await getClient()
+        .from('attendances').select('status')
+        .eq('guild_id', guildId)
+        .in('session_id', sessionIds)
+    : { data: [], error: null };
+  _throwSupabase(attError, 'getServerStats.attendances');
+
+  const atts     = attData ?? [];
+  const totalAtt = atts.length;
+  const present  = atts.filter(a => a.status === 'tham_gia').length;
+  const late     = atts.filter(a => a.status === 'tre').length;
+  const absent   = atts.filter(a => a.status === 'khong_tham_gia').length;
+  const excused  = atts.filter(a => a.status === 'co_phep').length;
 
   // tham_gia + trễ đều được tính là có mặt cho tỉ lệ tổng
   const totalPresent = present + late;
@@ -274,7 +317,7 @@ module.exports = {
   getMembers, getMember, addMember, deleteMember, upsertMember,
   getMemberStats, getMemberStatsMulti, getAllMemberStats,
   upsertMemberStats, batchUpsertMemberStats, resetStreak, batchResetStreak,
-  getTopMembers, getServerStats,
+  getTopMembers, getDistinctPhongBan, getServerStats,
   getBadgeDefinitions, getBadges, getUserBadges, upsertUserBadge,
   getMemberBadges, upsertMemberBadge, getMemberBadgesMulti, batchUpsertUserBadges,
 };

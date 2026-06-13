@@ -55,4 +55,18 @@ function colorFor(kind) {
   return COLORS.PRIMARY;
 }
 
-module.exports = { COLORS, ICONS, colorFor };
+// ─── Helper phái ───────────────────────────────────────────────────────
+function getPhaiIcon(roleId, phaiIcons = {}, fallback = ICONS.SWORD) {
+  return phaiIcons?.[roleId] ?? fallback;
+}
+
+function formatPhaiList(phaiRoleIds = [], phaiIcons = {}, guild = null) {
+  if (!phaiRoleIds?.length) return null;
+  return phaiRoleIds.map(id => {
+    const icon = getPhaiIcon(id, phaiIcons);
+    const role = guild?.roles?.cache?.get(id);
+    return role ? `${icon} ${role.name}` : `${icon} <@&${id}>`;
+  }).join(' · ');
+}
+
+module.exports = { COLORS, ICONS, colorFor, getPhaiIcon, formatPhaiList };

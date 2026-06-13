@@ -6,6 +6,7 @@ const { getMembers } = require('../../../services/memberService.js');
 const { getActiveSessions } = require('../../../services/sessionService.js');
 const { HomeView } = require('../../commands/setup/_views/_HomeView.js');
 const { CUSTOM_ID } = HomeView;
+const log = require('../../../utils/logger.js');
 
 class SetupHomeHandler extends InteractionHandler {
   constructor(ctx, options) {
@@ -21,13 +22,18 @@ class SetupHomeHandler extends InteractionHandler {
   async run(interaction) {
     await interaction.deferUpdate();
     const { guild } = interaction;
-    const [cfg, schedules, members, sessions] = await Promise.all([
-      getGuildConfig(guild.id),
-      getScheduledSessions(guild.id),
-      getMembers(guild.id),
-      getActiveSessions(guild.id),
-    ]);
-    return interaction.editReply(HomeView.render({ guild, cfg, schedules, members, sessions }));
+    try {
+      const [cfg, schedules, members, sessions] = await Promise.all([
+        getGuildConfig(guild.id),
+        getScheduledSessions(guild.id),
+        getMembers(guild.id),
+        getActiveSessions(guild.id),
+      ]);
+      return interaction.editReply(HomeView.render({ guild, cfg, schedules, members, sessions }));
+    } catch (e) {
+      log.error('SETUP_HOME', guild.id, 'Dashboard load thất bại: %s', e.message);
+      return interaction.editReply({ content: '❌ Không thể tải dashboard, thử lại sau.' });
+    }
   }
 }
 

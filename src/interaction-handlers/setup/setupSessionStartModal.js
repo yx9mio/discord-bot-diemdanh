@@ -43,7 +43,6 @@ class SetupSessionStartModalHandler extends InteractionHandler {
       }
 
       const cfg = await configService.getGuildConfig(guild.id);
-      const tz  = cfg?.timezone ?? 'Asia/Ho_Chi_Minh';
 
       const session = await sessionService.createSession({
         guild_id:      guild.id,
@@ -89,8 +88,8 @@ class SetupSessionStartModalHandler extends InteractionHandler {
         .setTitle(`✅ Đã mở phiên: ${session.session_name ?? 'Không tên'}`)
         .setColor(COLORS.SUCCESS)
         .addFields(
-          { name: 'Bắt đầu', value: fmtTs(session.started_at ?? new Date().toISOString(), tz), inline: true },
-          { name: 'Đóng lúc', value: session.auto_close_at ? fmtTs(session.auto_close_at, tz) : 'Thủ công', inline: true },
+          { name: 'Bắt đầu', value: fmtTs(session.started_at ?? new Date().toISOString()), inline: true },
+          { name: 'Đóng lúc', value: session.auto_close_at ? fmtTs(session.auto_close_at) : 'Thủ công', inline: true },
         )
         .setFooter({ text: `${FOOTER_DEFAULT} · Session ID: ${session.id}` });
 

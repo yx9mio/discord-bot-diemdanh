@@ -45,9 +45,10 @@ class SetupScheduleEditOneTimeModalSubmitHandler extends InteractionHandler {
       const cfg = await configService.getGuildConfig(guild.id);
       const tz = cfg?.timezone ?? 'Asia/Ho_Chi_Minh';
 
-      const gioMo   = interaction.fields.getTextInputValue('gio_mo').trim();
-      const phutBu  = interaction.fields.getTextInputValue('phut_bu')?.trim() || '0';
-      const ten     = interaction.fields.getTextInputValue('ten')?.trim() ?? '';
+      const gioMo      = interaction.fields.getTextInputValue('gio_mo').trim();
+      const phutBu     = interaction.fields.getTextInputValue('phut_bu')?.trim() || '0';
+      const ten        = interaction.fields.getTextInputValue('ten')?.trim() ?? '';
+      const channelRaw = interaction.fields.getTextInputValue('channel_id')?.trim() ?? '';
 
       if (!gioMo) return interaction.editReply(replyErrEdit('Giờ mở không được để trống.'));
 
@@ -62,12 +63,15 @@ class SetupScheduleEditOneTimeModalSubmitHandler extends InteractionHandler {
         closeMinute = total % 60;
       }
 
+      const channelId = channelRaw || null;
+
       const basePayload = {
         hour: h,
         minute: m,
         close_hour: closeHour,
         close_minute: closeMinute,
         session_name: ten || 'Điểm danh',
+        channel_id: channelId,
       };
 
       if (isRecurring) {

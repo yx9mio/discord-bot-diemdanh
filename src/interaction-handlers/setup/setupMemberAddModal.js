@@ -5,6 +5,7 @@
 const { MessageFlags } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const memberService = require('../../../services/memberService.js');
+const { getGuildConfig } = require('../../../services/configService.js');
 const log = require('../../../utils/logger.js');
 const { requireAdmin } = require('../../../utils/permissions.js');
 const { replyErrEdit } = require('../../../utils/embeds.js');
@@ -28,16 +29,21 @@ class SetupMemberAddModalHandler extends InteractionHandler {
     if (!ok) return;
     const { guild } = interaction;
 
-    const userId = interaction.fields.getTextInputValue('user_id').trim().replace(/[<@>]/g, '');
-    if (!userId) return interaction.editReply(replyErrEdit('Vui lòng nhập ID hoặc mention thành viên.'));
+    const rawId = interaction.fields.getTextInputValue('user_id').trim();
+    if (!rawId) return interaction.editReply(replyErrEdit('Vui lòng nhập ID hoặc mention thành viên.'));
+    if (rawId.startsWith('<@&')) return interaction.editReply(replyErrEdit('Vui lòng nhập ID người dùng, không phải role.'));
+    const userId = rawId.replace(/[<@!>]/g, '');
     const username = interaction.fields.getTextInputValue('username').trim();
     const phongBan = interaction.fields.getTextInputValue('phong_ban')?.trim() ?? '';
     const ghiChu = interaction.fields.getTextInputValue('ghi_chu')?.trim() ?? '';
 
     try {
       await memberService.upsertMember({ guildId: guild.id, userId, username, phongBan, ghiChu });
-      const members = await memberService.getMembers(guild.id);
-      await interaction.message?.edit(MemberView.render({ members, guild, page: 0 })).catch(() => null);
+      const [members, cfg] = await Promise.all([
+        memberService.getMembers(guild.id),
+        getGuildConfig(guild.id).catch(() => null),
+      ]);
+      await interaction.message?.edit(MemberView.render({ members, guild, cfg, page: 0 })).catch(() => null);
       return interaction.editReply({ content: '✅ Đã thêm thành viên.' });
     } catch (e) {
       log.error('MEMBER_ADD', guild.id, 'Lỗi thêm %s: %s', userId, e.message);

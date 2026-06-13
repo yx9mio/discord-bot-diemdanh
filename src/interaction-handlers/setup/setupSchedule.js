@@ -4,12 +4,15 @@
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } = require('discord.js');
 const scheduledService = require('../../../services/scheduledService.js');
+const configService    = require('../../../services/configService.js');
 const log = require('../../../utils/logger.js');
 const { ScheduleView } = require('../../commands/setup/_views/_ScheduleView.js');
 const { CUSTOM_ID } = ScheduleView;
 const { requireAdmin } = require('../../../utils/permissions.js');
 const { getState, setState, clearState } = require('../../../utils/scheduleAddState.js');
 const { renderAddViewStep2, renderAddViewStep1 } = require('../../../utils/scheduleAddViews.js');
+const { getState: getEditState, setState: setEditState, clearState: clearEditState } = require('../../../utils/scheduleEditState.js');
+const { renderEditViewStep1, renderEditViewStep2 } = require('../../../utils/scheduleEditViews.js');
 
 class SetupScheduleHandler extends InteractionHandler {
   constructor(ctx, options) {
@@ -25,6 +28,10 @@ class SetupScheduleHandler extends InteractionHandler {
     if (id === 'setup:sch:add:r:step1:cancel')    return this.some();
     if (id === 'setup:sch:add:r:step2:confirm')   return this.some();
     if (id === 'setup:sch:add:r:step2:cancel')    return this.some();
+    if (id === 'setup:sch:edit:r:step1:next')     return this.some();
+    if (id === 'setup:sch:edit:r:step1:cancel')   return this.some();
+    if (id === 'setup:sch:edit:r:step2:confirm')  return this.some();
+    if (id === 'setup:sch:edit:r:step2:cancel')   return this.some();
     if (id?.startsWith(CUSTOM_ID.DEL_PREFIX) &&
         !id.startsWith(CUSTOM_ID.DEL_CONFIRM) &&
         !id.startsWith(CUSTOM_ID.DEL_CANCEL))     return this.some();
@@ -121,6 +128,74 @@ class SetupScheduleHandler extends InteractionHandler {
       clearState(guild.id);
       const schedules = await scheduledService.getScheduledSessions(guild.id).catch(() => []);
       return interaction.editReply({ content: '✅ Đã thêm lịch.', ...ScheduleView.render({ schedules, guild, page: 0 }) });
+    }
+
+    // ── Edit recurring schedule flow (select menus) ───────────────────
+    if (customId === 'setup:sch:edit:r:step1:next') {
+      await interaction.deferUpdate();
+      const footer = interaction.message?.embeds?.[0]?.footer?.text ?? '';
+      const sidMatch = footer.match(/sid:(\d+)/);
+      const scheduleId = sidMatch ? sidMatch[1] : null;
+      if (!scheduleId) {
+        const schedules = await scheduledService.getScheduledSessions(guild.id).catch(() => []);
+        return interaction.editReply(ScheduleView.render({ schedules, guild, page: 0 }));
+      }
+      setEditState(guild.id, scheduleId, { step: 2 });
+      const state = getEditState(guild.id, scheduleId);
+      return interaction.editReply(renderEditViewStep2(guild, state));
+    }
+
+    if (customId === 'setup:sch:edit:r:step1:cancel' || customId === 'setup:sch:edit:r:step2:cancel') {
+      await interaction.deferUpdate();
+      const footer = interaction.message?.embeds?.[0]?.footer?.text ?? '';
+      const sidMatch = footer.match(/sid:(\d+)/);
+      if (sidMatch) clearEditState(guild.id, sidMatch[1]);
+      const schedules = await scheduledService.getScheduledSessions(guild.id).catch(() => []);
+      return interaction.editReply(ScheduleView.render({ schedules, guild, page: 0 }));
+    }
+
+    if (customId === 'setup:sch:edit:r:step2:confirm') {
+      await interaction.deferUpdate();
+      const footer = interaction.message?.embeds?.[0]?.footer?.text ?? '';
+      const sidMatch = footer.match(/sid:(\d+)/);
+      const scheduleId = sidMatch ? sidMatch[1] : null;
+      if (!scheduleId) {
+        const schedules = await scheduledService.getScheduledSessions(guild.id).catch(() => []);
+        return interaction.editReply(ScheduleView.render({ schedules, guild, page: 0 }));
+      }
+      const state = getEditState(guild.id, scheduleId);
+      if (!state || state.day == null || state.hour == null || state.minute == null || state.duration == null) {
+        clearEditState(guild.id, scheduleId);
+        const schedules = await scheduledService.getScheduledSessions(guild.id).catch(() => []);
+        return interaction.editReply({ content: '❌ Thiếu thông tin, vui lòng thử lại.', ...ScheduleView.render({ schedules, guild, page: 0 }) });
+      }
+      const gioBatDau = `${String(state.hour).padStart(2, '0')}:${String(state.minute).padStart(2, '0')}`;
+      let closeHour = null, closeMinute = null;
+      if (state.duration > 0) {
+        const totalMin = state.hour * 60 + state.minute + state.duration;
+        closeHour = Math.floor(totalMin / 60) % 24;
+        closeMinute = totalMin % 60;
+      }
+      try {
+        await scheduledService.updateScheduledSession(guild.id, scheduleId, {
+          day_of_week: state.day,
+          hour: state.hour,
+          minute: state.minute,
+          close_hour: closeHour,
+          close_minute: closeMinute,
+          session_name: 'Điểm danh',
+          channel_id: state.channel || null,
+        });
+        log.info('SCH_EDIT', guild.id, 'Đã sửa lịch định kỳ %s', scheduleId);
+      } catch (e) {
+        log.error('SCH_EDIT', guild.id, 'updateScheduledSession lỗi: %s', e.message);
+        clearEditState(guild.id, scheduleId);
+        const schedules = await scheduledService.getScheduledSessions(guild.id).catch(() => []);
+        return interaction.editReply({ content: `❌ Không thể lưu: ${e.message}`, ...ScheduleView.render({ schedules, guild, page: 0 }) });
+      }
+      clearEditState(guild.id, scheduleId);
+      const schedules = await scheduledService.getScheduledSessions(guild.id).catch(() => []);
+      return interaction.editReply({ content: '✅ Đã cập nhật lịch.', ...ScheduleView.render({ schedules, guild, page: 0 }) });
     }
 
     if (

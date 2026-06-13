@@ -58,13 +58,19 @@ class AdminMarkModalHandler extends InteractionHandler {
     const userField = interaction.fields.getTextInputValue('user_id').trim();
     const statusField = interaction.fields.getTextInputValue('status').trim().toLowerCase();
 
-    const validStatuses = ['tham_gia', 'tre', 'khong_tham_gia', 'co_phep'];
-    if (!validStatuses.includes(statusField)) {
+    const STATUS_ALIASES = {
+      'tham_gia': 'tham_gia', 'tham gia': 'tham_gia', 'có mặt': 'tham_gia', 'comat': 'tham_gia', 'co mat': 'tham_gia',
+      'tre': 'tre', 'trễ': 'tre', 'muộn': 'tre', 'muon': 'tre',
+      'khong_tham_gia': 'khong_tham_gia', 'không tham gia': 'khong_tham_gia', 'vắng': 'khong_tham_gia', 'vang': 'khong_tham_gia', 'absent': 'khong_tham_gia',
+      'co_phep': 'co_phep', 'có phép': 'co_phep', 'co phep': 'co_phep',
+    };
+    const resolvedStatus = STATUS_ALIASES[statusField];
+    if (!resolvedStatus) {
       return interaction.editReply({
-        content: `❌ Trạng thái không hợp lệ. Vui lòng dùng: ${validStatuses.join(', ')}`,
+        content: `❌ Trạng thái không hợp lệ. Gợi ý: \`tham_gia\`, \`tre\`, \`khong_tham_gia\`, \`co_phep\` (hoặc tiếng Việt: \`vắng\`, \`trễ\`, \`có phép\`)`,
       });
     }
-    const status = statusField;
+    const status = resolvedStatus;
 
     // [BUG-E] Guard: từ chối role mention <@&roleId>
     if (userField.startsWith('<@&')) {

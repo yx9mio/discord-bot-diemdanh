@@ -166,9 +166,6 @@ function replyLoading(msg = 'Đang xử lý...') {
 function replyErrEdit(msg = 'Có lỗi xảy ra. Vui lòng thử lại.') {
   return { embeds: [new EmbedBuilder().setColor(COLORS.RED).setDescription(`❌ ${msg}`)], components: [] };
 }
-function replyWarnEdit(msg = 'Có vấn đề xảy ra.') {
-  return { embeds: [new EmbedBuilder().setColor(COLORS.YELLOW).setDescription(`⚠️ ${msg}`)], components: [] };
-}
 function replyOkEdit(msg = 'Thành công.') {
   return { embeds: [new EmbedBuilder().setColor(COLORS.GREEN).setDescription(`✅ ${msg}`)], components: [] };
 }
@@ -193,6 +190,6 @@ module.exports = {
   chunkLines,
   buildPhaiStatsText,
   replyErr, replyOk, replyLoading,
-  replyErrEdit, replyWarnEdit, replyOkEdit,
+  replyErrEdit, replyOkEdit,
   replyConfirm,
 };
