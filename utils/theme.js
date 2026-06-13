@@ -65,6 +65,8 @@ function _emojiName(role) {
     .toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
 }
 
+const log = require('./logger.js');
+
 function getPhaiIcon(roleId, phaiRoleIds = [], guild = null, emojiMap = null) {
   if (guild) {
     const role = guild.roles?.cache?.get(roleId);
@@ -73,6 +75,8 @@ function getPhaiIcon(roleId, phaiRoleIds = [], guild = null, emojiMap = null) {
     if (customName) {
       const serverEmoji = guild.emojis?.cache?.find(e => e.name === customName);
       if (serverEmoji) return serverEmoji.toString();
+      log.warn('GET_PHAI_ICON', guild.id, 'Emoji name %s configured for role %s but not found in guild cache (total emojis: %d)',
+        customName, roleId, guild.emojis?.cache?.size ?? 0);
     }
     // 1. Discord custom emoji đặt tên theo role (đã sanitize)
     if (role) {

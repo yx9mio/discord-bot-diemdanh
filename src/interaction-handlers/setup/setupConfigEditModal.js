@@ -17,10 +17,17 @@ async function _refreshConfigAndReply(interaction, guildId) {
   const cfg = await configService.getGuildConfig(guildId);
   const { ConfigView } = require('../../commands/setup/_views/_ConfigView.js');
   const msgId = ConfigView.getMessageId(guildId);
+  log.info('CFG_EDIT_MODAL', guildId, '_refreshConfigAndReply msgId=%s', msgId);
   if (msgId) {
     const ch = interaction.channel;
     const msg = await ch.messages.fetch(msgId).catch(() => null);
-    if (msg) await msg.edit(ConfigView.render({ cfg, guild: interaction.guild })).catch(() => null);
+    if (msg) {
+      await msg.edit(ConfigView.render({ cfg, guild: interaction.guild })).catch(e => {
+        log.warn('CFG_EDIT_MODAL', guildId, 'Edit ConfigView fail: %s', e.message);
+      });
+    } else {
+      log.warn('CFG_EDIT_MODAL', guildId, 'ConfigView msg not found (deleted?)');
+    }
   }
   return interaction.editReply({ content: '✅ Đã lưu cấu hình.' });
 }
@@ -49,6 +56,8 @@ class SetupConfigEditModalHandler extends InteractionHandler {
       const raw = interaction.fields?.getTextInputValue('emoji_names') ?? '';
       // Parse mỗi dòng: RoleName=EmojiName
       const lines = raw.split('\n').filter(Boolean);
+      const matched = [];
+      const notFound = [];
       for (const line of lines) {
         const sep = line.indexOf('=');
         if (sep <= 0) continue;
@@ -57,17 +66,39 @@ class SetupConfigEditModalHandler extends InteractionHandler {
         if (!roleName) continue;
         // Tìm roleId theo tên role
         const role = interaction.guild.roles.cache.find(r => r.name === roleName);
-        if (!role) continue;
+        if (!role) { notFound.push(roleName); continue; }
         if (emojiName) existing[role.id] = emojiName;
         else delete existing[role.id];
+        matched.push({ name: roleName, emoji: emojiName || '(xóa)' });
       }
       // Xoá các entry của phái không còn trong danh sách
       for (const key of Object.keys(existing)) {
         if (!phaiIds.includes(key)) delete existing[key];
       }
+      // Debug: kiểm tra emoji nào tìm thấy trong guild cache
+      const foundEmojiNames = [];
+      const notFoundEmojiNames = [];
+      for (const [rid, ename] of Object.entries(existing)) {
+        const serverEmoji = interaction.guild.emojis?.cache?.find(e => e.name === ename);
+        if (serverEmoji) foundEmojiNames.push(`${ename} (${serverEmoji.toString()})`);
+        else notFoundEmojiNames.push(ename);
+      }
+      log.info('CFG_EDIT_MODAL', guildId,
+        'emoji_name matched=%d notFoundRoles=%s existing=%j foundEmojis=%s notFoundEmojis=%s',
+        matched.length, notFound.join(','), existing,
+        foundEmojiNames.join(','), notFoundEmojiNames.join(','));
       try {
         await configService.setConfigField(guildId, 'phai_role_icons', existing);
-        return await _refreshConfigAndReply(interaction, guildId);
+        await _refreshConfigAndReply(interaction, guildId);
+        const summary = [
+          matched.map(m => `${m.name}=${m.emoji}`).join('\n') || '_không có_',
+        ];
+        if (notFound.length) summary.push(`\n❌ Không tìm thấy role: ${notFound.join(', ')}`);
+        if (foundEmojiNames.length) summary.push(`✅ Emoji tìm thấy: ${foundEmojiNames.join(', ')}`);
+        if (notFoundEmojiNames.length) summary.push(`⚠️ Emoji không tìm thấy trên server: ${notFoundEmojiNames.join(', ')}`);
+        return interaction.editReply({
+          content: `✅ Đã lưu.\n\`\`\`${summary.join('\n')}\`\`\``.slice(0, 2000),
+        });
       } catch (e) {
         log.error('CFG_EDIT_MODAL', guildId, 'Lỗi lưu emoji_name: %s', e.message);
         return interaction.editReply(replyErrEdit(`Không thể lưu: ${e.message}`));
