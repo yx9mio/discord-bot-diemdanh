@@ -6,7 +6,7 @@ const configService     = require('../services/configService.js');
 const log = require('./logger.js');
 const { endSession, announceBadges, disableAttendanceUI } = require('./session.js');
 const {
-  buildSummaryEmbed, FOOTER_DEFAULT, buildSessionEmbed,
+  COLORS, buildSummaryEmbed, FOOTER_DEFAULT, buildSessionEmbed,
   buildSessionActionRow, buildAttendanceSelectRow,
 } = require('./embeds.js');
 
@@ -30,7 +30,7 @@ function scheduleCloseTimer(client, guild, session, channelId, ms) {
         if (!cur?.is_active || cur.id !== session.id) return;
         await ch.send({ embeds: [
           new EmbedBuilder()
-            .setColor(0xF1C40F)
+            .setColor(COLORS.YELLOW)
             .setDescription('⏰ **Còn 15 phút** — Phiên điểm danh sắp kết thúc!')
             .setFooter({ text: FOOTER_DEFAULT }),
         ] });
@@ -48,7 +48,7 @@ function scheduleCloseTimer(client, guild, session, channelId, ms) {
         if (!cur?.is_active || cur.id !== session.id) return;
         await ch.send({ embeds: [
           new EmbedBuilder()
-            .setColor(0xE67E22)
+            .setColor(COLORS.ORANGE)
             .setDescription('⏰ **Còn 5 phút** — Điểm danh ngay nếu chưa!')
             .setFooter({ text: FOOTER_DEFAULT }),
         ] });
@@ -76,7 +76,7 @@ function scheduleCloseTimer(client, guild, session, channelId, ms) {
       if (ch) {
         await disableAttendanceUI(client, ch, session, attended);
         const msg = new EmbedBuilder()
-          .setColor(0x99AAB5)
+          .setColor(COLORS.GREY)
           .setDescription('🔒 Phiên điểm danh đã tự động kết thúc.')
           .setFooter({ text: FOOTER_DEFAULT });
         const cfgT1 = await configService.getGuildConfig(guild.id).catch(() => null);

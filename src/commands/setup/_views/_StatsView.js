@@ -295,7 +295,7 @@ async function renderLichSu(records, userId, guild, page = 0) {
 
   if (!total) {
     return {
-      embeds: [new EmbedBuilder().setColor(COLORS.PRIMARY).setAuthor(buildAuthor(guild)).setTitle(`📋 Lịch sử — ${name}`)
+      embeds: [new EmbedBuilder().setColor(COLORS.NEUTRAL).setAuthor(buildAuthor(guild)).setTitle(`📋 Lịch sử — ${name}`)
         .setDescription('> _Chưa có điểm danh nào._')
         // [FIX] encode uid để REFRESH và pagination đọc đúng người
         .setFooter({ text: _footer(CTX.LICHSU, `uid:${userId}`) }).setTimestamp()],
@@ -336,7 +336,7 @@ async function renderLichSu(records, userId, guild, page = 0) {
   const footerText = _footer(CTX.LICHSU, `uid:${userId} · Trang ${cPage + 1}/${totalPages} · Tổng ${total} lần`);
 
   return {
-    embeds: [new EmbedBuilder().setColor(COLORS.PRIMARY).setAuthor(buildAuthor(guild))
+    embeds: [new EmbedBuilder().setColor(COLORS.NEUTRAL).setAuthor(buildAuthor(guild))
       .setTitle(`📋 Lịch sử — ${name}`)
       .setDescription(`${summaryStr}\n\n${lines.join('\n')}`)
       .setFooter({ text: footerText })

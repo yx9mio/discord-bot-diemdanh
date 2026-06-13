@@ -14,7 +14,7 @@ const { COLORS, ICONS, FOOTER_DEFAULT, buildRichProgressBar, pctEmoji, buildAuth
 function buildRankEmbed(rows = [], guild = null, topN = 10) {
   if (!rows.length) {
     return new EmbedBuilder()
-      .setColor(COLORS.GOLD ?? 0xd19900)
+.setColor(COLORS.GOLD)
       .setAuthor(buildAuthor(guild))
       .setTitle(`${ICONS.TROPHY} Bảng xếp hạng`)
       .setDescription('> _Chưa có dữ liệu điểm danh nào._')
@@ -35,7 +35,7 @@ function buildRankEmbed(rows = [], guild = null, topN = 10) {
   });
 
   return new EmbedBuilder()
-    .setColor(COLORS.GOLD ?? 0xd19900)
+    .setColor(COLORS.GOLD)
     .setAuthor(buildAuthor(guild))
     .setTitle(`${ICONS.TROPHY} Top ${Math.min(rows.length, topN)} — Bảng xếp hạng`)
     .setDescription(lines.join('\n\n'))

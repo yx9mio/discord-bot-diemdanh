@@ -10,6 +10,7 @@ const { EmbedBuilder } = require('discord.js');
 const memberService = require('../services/memberService.js');
 const log = require('./logger.js');
 const {
+  COLORS,
   FOOTER_DEFAULT,
   buildClosedSessionEmbed,
   buildSessionActionRow,
@@ -135,7 +136,7 @@ async function announceStreakMilestone(guild, channel, userId, streak) {
   if (!STREAK_MILESTONES.includes(streak)) return;
   const embed = new EmbedBuilder()
     .setTitle('🔥 Chuỗi điểm danh mới!')
-    .setColor(0xe67e22)
+    .setColor(COLORS.ORANGE)
     .setDescription(`<@${userId}> đạt **${streak}** phiên liên tiếp!`)
     .setFooter({ text: FOOTER_DEFAULT })
     .setTimestamp();
@@ -179,7 +180,7 @@ async function announceBadges(guild, channel, guildId, sessionId, attended, stat
   if (!newBadges.length) return;
   const embed = new EmbedBuilder()
     .setTitle('🎖️ Huy Hiệu Mới!')
-    .setColor(0xd19900)
+    .setColor(COLORS.GOLD)
     .setDescription(newBadges.map(({ userId, badge }) =>
       `${badge.emoji} <@${userId}> đạt **${badge.label}** (${badge.threshold} lần điểm danh)`
     ).join('\n'))

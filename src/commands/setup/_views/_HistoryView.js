@@ -39,7 +39,7 @@ function render({ sessions, page = 0, guild }) {
       }).join('\n\n');
 
   const embed = new EmbedBuilder()
-    .setColor(COLORS.PRIMARY)
+    .setColor(COLORS.NEUTRAL)
     .setAuthor(buildAuthor(guild))
     .setTitle(`${ICONS.CHART} Nhật ký phiên`)
     .setDescription(desc)
