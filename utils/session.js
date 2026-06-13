@@ -202,7 +202,7 @@ async function disableAttendanceUI(client, channel, session, attended = []) {
   try {
     const msg = await channel.messages.fetch(session.message_id);
     if (!msg) return;
-    const closedEmbed  = await buildClosedSessionEmbed(session, attended, channel.guild ?? null);
+    const closedEmbed  = buildClosedSessionEmbed(session, attended, channel.guild ?? null, session.phai_role_ids ?? null);
     const selectRow    = buildAttendanceSelectRow(false);
     const adminRows    = buildSessionActionRow(false);
     const disabledComponents = [selectRow, ...adminRows].slice(0, 5);
