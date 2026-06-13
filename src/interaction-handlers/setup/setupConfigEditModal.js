@@ -35,14 +35,20 @@ class SetupConfigEditModalHandler extends InteractionHandler {
 
     let value;
     if (suffix === 'phai_icon') {
-      const icons = {};
-      for (const [customId, field] of interaction.fields.fields) {
-        if (!customId.startsWith('phai_icon:')) continue;
-        const roleId = customId.slice('phai_icon:'.length);
-        const emoji = field.value.trim();
-        if (emoji) icons[roleId] = emoji;
+      // Merge với icons hiện tại — tránh overwrite khi có >4 phái
+      const existing = await configService.getGuildConfig(guildId).then(c => c?.phai_role_icons ?? {}).catch(() => ({}));
+      for (const row of interaction.fields.components) {
+        if (!row.components) continue;
+        for (const comp of row.components) {
+          if (comp.type !== 4) continue; // TextInput
+          if (!comp.custom_id.startsWith('phai_icon:')) continue;
+          const roleId = comp.custom_id.slice('phai_icon:'.length);
+          if (roleId === 'note') continue;
+          const emoji = (comp.value ?? '').trim();
+          if (emoji) existing[roleId] = emoji;
+        }
       }
-      value = icons;
+      value = existing;
     } else {
       value = interaction.fields.getTextInputValue(mapping.inputId).trim();
       if (!value) return interaction.editReply(replyErrEdit('Giá trị không được để trống.'));
