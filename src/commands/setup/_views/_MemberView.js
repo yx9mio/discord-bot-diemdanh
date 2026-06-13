@@ -132,10 +132,9 @@ function render({ members, page = 0, guild, cfg = null, filterPhai = '' }) {
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const cPage      = Math.max(0, Math.min(page, totalPages - 1));
   const start      = cPage * PAGE_SIZE;
-  const slice      = filtered.slice(start, start + PAGE_SIZE);
-  const phaiIcons  = cfg?.phai_role_icons ?? {};
-  // [FIX] btnSlice = đúng 5 item của trang hiện tại
-  const btnSlice   = slice.slice(0, BTN_LIMIT);
+  const slice    = filtered.slice(start, start + PAGE_SIZE);
+  const phaiIds  = cfg?.phai_role_ids ?? [];
+  const btnSlice = slice.slice(0, BTN_LIMIT);
 
   const desc = total === 0
     ? filterPhai
@@ -143,7 +142,7 @@ function render({ members, page = 0, guild, cfg = null, filterPhai = '' }) {
       : `*Chưa có thành viên nào.*\n> Bấm **${ICONS.PLUS} Thêm thành viên** để bắt đầu.`
     : slice.map((m, i) => {
         const phong  = m.phong_ban ? ` _(${m.phong_ban})_` : '';
-        const phaiStr = formatPhaiList(m.phai_role_ids, phaiIcons, guild);
+        const phaiStr = formatPhaiList(m.phai_role_ids, guild);
         const phaiLine = phaiStr ? `  ${phaiStr}` : '';
         const note   = m.ghi_chu  ? ` · 📝 ${m.ghi_chu}` : '';
         return `${start + i + 1}. <@${m.user_id}>${phong}${phaiLine}${note}`;
@@ -160,7 +159,6 @@ function render({ members, page = 0, guild, cfg = null, filterPhai = '' }) {
   const components = [];
 
   // Filter row: phái buttons
-  const phaiIds = cfg?.phai_role_ids ?? [];
   if (phaiIds.length > 0 && phaiIds.length <= 4) {
     const filterRow = new ActionRowBuilder();
     filterRow.addComponents(
@@ -170,7 +168,7 @@ function render({ members, page = 0, guild, cfg = null, filterPhai = '' }) {
         .setStyle(filterPhai ? ButtonStyle.Secondary : ButtonStyle.Primary),
     );
     for (const rid of phaiIds) {
-      const icon = getPhaiIcon(rid, phaiIcons);
+      const icon = getPhaiIcon(rid, phaiIds);
       const role = guild?.roles?.cache?.get(rid);
       filterRow.addComponents(
         new ButtonBuilder()

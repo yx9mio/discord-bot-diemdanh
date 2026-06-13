@@ -1,6 +1,6 @@
 'use strict';
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const { COLORS, ICONS } = require('../../../../utils/theme.js');
+const { COLORS, ICONS, getPhaiIcon } = require('../../../../utils/theme.js');
 const { FOOTER_DEFAULT } = require('../../../../utils/embeds.js');
 
 // Lưu messageId của ConfigView để các edit handler có thể fetch và update
@@ -19,7 +19,6 @@ const CUSTOM_ID = {
   EDIT_ADMIN_ROLE:      'setup:cfg:edit:admin_role',
   EDIT_ATTENDANCE_ROLE: 'setup:cfg:edit:attendance_role',
   EDIT_PHAI:            'setup:cfg:edit:phai',
-  EDIT_PHAI_ICON:       'setup:cfg:edit:phai_icon',
   REFRESH:              'setup:cfg:refresh',
   BACK_HOME:            'setup:home',
 };
@@ -31,9 +30,8 @@ function render({ cfg, guild }) {
   const attRole   = cfg?.attendance_role_id ? `<@&${cfg.attendance_role_id}>` : '_chưa cài_';
 
   const phaiIds = cfg?.phai_role_ids ?? [];
-  const phaiIcons = cfg?.phai_role_icons ?? {};
   const phaiStr = phaiIds.length
-    ? phaiIds.map(id => `${phaiIcons[id] ?? ICONS.SWORD} <@&${id}>`).join(' ')
+    ? phaiIds.map(id => `${getPhaiIcon(id, phaiIds)} <@&${id}>`).join(' ')
     : '_Không có_';
 
   const embed = new EmbedBuilder()
@@ -59,7 +57,6 @@ function render({ cfg, guild }) {
   );
 
   const phaiRow = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId(CUSTOM_ID.EDIT_PHAI_ICON).setLabel('Icon phái').setEmoji('🎨').setStyle(ButtonStyle.Secondary).setDisabled(!phaiIds.length),
     new ButtonBuilder().setCustomId(CUSTOM_ID.EDIT_CHANNEL).setLabel('Kênh thông báo').setEmoji(ICONS.CHANNEL).setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId(CUSTOM_ID.EDIT_TZ).setLabel('Timezone').setEmoji(ICONS.GLOBE).setStyle(ButtonStyle.Secondary),
   );

@@ -55,15 +55,19 @@ function colorFor(kind) {
   return COLORS.PRIMARY;
 }
 
-// ─── Helper phái ───────────────────────────────────────────────────────
-function getPhaiIcon(roleId, phaiIcons = {}, fallback = ICONS.SWORD) {
-  return phaiIcons?.[roleId] ?? fallback;
+// ─── Phái emoji mặc định theo vị trí ──────────────────────────────────
+const PHAI_EMOJIS = ['🔴', '🟠', '🟡', '🟢', '🔵', '🟣', '🟤', '⚫', '⚪', '🔶', '🔷', '🟩'];
+
+function getPhaiIcon(roleId, phaiRoleIds = []) {
+  const idx = phaiRoleIds.indexOf(roleId);
+  if (idx !== -1 && idx < PHAI_EMOJIS.length) return PHAI_EMOJIS[idx];
+  return ICONS.SWORD;
 }
 
-function formatPhaiList(phaiRoleIds = [], phaiIcons = {}, guild = null) {
+function formatPhaiList(phaiRoleIds = [], guild = null) {
   if (!phaiRoleIds?.length) return null;
   return phaiRoleIds.map(id => {
-    const icon = getPhaiIcon(id, phaiIcons);
+    const icon = getPhaiIcon(id, phaiRoleIds);
     const role = guild?.roles?.cache?.get(id);
     return role ? `${icon} ${role.name}` : `${icon} <@&${id}>`;
   }).join(' · ');

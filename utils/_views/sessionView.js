@@ -6,6 +6,7 @@ const {
   COLORS, ICONS, FOOTER_DEFAULT,
   buildRichProgressBar, pctEmoji, pctLabel, formatDuration,
 } = require('../_helpers');
+const { getPhaiIcon } = require('../theme.js');
 
 const PAGE_SIZE = 15;
 
@@ -16,7 +17,7 @@ const STATUS_LABEL = {
   co_phep:        `${ICONS.ATTEND_EXCUSE} Có phép`,
 };
 
-function buildSessionEmbed(guild, session, attended = [], phaiRoleIds = [], _isEditing = false, page = 1, phaiRoleIcons) {
+function buildSessionEmbed(guild, session, attended = [], phaiRoleIds = [], _isEditing = false, page = 1) {
   const total   = attended.length;
   const joined  = attended.filter(a => a.status === 'tham_gia' || a.status === 'tre').length;
   const late    = attended.filter(a => a.status === 'tre').length;
@@ -68,8 +69,7 @@ function buildSessionEmbed(guild, session, attended = [], phaiRoleIds = [], _isE
     { name: `${ICONS.ATTEND_EXCUSE} Có phép`, value: `**${excused}**`,    inline: true },
   ];
 
-  // Phái stats — ưu tiên param, fallback session field, cuối cùng là {}
-  const icons = (phaiRoleIcons && Object.keys(phaiRoleIcons).length) ? phaiRoleIcons : (session.phai_role_icons ?? {});
+  // Phái stats
   const safeEligible = session.eligible_member_ids ?? [];
   const eligibleSet = new Set(safeEligible.map ? safeEligible.map(m => m.id ?? m) : []);
   for (const roleId of (phaiRoleIds ?? [])) {
@@ -81,7 +81,7 @@ function buildSessionEmbed(guild, session, attended = [], phaiRoleIds = [], _isE
       roleMembers.includes(a.user_id) && ['tham_gia', 'tre'].includes(a.status)
     ).length;
     const rPct = rTotal > 0 ? Math.round(rPresent / rTotal * 100) : 0;
-    const icon = icons[roleId] ?? ICONS.SWORD;
+    const icon = getPhaiIcon(roleId, phaiRoleIds);
     fields.push({ name: `${icon} ${role.name}`, value: `**${rPresent}/${rTotal}** (${rPct}%)`, inline: true });
   }
 

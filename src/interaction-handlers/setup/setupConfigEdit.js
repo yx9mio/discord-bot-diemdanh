@@ -20,12 +20,11 @@ const EDIT_TZ              = 'setup:cfg:edit:tz';
 const EDIT_ADMIN_ROLE      = 'setup:cfg:edit:admin_role';
 const EDIT_ATTENDANCE_ROLE = 'setup:cfg:edit:attendance_role';
 const EDIT_PHAI            = 'setup:cfg:edit:phai';
-const EDIT_PHAI_ICON       = 'setup:cfg:edit:phai_icon';
 
 const EDIT_IDS = new Set([
   EDIT_CHANNEL, EDIT_TZ,
   EDIT_ADMIN_ROLE, EDIT_ATTENDANCE_ROLE,
-  EDIT_PHAI, EDIT_PHAI_ICON,
+  EDIT_PHAI,
 ]);
 
 const MODAL_PREFIX  = 'setup:cfg:modal:';
@@ -89,53 +88,6 @@ async function handleButton(interaction) {
       content: '⚔️ Chọn **phái / nhóm** (có thể chọn nhiều, bỏ trống = xoá hết):',
       components: [new ActionRowBuilder().addComponents(menu)],
     });
-  }
-
-  if (id === EDIT_PHAI_ICON) {
-    const cfg = await configService.getGuildConfig(interaction.guild.id);
-    const phaiIds = cfg?.phai_role_ids ?? [];
-    if (!phaiIds.length) {
-      return interaction.reply({ content: '❌ Chưa có phái / nhóm nào. Thêm phái trước.', flags: MessageFlags.Ephemeral });
-    }
-
-    const phaiIcons = cfg?.phai_role_icons ?? {};
-    const modal = new ModalBuilder()
-      .setCustomId(MODAL_PREFIX + 'phai_icon')
-      .setTitle('Icon phái / nhóm');
-
-    // Discord giới hạn 5 ActionRows/modal → để dành 1 row cho note nếu cần
-    const editCount = phaiIds.length > 5 ? 4 : phaiIds.length;
-    for (let i = 0; i < editCount; i++) {
-      const roleId = phaiIds[i];
-      const role = interaction.guild.roles.cache.get(roleId);
-      const name = role?.name ?? `Role ${roleId}`;
-      modal.addComponents(
-        new ActionRowBuilder().addComponents(
-          new TextInputBuilder()
-            .setCustomId(`phai_icon:${roleId}`)
-            .setLabel(`Icon ${name} (1 emoji)`)
-            .setStyle(TextInputStyle.Short)
-            .setPlaceholder(phaiIcons[roleId] ?? '⚔️')
-            .setRequired(false)
-            .setMaxLength(10),
-        ),
-      );
-    }
-
-    if (phaiIds.length > editCount) {
-      modal.addComponents(
-        new ActionRowBuilder().addComponents(
-          new TextInputBuilder()
-            .setCustomId('phai_icon:note')
-            .setLabel(`Còn ${phaiIds.length - editCount} phái khác (giữ mặc định)`)
-            .setStyle(TextInputStyle.Short)
-            .setRequired(false)
-            .setValue('...'),
-        ),
-      );
-    }
-
-    return interaction.showModal(modal);
   }
 
   if (id === EDIT_TZ) {

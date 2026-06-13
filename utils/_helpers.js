@@ -2,6 +2,7 @@
 // Không import từ embeds.js để tránh circular dependency
 'use strict';
 const { EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder, MessageFlags } = require('discord.js');
+const { getPhaiIcon } = require('./theme.js');
 
 // ─── Palette & Icons ───────────────────────────────────────────────────────
 const COLORS = {
@@ -133,7 +134,7 @@ function chunkLines(lines, maxLen = 1020) {
   return chunks;
 }
 
-function buildPhaiStatsText(guild, phaiRoleIds, attended, eligibleArr, phaiRoleIcons = {}) {
+function buildPhaiStatsText(guild, phaiRoleIds, attended, eligibleArr) {
   if (!phaiRoleIds || !phaiRoleIds.length || !guild) return null;
   const safe = eligibleArr ?? [];
   const eligibleSet = new Set(safe.map ? safe.map(m => m.id ?? m) : []);
@@ -147,7 +148,7 @@ function buildPhaiStatsText(guild, phaiRoleIds, attended, eligibleArr, phaiRoleI
       roleMembers.includes(a.user_id) && ['tham_gia', 'tre'].includes(a.status)
     ).length;
     const pct = total > 0 ? Math.round(present / total * 100) : 0;
-    const icon = phaiRoleIcons[roleId] ?? ICONS.SWORD;
+    const icon = getPhaiIcon(roleId, phaiRoleIds);
     lines.push(`${icon} **${role.name}**: ${present}/${total} (${pct}%)`);
   }
   return lines.length ? lines.join('\n') : null;

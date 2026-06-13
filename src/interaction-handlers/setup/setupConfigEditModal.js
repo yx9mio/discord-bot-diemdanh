@@ -10,8 +10,7 @@ const { replyErrEdit } = require('../../../utils/embeds.js');
 const MODAL_PREFIX = 'setup:cfg:modal:';
 
 const FIELD_MAP = {
-  tz:        { col: 'timezone', inputId: 'timezone' },
-  phai_icon: { col: 'phai_role_icons', inputId: null },
+  tz: { col: 'timezone', inputId: 'timezone' },
 };
 
 class SetupConfigEditModalHandler extends InteractionHandler {
@@ -33,29 +32,11 @@ class SetupConfigEditModalHandler extends InteractionHandler {
     const mapping = FIELD_MAP[suffix];
     if (!mapping) return interaction.editReply(replyErrEdit(`Loại cấu hình không xác định: "${suffix}"`));
 
-    let value;
-    if (suffix === 'phai_icon') {
-      // Merge với icons hiện tại — tránh overwrite khi có >4 phái
-      const existing = await configService.getGuildConfig(guildId).then(c => c?.phai_role_icons ?? {}).catch(() => ({}));
-      for (const row of interaction.fields.components) {
-        if (!row.components) continue;
-        for (const comp of row.components) {
-          if (comp.type !== 4) continue; // TextInput
-          if (!comp.custom_id.startsWith('phai_icon:')) continue;
-          const roleId = comp.custom_id.slice('phai_icon:'.length);
-          if (roleId === 'note') continue;
-          const emoji = (comp.value ?? '').trim();
-          if (emoji) existing[roleId] = emoji;
-        }
-      }
-      value = existing;
-    } else {
-      value = interaction.fields.getTextInputValue(mapping.inputId).trim();
-      if (!value) return interaction.editReply(replyErrEdit('Giá trị không được để trống.'));
-      if (suffix === 'tz') {
-        if (!DateTime.now().setZone(value).isValid) {
-          return interaction.editReply(replyErrEdit(`Múi giờ không hợp lệ: "${value}". Gợi ý: Asia/Ho_Chi_Minh, Asia/Saigon, UTC...`));
-        }
+    const value = interaction.fields.getTextInputValue(mapping.inputId).trim();
+    if (!value) return interaction.editReply(replyErrEdit('Giá trị không được để trống.'));
+    if (suffix === 'tz') {
+      if (!DateTime.now().setZone(value).isValid) {
+        return interaction.editReply(replyErrEdit(`Múi giờ không hợp lệ: "${value}". Gợi ý: Asia/Ho_Chi_Minh, Asia/Saigon, UTC...`));
       }
     }
 

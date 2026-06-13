@@ -105,10 +105,9 @@ function render({ guild, cfg, schedules, members, session, sessions }) {
   const phaiIds = cfg?.phai_role_ids ?? [];
   let phaiBreakdown = '';
   if (phaiIds.length && members?.length) {
-    const phaiIcons = cfg?.phai_role_icons ?? {};
     phaiBreakdown = phaiIds.map(rid => {
       const count = members.filter(m => (m.phai_role_ids ?? []).includes(rid)).length;
-      const icon  = getPhaiIcon(rid, phaiIcons);
+      const icon  = getPhaiIcon(rid, phaiIds);
       const role  = guild?.roles?.cache?.get(rid);
       return count > 0 ? `${icon} ${role?.name ?? rid}: ${count}` : null;
     }).filter(Boolean).join('  ');

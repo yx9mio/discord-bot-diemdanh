@@ -42,11 +42,11 @@ function _sessionCard(session, idx) {
 
 function _sessionCardExpanded(session, idx, cfg = null) {
   const card = _sessionCard(session, idx);
-  const phaiIcons = cfg?.phai_role_icons ?? {};
+  const phaiIds = cfg?.phai_role_ids ?? [];
   const extra = [
     `▸ ID: \`${session.id}\``,
     `▸ Tạo bởi: <@${session.created_by}>`,
-    session.phai_role_ids?.length ? `▸ Phái: ${session.phai_role_ids.map(r => `${getPhaiIcon(r, phaiIcons)} <@&${r}>`).join(' ')}` : null,
+    session.phai_role_ids?.length ? `▸ Phái: ${session.phai_role_ids.map(r => `${getPhaiIcon(r, phaiIds)} <@&${r}>`).join(' ')}` : null,
     session.eligible_member_ids?.length ? `▸ Thành viên: ${session.eligible_member_ids.length} người` : null,
     session.created_at ? `▸ Tạo lúc: ${fmtTs(session.created_at)}` : null,
   ].filter(Boolean).join('\n');

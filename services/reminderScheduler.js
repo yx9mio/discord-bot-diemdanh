@@ -139,7 +139,6 @@ async function autoOpenSession(guild, cfg, sched) {
     });
 
     session.channel_id = ch.id;
-    session.phai_role_icons = cfg?.phai_role_icons ?? {};
     await sessionService.updateSessionMessage(session.id, { channel_id: ch.id });
 
     const { embed: sessionEmbed, components } = buildSessionEmbed(guild, session, [], session.phai_role_ids ?? []);
