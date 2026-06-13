@@ -2,6 +2,7 @@
 const { EmbedBuilder } = require('discord.js');
 const sessionService    = require('../services/sessionService.js');
 const attendanceService = require('../services/attendanceService.js');
+const configService     = require('../services/configService.js');
 const log = require('./logger.js');
 const { endSession, announceBadges, disableAttendanceUI } = require('./session.js');
 const {
@@ -78,7 +79,10 @@ function scheduleCloseTimer(client, guild, session, channelId, ms) {
           .setColor(0x99AAB5)
           .setDescription('🔒 Phiên điểm danh đã tự động kết thúc.')
           .setFooter({ text: FOOTER_DEFAULT });
-        const summaryEmbed = await buildSummaryEmbed(session, attended, guild, session.phai_role_ids ?? []);
+        const phaiIds4 = session.phai_role_ids?.length
+          ? session.phai_role_ids
+          : (await configService.getGuildConfig(guild.id).catch(() => null))?.phai_role_ids ?? [];
+        const summaryEmbed = await buildSummaryEmbed(session, attended, guild, phaiIds4);
         await ch.send({ embeds: [msg, summaryEmbed] });
         await announceBadges(guild, ch, guild.id, session.id, attended, statsMap);
       } else {
@@ -145,7 +149,10 @@ function startAutoRefresh(sessionId, channelId, messageId, client) {
         return;
       }
 
-      const { embed, components: pagComponents } = buildSessionEmbed(guild, session, attended, session.phai_role_ids ?? []);
+      const phaiIds5 = session.phai_role_ids?.length
+        ? session.phai_role_ids
+        : (await configService.getGuildConfig(guild.id).catch(() => null))?.phai_role_ids ?? [];
+      const { embed, components: pagComponents } = buildSessionEmbed(guild, session, attended, phaiIds5);
       const selectRow = buildAttendanceSelectRow(true);
       const adminRows = buildSessionActionRow(true);
       const components = [selectRow, ...adminRows, ...pagComponents].slice(0, 5);

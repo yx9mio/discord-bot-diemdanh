@@ -34,6 +34,7 @@ function buildAttendanceSelectRow(isOpen = true) {
       .addOptions(
         new StringSelectMenuOptionBuilder().setLabel('✅ Tham gia').setDescription('Điểm danh đúng giờ').setValue('tham_gia'),
         new StringSelectMenuOptionBuilder().setLabel('⏰ Trễ').setDescription('Điểm danh muộn').setValue('tre'),
+        new StringSelectMenuOptionBuilder().setLabel('📋 Có phép').setDescription('Vắng mặt có lý do').setValue('co_phep'),
         new StringSelectMenuOptionBuilder().setLabel('❌ Vắng').setDescription('Báo vắng mặt').setValue('khong_tham_gia'),
       ),
   );

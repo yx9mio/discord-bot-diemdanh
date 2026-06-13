@@ -8,6 +8,7 @@ const { MessageFlags } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const sessionService    = require('../../services/sessionService.js');
 const attendanceService = require('../../services/attendanceService.js');
+const configService     = require('../../services/configService.js');
 const log               = require('../../utils/logger.js');
 const { getSessionChannel } = require('../../utils/channel.js');
 const { replyErr, buildSessionEmbed, buildAttendanceSelectRow, buildSessionActionRow } = require('../../utils/embeds.js');
@@ -42,7 +43,9 @@ class AttendanceSelectHandler extends InteractionHandler {
     }
 
     // Kiểm tra phái role — nếu chưa có, bắt chọn phái trước
-    const phaiRoleIds = session.phai_role_ids ?? [];
+    const phaiRoleIds = session.phai_role_ids?.length
+      ? session.phai_role_ids
+      : (await configService.getGuildConfig(guild.id).catch(() => null))?.phai_role_ids ?? [];
     if (phaiRoleIds.length > 0) {
       const member = await guild.members.fetch(user.id).catch(() => null);
       const hasPhai = member && phaiRoleIds.some(rid => member.roles.cache.has(rid));
@@ -104,8 +107,11 @@ class AttendanceSelectHandler extends InteractionHandler {
           const msg = await ch.messages.fetch(session.message_id).catch(() => null);
           if (msg) {
             const attended = await attendanceService.getAttendances(session.id);
+            const phaiIds = session.phai_role_ids?.length
+              ? session.phai_role_ids
+              : (await configService.getGuildConfig(guild.id).catch(() => null))?.phai_role_ids ?? [];
             const { embed, components: pagComponents } = buildSessionEmbed(
-              guild, session, attended, session.phai_role_ids ?? []
+              guild, session, attended, phaiIds
             );
             const selectRow = buildAttendanceSelectRow(true);
             const adminRows = buildSessionActionRow(true);

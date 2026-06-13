@@ -10,6 +10,7 @@ const attendanceService = require('../../services/attendanceService.js');
 const log = require('../../utils/logger.js');
 const metrics = require('../../utils/metrics.js');
 const { requireAdmin } = require('../../utils/permissions.js');
+const configService = require('../../services/configService.js');
 const {
   buildSessionEmbed, buildSummaryEmbed,
   buildSessionActionRow, buildAttendanceSelectRow,
@@ -28,6 +29,12 @@ const SESSION_BUTTON_IDS = new Set([
   'session:confirm_close', 'session:cancel_close',
   'session:confirm_close:all', 'session:cancel_close:all',
 ]);
+
+async function _phaiRoleIds(session, guildId) {
+  if (session.phai_role_ids?.length) return session.phai_role_ids;
+  const cfg = await configService.getGuildConfig(guildId).catch(() => null);
+  return cfg?.phai_role_ids ?? [];
+}
 
 class SessionButtonHandler extends InteractionHandler {
   constructor(ctx, options) {
@@ -67,8 +74,9 @@ class SessionButtonHandler extends InteractionHandler {
           ? Math.max(1, currentPage - 1)
           : Math.min(totalPages, currentPage + 1);
 
+        const phaiIds1 = await _phaiRoleIds(session, guild.id);
         const { embed, components: pagComponents } =
-          buildSessionEmbed(guild, session, attended, session.phai_role_ids ?? [], false, page);
+          buildSessionEmbed(guild, session, attended, phaiIds1, false, page);
 
         // [FIX-SELECT] Giữ select menu sau pagination
         const selectRow = buildAttendanceSelectRow(true);
@@ -79,8 +87,9 @@ class SessionButtonHandler extends InteractionHandler {
         });
       }
 
+      const phaiIds2 = await _phaiRoleIds(session, guild.id);
       const { embed, components } =
-        buildSessionEmbed(guild, session, attended, session.phai_role_ids ?? [], false, 1);
+        buildSessionEmbed(guild, session, attended, phaiIds2, false, 1);
       return interaction.reply({ embeds: [embed], components, flags: MessageFlags.Ephemeral });
     }
 
@@ -92,8 +101,9 @@ class SessionButtonHandler extends InteractionHandler {
         if (!session) return interaction.followUp({ ...replyErr('Không có phiên điểm danh đang mở.'), flags: MessageFlags.Ephemeral });
         const attended = await attendanceService.getAttendances(session.id);
         await interaction.guild.members.fetch().catch(() => {});
+        const phaiIds3 = await _phaiRoleIds(session, interaction.guild.id);
         const { embed, components: pagComponents } =
-          buildSessionEmbed(interaction.guild, session, attended, session.phai_role_ids ?? [], false);
+          buildSessionEmbed(interaction.guild, session, attended, phaiIds3, false);
         // [FIX-SELECT] Giữ select menu sau refresh
         const selectRow = buildAttendanceSelectRow(true);
         const adminRows = buildSessionActionRow(true);
@@ -250,7 +260,8 @@ class SessionButtonHandler extends InteractionHandler {
       metrics.sessionClosed(guild.id, { cancelled: false });
       metrics.sessionMemberCount(guild.id, attended.length);
 
-      await channel.send({ embeds: [await buildSummaryEmbed(session, attended, guild, session.phai_role_ids ?? [])] }).catch(() => null);
+      const phaiIds4 = await _phaiRoleIds(session, guild.id);
+      await channel.send({ embeds: [await buildSummaryEmbed(session, attended, guild, phaiIds4)] }).catch(() => null);
       await announceBadges(guild, channel, guild.id, session.id, attended, statsMap).catch(() => null);
       return interaction.editReply(replyOkEdit('✅ Phiên điểm danh đã được đóng thành công.'));
     }

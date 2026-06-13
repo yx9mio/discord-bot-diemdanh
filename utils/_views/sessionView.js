@@ -18,7 +18,7 @@ const STATUS_LABEL = {
   co_phep:        `${ICONS.ATTEND_EXCUSE} Có phép`,
 };
 
-function buildSessionEmbed(guild, session, attended = [], phaiRoleIds = [], _isEditing = false, page = 1) {
+function buildSessionEmbed(guild, session, attended = [], phaiRoleIds = [], _isEditing = false, page = 1, emojiMap = null) {
   const total   = attended.length;
   const joined  = attended.filter(a => a.status === 'tham_gia' || a.status === 'tre').length;
   const late    = attended.filter(a => a.status === 'tre').length;
@@ -36,7 +36,7 @@ function buildSessionEmbed(guild, session, attended = [], phaiRoleIds = [], _isE
     const name   = member?.displayName ?? `<@${a.user_id}>`;
     const phaiIcons = (phaiRoleIds ?? [])
       .filter(rid => member?.roles?.cache?.has(rid))
-      .map(rid => getPhaiIcon(rid, phaiRoleIds, guild))
+      .map(rid => getPhaiIcon(rid, phaiRoleIds, guild, emojiMap))
       .join('');
     const label = STATUS_LABEL[a.status] ?? a.status;
     return `${label} — **${name}**${phaiIcons ? ` ${phaiIcons}` : ''}`;
@@ -95,7 +95,7 @@ function buildSessionEmbed(guild, session, attended = [], phaiRoleIds = [], _isE
       roleMembers.includes(a.user_id) && ['tham_gia', 'tre'].includes(a.status)
     ).length;
     const rPct = rTotal > 0 ? Math.round(rPresent / rTotal * 100) : 0;
-    const icon = getPhaiIcon(roleId, phaiRoleIds, guild);
+    const icon = getPhaiIcon(roleId, phaiRoleIds, guild, emojiMap);
     phaiLines.push(`${icon} **${role.name}**: ${rPresent}/${rTotal} (${rPct}%)`);
   }
   if (phaiLines.length) {

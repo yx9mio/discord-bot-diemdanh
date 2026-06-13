@@ -7,6 +7,7 @@ const {
 } = require('@sapphire/framework');
 const { getActiveSession } = require('../../services/sessionService.js');
 const { getAttendances, upsertAttendance } = require('../../services/attendanceService.js');
+const configService = require('../../services/configService.js');
 const log = require('../../utils/logger.js');
 const { requireAdmin } = require('../../utils/permissions.js');
 const { addBreadcrumb } = require('../../utils/sentry.js');
@@ -112,8 +113,11 @@ class AdminEditModalHandler extends InteractionHandler {
         const msg = await ch.messages.fetch(session.message_id).catch(() => null);
         if (msg) {
           const attended = await getAttendances(session.id);
+          const phaiIds = session.phai_role_ids?.length
+            ? session.phai_role_ids
+            : (await configService.getGuildConfig(guild.id).catch(() => null))?.phai_role_ids ?? [];
           const { embed, components: pagComponents } = buildSessionEmbed(
-            guild, session, attended, session.phai_role_ids ?? []
+            guild, session, attended, phaiIds
           );
           const selectRow = buildAttendanceSelectRow(true);
           const adminRows = buildSessionActionRow(true);
