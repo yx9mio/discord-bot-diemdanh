@@ -80,6 +80,7 @@ function buildSessionEmbed(guild, session, attended = [], phaiRoleIds = [], _isE
   // Phái stats
   const safeEligible = session.eligible_member_ids ?? [];
   const eligibleSet = new Set(safeEligible.map ? safeEligible.map(m => m.id ?? m) : []);
+  const phaiLines = [];
   for (const roleId of (phaiRoleIds ?? [])) {
     const role = guild.roles?.cache?.get(roleId);
     if (!role) continue;
@@ -90,7 +91,10 @@ function buildSessionEmbed(guild, session, attended = [], phaiRoleIds = [], _isE
     ).length;
     const rPct = rTotal > 0 ? Math.round(rPresent / rTotal * 100) : 0;
     const icon = getPhaiIcon(roleId, phaiRoleIds, guild);
-    fields.push({ name: `${icon} ${role.name}`, value: `**${rPresent}/${rTotal}** (${rPct}%)`, inline: true });
+    phaiLines.push(`${icon} **${role.name}**: ${rPresent}/${rTotal} (${rPct}%)`);
+  }
+  if (phaiLines.length) {
+    fields.push({ name: '⚔️ Phái / Nhóm', value: phaiLines.join('\n'), inline: false });
   }
 
   const listTitle = total > 0

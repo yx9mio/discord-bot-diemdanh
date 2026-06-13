@@ -110,7 +110,7 @@ function render({ guild, cfg, schedules, members, session, sessions }) {
       const icon  = getPhaiIcon(rid, phaiIds, guild, cfg?.phai_role_icons);
       const role  = guild?.roles?.cache?.get(rid);
       return count > 0 ? `${icon} ${role?.name ?? rid}: ${count}` : null;
-    }).filter(Boolean).join('  ');
+    }).filter(Boolean).join('\n');
   }
 
   embed.addFields({

@@ -46,7 +46,7 @@ function _sessionCardExpanded(session, idx, cfg = null, guild = null) {
   const extra = [
     `▸ ID: \`${session.id}\``,
     `▸ Tạo bởi: <@${session.created_by}>`,
-    session.phai_role_ids?.length ? `▸ Phái: ${session.phai_role_ids.map(r => `${getPhaiIcon(r, phaiIds, guild, cfg?.phai_role_icons)} <@&${r}>`).join(' ')}` : null,
+    session.phai_role_ids?.length ? `▸ Phái:\n${session.phai_role_ids.map(r => `${getPhaiIcon(r, phaiIds, guild, cfg?.phai_role_icons)} <@&${r}>`).join('\n')}` : null,
     session.eligible_member_ids?.length ? `▸ Thành viên: ${session.eligible_member_ids.length} người` : null,
     session.created_at ? `▸ Tạo lúc: ${fmtTs(session.created_at)}` : null,
   ].filter(Boolean).join('\n');

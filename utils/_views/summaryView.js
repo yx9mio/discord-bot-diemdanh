@@ -5,6 +5,7 @@
 'use strict';
 const { EmbedBuilder } = require('discord.js');
 const { COLORS, ICONS, FOOTER_DEFAULT, buildRichProgressBar, pctEmoji, pctLabel } = require('../_helpers');
+const { getPhaiIcon } = require('../theme.js');
 
 const STATUS_LABEL = {
   tham_gia:       `${ICONS.ATTEND_YES} Tham gia`,
@@ -38,7 +39,23 @@ function buildSummaryEmbed(session, attended = [], guild, phai_role_ids = []) {
 
   const color = pct >= 80 ? COLORS.GREEN : pct >= 50 ? COLORS.YELLOW : COLORS.RED;
 
-  return new EmbedBuilder()
+  // Phái stats
+  const phaiLines = [];
+  const eligibleSet = new Set((session.eligible_member_ids ?? []).map(m => m.id ?? m));
+  for (const roleId of (phai_role_ids ?? [])) {
+    const role = guild?.roles?.cache?.get(roleId);
+    if (!role) continue;
+    const roleMembers = [...role.members.keys()].filter(id => eligibleSet.size === 0 || eligibleSet.has(id));
+    const rTotal = roleMembers.length;
+    const rPresent = attended.filter(a =>
+      roleMembers.includes(a.user_id) && ['tham_gia', 'tre'].includes(a.status)
+    ).length;
+    const rPct = rTotal > 0 ? Math.round(rPresent / rTotal * 100) : 0;
+    const icon = getPhaiIcon(roleId, phai_role_ids, guild);
+    phaiLines.push(`${icon} **${role.name}**: ${rPresent}/${rTotal} (${rPct}%)`);
+  }
+
+  const embed = new EmbedBuilder()
     .setColor(color)
     .setTitle(`📊 Tổng kết — ${session?.session_name ?? 'Phiên điểm danh'}`)
     .setDescription([
@@ -50,10 +67,16 @@ function buildSummaryEmbed(session, attended = [], guild, phai_role_ids = []) {
       { name: `${ICONS.ATTEND_NO} Vắng`,      value: `**${absent}**`,  inline: true },
       { name: `${ICONS.ATTEND_EXCUSE} Có phép`, value: `**${excused}**`, inline: true },
       ...(late > 0 ? [{ name: `${ICONS.ATTEND_LATE} Trễ`, value: `**${late}**`, inline: true }] : []),
-      { name: '📋 Chi tiết', value: lines.length ? lines.join('\n') : '_Không có ai_', inline: false },
-    )
+    );
+  if (phaiLines.length) {
+    embed.addFields({ name: '⚔️ Phái / Nhóm', value: phaiLines.join('\n'), inline: false });
+  }
+  embed.addFields(
+    { name: '📋 Chi tiết', value: lines.length ? lines.join('\n') : '_Không có ai_', inline: false },
+  )
     .setFooter({ text: `${FOOTER_DEFAULT} · Tổng ${total} người` })
     .setTimestamp();
+  return embed;
 }
 
 module.exports = { buildSummaryEmbed };
