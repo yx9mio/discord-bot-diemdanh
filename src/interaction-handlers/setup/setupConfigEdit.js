@@ -98,27 +98,27 @@ async function handleButton(interaction) {
       return interaction.reply({ content: '❌ Chưa có phái / nhóm nào. Thêm phái trước.', flags: MessageFlags.Ephemeral });
     }
     const emojiMap = cfg?.phai_role_icons ?? {};
+    const lines = phaiIds.map(id => {
+      const role = interaction.guild.roles.cache.get(id);
+      const name = role?.name ?? id;
+      const val = emojiMap[id] ?? '';
+      return `${name}=${val}`;
+    });
     const modal = new ModalBuilder()
       .setCustomId(MODAL_PREFIX + 'emoji_name')
-      .setTitle('Tên emoji Discord cho phái');
-    const count = Math.min(phaiIds.length, 5);
-    for (let i = 0; i < count; i++) {
-      const roleId = phaiIds[i];
-      const role = interaction.guild.roles.cache.get(roleId);
-      const label = role?.name ?? `Phái ${i + 1}`;
-      modal.addComponents(
+      .setTitle('Tên emoji Discord cho phái')
+      .addComponents(
         new ActionRowBuilder().addComponents(
           new TextInputBuilder()
-            .setCustomId(`emoji:${roleId}`)
-            .setLabel(label)
-            .setStyle(TextInputStyle.Short)
-            .setPlaceholder('Tên emoji (VD: TY)')
+            .setCustomId('emoji_names')
+            .setLabel('Mỗi dòng: TênPhái=TênEmoji')
+            .setStyle(TextInputStyle.Paragraph)
+            .setPlaceholder('Cửu Linh=TY\nThiết Y=TY\nHồng Âm=HA')
             .setRequired(false)
-            .setMaxLength(32)
-            .setValue(emojiMap[roleId] ?? ''),
+            .setMaxLength(2000)
+            .setValue(lines.join('\n')),
         ),
       );
-    }
     return interaction.showModal(modal);
   }
 

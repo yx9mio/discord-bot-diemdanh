@@ -43,19 +43,27 @@ class SetupConfigEditModalHandler extends InteractionHandler {
     const guildId = interaction.guild.id;
 
     if (suffix === 'emoji_name') {
-      const existing = await configService.getGuildConfig(guildId).then(c => c?.phai_role_icons ?? {}).catch(() => ({}));
-      const rows = interaction.fields?.components ?? [];
-      for (const row of rows) {
-        if (!row?.components) continue;
-        for (const comp of row.components) {
-          if (!comp || comp.type !== 4) continue;
-          const cid = comp.custom_id ?? '';
-          if (!cid.startsWith('emoji:')) continue;
-          const roleId = cid.slice('emoji:'.length);
-          const name = (comp.value ?? '').trim();
-          if (name) existing[roleId] = name;
-          else delete existing[roleId];
-        }
+      const cfg = await configService.getGuildConfig(guildId);
+      const phaiIds = cfg?.phai_role_ids ?? [];
+      const existing = cfg?.phai_role_icons ?? {};
+      const raw = interaction.fields?.getTextInputValue('emoji_names') ?? '';
+      // Parse mỗi dòng: RoleName=EmojiName
+      const lines = raw.split('\n').filter(Boolean);
+      for (const line of lines) {
+        const sep = line.indexOf('=');
+        if (sep <= 0) continue;
+        const roleName = line.slice(0, sep).trim();
+        const emojiName = line.slice(sep + 1).trim();
+        if (!roleName) continue;
+        // Tìm roleId theo tên role
+        const role = interaction.guild.roles.cache.find(r => r.name === roleName);
+        if (!role) continue;
+        if (emojiName) existing[role.id] = emojiName;
+        else delete existing[role.id];
+      }
+      // Xoá các entry của phái không còn trong danh sách
+      for (const key of Object.keys(existing)) {
+        if (!phaiIds.includes(key)) delete existing[key];
       }
       try {
         await configService.setConfigField(guildId, 'phai_role_icons', existing);
