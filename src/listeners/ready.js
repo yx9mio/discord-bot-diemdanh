@@ -4,6 +4,7 @@ const { getActiveSession, getActiveSessions, closeSession } = require('../../ser
 const { getAttendances } = require('../../services/attendanceService.js');
 const scheduledService = require('../../services/scheduledService.js');
 const configService = require('../../services/configService.js');
+const { syncGuildEmojis } = require('../../services/guildEmojiService.js');
 const log = require('../../utils/logger.js');
 const { scheduleCloseTimer, startAutoRefresh, stopAutoRefresh } = require('../../utils/timers.js');
 const { startReminderScheduler, getMinutesToOpen, autoOpenSession } = require('../../services/reminderScheduler.js');
@@ -19,6 +20,13 @@ class ReadyListener extends Listener {
 
     let restored = 0;
     for (const guild of client.guilds.cache.values()) {
+      // ── Đồng bộ emoji cache ─────────────────────────────────────────────
+      try { await syncGuildEmojis(guild); } catch (e) {
+        log.warn('READY', guild.id, 'Emoji sync fail, fallback Supabase load: %s', e.message);
+        const { loadGuildEmojiCache } = require('../../services/guildEmojiService.js');
+        try { await loadGuildEmojiCache(guild.id); } catch (e2) { log.warn('READY', guild.id, 'Supabase load also fail: %s', e2.message); }
+      }
+
       // ── Catch-up: auto-open các one-time schedule đáng lẽ đã mở ─────────
       const cfg = await configService.getGuildConfig(guild.id).catch(() => null);
       if (cfg?.notification_channel_id) {

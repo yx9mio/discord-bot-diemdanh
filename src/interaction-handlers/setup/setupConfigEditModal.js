@@ -75,8 +75,9 @@ class SetupConfigEditModalHandler extends InteractionHandler {
       for (const key of Object.keys(existing)) {
         if (!phaiIds.includes(key)) delete existing[key];
       }
-      // Force refresh emoji cache để tránh cache cũ
-      await interaction.guild.emojis.fetch();
+      // Force sync emoji cache để tránh cache cũ
+      const { syncGuildEmojis } = require('../../../services/guildEmojiService.js');
+      await syncGuildEmojis(interaction.guild);
       // Debug: kiểm tra emoji nào tìm thấy trong guild cache
       const foundEmojiNames = [];
       const notFoundEmojiNames = [];
