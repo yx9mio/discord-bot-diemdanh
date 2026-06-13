@@ -25,30 +25,50 @@ async function createSession(payload) {
 }
 
 async function getActiveSession(guildId) {
-  const { data, error } = await getClient()
-    .from('sessions').select('*')
-    .eq('guild_id', guildId).eq('is_active', true).eq('cancelled', false)
-    .maybeSingle();
-  _throwSupabase(error, 'getActiveSession');
-  return _validateSession(data, 'getActiveSession');
+  const [sessionRes, cfgRes] = await Promise.all([
+    getClient()
+      .from('sessions').select('*')
+      .eq('guild_id', guildId).eq('is_active', true).eq('cancelled', false)
+      .maybeSingle(),
+    getClient()
+      .from('guild_configs').select('phai_role_icons').eq('guild_id', guildId).maybeSingle(),
+  ]);
+  _throwSupabase(sessionRes.error, 'getActiveSession');
+  const session = _validateSession(sessionRes.data, 'getActiveSession');
+  if (session) session.phai_role_icons = cfgRes?.data?.phai_role_icons ?? {};
+  return session;
 }
 
 async function getActiveSessions(guildId) {
-  const { data, error } = await getClient()
-    .from('sessions').select('*')
-    .eq('guild_id', guildId).eq('is_active', true).eq('cancelled', false)
-    .order('started_at', { ascending: false });
-  _throwSupabase(error, 'getActiveSessions');
-  if (!data) return [];
-  data.forEach(row => _validateSession(row, 'getActiveSessions'));
-  return data;
+  const [sessionsRes, cfgRes] = await Promise.all([
+    getClient()
+      .from('sessions').select('*')
+      .eq('guild_id', guildId).eq('is_active', true).eq('cancelled', false)
+      .order('started_at', { ascending: false }),
+    getClient()
+      .from('guild_configs').select('phai_role_icons').eq('guild_id', guildId).maybeSingle(),
+  ]);
+  _throwSupabase(sessionsRes.error, 'getActiveSessions');
+  const phaiIcons = cfgRes?.data?.phai_role_icons ?? {};
+  if (!sessionsRes.data) return [];
+  sessionsRes.data.forEach(row => {
+    _validateSession(row, 'getActiveSessions');
+    row.phai_role_icons = phaiIcons;
+  });
+  return sessionsRes.data;
 }
 
 async function getSessionById(sessionId) {
   const { data, error } = await getClient()
     .from('sessions').select('*').eq('id', sessionId).maybeSingle();
   _throwSupabase(error, 'getSessionById');
-  return _validateSession(data, 'getSessionById');
+  const session = _validateSession(data, 'getSessionById');
+  if (session) {
+    const { data: cfgData } = await getClient()
+      .from('guild_configs').select('phai_role_icons').eq('guild_id', session.guild_id).maybeSingle().catch(() => ({}));
+    session.phai_role_icons = cfgData?.phai_role_icons ?? {};
+  }
+  return session;
 }
 
 async function getSessionByMessageId(messageId) {
@@ -59,10 +79,16 @@ async function getSessionByMessageId(messageId) {
 }
 
 async function getSessionByIdRaw(sessionId, guildId) {
-  const { data, error } = await getClient()
-    .from('sessions').select('*').eq('id', sessionId).eq('guild_id', guildId).maybeSingle();
-  _throwSupabase(error, 'getSessionByIdRaw');
-  return _validateSession(data, 'getSessionByIdRaw');
+  const [sessionRes, cfgRes] = await Promise.all([
+    getClient()
+      .from('sessions').select('*').eq('id', sessionId).eq('guild_id', guildId).maybeSingle(),
+    getClient()
+      .from('guild_configs').select('phai_role_icons').eq('guild_id', guildId).maybeSingle(),
+  ]);
+  _throwSupabase(sessionRes.error, 'getSessionByIdRaw');
+  const session = _validateSession(sessionRes.data, 'getSessionByIdRaw');
+  if (session) session.phai_role_icons = cfgRes?.data?.phai_role_icons ?? {};
+  return session;
 }
 
 // [BUG-11] Thêm guildId param + .eq('guild_id', guildId) — ngăn IDOR close session của guild khác

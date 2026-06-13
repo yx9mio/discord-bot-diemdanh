@@ -16,7 +16,7 @@ const STATUS_LABEL = {
   co_phep:        `${ICONS.ATTEND_EXCUSE} Có phép`,
 };
 
-function buildSessionEmbed(guild, session, attended = [], phaiRoleIds = [], _isEditing = false, page = 1, phaiRoleIcons = {}) {
+function buildSessionEmbed(guild, session, attended = [], phaiRoleIds = [], _isEditing = false, page = 1, phaiRoleIcons) {
   const total   = attended.length;
   const joined  = attended.filter(a => a.status === 'tham_gia' || a.status === 'tre').length;
   const late    = attended.filter(a => a.status === 'tre').length;
@@ -68,8 +68,8 @@ function buildSessionEmbed(guild, session, attended = [], phaiRoleIds = [], _isE
     { name: `${ICONS.ATTEND_EXCUSE} Có phép`, value: `**${excused}**`,    inline: true },
   ];
 
-  // Phái stats
-  const icons = phaiRoleIcons ?? session.phai_role_icons ?? {};
+  // Phái stats — ưu tiên param, fallback session field, cuối cùng là {}
+  const icons = (phaiRoleIcons && Object.keys(phaiRoleIcons).length) ? phaiRoleIcons : (session.phai_role_icons ?? {});
   const safeEligible = session.eligible_member_ids ?? [];
   const eligibleSet = new Set(safeEligible.map ? safeEligible.map(m => m.id ?? m) : []);
   for (const roleId of (phaiRoleIds ?? [])) {
