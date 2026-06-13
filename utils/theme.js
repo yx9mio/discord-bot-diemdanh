@@ -60,6 +60,10 @@ const PHAI_EMOJIS = ['🔴', '🟠', '🟡', '🟢', '🔵', '🟣', '🟤', '�
 
 function getPhaiIcon(roleId, phaiRoleIds = [], guild = null) {
   if (guild) {
+    // 1. Discord custom emoji đặt tên theo roleId
+    const serverEmoji = guild.emojis?.cache?.find(e => e.name === roleId);
+    if (serverEmoji) return serverEmoji.toString();
+    // 2. Role icon dạng unicode emoji
     const role = guild.roles?.cache?.get(roleId);
     if (role?.unicodeEmoji) return role.unicodeEmoji;
   }
