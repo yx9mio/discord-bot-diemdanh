@@ -31,7 +31,7 @@ class SetupConfigEditModalHandler extends InteractionHandler {
   }
 
   parse(interaction) {
-    if (interaction.customId.startsWith(MODAL_PREFIX)) return this.some();
+    if (interaction.customId?.startsWith(MODAL_PREFIX)) return this.some();
     return this.none();
   }
 
@@ -44,12 +44,14 @@ class SetupConfigEditModalHandler extends InteractionHandler {
 
     if (suffix === 'emoji_name') {
       const existing = await configService.getGuildConfig(guildId).then(c => c?.phai_role_icons ?? {}).catch(() => ({}));
-      for (const row of interaction.fields.components) {
-        if (!row.components) continue;
+      const rows = interaction.fields?.components ?? [];
+      for (const row of rows) {
+        if (!row?.components) continue;
         for (const comp of row.components) {
-          if (comp.type !== 4) continue;
-          if (!comp.custom_id.startsWith('emoji:')) continue;
-          const roleId = comp.custom_id.slice('emoji:'.length);
+          if (!comp || comp.type !== 4) continue;
+          const cid = comp.custom_id ?? '';
+          if (!cid.startsWith('emoji:')) continue;
+          const roleId = cid.slice('emoji:'.length);
           const name = (comp.value ?? '').trim();
           if (name) existing[roleId] = name;
           else delete existing[roleId];
