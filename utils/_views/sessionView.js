@@ -7,6 +7,7 @@ const {
   buildRichProgressBar, pctEmoji, pctLabel, formatDuration,
 } = require('../_helpers');
 const { getPhaiIcon } = require('../theme.js');
+const { buildPublicUrl } = require('../phaiIcons.js');
 
 const PAGE_SIZE = 15;
 
@@ -61,6 +62,13 @@ function buildSessionEmbed(guild, session, attended = [], phaiRoleIds = [], _isE
     ].join('\n'))
     .setFooter({ text: `${FOOTER_DEFAULT} · Cập nhật lúc` })
     .setTimestamp();
+
+  // Thumbnail = icon phái đầu tiên từ Supabase Storage
+  const firstPhaiId = phaiRoleIds?.[0];
+  if (firstPhaiId) {
+    const thumbUrl = buildPublicUrl(guild?.id, firstPhaiId);
+    if (thumbUrl) embed.setThumbnail(thumbUrl);
+  }
 
   const fields = [
     { name: `${ICONS.ATTEND_YES} Tham gia`, value: `**${joined - late}**`, inline: true },
