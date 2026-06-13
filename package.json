@@ -22,6 +22,7 @@
     "db:seed": "supabase db reset"
   },
   "dependencies": {
+    "@napi-rs/canvas": "^1.0.0",
     "@sapphire/framework": "^5.3.4",
     "@sapphire/plugin-logger": "^4.0.2",
     "@sapphire/plugin-subcommands": "^7.0.1",

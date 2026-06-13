@@ -9,9 +9,10 @@
 // [UPG] renderToi: total_absent, total_late từ getMemberStats (đã có trả về)
 // [UPG] renderLichSu: limit 200, summary 4 trạng thái, REFRESH button trong navRow
 'use strict';
-const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, StringSelectMenuOptionBuilder } = require('discord.js');
+const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, AttachmentBuilder } = require('discord.js');
 const { COLORS, ICONS, getPhaiIcon, formatPhaiList } = require('../../../../utils/theme.js');
 const { FOOTER_DEFAULT, buildRichProgressBar, pctEmoji, pctLabel, buildAuthor } = require('../../../../utils/embeds.js');
+const { generateRankImage, generatePieChart } = require('../../../../utils/canvas.js');
 
 const CUSTOM_ID = {
   TOI:       'setup:stats:toi',
@@ -171,7 +172,29 @@ function renderToi(stats, member, guild, badges, viewerId = null, cfg = null) {
     if (url) embed.setThumbnail(url);
   }
 
-  return { embeds: [embed], components: [_navRow()] };
+  // Pie chart
+  const chartValues = [joined - (late ?? 0), late ?? 0, absent ?? 0, excused ?? 0].filter(v => v !== null);
+  let chartAttachment = null;
+  if (total > 0 && chartValues.some(v => v > 0)) {
+    try {
+      const chartBuf = generatePieChart(
+        ['Tham gia', 'Tre', 'Vang', 'Co phep'],
+        [joined - (late ?? 0), late ?? 0, absent ?? 0, excused ?? 0],
+        ['#57f287', '#f0a500', '#ff4444', '#fee75c'],
+        'Thong ke ca nhan'
+      );
+      chartAttachment = new AttachmentBuilder(chartBuf, { name: 'chart.png' });
+      embed.setImage('attachment://chart.png');
+    } catch (e) {
+      // Fallback: no chart
+    }
+  }
+
+  return {
+    embeds: [embed],
+    components: [_navRow()],
+    ...(chartAttachment ? { files: [chartAttachment] } : {}),
+  };
 }
 
 // ─── Bảng xếp hạng ───────────────────────────────────────────────────
@@ -194,10 +217,25 @@ async function renderRank(rows, guild, topN = 10, phongBanList = [], selectedPho
     await guild.members.fetch({ user: uncached }).catch(() => null);
   }
 
-  const lines = rows.slice(0, topN).map((r, i) => {
+  const topRows = rows.slice(0, topN).map(r => {
+    const gMember = guild?.members?.cache?.get(r.user_id);
+    return {
+      ...r,
+      displayName: gMember?.displayName ?? `<@${r.user_id}>`,
+    };
+  });
+
+  // Generate rank image
+  let rankAttachment = null;
+  try {
+    const imgBuf = generateRankImage(topRows, guild?.name ?? '', topN);
+    rankAttachment = new AttachmentBuilder(imgBuf, { name: 'rank.png' });
+  } catch (e) {
+    // Fallback: no image, just text
+  }
+
+  const lines = topRows.map((r, i) => {
     const medal    = medals[i] ?? `\`${String(i + 1).padStart(2)}.\``;
-    const gMember  = guild?.members?.cache?.get(r.user_id);
-    const name     = gMember?.displayName ?? `<@${r.user_id}>`;
     const phong    = r.phong_ban ?? '';
     const joined   = r.total_joined   ?? 0;
     const streak   = r.current_streak ?? 0;
@@ -206,7 +244,7 @@ async function renderRank(rows, guild, topN = 10, phongBanList = [], selectedPho
     const phongStr = phong ? ` · 📌 ${phong}` : '';
     const phaiStr  = formatPhaiList(r.phai_role_ids, guild, cfg?.phai_role_icons);
     const phaiLine = phaiStr ? ` · ${phaiStr}` : '';
-    return `${medal} **${name}**${phongStr}${phaiLine}\n\`${buildRichProgressBar(pct, 8)}\` **${pct}%** · ${joined} phiên · ${ICONS.FIRE}${streak}`;
+    return `${medal} **${r.displayName}**${phongStr}${phaiLine}\n\`${buildRichProgressBar(pct, 8)}\` **${pct}%** · ${joined} phiên · ${ICONS.FIRE}${streak}`;
   });
 
   const components = [];
@@ -261,12 +299,24 @@ async function renderRank(rows, guild, topN = 10, phongBanList = [], selectedPho
   if (filterPhaiRoleId) footerParts.push(`phai:${filterPhaiRoleId}`);
   const footerExtra = footerParts.join(' · ');
 
+  const embed = new EmbedBuilder()
+    .setColor(COLORS.GOLD).setAuthor(buildAuthor(guild))
+    .setTitle(`${ICONS.TROPHY} Top ${Math.min(rows.length, topN)} — Bảng xếp hạng`)
+    .setFooter({ text: _footer(CTX.RANK, footerExtra) }).setTimestamp();
+
+  if (rankAttachment) {
+    embed.setImage('attachment://rank.png');
+    embed.setDescription(lines.length > 0
+      ? `> Bang xep hang chi tiet o hinh ben duoi\n> ${lines.length} thanh vien`
+      : '> _Chua co du lieu_');
+  } else {
+    embed.setDescription(lines.join('\n\n'));
+  }
+
   return {
-    embeds: [new EmbedBuilder().setColor(COLORS.GOLD).setAuthor(buildAuthor(guild))
-      .setTitle(`${ICONS.TROPHY} Top ${Math.min(rows.length, topN)} — Bảng xếp hạng`)
-      .setDescription(lines.join('\n\n'))
-      .setFooter({ text: _footer(CTX.RANK, footerExtra) }).setTimestamp()],
+    embeds: [embed],
     components,
+    ...(rankAttachment ? { files: [rankAttachment] } : {}),
   };
 }
 
