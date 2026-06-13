@@ -76,10 +76,11 @@ class ReadyListener extends Listener {
                 if (ch2) {
                   const statsMap = await endSession(guild, session, attended);
                   await disableAttendanceUI(client, ch2, session, attended);
+                  const cfgR = await configService.getGuildConfig(guild.id).catch(() => null);
                   const phaiIds6 = session.phai_role_ids?.length
                     ? session.phai_role_ids
-                    : (await configService.getGuildConfig(guild.id).catch(() => null))?.phai_role_ids ?? [];
-                  await ch2.send({ embeds: [await buildSummaryEmbed(session, attended, guild, phaiIds6)] });
+                    : cfgR?.phai_role_ids ?? [];
+                  await ch2.send({ embeds: [await buildSummaryEmbed(session, attended, guild, phaiIds6, cfgR?.phai_role_icons ?? null)] });
                   await announceBadges(guild, ch2, guild.id, session.id, attended, statsMap);
                 }
               } catch (e) {

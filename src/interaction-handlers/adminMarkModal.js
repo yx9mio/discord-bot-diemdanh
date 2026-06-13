@@ -123,11 +123,12 @@ class AdminMarkModalHandler extends InteractionHandler {
         const msg = await ch.messages.fetch(session.message_id).catch(() => null);
         if (msg) {
           const attended = await getAttendances(session.id);
+          const cfgA1 = await configService.getGuildConfig(guild.id).catch(() => null);
           const phaiIds = session.phai_role_ids?.length
             ? session.phai_role_ids
-            : (await configService.getGuildConfig(guild.id).catch(() => null))?.phai_role_ids ?? [];
+            : cfgA1?.phai_role_ids ?? [];
           const { embed, components: pagComponents } = buildSessionEmbed(
-            guild, session, attended, phaiIds
+            guild, session, attended, phaiIds, false, 1, cfgA1?.phai_role_icons ?? null
           );
           const selectRow = buildAttendanceSelectRow(true);
           const adminRows = buildSessionActionRow(true);

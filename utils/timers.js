@@ -79,10 +79,11 @@ function scheduleCloseTimer(client, guild, session, channelId, ms) {
           .setColor(0x99AAB5)
           .setDescription('🔒 Phiên điểm danh đã tự động kết thúc.')
           .setFooter({ text: FOOTER_DEFAULT });
+        const cfgT1 = await configService.getGuildConfig(guild.id).catch(() => null);
         const phaiIds4 = session.phai_role_ids?.length
           ? session.phai_role_ids
-          : (await configService.getGuildConfig(guild.id).catch(() => null))?.phai_role_ids ?? [];
-        const summaryEmbed = await buildSummaryEmbed(session, attended, guild, phaiIds4);
+          : cfgT1?.phai_role_ids ?? [];
+        const summaryEmbed = await buildSummaryEmbed(session, attended, guild, phaiIds4, cfgT1?.phai_role_icons ?? null);
         await ch.send({ embeds: [msg, summaryEmbed] });
         await announceBadges(guild, ch, guild.id, session.id, attended, statsMap);
       } else {
@@ -149,10 +150,11 @@ function startAutoRefresh(sessionId, channelId, messageId, client) {
         return;
       }
 
+      const cfgT2 = await configService.getGuildConfig(guild.id).catch(() => null);
       const phaiIds5 = session.phai_role_ids?.length
         ? session.phai_role_ids
-        : (await configService.getGuildConfig(guild.id).catch(() => null))?.phai_role_ids ?? [];
-      const { embed, components: pagComponents } = buildSessionEmbed(guild, session, attended, phaiIds5);
+        : cfgT2?.phai_role_ids ?? [];
+      const { embed, components: pagComponents } = buildSessionEmbed(guild, session, attended, phaiIds5, false, 1, cfgT2?.phai_role_icons ?? null);
       const selectRow = buildAttendanceSelectRow(true);
       const adminRows = buildSessionActionRow(true);
       const components = [selectRow, ...adminRows, ...pagComponents].slice(0, 5);

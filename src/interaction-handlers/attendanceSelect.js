@@ -107,11 +107,12 @@ class AttendanceSelectHandler extends InteractionHandler {
           const msg = await ch.messages.fetch(session.message_id).catch(() => null);
           if (msg) {
             const attended = await attendanceService.getAttendances(session.id);
+            const cfg7 = await configService.getGuildConfig(guild.id).catch(() => null);
             const phaiIds = session.phai_role_ids?.length
               ? session.phai_role_ids
-              : (await configService.getGuildConfig(guild.id).catch(() => null))?.phai_role_ids ?? [];
+              : cfg7?.phai_role_ids ?? [];
             const { embed, components: pagComponents } = buildSessionEmbed(
-              guild, session, attended, phaiIds
+              guild, session, attended, phaiIds, false, 1, cfg7?.phai_role_icons ?? null
             );
             const selectRow = buildAttendanceSelectRow(true);
             const adminRows = buildSessionActionRow(true);

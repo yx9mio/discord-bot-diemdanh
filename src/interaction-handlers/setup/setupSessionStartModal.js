@@ -58,7 +58,7 @@ class SetupSessionStartModalHandler extends InteractionHandler {
         if (ch) {
           session.channel_id = ch.id;
           await sessionService.updateSessionMessage(session.id, { channel_id: ch.id });
-          const { embed: sessionEmbed, components } = buildSessionEmbed(guild, session, [], cfg?.phai_role_ids ?? [], false, 1);
+          const { embed: sessionEmbed, components } = buildSessionEmbed(guild, session, [], cfg?.phai_role_ids ?? [], false, 1, cfg?.phai_role_icons ?? null);
           const selectRow = buildAttendanceSelectRow(true);
           const adminRows = buildSessionActionRow(true);
           const msg = await ch.send({ embeds: [sessionEmbed], components: [selectRow, ...adminRows, ...components].slice(0, 5) });
