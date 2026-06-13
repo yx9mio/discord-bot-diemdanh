@@ -4,7 +4,7 @@
 //   ch.send({ embeds: [summaryEmbed] })
 'use strict';
 const { EmbedBuilder } = require('discord.js');
-const { COLORS, ICONS, FOOTER_DEFAULT, buildRichProgressBar, pctEmoji, pctLabel } = require('../_helpers');
+const { COLORS, ICONS, FOOTER_DEFAULT, buildRichProgressBar, pctEmoji, pctLabel, buildAuthor } = require('../_helpers');
 const { getPhaiIcon } = require('../theme.js');
 
 const STATUS_LABEL = {
@@ -30,16 +30,22 @@ function buildSummaryEmbed(session, attended = [], guild, phai_role_ids = [], em
   const pct     = total > 0 ? Math.round(joined / total * 100) : 0;
   const bar     = buildRichProgressBar(pct);
 
-  const lines = attended.slice(0, 20).map(a => {
+  const top = attended.slice(0, 20);
+  const groups = { tham_gia: [], tre: [], khong_tham_gia: [], co_phep: [] };
+  for (const a of top) {
     const member = guild?.members?.cache?.get(a.user_id);
     const name   = member?.displayName ?? `<@${a.user_id}>`;
     const phaiIcons = (phai_role_ids ?? [])
       .filter(rid => member?.roles?.cache?.has(rid))
       .map(rid => getPhaiIcon(rid, phai_role_ids, guild, emojiMap))
       .join('');
-    const label = STATUS_LABEL[a.status] ?? a.status;
-    return `${label} — **${name}**${phaiIcons ? ` ${phaiIcons}` : ''}`;
-  });
+    groups[a.status]?.push(`  **${name}**${phaiIcons ? ` ${phaiIcons}` : ''}`);
+  }
+  const lines = [];
+  if (groups.tham_gia.length) lines.push(`────────────────\n✅ Đúng giờ:\n${groups.tham_gia.join('\n')}`);
+  if (groups.tre.length) lines.push(`────────────────\n⏰ Trễ:\n${groups.tre.join('\n')}`);
+  if (groups.co_phep.length) lines.push(`────────────────\n📋 Có phép:\n${groups.co_phep.join('\n')}`);
+  if (groups.khong_tham_gia.length) lines.push(`────────────────\n❌ Vắng:\n${groups.khong_tham_gia.join('\n')}`);
   if (attended.length > 20) lines.push(`_... và ${attended.length - 20} người khác_`);
 
   const color = pct >= 80 ? COLORS.GREEN : pct >= 50 ? COLORS.YELLOW : COLORS.RED;
@@ -62,6 +68,7 @@ function buildSummaryEmbed(session, attended = [], guild, phai_role_ids = [], em
 
   const embed = new EmbedBuilder()
     .setColor(color)
+    .setAuthor(buildAuthor(guild))
     .setTitle(`📊 Tổng kết — ${session?.session_name ?? 'Phiên điểm danh'}`)
     .setDescription([
       `${pctEmoji(pct)} **Tỉ lệ tham gia: ${pct}%** — ${pctLabel(pct)}`,

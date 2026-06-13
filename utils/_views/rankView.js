@@ -3,7 +3,7 @@
 // Delegate sang _helpers để tái dùng buildRichProgressBar, pctEmoji — không duplicate logic StatsView
 'use strict';
 const { EmbedBuilder } = require('discord.js');
-const { COLORS, ICONS, FOOTER_DEFAULT, buildRichProgressBar, pctEmoji } = require('../_helpers');
+const { COLORS, ICONS, FOOTER_DEFAULT, buildRichProgressBar, pctEmoji, buildAuthor } = require('../_helpers');
 
 /**
  * @param {Array}  rows   – mảng stats rows: { user_id, total_joined, total_sessions, current_streak }
@@ -15,6 +15,7 @@ function buildRankEmbed(rows = [], guild = null, topN = 10) {
   if (!rows.length) {
     return new EmbedBuilder()
       .setColor(COLORS.GOLD ?? 0xd19900)
+      .setAuthor(buildAuthor(guild))
       .setTitle(`${ICONS.TROPHY} Bảng xếp hạng`)
       .setDescription('> _Chưa có dữ liệu điểm danh nào._')
       .setFooter({ text: FOOTER_DEFAULT })
@@ -35,6 +36,7 @@ function buildRankEmbed(rows = [], guild = null, topN = 10) {
 
   return new EmbedBuilder()
     .setColor(COLORS.GOLD ?? 0xd19900)
+    .setAuthor(buildAuthor(guild))
     .setTitle(`${ICONS.TROPHY} Top ${Math.min(rows.length, topN)} — Bảng xếp hạng`)
     .setDescription(lines.join('\n\n'))
     .setFooter({ text: `${FOOTER_DEFAULT} · Cập nhật lần cuối` })

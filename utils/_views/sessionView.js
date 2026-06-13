@@ -4,7 +4,7 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const {
   COLORS, ICONS, FOOTER_DEFAULT,
-  buildRichProgressBar, pctEmoji, pctLabel, formatDuration,
+  buildRichProgressBar, pctEmoji, pctLabel, formatDuration, buildAuthor,
 } = require('../_helpers');
 const { getPhaiIcon } = require('../theme.js');
 const { buildPublicUrl } = require('../phaiIcons.js');
@@ -31,16 +31,22 @@ function buildSessionEmbed(guild, session, attended = [], phaiRoleIds = [], _isE
   const clampedPage = Math.max(1, Math.min(page, totalPages));
   const slice = attended.slice((clampedPage - 1) * PAGE_SIZE, clampedPage * PAGE_SIZE);
 
-  const lines = slice.map(a => {
+  const groups = { tham_gia: [], tre: [], khong_tham_gia: [], co_phep: [] };
+  for (const a of slice) {
     const member = guild?.members?.cache?.get(a.user_id);
     const name   = member?.displayName ?? `<@${a.user_id}>`;
     const phaiIcons = (phaiRoleIds ?? [])
       .filter(rid => member?.roles?.cache?.has(rid))
       .map(rid => getPhaiIcon(rid, phaiRoleIds, guild, emojiMap))
       .join('');
-    const label = STATUS_LABEL[a.status] ?? a.status;
-    return `${label} — **${name}**${phaiIcons ? ` ${phaiIcons}` : ''}`;
-  });
+    groups[a.status]?.push(`  **${name}**${phaiIcons ? ` ${phaiIcons}` : ''}`);
+  }
+  const groupParts = [];
+  if (groups.tham_gia.length) groupParts.push(`────────────────\n✅ Đúng giờ:\n${groups.tham_gia.join('\n')}`);
+  if (groups.tre.length) groupParts.push(`────────────────\n⏰ Trễ:\n${groups.tre.join('\n')}`);
+  if (groups.co_phep.length) groupParts.push(`────────────────\n📋 Có phép:\n${groups.co_phep.join('\n')}`);
+  if (groups.khong_tham_gia.length) groupParts.push(`────────────────\n❌ Vắng:\n${groups.khong_tham_gia.join('\n')}`);
+  const lines = groupParts;
 
   const startTs  = Math.floor(new Date(session.started_at ?? Date.now()).getTime() / 1000);
   const ch       = session.channel_id ? `<#${session.channel_id}>` : '_Chưa có kênh_';
@@ -58,6 +64,7 @@ function buildSessionEmbed(guild, session, attended = [], phaiRoleIds = [], _isE
 
   const embed = new EmbedBuilder()
     .setColor(color)
+    .setAuthor(buildAuthor(guild))
     .setTitle(`📊 Điểm danh — ${session.session_name ?? 'Phiên'}`)
     .setDescription([
       `${ICONS.SESSION_OPEN} **${session.session_name ?? 'Phiên'}**`,
@@ -141,6 +148,7 @@ function buildClosedSessionEmbed(session, attended = [], _guild) {
 
   return new EmbedBuilder()
     .setColor(color)
+    .setAuthor(buildAuthor(_guild))
     .setTitle(`${ICONS.SESSION_CLOSED} Đã kết thúc — ${session?.session_name ?? 'Phiên'}`)
     .setDescription([
       `${pctEmoji(pct)} **${pct}%** — ${pctLabel(pct)}   \`${bar}\``,

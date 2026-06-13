@@ -11,7 +11,7 @@
 'use strict';
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, StringSelectMenuOptionBuilder } = require('discord.js');
 const { COLORS, ICONS, getPhaiIcon, formatPhaiList } = require('../../../../utils/theme.js');
-const { FOOTER_DEFAULT, buildRichProgressBar, pctEmoji, pctLabel } = require('../../../../utils/embeds.js');
+const { FOOTER_DEFAULT, buildRichProgressBar, pctEmoji, pctLabel, buildAuthor } = require('../../../../utils/embeds.js');
 
 const CUSTOM_ID = {
   TOI:       'setup:stats:toi',
@@ -159,6 +159,7 @@ function renderToi(stats, member, guild, badges, viewerId = null, cfg = null) {
 
   const embed = new EmbedBuilder()
     .setColor(COLORS.GOLD)
+    .setAuthor(buildAuthor(guild))
     .setTitle(`${ICONS.PERSON} ${name}`)
     .setDescription(descParts.join('\n'))
     .addFields(...fields)
@@ -180,7 +181,7 @@ async function renderRank(rows, guild, topN = 10, phongBanList = [], selectedPho
 
   if (!rows?.length) {
     return {
-      embeds: [new EmbedBuilder().setColor(COLORS.GOLD).setTitle(`${ICONS.TROPHY} Bảng xếp hạng`)
+      embeds: [new EmbedBuilder().setColor(COLORS.GOLD).setAuthor(buildAuthor(guild)).setTitle(`${ICONS.TROPHY} Bảng xếp hạng`)
         .setDescription('> _Chưa có dữ liệu._')
         .setFooter({ text: _footer(CTX.RANK) }).setTimestamp()],
       components: [_navRow()],
@@ -261,7 +262,7 @@ async function renderRank(rows, guild, topN = 10, phongBanList = [], selectedPho
   const footerExtra = footerParts.join(' · ');
 
   return {
-    embeds: [new EmbedBuilder().setColor(COLORS.GOLD)
+    embeds: [new EmbedBuilder().setColor(COLORS.GOLD).setAuthor(buildAuthor(guild))
       .setTitle(`${ICONS.TROPHY} Top ${Math.min(rows.length, topN)} — Bảng xếp hạng`)
       .setDescription(lines.join('\n\n'))
       .setFooter({ text: _footer(CTX.RANK, footerExtra) }).setTimestamp()],
@@ -294,7 +295,7 @@ async function renderLichSu(records, userId, guild, page = 0) {
 
   if (!total) {
     return {
-      embeds: [new EmbedBuilder().setColor(COLORS.PRIMARY).setTitle(`📋 Lịch sử — ${name}`)
+      embeds: [new EmbedBuilder().setColor(COLORS.PRIMARY).setAuthor(buildAuthor(guild)).setTitle(`📋 Lịch sử — ${name}`)
         .setDescription('> _Chưa có điểm danh nào._')
         // [FIX] encode uid để REFRESH và pagination đọc đúng người
         .setFooter({ text: _footer(CTX.LICHSU, `uid:${userId}`) }).setTimestamp()],
@@ -335,7 +336,7 @@ async function renderLichSu(records, userId, guild, page = 0) {
   const footerText = _footer(CTX.LICHSU, `uid:${userId} · Trang ${cPage + 1}/${totalPages} · Tổng ${total} lần`);
 
   return {
-    embeds: [new EmbedBuilder().setColor(COLORS.PRIMARY)
+    embeds: [new EmbedBuilder().setColor(COLORS.PRIMARY).setAuthor(buildAuthor(guild))
       .setTitle(`📋 Lịch sử — ${name}`)
       .setDescription(`${summaryStr}\n\n${lines.join('\n')}`)
       .setFooter({ text: footerText })
@@ -378,6 +379,7 @@ async function renderServerStats(stats, top, guild, period = 'all') {
 
   const embed = new EmbedBuilder()
     .setColor(color)
+    .setAuthor(buildAuthor(guild))
     .setTitle(`${ICONS.CHART} Thống kê Server${titleSuffix}`)
     .setDescription([
       `${pctEmoji(pct)} **Tỉ lệ tham gia trung bình: ${pct}%** — ${pctLabel(pct)}`,

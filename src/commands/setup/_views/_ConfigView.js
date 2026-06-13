@@ -1,7 +1,7 @@
 'use strict';
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { COLORS, ICONS, getPhaiIcon } = require('../../../../utils/theme.js');
-const { FOOTER_DEFAULT } = require('../../../../utils/embeds.js');
+const { FOOTER_DEFAULT, buildAuthor } = require('../../../../utils/embeds.js');
 
 // Lưu messageId của ConfigView để các edit handler có thể fetch và update
 const _configMsgIds = new Map(); // guildId → messageId
@@ -37,7 +37,8 @@ function render({ cfg, guild }) {
 
   const embed = new EmbedBuilder()
     .setColor(COLORS.PRIMARY)
-    .setTitle(`${ICONS.GEAR} Cài đặt chung — ${guild.name}`)
+    .setAuthor(buildAuthor(guild))
+    .setTitle(`${ICONS.GEAR} Cài đặt chung`)
     .setThumbnail(guild.iconURL({ size: 64 }) ?? null)
     .setFooter({ text: FOOTER_DEFAULT })
     .setTimestamp();

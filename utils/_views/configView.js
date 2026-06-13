@@ -3,7 +3,7 @@
 // Hiển thị cài đặt server: channel log, phai roles, timezone, auto-close
 'use strict';
 const { EmbedBuilder } = require('discord.js');
-const { COLORS, ICONS, FOOTER_DEFAULT } = require('../_helpers');
+const { COLORS, ICONS, FOOTER_DEFAULT, buildAuthor } = require('../_helpers');
 
 /**
  * @param {object} cfg   – guild config từ configService.getGuildConfig()
@@ -30,6 +30,7 @@ function buildConfigEmbed(cfg = {}, guild = null) {
 
   return new EmbedBuilder()
     .setColor(COLORS.PRIMARY)
+    .setAuthor(buildAuthor(guild))
     .setTitle(`${ICONS.GEAR} Cài đặt Server`)
     .setDescription('Cấu hình hiện tại của bot điểm danh cho server này.')
     .addFields(

@@ -4,7 +4,7 @@
 'use strict';
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { COLORS, ICONS } = require('../../../../utils/theme.js');
-const { FOOTER_DEFAULT } = require('../../../../utils/embeds.js');
+const { FOOTER_DEFAULT, buildAuthor } = require('../../../../utils/embeds.js');
 const { DAY_NAMES: DAY_VI } = require('../../../../utils/format.js');
 
 const CUSTOM_ID = {
@@ -58,7 +58,8 @@ function render({ schedules, page = 0, guild }) {
 
   const embed = new EmbedBuilder()
     .setColor(COLORS.PRIMARY)
-    .setTitle(`${ICONS.CALENDAR} Lịch cố định — ${guild.name}`)
+    .setAuthor(buildAuthor(guild))
+    .setTitle(`${ICONS.CALENDAR} Lịch cố định`)
     .setDescription(desc)
     .setFooter({ text: `${FOOTER_DEFAULT} · Trang ${cPage + 1}/${totalPages} · Tổng ${total} lịch` })
     .setTimestamp();

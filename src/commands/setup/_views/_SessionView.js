@@ -1,7 +1,7 @@
 'use strict';
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { COLORS, ICONS, getPhaiIcon }  = require('../../../../utils/theme.js');
-const { FOOTER_DEFAULT } = require('../../../../utils/embeds.js');
+const { FOOTER_DEFAULT, buildAuthor } = require('../../../../utils/embeds.js');
 const { fmtTs }          = require('../../../../utils/format.js');
 
 const CUSTOM_ID = {
@@ -64,7 +64,8 @@ function render({ sessions, page = 0, guild, cfg, members = [], detailId = null 
 
   const embed = new EmbedBuilder()
     .setColor(total > 0 ? COLORS.SUCCESS : COLORS.PRIMARY)
-    .setTitle(`${total > 0 ? ICONS.SESSION : '⚪'} Quản lý phiên — ${guild.name}`)
+    .setAuthor(buildAuthor(guild))
+    .setTitle(`${total > 0 ? ICONS.SESSION : '⚪'} Quản lý phiên`)
     .setFooter({ text: `${FOOTER_DEFAULT} · Trang ${cPage + 1}/${totalPages} · Tổng ${total} phiên` })
     .setTimestamp();
 

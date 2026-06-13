@@ -86,7 +86,8 @@ function pctEmoji(pct) {
 function buildRichProgressBar(pct, len = 12) {
   const filled = Math.round(pct / 100 * len);
   const empty  = len - filled;
-  return '█'.repeat(filled) + '░'.repeat(empty);
+  const barFill = pct >= 80 ? '🟩' : pct >= 50 ? '🟨' : pct >= 25 ? '🟧' : '🟥';
+  return barFill.repeat(filled) + '⬜'.repeat(empty);
 }
 
 const buildProgressBar = buildRichProgressBar;
@@ -154,6 +155,12 @@ function buildPhaiStatsText(guild, phaiRoleIds, attended, eligibleArr) {
   return lines.length ? lines.join('\n') : null;
 }
 
+function buildAuthor(guild) {
+  if (!guild) return AUTHOR_DEFAULT;
+  const icon = guild.iconURL({ size: 32 });
+  return icon ? { name: guild.name, iconURL: icon } : { name: guild.name };
+}
+
 // ─── Reply helpers (ephemeral) ──────────────────────────────────────────────────
 function replyErr(msg = 'Có lỗi xảy ra. Vui lòng thử lại.') {
   return { embeds: [new EmbedBuilder().setColor(COLORS.RED).setDescription(`❌ ${msg}`)], flags: MessageFlags.Ephemeral };
@@ -190,6 +197,7 @@ module.exports = {
   resolveDisplayName, resolveDisplayNameAsync,
   chunkLines,
   buildPhaiStatsText,
+  buildAuthor,
   replyErr, replyOk, replyLoading,
   replyErrEdit, replyOkEdit,
   replyConfirm,
