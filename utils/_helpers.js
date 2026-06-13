@@ -148,7 +148,7 @@ function buildPhaiStatsText(guild, phaiRoleIds, attended, eligibleArr) {
       roleMembers.includes(a.user_id) && ['tham_gia', 'tre'].includes(a.status)
     ).length;
     const pct = total > 0 ? Math.round(present / total * 100) : 0;
-    const icon = getPhaiIcon(roleId, phaiRoleIds);
+    const icon = getPhaiIcon(roleId, phaiRoleIds, guild);
     lines.push(`${icon} **${role.name}**: ${present}/${total} (${pct}%)`);
   }
   return lines.length ? lines.join('\n') : null;

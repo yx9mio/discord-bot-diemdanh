@@ -240,7 +240,7 @@ async function renderRank(rows, guild, topN = 10, phongBanList = [], selectedPho
         .setStyle(filterPhaiRoleId ? ButtonStyle.Secondary : ButtonStyle.Primary),
     );
     for (const rid of phaiIds) {
-      const icon = getPhaiIcon(rid, phaiIds);
+      const icon = getPhaiIcon(rid, phaiIds, guild);
       const role = guild?.roles?.cache?.get(rid);
       phaiRow.addComponents(
         new ButtonBuilder()

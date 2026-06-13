@@ -81,7 +81,7 @@ function buildSessionEmbed(guild, session, attended = [], phaiRoleIds = [], _isE
       roleMembers.includes(a.user_id) && ['tham_gia', 'tre'].includes(a.status)
     ).length;
     const rPct = rTotal > 0 ? Math.round(rPresent / rTotal * 100) : 0;
-    const icon = getPhaiIcon(roleId, phaiRoleIds);
+    const icon = getPhaiIcon(roleId, phaiRoleIds, guild);
     fields.push({ name: `${icon} ${role.name}`, value: `**${rPresent}/${rTotal}** (${rPct}%)`, inline: true });
   }
 

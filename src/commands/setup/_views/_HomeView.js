@@ -107,7 +107,7 @@ function render({ guild, cfg, schedules, members, session, sessions }) {
   if (phaiIds.length && members?.length) {
     phaiBreakdown = phaiIds.map(rid => {
       const count = members.filter(m => (m.phai_role_ids ?? []).includes(rid)).length;
-      const icon  = getPhaiIcon(rid, phaiIds);
+      const icon  = getPhaiIcon(rid, phaiIds, guild);
       const role  = guild?.roles?.cache?.get(rid);
       return count > 0 ? `${icon} ${role?.name ?? rid}: ${count}` : null;
     }).filter(Boolean).join('  ');

@@ -168,7 +168,7 @@ function render({ members, page = 0, guild, cfg = null, filterPhai = '' }) {
         .setStyle(filterPhai ? ButtonStyle.Secondary : ButtonStyle.Primary),
     );
     for (const rid of phaiIds) {
-      const icon = getPhaiIcon(rid, phaiIds);
+      const icon = getPhaiIcon(rid, phaiIds, guild);
       const role = guild?.roles?.cache?.get(rid);
       filterRow.addComponents(
         new ButtonBuilder()

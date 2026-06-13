@@ -31,7 +31,7 @@ function render({ cfg, guild }) {
 
   const phaiIds = cfg?.phai_role_ids ?? [];
   const phaiStr = phaiIds.length
-    ? phaiIds.map(id => `${getPhaiIcon(id, phaiIds)} <@&${id}>`).join(' ')
+    ? phaiIds.map(id => `${getPhaiIcon(id, phaiIds, guild)} <@&${id}>`).join(' ')
     : '_Không có_';
 
   const embed = new EmbedBuilder()
