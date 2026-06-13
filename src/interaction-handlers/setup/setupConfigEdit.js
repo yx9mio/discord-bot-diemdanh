@@ -103,7 +103,9 @@ async function handleButton(interaction) {
       .setCustomId(MODAL_PREFIX + 'phai_icon')
       .setTitle('Icon phái / nhóm');
 
-    for (let i = 0; i < Math.min(phaiIds.length, 5); i++) {
+    // Discord giới hạn 5 ActionRows/modal → để dành 1 row cho note nếu cần
+    const editCount = phaiIds.length > 5 ? 4 : phaiIds.length;
+    for (let i = 0; i < editCount; i++) {
       const roleId = phaiIds[i];
       const role = interaction.guild.roles.cache.get(roleId);
       const name = role?.name ?? `Role ${roleId}`;
@@ -120,12 +122,12 @@ async function handleButton(interaction) {
       );
     }
 
-    if (phaiIds.length > 5) {
+    if (phaiIds.length > editCount) {
       modal.addComponents(
         new ActionRowBuilder().addComponents(
           new TextInputBuilder()
             .setCustomId('phai_icon:note')
-            .setLabel(`Còn ${phaiIds.length - 5} phái khác (giữ mặc định)`)
+            .setLabel(`Còn ${phaiIds.length - editCount} phái khác (giữ mặc định)`)
             .setStyle(TextInputStyle.Short)
             .setRequired(false)
             .setValue('...'),
