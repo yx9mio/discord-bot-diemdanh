@@ -58,13 +58,23 @@ function colorFor(kind) {
 // ─── Phái emoji mặc định theo vị trí ──────────────────────────────────
 const PHAI_EMOJIS = ['🔴', '🟠', '🟡', '🟢', '🔵', '🟣', '🟤', '⚫', '⚪', '🔶', '🔷', '🟩'];
 
+function _emojiName(role) {
+  // sanitize: bỏ dấu, lowercase, underscore
+  return role.name
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+}
+
 function getPhaiIcon(roleId, phaiRoleIds = [], guild = null) {
   if (guild) {
-    // 1. Discord custom emoji đặt tên theo roleId
-    const serverEmoji = guild.emojis?.cache?.find(e => e.name === roleId);
-    if (serverEmoji) return serverEmoji.toString();
-    // 2. Role icon dạng unicode emoji
     const role = guild.roles?.cache?.get(roleId);
+    // 1. Discord custom emoji đặt tên theo role (đã sanitize)
+    if (role) {
+      const emojiName = _emojiName(role);
+      const serverEmoji = guild.emojis?.cache?.find(e => e.name === emojiName);
+      if (serverEmoji) return serverEmoji.toString();
+    }
+    // 2. Role icon dạng unicode emoji
     if (role?.unicodeEmoji) return role.unicodeEmoji;
   }
   const idx = phaiRoleIds.indexOf(roleId);
