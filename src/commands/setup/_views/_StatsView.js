@@ -145,7 +145,7 @@ function renderToi(stats, member, guild, badges, viewerId = null, cfg = null) {
   const footerExtra    = isViewingOther ? `uid:${userId}` : '';
 
   const phaiRoles = stats?.phai_role_ids ?? [];
-  const phaiStr   = formatPhaiList(phaiRoles, guild);
+  const phaiStr   = formatPhaiList(phaiRoles, guild, cfg?.phai_role_icons);
 
   const descParts = [
     isViewingOther ? `> 🔍 Đang xem thành viên khác` : null,
@@ -203,7 +203,7 @@ async function renderRank(rows, guild, topN = 10, phongBanList = [], selectedPho
     const totalS   = r.total_sessions ?? joined;
     const pct      = totalS > 0 ? Math.round((joined / totalS) * 100) : 0;
     const phongStr = phong ? ` · 📌 ${phong}` : '';
-    const phaiStr  = formatPhaiList(r.phai_role_ids, guild);
+    const phaiStr  = formatPhaiList(r.phai_role_ids, guild, cfg?.phai_role_icons);
     const phaiLine = phaiStr ? ` · ${phaiStr}` : '';
     return `${medal} **${name}**${phongStr}${phaiLine}\n\`${buildRichProgressBar(pct, 8)}\` **${pct}%** · ${joined} phiên · ${ICONS.FIRE}${streak}`;
   });
@@ -240,7 +240,7 @@ async function renderRank(rows, guild, topN = 10, phongBanList = [], selectedPho
         .setStyle(filterPhaiRoleId ? ButtonStyle.Secondary : ButtonStyle.Primary),
     );
     for (const rid of phaiIds) {
-      const icon = getPhaiIcon(rid, phaiIds, guild);
+      const icon = getPhaiIcon(rid, phaiIds, guild, cfg?.phai_role_icons);
       const role = guild?.roles?.cache?.get(rid);
       phaiRow.addComponents(
         new ButtonBuilder()

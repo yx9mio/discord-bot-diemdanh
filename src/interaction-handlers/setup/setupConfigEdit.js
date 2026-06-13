@@ -20,11 +20,12 @@ const EDIT_TZ              = 'setup:cfg:edit:tz';
 const EDIT_ADMIN_ROLE      = 'setup:cfg:edit:admin_role';
 const EDIT_ATTENDANCE_ROLE = 'setup:cfg:edit:attendance_role';
 const EDIT_PHAI            = 'setup:cfg:edit:phai';
+const EDIT_EMOJI_NAME      = 'setup:cfg:edit:emoji_name';
 
 const EDIT_IDS = new Set([
   EDIT_CHANNEL, EDIT_TZ,
   EDIT_ADMIN_ROLE, EDIT_ATTENDANCE_ROLE,
-  EDIT_PHAI,
+  EDIT_PHAI, EDIT_EMOJI_NAME,
 ]);
 
 const MODAL_PREFIX  = 'setup:cfg:modal:';
@@ -88,6 +89,37 @@ async function handleButton(interaction) {
       content: '⚔️ Chọn **phái / nhóm** (có thể chọn nhiều, bỏ trống = xoá hết):',
       components: [new ActionRowBuilder().addComponents(menu)],
     });
+  }
+
+  if (id === EDIT_EMOJI_NAME) {
+    const cfg = await configService.getGuildConfig(interaction.guild.id);
+    const phaiIds = cfg?.phai_role_ids ?? [];
+    if (!phaiIds.length) {
+      return interaction.reply({ content: '❌ Chưa có phái / nhóm nào. Thêm phái trước.', flags: MessageFlags.Ephemeral });
+    }
+    const emojiMap = cfg?.phai_role_icons ?? {};
+    const modal = new ModalBuilder()
+      .setCustomId(MODAL_PREFIX + 'emoji_name')
+      .setTitle('Tên emoji Discord cho phái');
+    const count = Math.min(phaiIds.length, 5);
+    for (let i = 0; i < count; i++) {
+      const roleId = phaiIds[i];
+      const role = interaction.guild.roles.cache.get(roleId);
+      const label = role?.name ?? `Phái ${i + 1}`;
+      modal.addComponents(
+        new ActionRowBuilder().addComponents(
+          new TextInputBuilder()
+            .setCustomId(`emoji:${roleId}`)
+            .setLabel(label)
+            .setStyle(TextInputStyle.Short)
+            .setPlaceholder('Tên emoji (VD: TY)')
+            .setRequired(false)
+            .setMaxLength(32)
+            .setValue(emojiMap[roleId] ?? ''),
+        ),
+      );
+    }
+    return interaction.showModal(modal);
   }
 
   if (id === EDIT_TZ) {

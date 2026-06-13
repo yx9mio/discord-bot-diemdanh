@@ -13,6 +13,18 @@ const FIELD_MAP = {
   tz: { col: 'timezone', inputId: 'timezone' },
 };
 
+async function _refreshConfigAndReply(interaction, guildId) {
+  const cfg = await configService.getGuildConfig(guildId);
+  const { ConfigView } = require('../../commands/setup/_views/_ConfigView.js');
+  const msgId = ConfigView.getMessageId(guildId);
+  if (msgId) {
+    const ch = interaction.channel;
+    const msg = await ch.messages.fetch(msgId).catch(() => null);
+    if (msg) await msg.edit(ConfigView.render({ cfg, guild: interaction.guild })).catch(() => null);
+  }
+  return interaction.editReply({ content: '✅ Đã lưu cấu hình.' });
+}
+
 class SetupConfigEditModalHandler extends InteractionHandler {
   constructor(ctx, options) {
     super(ctx, { ...options, interactionHandlerType: InteractionHandlerTypes.ModalSubmit });
@@ -29,6 +41,29 @@ class SetupConfigEditModalHandler extends InteractionHandler {
     if (!ok) return;
     const suffix = interaction.customId.slice(MODAL_PREFIX.length);
     const guildId = interaction.guild.id;
+
+    if (suffix === 'emoji_name') {
+      const existing = await configService.getGuildConfig(guildId).then(c => c?.phai_role_icons ?? {}).catch(() => ({}));
+      for (const row of interaction.fields.components) {
+        if (!row.components) continue;
+        for (const comp of row.components) {
+          if (comp.type !== 4) continue;
+          if (!comp.custom_id.startsWith('emoji:')) continue;
+          const roleId = comp.custom_id.slice('emoji:'.length);
+          const name = (comp.value ?? '').trim();
+          if (name) existing[roleId] = name;
+          else delete existing[roleId];
+        }
+      }
+      try {
+        await configService.setConfigField(guildId, 'phai_role_icons', existing);
+        return await _refreshConfigAndReply(interaction, guildId);
+      } catch (e) {
+        log.error('CFG_EDIT_MODAL', guildId, 'Lỗi lưu emoji_name: %s', e.message);
+        return interaction.editReply(replyErrEdit(`Không thể lưu: ${e.message}`));
+      }
+    }
+
     const mapping = FIELD_MAP[suffix];
     if (!mapping) return interaction.editReply(replyErrEdit(`Loại cấu hình không xác định: "${suffix}"`));
 
@@ -42,15 +77,7 @@ class SetupConfigEditModalHandler extends InteractionHandler {
 
     try {
       await configService.setConfigField(guildId, mapping.col, value);
-      const cfg = await configService.getGuildConfig(guildId);
-      const { ConfigView } = require('../../commands/setup/_views/_ConfigView.js');
-      const msgId = ConfigView.getMessageId(guildId);
-      if (msgId) {
-        const ch = interaction.channel;
-        const msg = await ch.messages.fetch(msgId).catch(() => null);
-        if (msg) await msg.edit(ConfigView.render({ cfg, guild: interaction.guild })).catch(() => null);
-      }
-      return interaction.editReply({ content: '✅ Đã lưu cấu hình.' });
+      return await _refreshConfigAndReply(interaction, guildId);
     } catch (e) {
       log.error('CFG_EDIT_MODAL', guildId, 'Lỗi lưu field %s: %s', suffix, e.message);
       return interaction.editReply(replyErrEdit(`Không thể lưu cấu hình: ${e.message}`));

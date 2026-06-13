@@ -142,7 +142,7 @@ function render({ members, page = 0, guild, cfg = null, filterPhai = '' }) {
       : `*Chưa có thành viên nào.*\n> Bấm **${ICONS.PLUS} Thêm thành viên** để bắt đầu.`
     : slice.map((m, i) => {
         const phong  = m.phong_ban ? ` _(${m.phong_ban})_` : '';
-        const phaiStr = formatPhaiList(m.phai_role_ids, guild);
+        const phaiStr = formatPhaiList(m.phai_role_ids, guild, cfg?.phai_role_icons);
         const phaiLine = phaiStr ? `  ${phaiStr}` : '';
         const note   = m.ghi_chu  ? ` · 📝 ${m.ghi_chu}` : '';
         return `${start + i + 1}. <@${m.user_id}>${phong}${phaiLine}${note}`;
@@ -168,7 +168,7 @@ function render({ members, page = 0, guild, cfg = null, filterPhai = '' }) {
         .setStyle(filterPhai ? ButtonStyle.Secondary : ButtonStyle.Primary),
     );
     for (const rid of phaiIds) {
-      const icon = getPhaiIcon(rid, phaiIds, guild);
+      const icon = getPhaiIcon(rid, phaiIds, guild, cfg?.phai_role_icons);
       const role = guild?.roles?.cache?.get(rid);
       filterRow.addComponents(
         new ButtonBuilder()

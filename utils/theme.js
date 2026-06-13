@@ -65,9 +65,15 @@ function _emojiName(role) {
     .toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
 }
 
-function getPhaiIcon(roleId, phaiRoleIds = [], guild = null) {
+function getPhaiIcon(roleId, phaiRoleIds = [], guild = null, emojiMap = null) {
   if (guild) {
     const role = guild.roles?.cache?.get(roleId);
+    // 0. Custom emoji name từ config (VD: role → TY, HA, HC...)
+    const customName = emojiMap?.[roleId];
+    if (customName) {
+      const serverEmoji = guild.emojis?.cache?.find(e => e.name === customName);
+      if (serverEmoji) return serverEmoji.toString();
+    }
     // 1. Discord custom emoji đặt tên theo role (đã sanitize)
     if (role) {
       const emojiName = _emojiName(role);
@@ -82,10 +88,10 @@ function getPhaiIcon(roleId, phaiRoleIds = [], guild = null) {
   return ICONS.SWORD;
 }
 
-function formatPhaiList(phaiRoleIds = [], guild = null) {
+function formatPhaiList(phaiRoleIds = [], guild = null, emojiMap = null) {
   if (!phaiRoleIds?.length) return null;
   return phaiRoleIds.map(id => {
-    const icon = getPhaiIcon(id, phaiRoleIds, guild);
+    const icon = getPhaiIcon(id, phaiRoleIds, guild, emojiMap);
     const role = guild?.roles?.cache?.get(id);
     return role ? `${icon} ${role.name}` : `${icon} <@&${id}>`;
   }).join(' · ');

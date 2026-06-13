@@ -19,6 +19,7 @@ const CUSTOM_ID = {
   EDIT_ADMIN_ROLE:      'setup:cfg:edit:admin_role',
   EDIT_ATTENDANCE_ROLE: 'setup:cfg:edit:attendance_role',
   EDIT_PHAI:            'setup:cfg:edit:phai',
+  EDIT_EMOJI_NAME:      'setup:cfg:edit:emoji_name',
   REFRESH:              'setup:cfg:refresh',
   BACK_HOME:            'setup:home',
 };
@@ -31,7 +32,7 @@ function render({ cfg, guild }) {
 
   const phaiIds = cfg?.phai_role_ids ?? [];
   const phaiStr = phaiIds.length
-    ? phaiIds.map(id => `${getPhaiIcon(id, phaiIds, guild)} <@&${id}>`).join(' ')
+    ? phaiIds.map(id => `${getPhaiIcon(id, phaiIds, guild, cfg?.phai_role_icons)} <@&${id}>`).join(' ')
     : '_Không có_';
 
   const embed = new EmbedBuilder()
@@ -59,6 +60,7 @@ function render({ cfg, guild }) {
   const phaiRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId(CUSTOM_ID.EDIT_CHANNEL).setLabel('Kênh thông báo').setEmoji(ICONS.CHANNEL).setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId(CUSTOM_ID.EDIT_TZ).setLabel('Timezone').setEmoji(ICONS.GLOBE).setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(CUSTOM_ID.EDIT_EMOJI_NAME).setLabel('Tên emoji').setEmoji('⭐').setStyle(ButtonStyle.Secondary).setDisabled(!phaiIds.length),
   );
 
   const navRow = new ActionRowBuilder().addComponents(
