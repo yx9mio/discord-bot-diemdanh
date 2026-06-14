@@ -103,7 +103,7 @@ class SetupStatsHandler extends InteractionHandler {
         return _renderServerStats(interaction, 'all');
       } catch (e) {
         log.error('SETUP_STATS', guild.id, 'getServerStats thất bại: %s', e.message);
-        return interaction.editReply({ content: '❌ Không thể tải stats server, thử lại sau.' });
+        return interaction.editReply({ content: '❌ Không thể tải stats server, thử lại sau.', embeds: [], files: [] });
       }
     }
 
@@ -117,7 +117,7 @@ class SetupStatsHandler extends InteractionHandler {
         return _renderServerStats(interaction, period);
       } catch (e) {
         log.error('SETUP_STATS', guild.id, 'server period thất bại period=%s: %s', period, e.message);
-        return interaction.editReply({ content: '❌ Không thể lọc server stats, thử lại sau.' });
+        return interaction.editReply({ content: '❌ Không thể lọc server stats, thử lại sau.', embeds: [], files: [] });
       }
     }
 
@@ -136,7 +136,7 @@ class SetupStatsHandler extends InteractionHandler {
         return interaction.editReply(await StatsView.renderRank(top, guild, 10, pbList, '', cfg, filterPhaiRoleId));
       } catch (e) {
         log.error('SETUP_STATS', guild.id, 'rank phai filter thất bại: %s', e.message);
-        return interaction.editReply({ content: '❌ Không thể lọc xếp hạng, thử lại sau.' });
+        return interaction.editReply({ content: '❌ Không thể lọc xếp hạng, thử lại sau.', embeds: [], files: [] });
       }
     }
 
@@ -155,7 +155,7 @@ class SetupStatsHandler extends InteractionHandler {
         return interaction.editReply(StatsView.renderToi(stats, member, guild, badges, interaction.user.id, cfg));
       } catch (e) {
         log.error('SETUP_STATS', guild.id, 'getMemberStats thất bại: %s', e.message);
-        return interaction.editReply({ content: '❌ Không thể tải stats cá nhân, thử lại sau.' });
+        return interaction.editReply({ content: '❌ Không thể tải stats cá nhân, thử lại sau.', embeds: [], files: [] });
       }
     }
 
@@ -171,7 +171,7 @@ class SetupStatsHandler extends InteractionHandler {
         return interaction.editReply(await StatsView.renderRank(top, guild, 10, pbList, '', cfg, ''));
       } catch (e) {
         log.error('SETUP_STATS', guild.id, 'getTopMembers thất bại: %s', e.message);
-        return interaction.editReply({ content: '❌ Không thể tải bảng xếp hạng, thử lại sau.' });
+        return interaction.editReply({ content: '❌ Không thể tải bảng xếp hạng, thử lại sau.', embeds: [], files: [] });
       }
     }
 
@@ -184,7 +184,7 @@ class SetupStatsHandler extends InteractionHandler {
         return interaction.editReply(await StatsView.renderLichSu(records, interaction.user.id, guild, 0));
       } catch (e) {
         log.error('SETUP_STATS', guild.id, 'getLichSu thất bại: %s', e.message);
-        return interaction.editReply({ content: '❌ Không thể tải lịch sử, thử lại sau.' });
+        return interaction.editReply({ content: '❌ Không thể tải lịch sử, thử lại sau.', embeds: [], files: [] });
       }
     }
 
@@ -264,7 +264,7 @@ class SetupStatsHandler extends InteractionHandler {
         return interaction.editReply(StatsView.renderStatsMenu());
       } catch (e) {
         log.error('SETUP_STATS_REFRESH', guild.id, 'refresh thất bại ctx=%s: %s', ctx, e.message);
-        return interaction.editReply({ content: '❌ Không thể làm mới, thử lại sau.' });
+        return interaction.editReply({ content: '❌ Không thể làm mới, thử lại sau.', embeds: [], files: [] });
       }
     }
   }

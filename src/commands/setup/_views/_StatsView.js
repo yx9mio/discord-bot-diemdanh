@@ -87,7 +87,7 @@ function renderStatsMenu() {
     new ButtonBuilder().setCustomId(CUSTOM_ID.SERVER).setLabel('Server').setEmoji(ICONS.CHART).setStyle(ButtonStyle.Secondary),
   );
 
-  return { embeds: [embed], components: [menuRow, _navRow()] };
+  return { embeds: [embed], components: [menuRow, _navRow()], files: [] };
 }
 
 // ─── Thống kê cá nhân ─────────────────────────────────────────────────
@@ -193,7 +193,7 @@ function renderToi(stats, member, guild, badges, viewerId = null, cfg = null) {
   return {
     embeds: [embed],
     components: [_navRow()],
-    ...(chartAttachment ? { files: [chartAttachment] } : {}),
+    files: chartAttachment ? [chartAttachment] : [],
   };
 }
 
@@ -208,6 +208,7 @@ async function renderRank(rows, guild, topN = 10, phongBanList = [], selectedPho
         .setDescription('> _Chưa có dữ liệu._')
         .setFooter({ text: _footer(CTX.RANK) }).setTimestamp()],
       components: [_navRow()],
+      files: [],
     };
   }
 
@@ -316,7 +317,7 @@ async function renderRank(rows, guild, topN = 10, phongBanList = [], selectedPho
   return {
     embeds: [embed],
     components,
-    ...(rankAttachment ? { files: [rankAttachment] } : {}),
+    files: rankAttachment ? [rankAttachment] : [],
   };
 }
 
@@ -347,9 +348,9 @@ async function renderLichSu(records, userId, guild, page = 0) {
     return {
       embeds: [new EmbedBuilder().setColor(COLORS.NEUTRAL).setAuthor(buildAuthor(guild)).setTitle(`📋 Lịch sử — ${name}`)
         .setDescription('> _Chưa có điểm danh nào._')
-        // [FIX] encode uid để REFRESH và pagination đọc đúng người
         .setFooter({ text: _footer(CTX.LICHSU, `uid:${userId}`) }).setTimestamp()],
       components: [_navRow()],
+      files: [],
     };
   }
 
@@ -392,6 +393,7 @@ async function renderLichSu(records, userId, guild, page = 0) {
       .setFooter({ text: footerText })
       .setTimestamp()],
     components: [navRow],
+    files: [],
   };
 }
 
@@ -493,7 +495,7 @@ async function renderServerStats(stats, top, guild, period = 'all') {
       .setEmoji('🌐'),
   );
 
-  return { embeds: [embed], components: [periodRow, _navRow()] };
+  return { embeds: [embed], components: [periodRow, _navRow()], files: [] };
 }
 
 // ─── Xem người khác (placeholder — thực tế mở modal) ─────────────────
@@ -505,7 +507,7 @@ function renderXemInput() {
     .setFooter({ text: _footer(CTX.MENU) })
     .setTimestamp();
 
-  return { embeds: [embed], components: [_navRow()] };
+  return { embeds: [embed], components: [_navRow()], files: [] };
 }
 
 module.exports = {

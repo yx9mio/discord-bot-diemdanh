@@ -27,7 +27,7 @@ class SetupStatsPhongBanHandler extends InteractionHandler {
       return interaction.editReply(await StatsView.renderRank(top, guild, 10, pbList, selectedPhongBan));
     } catch (e) {
       log.error('SETUP_STATS_PB', guild.id, 'phòng ban filter thất bại: %s', e.message);
-      return interaction.editReply({ content: '❌ Không thể lọc theo phòng ban, thử lại sau.' });
+      return interaction.editReply({ content: '❌ Không thể lọc theo phòng ban, thử lại sau.', embeds: [], files: [] });
     }
   }
 }
