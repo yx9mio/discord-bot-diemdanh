@@ -9,13 +9,6 @@ const { buildPublicUrl } = require('../phaiIcons.js');
 
 const PAGE_SIZE = 15;
 
-const STATUS_LABEL = {
-  tham_gia:       `${ICONS.ATTEND_YES} Tham gia`,
-  tre:            `${ICONS.ATTEND_LATE} Trễ`,
-  khong_tham_gia: `${ICONS.ATTEND_NO} Vắng`,
-  co_phep:        `${ICONS.ATTEND_EXCUSE} Có phép`,
-};
-
 function _durationStr(start, end) {
   if (!start || !end) return '';
   const diff = Math.floor((new Date(end).getTime() - new Date(start).getTime()) / 1000);

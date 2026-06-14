@@ -12,6 +12,7 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, AttachmentBuilder } = require('discord.js');
 const { COLORS, ICONS, getPhaiIcon, formatPhaiList } = require('../../../../utils/theme.js');
 const { FOOTER_DEFAULT, buildRichProgressBar, pctEmoji, pctLabel, buildAuthor } = require('../../../../utils/embeds.js');
+const { STATUS_CONFIG } = require('../../../../utils/design-tokens.js');
 const { generateRankImage, generatePieChart } = require('../../../../utils/canvas.js');
 
 const CUSTOM_ID = {
@@ -337,13 +338,6 @@ async function renderLichSu(records, userId, guild, page = 0) {
   const gMember = guild?.members?.cache?.get(userId);
   const name    = gMember?.displayName ?? `<@${userId}>`;
 
-  const statusMap = {
-    tham_gia:       { emoji: ICONS.ATTEND_YES    ?? '✅', label: 'Tham gia' },
-    tre:            { emoji: ICONS.ATTEND_LATE   ?? '⏰', label: 'Trễ'     },
-    khong_tham_gia: { emoji: ICONS.ATTEND_NO     ?? '❌', label: 'Vắng'    },
-    co_phep:        { emoji: ICONS.ATTEND_EXCUSE ?? '📋', label: 'Có phép' },
-  };
-
   if (!total) {
     return {
       embeds: [new EmbedBuilder().setColor(COLORS.NEUTRAL).setAuthor(buildAuthor(guild)).setTitle(`📋 Lịch sử — ${name}`)
@@ -360,14 +354,14 @@ async function renderLichSu(records, userId, guild, page = 0) {
     if (summary[r.status] !== undefined) summary[r.status]++;
   }
   const summaryStr = [
-    `${statusMap.tham_gia.emoji} **${summary.tham_gia}** tham gia`,
-    `${statusMap.tre.emoji} **${summary.tre}** trễ`,
-    `${statusMap.khong_tham_gia.emoji} **${summary.khong_tham_gia}** vắng`,
-    `${statusMap.co_phep.emoji} **${summary.co_phep}** có phép`,
+    `${STATUS_CONFIG.tham_gia.emoji} **${summary.tham_gia}** tham gia`,
+    `${STATUS_CONFIG.tre.emoji} **${summary.tre}** trễ`,
+    `${STATUS_CONFIG.khong_tham_gia.emoji} **${summary.khong_tham_gia}** vắng`,
+    `${STATUS_CONFIG.co_phep.emoji} **${summary.co_phep}** có phép`,
   ].join('  ·  ');
 
   const lines = slice.map((r, i) => {
-    const s    = statusMap[r.status] ?? { emoji: '❓', label: r.status };
+    const s    = STATUS_CONFIG[r.status] ?? { emoji: '❓', label: r.status };
     const time = r.checked_in_at
       ? `<t:${Math.floor(new Date(r.checked_in_at).getTime() / 1000)}:d>`
       : '—';

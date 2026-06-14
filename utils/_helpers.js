@@ -1,65 +1,12 @@
-// utils/_helpers.js — Shared constants & helpers dùng bởi _views/*.js
-// Không import từ embeds.js để tránh circular dependency
+// utils/_helpers.js — Shared helpers dùng bởi _views/*.js
+// Constants được định nghĩa trong design-tokens.js — import vào đây để re-export
 'use strict';
 const { EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder, MessageFlags } = require('discord.js');
 const { getPhaiIcon } = require('./theme.js');
-
-// ─── Palette & Icons ───────────────────────────────────────────────────────
-const COLORS = {
-  GREEN:   0x57f287,
-  RED:     0xff4444,
-  BLUE:    0x5865f2,
-  YELLOW:  0xfee75c,
-  ORANGE:  0xf0a500,
-  GREY:    0x36393e,
-  PURPLE:  0x9b59b6,
-  TEAL:    0x1abc9c,
-  PRIMARY: 0x01696f,
-  GOLD:    0xFFD700,
-  SUCCESS: 0x57f287,
-};
-
-const ICONS = {
-  SESSION_OPEN:   '🟢',
-  SESSION_CLOSED: '🔴',
-  ATTEND_YES:     '✅',
-  ATTEND_LATE:    '⏰',
-  ATTEND_NO:      '❌',
-  ATTEND_ABSENT:  '💭',
-  ATTEND_EXCUSE:  '📋',
-  PERSON:         '👤',
-  CLOCK:          '🕒',
-  SWORD:          '⚔️',
-  STAR:           '⭐',
-  TROPHY:         '🏆',
-  CHART:          '📊',
-  CALENDAR:       '📅',
-  FIRE:           '🔥',
-  SHIELD:         '🛡️',
-  SPARKLE:        '✨',
-  BELL:           '🔔',
-  GEAR:           '⚙️',
-  ID:             '🆔',
-  // [Phase-D] thêm các icon dùng bởi _ScheduleView, _SessionView, _HomeView
-  REFRESH:        '🔄',
-  HOME:           '🏠',
-  MEMBER:         '👥',
-  STATS:          '📈',
-  HISTORY:        '📜',
-  SETTINGS:       '🔧',
-};
-
-const FOOTER_DEFAULT = 'Quản Gia · Bot Điểm Danh';
-const AUTHOR_DEFAULT = { name: 'Quản Gia · Bot Điểm Danh' };
-const COLOR_GOLD = COLORS.GOLD;
-
-// ─── [#2] Attendance options — single source of truth ────────────────────────
-const ATTENDANCE_OPTIONS = [
-  { label: '✅ Tham gia', description: 'Điểm danh đúng giờ', value: 'tham_gia'        },
-  { label: '⏰ Trễ',      description: 'Điểm danh muộn',      value: 'tre'             },
-  { label: '❌ Vắng',    description: 'Báo vắng mặt',        value: 'khong_tham_gia' },
-  { label: '📋 Có phép', description: 'Vắng mặt có lý do',   value: 'co_phep'        },
-];
+const {
+  COLORS, ICONS, FOOTER_DEFAULT, AUTHOR_DEFAULT, COLOR_GOLD,
+  ATTENDANCE_OPTIONS,
+} = require('./design-tokens.js');
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function pctColor(pct) {
@@ -86,7 +33,7 @@ function pctEmoji(pct) {
 function buildRichProgressBar(pct, len = 12) {
   const filled = Math.round(pct / 100 * len);
   const empty  = len - filled;
-  const barFill = pct >= 80 ? '🟩' : pct >= 50 ? '🟨' : pct >= 25 ? '🟧' : '🟥';
+  const barFill = pct >= 90 ? '💎' : pct >= 70 ? '🟩' : pct >= 50 ? '🟡' : pct >= 30 ? '🟠' : '🔴';
   return barFill.repeat(filled) + '⬜'.repeat(empty);
 }
 

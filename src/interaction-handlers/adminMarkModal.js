@@ -16,13 +16,7 @@ const { requireAdmin } = require('../../utils/permissions.js');
 const { addBreadcrumb } = require('../../utils/sentry.js');
 const { getSessionChannel } = require('../../utils/channel.js');
 const { buildSessionEmbed, buildAttendanceSelectRow, buildSessionActionRow } = require('../../utils/embeds.js');
-
-const STATUS_LABELS = {
-  'tham_gia': '✅ Tham gia',
-  'tre': '⏰ Trễ',
-  'khong_tham_gia': '❌ Vắng',
-  'co_phep': '📋 Có phép',
-};
+const { statusFull } = require('../../utils/design-tokens.js');
 
 class AdminMarkModalHandler extends InteractionHandler {
   constructor(ctx, options) {
@@ -143,7 +137,7 @@ class AdminMarkModalHandler extends InteractionHandler {
     }
 
     return interaction.editReply({
-      content: `✅ Đã điểm danh thay cho **${username}** (${STATUS_LABELS[status]})`,
+      content: `✅ Đã điểm danh thay cho **${username}** (${statusFull(status)})`,
     });
   }
 }
