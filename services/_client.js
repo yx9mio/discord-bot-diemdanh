@@ -18,10 +18,22 @@ function getClient() {
   return _supabase;
 }
 
+function _sanitize(msg) {
+  if (typeof msg !== 'string') return String(msg ?? '');
+  let s = '';
+  for (let i = 0; i < msg.length && s.length < 500; i++) {
+    const c = msg[i];
+    const code = c.charCodeAt(0);
+    s += (code >= 32 || code === 10 || code === 13 || code === 9) ? c : ' ';
+  }
+  return s;
+}
+
 function _throwSupabase(error, ctx) {
   if (error) {
-    log.error('DB', null, '[%s] %s', ctx, error.message);
-    throw new Error(`[DB:${ctx}] ${error.message}`);
+    const safe = _sanitize(error.message);
+    log.error('DB', null, '[%s] %s', ctx, safe);
+    throw new Error(`[DB:${ctx}] ${safe}`);
   }
 }
 

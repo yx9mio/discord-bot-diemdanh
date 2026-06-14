@@ -22,6 +22,7 @@ const { buildAttendanceSelectRow, buildSessionActionRow } = require('../utils/_v
 const { startAutoRefresh, scheduleCloseTimer } = require('../utils/timers.js');
 
 let _client = null;
+let _running = false;
 
 function startReminderScheduler(client) {
   _client = client;
@@ -30,6 +31,11 @@ function startReminderScheduler(client) {
 }
 
 async function runReminders() {
+  if (_running) {
+    log.warn('REMINDER', null, 'Previous tick still running, skipping');
+    return;
+  }
+  _running = true;
   try {
     const guilds = _client?.guilds?.cache;
     if (!guilds) return;
@@ -38,6 +44,8 @@ async function runReminders() {
     }
   } catch (e) {
     log.error('REMINDER', null, 'runReminders error: %s', e.message);
+  } finally {
+    _running = false;
   }
 }
 
@@ -113,7 +121,23 @@ async function autoOpenSession(guild, cfg, sched) {
       return;
     }
 
-    // Kiểm tra không có phiên đang mở
+    // Distributed guard: atomic deactivate schedule để tránh multi-instance duplicate
+    if (sched.type === 'one_time') {
+      const deleted = await scheduledService.deleteScheduledSession(guild.id, sched.id);
+      if (!deleted) {
+        log.info('AUTO_OPEN', guild.id, 'Schedule %s đã được xử lý bởi instance khác, bỏ qua', sched.id);
+        return;
+      }
+    } else {
+      const tomorrow = DateTime.now().setZone(cfg.timezone ?? 'Asia/Ho_Chi_Minh').plus({ days: 1 }).startOf('day');
+      const updated = await scheduledService.skipScheduledSession(sched.id, tomorrow.toISO());
+      if (!updated) {
+        log.info('AUTO_OPEN', guild.id, 'Schedule %s đã được skip bởi instance khác, bỏ qua', sched.id);
+        return;
+      }
+    }
+
+    // Kiểm tra không có phiên đang mở (L2 check sau khi deactivate)
     const activeSession = await sessionService.getActiveSession(guild.id);
     if (activeSession) {
       log.info('AUTO_OPEN', guild.id, 'Đã có phiên đang mở, bỏ qua auto-open');
@@ -170,17 +194,6 @@ async function autoOpenSession(guild, cfg, sched) {
     }
 
     log.info('AUTO_OPEN', guild.id, 'Đã auto-open phiên: %s', session.session_name);
-
-    // Deactivate schedule
-    if (sched.type === 'one_time') {
-      await scheduledService.deleteScheduledSession(guild.id, sched.id);
-      log.info('AUTO_OPEN', guild.id, 'Đã xoá one-time schedule %s', sched.id);
-    } else {
-      // recurring: skip until tomorrow để tránh mở lại
-      const tomorrow = DateTime.now().setZone(cfg.timezone ?? 'Asia/Ho_Chi_Minh').plus({ days: 1 }).startOf('day');
-      await scheduledService.skipScheduledSession(sched.id, tomorrow.toISO());
-      log.info('AUTO_OPEN', guild.id, 'Đã skip recurring schedule %s đến %s', sched.id, tomorrow.toISODate());
-    }
   } catch (e) {
     log.error('AUTO_OPEN', guild.id, 'autoOpenSession thất bại: %s', e.message);
   }

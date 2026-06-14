@@ -7,6 +7,7 @@ const configService     = require('../../services/configService.js');
 const log               = require('../../utils/logger.js');
 const { getSessionChannel } = require('../../utils/channel.js');
 const { replyErr, buildSessionEmbed, buildAttendanceSelectRow, buildSessionActionRow } = require('../../utils/embeds.js');
+const { checkCooldown } = require('../../utils/cooldown.js');
 
 class PhaiSelectHandler extends InteractionHandler {
   constructor(ctx, options) {
@@ -44,8 +45,13 @@ class PhaiSelectHandler extends InteractionHandler {
       return interaction.editReply({ content: '❌ Không thể gán role phái. Bot cần quyền **Quản lý role**. Vui lòng báo admin.' });
     }
 
+    // Rate limit
+    if (!checkCooldown(user.id, 'attendance', 2000)) {
+      return interaction.editReply({ content: '⏳ Bạn đang thao tác quá nhanh, vui lòng chậm lại...' });
+    }
+
     // Ghi nhận điểm danh với trạng thái đã chọn từ đầu
-    const acquired = attendanceService.tryAcquireAttendanceLock(session.id, user.id);
+    const acquired = await attendanceService.tryAcquireAttendanceLock(session.id, user.id);
     if (!acquired) {
       return interaction.editReply({ content: '⏳ Đang xử lý điểm danh của bạn, vui lòng chờ...' });
     }
@@ -103,7 +109,7 @@ class PhaiSelectHandler extends InteractionHandler {
       log.error('PHAI_SELECT', guild.id, 'Lỗi upsertAttendance: %s', e.message);
       return interaction.editReply(replyErr('❌ Không thể ghi nhận điểm danh, thử lại sau.'));
     } finally {
-      attendanceService.releaseAttendanceLock(session.id, user.id);
+      await attendanceService.releaseAttendanceLock(session.id, user.id).catch(() => {});
     }
   }
 }

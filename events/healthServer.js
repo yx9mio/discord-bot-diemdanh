@@ -19,11 +19,12 @@ function startHealthServer(client) {
       const statusCode  = (ready || inGrace) ? 200 : 503;
       const body        = JSON.stringify({
         status : ready ? 'ok' : (inGrace ? 'starting' : 'unhealthy'),
-        uptime : Math.floor(process.uptime()),
-        ping   : client?.ws?.ping ?? -1,
-        guilds : client?.guilds?.cache?.size ?? 0,
       });
-      res.writeHead(statusCode, { 'Content-Type': 'application/json' });
+      res.writeHead(statusCode, {
+        'Content-Type': 'application/json',
+        'X-Content-Type-Options': 'nosniff',
+        'Cache-Control': 'no-store',
+      });
       res.end(body);
     } else {
       res.writeHead(404);

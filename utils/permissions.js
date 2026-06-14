@@ -4,6 +4,7 @@
 const { MessageFlags, PermissionFlagsBits } = require('discord.js');
 const { replyErr, replyErrEdit } = require('./embeds.js');
 const { getGuildConfig } = require('../services/configService.js'); // [FIX] db.js → configService
+const log = require('./logger.js');
 
 /**
  * Kiểm tra quyền admin cho interaction.
@@ -17,7 +18,10 @@ async function requireAdmin(interaction, opts = {}) {
 
   // Bot owner bypass (nếu có)
   const ownerId = process.env.BOT_OWNER_ID;
-  if (ownerId && interaction.user.id === ownerId) return { ok: true };
+  if (ownerId && interaction.user.id === ownerId) {
+    log.warn('PERM', interaction.guild?.id, 'BOT_OWNER_ID bypass — user=%s guild=%s action=%s', interaction.user.id, interaction.guild?.id, context);
+    return { ok: true };
+  }
 
   const member = interaction.member;
   if (!member) {

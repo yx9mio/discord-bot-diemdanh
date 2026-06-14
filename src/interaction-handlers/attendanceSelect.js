@@ -12,6 +12,7 @@ const configService     = require('../../services/configService.js');
 const log               = require('../../utils/logger.js');
 const { getSessionChannel } = require('../../utils/channel.js');
 const { replyErr, buildSessionEmbed, buildAttendanceSelectRow, buildSessionActionRow } = require('../../utils/embeds.js');
+const { checkCooldown } = require('../../utils/cooldown.js');
 
 const SELECT_CUSTOM_ID = 'attendance:select';
 
@@ -74,8 +75,11 @@ class AttendanceSelectHandler extends InteractionHandler {
 
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-    // [BUG-LOCK] sync lock — không dùng await
-    const acquired = attendanceService.tryAcquireAttendanceLock(session.id, user.id);
+    if (!checkCooldown(user.id, 'attendance', 2000)) {
+      return interaction.editReply({ content: '⏳ Bạn đang thao tác quá nhanh, vui lòng chậm lại...' });
+    }
+
+    const acquired = await attendanceService.tryAcquireAttendanceLock(session.id, user.id);
     if (!acquired) {
       return interaction.editReply({ content: '⏳ Đang xử lý điểm danh của bạn, vui lòng chờ...' });
     }
@@ -132,8 +136,7 @@ class AttendanceSelectHandler extends InteractionHandler {
       log.error('ATTEND', guild.id, 'Lỗi upsertAttendance: %s', e.message);
       return interaction.editReply(replyErr('❌ Không thể ghi nhận điểm danh, thử lại sau.'));
     } finally {
-      // [BUG-LOCK] sync release — không dùng await/.catch()
-      attendanceService.releaseAttendanceLock(session.id, user.id);
+      await attendanceService.releaseAttendanceLock(session.id, user.id).catch(() => {});
     }
   }
 }

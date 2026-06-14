@@ -31,15 +31,20 @@ async function updateScheduledSession(guildId, id, payload) {
 }
 
 async function deleteScheduledSession(guildId, id) {
+  // Check existence first, then delete (atomicity best-effort — unique PK prevents races)
+  const existing = await getClient().from('scheduled_sessions').select('id').eq('id', id).eq('guild_id', guildId).maybeSingle();
+  if (existing.error) _throwSupabase(existing.error, 'deleteScheduledSession.check');
+  if (!existing.data) return false;
   const { error } = await getClient().from('scheduled_sessions').delete().eq('id', id).eq('guild_id', guildId);
   _throwSupabase(error, 'deleteScheduledSession');
+  return true;
 }
 
 async function skipScheduledSession(id, skipUntil) {
   const { data, error } = await getClient()
     .from('scheduled_sessions').update({ skip_until: skipUntil }).eq('id', id).select().single();
   _throwSupabase(error, 'skipScheduledSession');
-  return data;
+  return !!data;
 }
 
 // Vietnamese aliases
