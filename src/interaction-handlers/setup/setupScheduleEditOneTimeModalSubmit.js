@@ -4,9 +4,11 @@ const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/frame
 const scheduledService = require('../../../services/scheduledService.js');
 const configService    = require('../../../services/configService.js');
 const { requireAdmin } = require('../../../utils/permissions.js');
+const { auditLog } = require('../../../utils/auditLog.js');
 const { replyErrEdit } = require('../../../utils/embeds.js');
 const log = require('../../../utils/logger.js');
 const { wrapHandler } = require('../../../utils/error-boundary.js');
+const { checkCooldown } = require('../../../utils/cooldown.js');
 
 const EDIT_ONETIME_PREFIX    = 'setup:sch:edit:onetime:';
 const EDIT_RECURRING_PREFIX  = 'setup:sch:edit:recurring:';
@@ -38,6 +40,7 @@ class SetupScheduleEditOneTimeModalSubmitHandler extends InteractionHandler {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const { ok } = await requireAdmin(interaction, { context: 'sửa lịch', deferred: true });
     if (!ok) return;
+    if (!checkCooldown(interaction.user.id, 'sch_edit_submit', 5000)) return interaction.editReply({ content: '⏳ Vui lòng đợi một chút trước khi thực hiện hành động này.' });
 
     const { guild, customId } = interaction;
     const isRecurring = customId.startsWith(EDIT_RECURRING_PREFIX);
@@ -93,6 +96,7 @@ class SetupScheduleEditOneTimeModalSubmitHandler extends InteractionHandler {
         });
       }
 
+      auditLog({ guildId: guild.id, actorId: interaction.user.id, action: 'SCHEDULE_UPDATE', targetId: scheduleId, metadata: { type: isRecurring ? 'recurring' : 'onetime', hour: h, minute: m } }).catch(() => {});
       const { ScheduleView } = require('../../commands/setup/_views/_ScheduleView.js');
       const sessions = await scheduledService.getScheduledSessions(guild.id);
       await interaction.message?.edit(ScheduleView.render({ schedules: sessions, guild, page: 0 })).catch(() => null);

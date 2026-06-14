@@ -16,6 +16,7 @@ const configService    = require('./configService.js');
 const scheduledService = require('./scheduledService.js');
 const sessionService   = require('./sessionService.js');
 const log = require('../utils/logger.js');
+const { tryAcquireLeadership, startHeartbeat, stopHeartbeat } = require('../utils/schedulerLock.js');
 const { DateTime } = require('luxon');
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { buildSessionEmbed } = require('../utils/_views/sessionView.js');
@@ -36,7 +37,14 @@ async function runReminders() {
     log.warn('REMINDER', null, 'Previous tick still running, skipping');
     return;
   }
+
+  if (!await tryAcquireLeadership('scheduler_leader')) {
+    log.debug('REMINDER', null, 'Distributed lock held by another instance, skipping tick');
+    return;
+  }
+
   _running = true;
+  startHeartbeat('scheduler_leader');
   try {
     const guilds = _client?.guilds?.cache;
     if (!guilds) return;
@@ -46,6 +54,7 @@ async function runReminders() {
   } catch (e) {
     log.error('REMINDER', null, 'runReminders error: %s', e.message);
   } finally {
+    stopHeartbeat();
     _running = false;
   }
 }

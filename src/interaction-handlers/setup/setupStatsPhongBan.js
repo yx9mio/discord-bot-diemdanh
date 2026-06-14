@@ -4,6 +4,7 @@ const { getTopMembers, getDistinctPhongBan } = require('../../../services/member
 const log = require('../../../utils/logger.js');
 const { StatsView } = require('../../commands/setup/_views/_StatsView.js');
 const { wrapHandler } = require('../../../utils/error-boundary.js');
+const { checkCooldown } = require('../../../utils/cooldown.js');
 
 class SetupStatsPhongBanHandler extends InteractionHandler {
   constructor(ctx, options) {
@@ -18,6 +19,7 @@ class SetupStatsPhongBanHandler extends InteractionHandler {
   async run(interaction) {
     return wrapHandler(async (interaction) => {
     await interaction.deferUpdate();
+    if (!checkCooldown(interaction.user.id, 'stats_pb_filter', 1000)) return interaction.editReply({ content: '⏳ Vui lòng đợi một chút...' });
     const { guild } = interaction;
     const selectedPhongBan = interaction.values[0] === '__all' ? '' : interaction.values[0];
 

@@ -7,6 +7,7 @@ const { getAttendancesByUser } = require('../../../services/attendanceService.js
 const log = require('../../../utils/logger.js');
 const { StatsView } = require('../../commands/setup/_views/_StatsView.js');
 const { wrapHandler } = require('../../../utils/error-boundary.js');
+const { checkCooldown } = require('../../../utils/cooldown.js');
 
 const LICHSU_NEXT = 'setup:stats:lichsu:next';
 const LICHSU_PREV = 'setup:stats:lichsu:prev';
@@ -24,6 +25,7 @@ class SetupStatsLichsuHandler extends InteractionHandler {
   async run(interaction) {
     return wrapHandler(async (interaction) => {
     await interaction.deferUpdate();
+    if (!checkCooldown(interaction.user.id, 'stats_lichsu_page', 1000)) return interaction.editReply({ content: '⏳ Vui lòng đợi một chút...' });
     const { guild, customId } = interaction;
 
     try {

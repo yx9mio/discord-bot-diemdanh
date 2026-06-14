@@ -6,6 +6,8 @@ const log = require('../../../utils/logger.js');
 const { requireAdmin } = require('../../../utils/permissions.js');
 const { replyErrEdit } = require('../../../utils/embeds.js');
 const { wrapHandler } = require('../../../utils/error-boundary.js');
+const { auditLog } = require('../../../utils/auditLog.js');
+const { checkCooldown } = require('../../../utils/cooldown.js');
 
 const SELECT_PREFIX = 'setup:cfg:select:';
 
@@ -33,6 +35,9 @@ class SetupConfigEditSelectHandler extends InteractionHandler {
     await interaction.deferUpdate();
     const { ok } = await requireAdmin(interaction, { context: 'sửa cấu hình', deferred: true });
     if (!ok) return;
+    if (!checkCooldown(interaction.user.id, 'setup_cfg_edit_select', 5000)) {
+      return interaction.editReply({ content: '⏳ Vui lòng đợi một chút trước khi thực hiện hành động này.' });
+    }
     const suffix = interaction.customId.slice(SELECT_PREFIX.length);
     const guildId = interaction.guild.id;
     const col = SELECT_FIELD_MAP[suffix];
@@ -43,6 +48,7 @@ class SetupConfigEditSelectHandler extends InteractionHandler {
       : interaction.values[0];
     try {
       await configService.setConfigField(guildId, col, value);
+      auditLog({ guildId, actorId: interaction.user.id, action: 'CONFIG_UPDATE', metadata: { field: col, suffix } }).catch(() => {});
       const cfg = await configService.getGuildConfig(guildId);
       const { ConfigView } = require('../../commands/setup/_views/_ConfigView.js');
       ConfigView.storeMessageId(guildId, interaction.message.id);

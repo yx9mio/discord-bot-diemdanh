@@ -13,6 +13,7 @@ const log = require('../../../utils/logger.js');
 const { StatsView } = require('../../commands/setup/_views/_StatsView.js');
 const { CUSTOM_ID } = StatsView;
 const { wrapHandler } = require('../../../utils/error-boundary.js');
+const { checkCooldown } = require('../../../utils/cooldown.js');
 
 // CustomId mà HomeView gửi khi bấm nút "Thống kê"
 const HOME_STATS_ID = 'setup:stats';
@@ -115,6 +116,7 @@ class SetupStatsHandler extends InteractionHandler {
     // ── Server stats ──────────────────────────────────────────────────
     if (customId === CUSTOM_ID.SERVER) {
       await interaction.deferUpdate();
+      if (!checkCooldown(interaction.user.id, 'stats_server', 1000)) return interaction.editReply({ content: '⏳ Vui lòng đợi một chút...' });
       try {
         return _renderServerStats(interaction, 'all');
       } catch (e) {
@@ -126,6 +128,7 @@ class SetupStatsHandler extends InteractionHandler {
     // ── Server stats — period filter ──────────────────────────────────
     if ([CUSTOM_ID.SERVER_PERIOD_WEEK, CUSTOM_ID.SERVER_PERIOD_MONTH, CUSTOM_ID.SERVER_PERIOD_ALL].includes(customId)) {
       await interaction.deferUpdate();
+      if (!checkCooldown(interaction.user.id, 'stats_server', 1000)) return interaction.editReply({ content: '⏳ Vui lòng đợi một chút...' });
       const period = customId === CUSTOM_ID.SERVER_PERIOD_WEEK ? 'week'
                    : customId === CUSTOM_ID.SERVER_PERIOD_MONTH ? 'month'
                    : 'all';
@@ -140,6 +143,7 @@ class SetupStatsHandler extends InteractionHandler {
     // ── Rank filter — phái ────────────────────────────────────────────
     if (customId === CUSTOM_ID.RANK_ALL || customId.startsWith(CUSTOM_ID.RANK_PHAI_PREFIX)) {
       await interaction.deferUpdate();
+      if (!checkCooldown(interaction.user.id, 'stats_rank_phai', 1000)) return interaction.editReply({ content: '⏳ Vui lòng đợi một chút...' });
       const filterPhaiRoleId = customId === CUSTOM_ID.RANK_ALL ? '' : customId.slice(CUSTOM_ID.RANK_PHAI_PREFIX.length);
       try {
         const [top, pbList, cfg] = await Promise.all([
@@ -159,6 +163,7 @@ class SetupStatsHandler extends InteractionHandler {
     // ── Thống kê cá nhân ──────────────────────────────────────────────
     if (customId === CUSTOM_ID.TOI) {
       await interaction.deferUpdate();
+      if (!checkCooldown(interaction.user.id, 'stats_toi', 1000)) return interaction.editReply({ content: '⏳ Vui lòng đợi một chút...' });
       try {
         const [stats, badges, cfg, records] = await Promise.all([
           getMemberStats(guild.id, interaction.user.id),
@@ -179,6 +184,7 @@ class SetupStatsHandler extends InteractionHandler {
     // ── Bảng xếp hạng ─────────────────────────────────────────────────
     if (customId === CUSTOM_ID.RANK) {
       await interaction.deferUpdate();
+      if (!checkCooldown(interaction.user.id, 'stats_rank', 1000)) return interaction.editReply({ content: '⏳ Vui lòng đợi một chút...' });
       try {
         const [top, pbList, cfg] = await Promise.all([
           getTopMembers(guild.id, 10),
@@ -195,6 +201,7 @@ class SetupStatsHandler extends InteractionHandler {
     // ── Lịch sử cá nhân ───────────────────────────────────────────────
     if (customId === CUSTOM_ID.LICHSU) {
       await interaction.deferUpdate();
+      if (!checkCooldown(interaction.user.id, 'stats_lichsu', 1000)) return interaction.editReply({ content: '⏳ Vui lòng đợi một chút...' });
       try {
         let records = await getAttendancesByUser(guild.id, interaction.user.id);
         if (!Array.isArray(records)) records = [];
@@ -207,6 +214,7 @@ class SetupStatsHandler extends InteractionHandler {
 
     // ── Xem người khác → modal ────────────────────────────────────────
     if (customId === CUSTOM_ID.XEM) {
+      if (!checkCooldown(interaction.user.id, 'stats_xem', 1000)) return interaction.reply({ content: '⏳ Vui lòng đợi một chút...', flags: require('discord.js').MessageFlags.Ephemeral });
       const modal = new ModalBuilder()
         .setCustomId('setup:stats:xem:modal')
         .setTitle('Xem điểm danh thành viên khác')
@@ -227,6 +235,7 @@ class SetupStatsHandler extends InteractionHandler {
     // ── REFRESH: reload đúng view hiện tại dựa vào ctx: trong footer ──
     if (customId === CUSTOM_ID.REFRESH) {
       await interaction.deferUpdate();
+      if (!checkCooldown(interaction.user.id, 'stats_refresh', 1000)) return interaction.editReply({ content: '⏳ Vui lòng đợi một chút...' });
       const ctx = _readCtx(interaction);
 
       try {

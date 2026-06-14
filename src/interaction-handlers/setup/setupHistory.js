@@ -5,6 +5,7 @@ const sessionService = require('../../../services/sessionService.js');
 const log = require('../../../utils/logger.js');
 const { CUSTOM_ID } = HistoryView;
 const { wrapHandler } = require('../../../utils/error-boundary.js');
+const { checkCooldown } = require('../../../utils/cooldown.js');
 
 class SetupHistoryHandler extends InteractionHandler {
   constructor(ctx, options) {
@@ -20,6 +21,7 @@ class SetupHistoryHandler extends InteractionHandler {
   async run(interaction) {
     return wrapHandler(async (interaction) => {
     await interaction.deferUpdate();
+    if (!checkCooldown(interaction.user.id, 'setup_history', 1000)) return interaction.editReply({ content: '⏳ Vui lòng đợi một chút trước khi thực hiện hành động này.' });
     const { guild, customId } = interaction;
 
     try {

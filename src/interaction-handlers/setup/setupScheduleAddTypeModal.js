@@ -7,6 +7,7 @@ const { requireAdmin } = require('../../../utils/permissions.js');
 const { clearState } = require('../../../utils/scheduleAddState.js');
 const { renderAddViewStep1 } = require('../../../utils/scheduleAddViews.js');
 const { wrapHandler } = require('../../../utils/error-boundary.js');
+const { checkCooldown } = require('../../../utils/cooldown.js');
 
 const ADD_R = 'setup:sch:add:r';
 const ADD_O = 'setup:sch:add:o';
@@ -55,11 +56,13 @@ class SetupScheduleAddTypeModalHandler extends InteractionHandler {
     if (!ok) return;
 
     if (interaction.customId === ADD_O) {
+      if (!checkCooldown(interaction.user.id, 'sch_add_type', 5000)) return interaction.reply({ content: '⏳ Vui lòng đợi một chút trước khi thực hiện hành động này.', flags: require('discord.js').MessageFlags.Ephemeral });
       return interaction.showModal(_buildOnetimeModal());
     }
 
     // Recurring: show select menus
     await interaction.deferUpdate();
+    if (!checkCooldown(interaction.user.id, 'sch_add_type', 5000)) return interaction.editReply({ content: '⏳ Vui lòng đợi một chút trước khi thực hiện hành động này.' });
     clearState(interaction.guild.id, interaction.user.id);
     return interaction.editReply(renderAddViewStep1(interaction.guild, {}));
   }, 'SetupScheduleAddTypeModalHandler')(interaction); }

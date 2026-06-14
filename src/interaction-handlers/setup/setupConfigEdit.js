@@ -15,6 +15,7 @@ const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/frame
 const configService = require('../../../services/configService.js');
 const log = require('../../../utils/logger.js');
 const { wrapHandler } = require('../../../utils/error-boundary.js');
+const { checkCooldown } = require('../../../utils/cooldown.js');
 
 const EDIT_CHANNEL         = 'setup:cfg:edit:channel';
 const EDIT_TZ              = 'setup:cfg:edit:tz';
@@ -37,6 +38,9 @@ async function handleButton(interaction) {
 
   if (id === EDIT_CHANNEL) {
     await interaction.deferUpdate();
+    if (!checkCooldown(interaction.user.id, 'setup_cfg_edit', 1000)) {
+      return interaction.editReply({ content: '⏳ Vui lòng đợi một chút trước khi thực hiện hành động này.' });
+    }
     const menu = new ChannelSelectMenuBuilder()
       .setCustomId(SELECT_PREFIX + 'channel')
       .setPlaceholder('Chọn kênh thông báo điểm danh...')
@@ -52,6 +56,9 @@ async function handleButton(interaction) {
 
   if (id === EDIT_ADMIN_ROLE) {
     await interaction.deferUpdate();
+    if (!checkCooldown(interaction.user.id, 'setup_cfg_edit', 1000)) {
+      return interaction.editReply({ content: '⏳ Vui lòng đợi một chút trước khi thực hiện hành động này.' });
+    }
     const menu = new RoleSelectMenuBuilder()
       .setCustomId(SELECT_PREFIX + 'admin_role')
       .setPlaceholder('Chọn role quản lý...')
@@ -66,6 +73,9 @@ async function handleButton(interaction) {
 
   if (id === EDIT_ATTENDANCE_ROLE) {
     await interaction.deferUpdate();
+    if (!checkCooldown(interaction.user.id, 'setup_cfg_edit', 1000)) {
+      return interaction.editReply({ content: '⏳ Vui lòng đợi một chút trước khi thực hiện hành động này.' });
+    }
     const menu = new RoleSelectMenuBuilder()
       .setCustomId(SELECT_PREFIX + 'attendance_role')
       .setPlaceholder('Chọn role điểm danh...')
@@ -80,6 +90,9 @@ async function handleButton(interaction) {
 
   if (id === EDIT_PHAI) {
     await interaction.deferUpdate();
+    if (!checkCooldown(interaction.user.id, 'setup_cfg_edit', 1000)) {
+      return interaction.editReply({ content: '⏳ Vui lòng đợi một chút trước khi thực hiện hành động này.' });
+    }
     const menu = new RoleSelectMenuBuilder()
       .setCustomId(SELECT_PREFIX + 'phai')
       .setPlaceholder('Chọn phái / nhóm...')
@@ -93,6 +106,9 @@ async function handleButton(interaction) {
   }
 
   if (id === EDIT_EMOJI_NAME) {
+    if (!checkCooldown(interaction.user.id, 'setup_cfg_edit', 1000)) {
+      return interaction.reply({ content: '⏳ Vui lòng đợi một chút trước khi thực hiện hành động này.', flags: MessageFlags.Ephemeral });
+    }
     const cfg = await configService.getGuildConfig(interaction.guild.id);
     const phaiIds = cfg?.phai_role_ids ?? [];
     if (!phaiIds.length) {
@@ -124,6 +140,9 @@ async function handleButton(interaction) {
   }
 
   if (id === EDIT_TZ) {
+    if (!checkCooldown(interaction.user.id, 'setup_cfg_edit', 1000)) {
+      return interaction.reply({ content: '⏳ Vui lòng đợi một chút trước khi thực hiện hành động này.', flags: MessageFlags.Ephemeral });
+    }
     const modal = new ModalBuilder()
       .setCustomId(MODAL_PREFIX + 'tz')
       .setTitle('Cài đặt Timezone')

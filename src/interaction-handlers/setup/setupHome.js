@@ -8,6 +8,7 @@ const { HomeView } = require('../../commands/setup/_views/_HomeView.js');
 const { CUSTOM_ID } = HomeView;
 const log = require('../../../utils/logger.js');
 const { wrapHandler } = require('../../../utils/error-boundary.js');
+const { checkCooldown } = require('../../../utils/cooldown.js');
 
 class SetupHomeHandler extends InteractionHandler {
   constructor(ctx, options) {
@@ -23,6 +24,7 @@ class SetupHomeHandler extends InteractionHandler {
   async run(interaction) {
     return wrapHandler(async (interaction) => {
     await interaction.deferUpdate();
+    if (!checkCooldown(interaction.user.id, 'setup_home', 1000)) return interaction.editReply({ content: '⏳ Vui lòng đợi một chút trước khi thực hiện hành động này.' });
     const { guild } = interaction;
     try {
       const [cfg, schedules, members, sessions] = await Promise.all([

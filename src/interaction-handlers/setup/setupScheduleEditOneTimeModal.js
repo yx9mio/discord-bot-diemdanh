@@ -10,6 +10,7 @@ const { requireAdmin } = require('../../../utils/permissions.js');
 const { setState } = require('../../../utils/scheduleEditState.js');
 const { renderEditViewStep1 } = require('../../../utils/scheduleEditViews.js');
 const { wrapHandler } = require('../../../utils/error-boundary.js');
+const { checkCooldown } = require('../../../utils/cooldown.js');
 
 const EDIT_PREFIX = 'setup:sch:edit:';
 
@@ -74,6 +75,7 @@ class SetupScheduleEditOneTimeModalHandler extends InteractionHandler {
           channel: session.channel_id ?? null,
           scheduleId,
         });
+        if (!checkCooldown(interaction.user.id, 'sch_edit_modal', 5000)) return interaction.reply({ content: '⏳ Vui lòng đợi một chút trước khi thực hiện hành động này.', flags: require('discord.js').MessageFlags.Ephemeral });
         return interaction.update(renderEditViewStep1(guild, { day: session.day_of_week, hour: session.hour, minute: session.minute, scheduleId }));
       }
 
@@ -117,6 +119,7 @@ class SetupScheduleEditOneTimeModalHandler extends InteractionHandler {
         .setCustomId(`setup:sch:edit:onetime:${scheduleId}`)
         .setTitle('Sửa lịch một lần')
         .addComponents(...fields);
+      if (!checkCooldown(interaction.user.id, 'sch_edit_modal', 5000)) return interaction.reply({ content: '⏳ Vui lòng đợi một chút trước khi thực hiện hành động này.', flags: require('discord.js').MessageFlags.Ephemeral });
       return interaction.showModal(modal);
     } catch (e) {
       log.error('SCH_EDIT_MODAL', guild.id, 'Lỗi mở sửa %s: %s', scheduleId, e.message);

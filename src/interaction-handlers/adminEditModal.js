@@ -10,11 +10,13 @@ const { getAttendances, upsertAttendance } = require('../../services/attendanceS
 const configService = require('../../services/configService.js');
 const log = require('../../utils/logger.js');
 const { requireAdmin } = require('../../utils/permissions.js');
+const { auditLog } = require('../../utils/auditLog.js');
 const { addBreadcrumb } = require('../../utils/sentry.js');
 const { getSessionChannel } = require('../../utils/channel.js');
 const { buildSessionEmbed, buildAttendanceSelectRow, buildSessionActionRow } = require('../../utils/embeds.js');
 const { statusFull } = require('../../utils/design-tokens.js');
 const { wrapHandler } = require('../../utils/error-boundary.js');
+const { checkCooldown } = require('../../utils/cooldown.js');
 
 class AdminEditModalHandler extends InteractionHandler {
   constructor(ctx, options) {
@@ -37,6 +39,7 @@ class AdminEditModalHandler extends InteractionHandler {
     const { guild, user } = interaction;
     const { ok } = await requireAdmin(interaction, { context: 'sửa điểm danh', deferred: true });
     if (!ok) return;
+    if (!checkCooldown(user.id, 'admin_edit_modal', 5000)) return;
 
     const session = await getActiveSession(guild.id);
     if (!session) {
@@ -102,6 +105,7 @@ class AdminEditModalHandler extends InteractionHandler {
     }
 
     log.info('ADMIN_EDIT', guild.id, '%s sửa điểm danh %s → %s', user.tag, targetUserId, statusField);
+    auditLog({ guildId: guild.id, actorId: user.id, action: 'ADMIN_EDIT', targetId: targetUserId, metadata: { status: resolvedStatus, sessionId: session.id } }).catch(() => {});
 
     try {
       const ch = await getSessionChannel(guild, session);

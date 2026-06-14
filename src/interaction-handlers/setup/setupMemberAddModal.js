@@ -8,9 +8,11 @@ const memberService = require('../../../services/memberService.js');
 const { getGuildConfig } = require('../../../services/configService.js');
 const log = require('../../../utils/logger.js');
 const { requireAdmin } = require('../../../utils/permissions.js');
+const { auditLog } = require('../../../utils/auditLog.js');
 const { replyErrEdit } = require('../../../utils/embeds.js');
 const { MemberView } = require('../../commands/setup/_views/_MemberView.js');
 const { wrapHandler } = require('../../../utils/error-boundary.js');
+const { checkCooldown } = require('../../../utils/cooldown.js');
 
 const MODAL_ADD = 'setup:mem:add:modal';
 
@@ -29,6 +31,9 @@ class SetupMemberAddModalHandler extends InteractionHandler {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const { ok } = await requireAdmin(interaction, { context: 'thêm thành viên', deferred: true });
     if (!ok) return;
+    if (!checkCooldown(interaction.user.id, 'setup_mem_add_modal', 5000)) {
+      return interaction.editReply({ content: '⏳ Vui lòng đợi một chút trước khi thực hiện hành động này.' });
+    }
     const { guild } = interaction;
 
     const rawId = interaction.fields.getTextInputValue('user_id').trim();
@@ -41,6 +46,7 @@ class SetupMemberAddModalHandler extends InteractionHandler {
 
     try {
       await memberService.upsertMember({ guildId: guild.id, userId, username, phongBan, ghiChu });
+      auditLog({ guildId: guild.id, actorId: interaction.user.id, action: 'MEMBER_ADD', targetId: userId, metadata: { username } }).catch(() => {});
       const [members, cfg] = await Promise.all([
         memberService.getMembers(guild.id),
         getGuildConfig(guild.id).catch(() => null),

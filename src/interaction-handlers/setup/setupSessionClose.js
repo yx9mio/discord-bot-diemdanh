@@ -6,6 +6,7 @@ const { replyConfirm, replyErrEdit } = require('../../../utils/embeds.js');
 const sessionService = require('../../../services/sessionService.js');
 const log = require('../../../utils/logger.js');
 const { wrapHandler } = require('../../../utils/error-boundary.js');
+const { checkCooldown } = require('../../../utils/cooldown.js');
 
 const PREFIX = 'setup:session:close:';
 const CLOSE_ALL = 'setup:session:close:all';
@@ -28,6 +29,9 @@ class SetupSessionCloseHandler extends InteractionHandler {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const { ok } = await requireAdmin(interaction, { context: 'đóng phiên', deferred: true });
     if (!ok) return;
+    if (!checkCooldown(interaction.user.id, 'setup_session_close', 5000)) {
+      return interaction.editReply({ content: '⏳ Vui lòng đợi một chút trước khi thực hiện hành động này.' });
+    }
 
     const id = interaction.customId;
     const guild = interaction.guild;

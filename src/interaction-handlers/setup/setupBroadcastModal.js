@@ -9,6 +9,7 @@ const log = require('../../../utils/logger.js');
 const { requireAdmin } = require('../../../utils/permissions.js');
 const { FOOTER_DEFAULT, replyErrEdit } = require('../../../utils/embeds.js');
 const { wrapHandler } = require('../../../utils/error-boundary.js');
+const { checkCooldown } = require('../../../utils/cooldown.js');
 
 const BROADCAST_MODAL_ID = 'setup:session:broadcast:modal';
 
@@ -27,6 +28,9 @@ class SetupBroadcastModalHandler extends InteractionHandler {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const { ok } = await requireAdmin(interaction, { context: 'phát tin', deferred: true });
     if (!ok) return;
+    if (!checkCooldown(interaction.user.id, 'setup_broadcast_modal', 5000)) {
+      return interaction.editReply({ content: '⏳ Vui lòng đợi một chút trước khi thực hiện hành động này.' });
+    }
 
     const { guild, channel } = interaction;
     const content = interaction.fields.getTextInputValue('message').trim();

@@ -4,6 +4,7 @@
 const { ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const { wrapHandler } = require('../../../utils/error-boundary.js');
+const { checkCooldown } = require('../../../utils/cooldown.js');
 
 const BROADCAST_MODAL_ID = 'setup:session:broadcast:modal';
 
@@ -17,6 +18,9 @@ class SetupBroadcastHandler extends InteractionHandler {
   }
   run(interaction) {
     return wrapHandler(async (interaction) => {
+    if (!checkCooldown(interaction.user.id, 'setup_broadcast', 5000)) {
+      return interaction.reply({ content: '⏳ Vui lòng đợi một chút trước khi thực hiện hành động này.', flags: require('discord.js').MessageFlags.Ephemeral });
+    }
     const modal = new ModalBuilder()
       .setCustomId(BROADCAST_MODAL_ID)
       .setTitle('📢 Phát tin')

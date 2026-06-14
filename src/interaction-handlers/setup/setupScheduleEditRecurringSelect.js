@@ -5,6 +5,7 @@ const { renderEditViewStep1, renderEditViewStep2 } = require('../../../utils/sch
 const scheduledService = require('../../../services/scheduledService.js');
 const log = require('../../../utils/logger.js');
 const { wrapHandler } = require('../../../utils/error-boundary.js');
+const { checkCooldown } = require('../../../utils/cooldown.js');
 
 const HANDLED = ['setup:sch:edit:r:day', 'setup:sch:edit:r:hour', 'setup:sch:edit:r:min',
   'setup:sch:edit:r:close_day', 'setup:sch:edit:r:close_hour', 'setup:sch:edit:r:close_min',
@@ -23,6 +24,7 @@ class SetupScheduleEditRecurringSelectHandler extends InteractionHandler {
   async run(interaction) {
     return wrapHandler(async (interaction) => {
     await interaction.deferUpdate();
+    if (!checkCooldown(interaction.user.id, 'sch_edit_select', 1000)) return interaction.editReply({ content: '⏳ Vui lòng đợi một chút...' });
     const { guild, customId, values, message } = interaction;
 
     try {

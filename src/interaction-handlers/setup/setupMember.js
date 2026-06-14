@@ -15,9 +15,11 @@ const memberService = require('../../../services/memberService.js');
 const { getGuildConfig } = require('../../../services/configService.js');
 const log = require('../../../utils/logger.js');
 const { requireAdmin } = require('../../../utils/permissions.js');
+const { auditLog } = require('../../../utils/auditLog.js');
 const { MemberView } = require('../../commands/setup/_views/_MemberView.js');
 const { CUSTOM_ID } = MemberView;
 const { wrapHandler } = require('../../../utils/error-boundary.js');
+const { checkCooldown } = require('../../../utils/cooldown.js');
 
 class SetupMemberHandler extends InteractionHandler {
   constructor(ctx, options) {
@@ -59,6 +61,7 @@ class SetupMemberHandler extends InteractionHandler {
       customId.startsWith(CUSTOM_ID.FILTER_PHAI_PREFIX)
     ) {
       await interaction.deferUpdate();
+      if (!checkCooldown(interaction.user.id, 'mem_list', 1000)) return;
       const footer = interaction.message?.embeds?.[0]?.footer?.text ?? '';
       let currentPage = 0;
       const m = footer.match(/Trang (\d+)\/(\d+)/);
@@ -85,6 +88,9 @@ class SetupMemberHandler extends InteractionHandler {
     if (customId.startsWith(CUSTOM_ID.EDIT_PREFIX)) {
       const { ok } = await requireAdmin(interaction, { context: 'sửa thành viên', deferred: false });
       if (!ok) return;
+      if (!checkCooldown(interaction.user.id, 'mem_edit', 5000)) {
+        return interaction.reply({ content: '⏳ Vui lòng đợi trước khi thực hiện lại thao tác này.', flags: MessageFlags.Ephemeral });
+      }
       const userId = customId.slice(CUSTOM_ID.EDIT_PREFIX.length);
       const member = await memberService.getMember(guild.id, userId);
       const { MemberView: MV } = require('../../commands/setup/_views/_MemberView.js');
@@ -94,6 +100,7 @@ class SetupMemberHandler extends InteractionHandler {
     // ── Xoá thành viên (bước 1: confirm) ─────────────────────────────
     if (customId.startsWith(CUSTOM_ID.DEL_PREFIX) && !customId.startsWith(CUSTOM_ID.DEL_CONFIRM_PREFIX) && !customId.startsWith(CUSTOM_ID.DEL_CANCEL_PREFIX)) {
       await interaction.deferUpdate();
+      if (!checkCooldown(interaction.user.id, 'mem_del', 5000)) return;
       const { ok } = await requireAdmin(interaction, { context: 'xoá thành viên', deferred: true });
       if (!ok) return;
       const userId = customId.slice(CUSTOM_ID.DEL_PREFIX.length);
@@ -113,11 +120,13 @@ class SetupMemberHandler extends InteractionHandler {
     // ── Xoá thành viên (bước 2: thực hiện) ───────────────────────────
     if (customId.startsWith(CUSTOM_ID.DEL_CONFIRM_PREFIX)) {
       await interaction.deferUpdate();
+      if (!checkCooldown(interaction.user.id, 'mem_del_confirm', 5000)) return;
       const { ok } = await requireAdmin(interaction, { context: 'xoá thành viên', deferred: true });
       if (!ok) return;
       const userId = customId.slice(CUSTOM_ID.DEL_CONFIRM_PREFIX.length);
       try {
         await memberService.deleteMember(guild.id, userId);
+        auditLog({ guildId: guild.id, actorId: interaction.user.id, action: 'MEMBER_REMOVE', targetId: userId }).catch(() => {});
         const [members, cfg] = await Promise.all([
           memberService.getMembers(guild.id),
           getGuildConfig(guild.id),
@@ -132,6 +141,7 @@ class SetupMemberHandler extends InteractionHandler {
     // ── Huỷ xoá ──────────────────────────────────────────────────────
     if (customId.startsWith(CUSTOM_ID.DEL_CANCEL_PREFIX)) {
       await interaction.deferUpdate();
+      if (!checkCooldown(interaction.user.id, 'mem_del_cancel', 1000)) return;
       const [members, cfg] = await Promise.all([
         memberService.getMembers(guild.id),
         getGuildConfig(guild.id),

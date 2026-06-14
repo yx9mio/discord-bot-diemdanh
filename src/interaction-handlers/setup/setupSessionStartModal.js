@@ -13,6 +13,8 @@ const { startAutoRefresh, scheduleCloseTimer } = require('../../../utils/timers.
 const { buildSessionEmbed } = require('../../../utils/_views/sessionView.js');
 const { buildAttendanceSelectRow, buildSessionActionRow } = require('../../../utils/_views/rows.js');
 const { wrapHandler } = require('../../../utils/error-boundary.js');
+const { auditLog } = require('../../../utils/auditLog.js');
+const { checkCooldown } = require('../../../utils/cooldown.js');
 
 const MODAL_ID = 'setup:session:start:modal';
 
@@ -31,6 +33,9 @@ class SetupSessionStartModalHandler extends InteractionHandler {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const { ok } = await requireAdmin(interaction, { context: 'mở phiên', deferred: true });
     if (!ok) return;
+    if (!checkCooldown(interaction.user.id, 'setup_session_start_modal', 5000)) {
+      return interaction.editReply({ content: '⏳ Vui lòng đợi một chút trước khi thực hiện hành động này.' });
+    }
     const { guild } = interaction;
 
     try {
@@ -93,6 +98,7 @@ class SetupSessionStartModalHandler extends InteractionHandler {
         )
         .setFooter({ text: `${FOOTER_DEFAULT} · Session ID: ${session.id}` });
 
+      auditLog({ guildId: guild.id, actorId: interaction.user.id, action: 'SESSION_CREATE', targetId: session.id, metadata: { session_name: ten, channel_id: notifChannelId, auto_close_at: session.auto_close_at } }).catch(() => {});
       return interaction.editReply({ embeds: [embed], components: [] });
     } catch (e) {
       log.error('SESSION_START_MODAL', guild.id, 'Lỗi tạo phiên: %s', e.message);

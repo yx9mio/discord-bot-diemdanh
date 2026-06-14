@@ -13,11 +13,13 @@ const configService = require('../../services/configService.js');
 const log = require('../../utils/logger.js');
 const metrics = require('../../utils/metrics.js');
 const { requireAdmin } = require('../../utils/permissions.js');
+const { auditLog } = require('../../utils/auditLog.js');
 const { addBreadcrumb } = require('../../utils/sentry.js');
 const { getSessionChannel } = require('../../utils/channel.js');
 const { buildSessionEmbed, buildAttendanceSelectRow, buildSessionActionRow } = require('../../utils/embeds.js');
 const { statusFull } = require('../../utils/design-tokens.js');
 const { wrapHandler } = require('../../utils/error-boundary.js');
+const { checkCooldown } = require('../../utils/cooldown.js');
 
 class AdminMarkModalHandler extends InteractionHandler {
   constructor(ctx, options) {
@@ -40,6 +42,7 @@ class AdminMarkModalHandler extends InteractionHandler {
     const { guild, user } = interaction;
     const { ok } = await requireAdmin(interaction, { context: 'điểm danh thay', deferred: true });
     if (!ok) return;
+    if (!checkCooldown(user.id, 'admin_mark_modal', 5000)) return;
 
     const session = await getActiveSession(guild.id);
     if (!session) {
@@ -111,6 +114,7 @@ class AdminMarkModalHandler extends InteractionHandler {
 
     metrics.attendanceMarked(guild.id, status, { markedBy: 'admin' });
     log.info('ADMIN_MARK', guild.id, '%s điểm danh thay cho %s: %s', user.tag, targetUserId, status);
+    auditLog({ guildId: guild.id, actorId: user.id, action: 'ADMIN_MARK', targetId: targetUserId, metadata: { status, sessionId: session.id } }).catch(() => {});
 
     // Update embed trong kênh
     try {

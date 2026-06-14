@@ -11,6 +11,7 @@ const log = require('../../../utils/logger.js');
 const { replyErrEdit } = require('../../../utils/embeds.js');
 const { StatsView } = require('../../commands/setup/_views/_StatsView.js');
 const { wrapHandler } = require('../../../utils/error-boundary.js');
+const { checkCooldown } = require('../../../utils/cooldown.js');
 
 const MODAL_ID = 'setup:stats:xem:modal';
 
@@ -27,6 +28,7 @@ class SetupStatsModalHandler extends InteractionHandler {
   async run(interaction) {
     return wrapHandler(async (interaction) => {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    if (!checkCooldown(interaction.user.id, 'stats_xem_modal', 1000)) return interaction.editReply({ content: '⏳ Vui lòng đợi một chút...' });
     const { guild } = interaction;
 
     try {

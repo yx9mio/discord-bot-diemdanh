@@ -5,8 +5,10 @@ const { DateTime } = require('luxon');
 const configService = require('../../../services/configService.js');
 const log = require('../../../utils/logger.js');
 const { requireAdmin } = require('../../../utils/permissions.js');
+const { auditLog } = require('../../../utils/auditLog.js');
 const { replyErrEdit } = require('../../../utils/embeds.js');
 const { wrapHandler } = require('../../../utils/error-boundary.js');
+const { checkCooldown } = require('../../../utils/cooldown.js');
 
 const MODAL_PREFIX = 'setup:cfg:modal:';
 
@@ -48,6 +50,9 @@ class SetupConfigEditModalHandler extends InteractionHandler {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const { ok } = await requireAdmin(interaction, { context: 'sửa cấu hình', deferred: true });
     if (!ok) return;
+    if (!checkCooldown(interaction.user.id, 'setup_cfg_edit_modal', 5000)) {
+      return interaction.editReply({ content: '⏳ Vui lòng đợi một chút trước khi thực hiện hành động này.' });
+    }
     const suffix = interaction.customId.slice(MODAL_PREFIX.length);
     const guildId = interaction.guild.id;
 
@@ -94,6 +99,7 @@ class SetupConfigEditModalHandler extends InteractionHandler {
         foundEmojiNames.join(','), notFoundEmojiNames.join(','));
       try {
         await configService.setConfigField(guildId, 'phai_role_icons', existing);
+        auditLog({ guildId, actorId: interaction.user.id, action: 'CONFIG_UPDATE', metadata: { field: 'phai_role_icons', suffix: 'emoji_name' } }).catch(() => {});
         await _refreshConfigAndReply(interaction, guildId);
         const summary = [
           matched.map(m => `${m.name}=${m.emoji}`).join('\n') || '_không có_',
@@ -123,6 +129,7 @@ class SetupConfigEditModalHandler extends InteractionHandler {
 
     try {
       await configService.setConfigField(guildId, mapping.col, value);
+      auditLog({ guildId, actorId: interaction.user.id, action: 'CONFIG_UPDATE', metadata: { field: mapping.col, suffix } }).catch(() => {});
       return await _refreshConfigAndReply(interaction, guildId);
     } catch (e) {
       log.error('CFG_EDIT_MODAL', guildId, 'Lỗi lưu field %s: %s', suffix, e.message);

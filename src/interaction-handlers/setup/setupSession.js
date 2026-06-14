@@ -6,6 +6,7 @@ const { getGuildConfig } = require('../../../services/configService.js');
 const { getMembers } = require('../../../services/memberService.js');
 const log = require('../../../utils/logger.js');
 const { wrapHandler } = require('../../../utils/error-boundary.js');
+const { checkCooldown } = require('../../../utils/cooldown.js');
 
 const PREFIX_REFRESH = 'setup:session:refresh';
 const PREFIX_DETAIL  = 'setup:session:detail:';
@@ -35,6 +36,7 @@ class SetupSessionHandler extends InteractionHandler {
     }
 
     await interaction.deferUpdate();
+    if (!checkCooldown(interaction.user.id, 'setup_session', 1000)) return interaction.editReply({ content: '⏳ Vui lòng đợi một chút trước khi thực hiện hành động này.' });
 
     try {
       const [allSessions, cfg, members] = await Promise.all([

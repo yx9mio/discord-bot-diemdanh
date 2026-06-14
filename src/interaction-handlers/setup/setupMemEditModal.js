@@ -12,6 +12,8 @@ const { requireAdmin } = require('../../../utils/permissions.js');
 const { replyErrEdit } = require('../../../utils/embeds.js');
 const { MemberView } = require('../../commands/setup/_views/_MemberView.js');
 const { wrapHandler } = require('../../../utils/error-boundary.js');
+const { auditLog } = require('../../../utils/auditLog.js');
+const { checkCooldown } = require('../../../utils/cooldown.js');
 
 const MODAL_EDIT = 'setup:mem:edit:modal:';
 
@@ -30,6 +32,9 @@ class SetupMemEditModalHandler extends InteractionHandler {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const { ok } = await requireAdmin(interaction, { context: 'sửa thành viên', deferred: true });
     if (!ok) return;
+    if (!checkCooldown(interaction.user.id, 'setup_mem_edit', 5000)) {
+      return interaction.editReply({ content: '⏳ Vui lòng đợi một chút trước khi thực hiện hành động này.' });
+    }
 
     const { guild } = interaction;
     const userId = interaction.customId.slice(MODAL_EDIT.length);
@@ -58,6 +63,7 @@ class SetupMemEditModalHandler extends InteractionHandler {
         phaiRoleIds,
       });
       log.info('MEM_EDIT', guild.id, 'Sửa thành viên %s: username=%s phongBan=%s ghiChu=%s', userId, currentUsername, phongBan, ghiChu);
+      auditLog({ guildId: guild.id, actorId: interaction.user.id, action: 'MEMBER_UPDATE', targetId: userId, metadata: { username: currentUsername, phongBan, ghiChu } }).catch(() => {});
     } catch (e) {
       log.error('MEM_EDIT', guild.id, 'upsertMember thất bại: %s', e.message);
       return interaction.editReply(replyErrEdit('Không thể cập nhật, thử lại sau.'));

@@ -11,6 +11,8 @@ const log = require('../../../utils/logger.js');
 const { requireAdmin } = require('../../../utils/permissions.js');
 const { replyErrEdit } = require('../../../utils/embeds.js');
 const { wrapHandler } = require('../../../utils/error-boundary.js');
+const { auditLog } = require('../../../utils/auditLog.js');
+const { checkCooldown } = require('../../../utils/cooldown.js');
 
 const MODAL_RECURRING_ID = 'setup:sch:add:recurring:detail';
 const MODAL_ONETIME_ID   = 'setup:sch:add:onetime:detail';
@@ -41,6 +43,7 @@ class SetupScheduleAddDetailModalHandler extends InteractionHandler {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const { ok } = await requireAdmin(interaction, { deferred: true, context: 'thêm lịch' });
     if (!ok) return;
+    if (!checkCooldown(interaction.user.id, 'sch_add_detail', 5000)) return interaction.editReply({ content: '⏳ Vui lòng đợi một chút trước khi thực hiện hành động này.' });
     const { guild, customId } = interaction;
 
     try {
@@ -74,6 +77,7 @@ class SetupScheduleAddDetailModalHandler extends InteractionHandler {
           gio_ket_thuc: closeHour != null ? `${closeHour}:${String(closeMinute).padStart(2, '0')}` : null,
           ten: 'Điểm danh', timezone: tz, pre_close_minutes: reminderMin,
         });
+        auditLog({ guildId: guild.id, actorId: interaction.user.id, action: 'SCHEDULE_CREATE', metadata: { type: 'recurring', day_of_week: dayOfWeek, hour, minute } }).catch(() => {});
       } else {
         const ngay       = interaction.fields.getTextInputValue('ngay').trim();
         const gio_mo     = interaction.fields.getTextInputValue('gio_mo').trim();
@@ -99,6 +103,7 @@ class SetupScheduleAddDetailModalHandler extends InteractionHandler {
           gio_ket_thuc: closeHour != null ? `${closeHour}:${String(closeMinute).padStart(2, '0')}` : null,
           ten: 'Điểm danh', timezone: tz, pre_close_minutes: reminderMin,
         });
+        auditLog({ guildId: guild.id, actorId: interaction.user.id, action: 'SCHEDULE_CREATE', metadata: { type: 'onetime', date: ngay, hour, minute } }).catch(() => {});
       }
 
       const { ScheduleView } = require('../../commands/setup/_views/_ScheduleView.js');

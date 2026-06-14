@@ -9,11 +9,13 @@ const log = require('../../../utils/logger.js');
 const { ScheduleView } = require('../../commands/setup/_views/_ScheduleView.js');
 const { CUSTOM_ID } = ScheduleView;
 const { requireAdmin } = require('../../../utils/permissions.js');
+const { auditLog } = require('../../../utils/auditLog.js');
 const { getState, setState, clearState } = require('../../../utils/scheduleAddState.js');
 const { renderAddViewStep2, renderAddViewStep1 } = require('../../../utils/scheduleAddViews.js');
 const { getState: getEditState, setState: setEditState, clearState: clearEditState } = require('../../../utils/scheduleEditState.js');
 const { renderEditViewStep1, renderEditViewStep2 } = require('../../../utils/scheduleEditViews.js');
 const { wrapHandler } = require('../../../utils/error-boundary.js');
+const { checkCooldown } = require('../../../utils/cooldown.js');
 
 class SetupScheduleHandler extends InteractionHandler {
   constructor(ctx, options) {
@@ -47,6 +49,7 @@ class SetupScheduleHandler extends InteractionHandler {
 
     if (customId === CUSTOM_ID.REFRESH) {
       await interaction.deferUpdate();
+      if (!checkCooldown(interaction.user.id, 'sch_refresh', 1000)) return interaction.editReply({ content: '⏳ Vui lòng đợi một chút...' });
       let page = 0;
       try {
         const footer = interaction.message?.embeds?.[0]?.footer?.text ?? '';
@@ -59,12 +62,14 @@ class SetupScheduleHandler extends InteractionHandler {
 
     if (customId === 'setup:sch') {
       await interaction.deferUpdate();
+      if (!checkCooldown(interaction.user.id, 'sch_list', 1000)) return interaction.editReply({ content: '⏳ Vui lòng đợi một chút...' });
       const schedules = await scheduledService.getScheduledSessions(guild.id).catch(() => []);
       return interaction.editReply(ScheduleView.render({ schedules, guild, page: 0 }));
     }
 
     if (customId === CUSTOM_ID.PAGE_NEXT || customId === CUSTOM_ID.PAGE_PREV) {
       await interaction.deferUpdate();
+      if (!checkCooldown(interaction.user.id, 'sch_page', 1000)) return interaction.editReply({ content: '⏳ Vui lòng đợi một chút...' });
       let currentPage = 0;
       try {
         const footer = interaction.message?.embeds?.[0]?.footer?.text ?? '';
@@ -82,6 +87,7 @@ class SetupScheduleHandler extends InteractionHandler {
     // ── Add recurring schedule flow ───────────────────────────────────
     if (customId === 'setup:sch:add:r:step1:next') {
       await interaction.deferUpdate();
+      if (!checkCooldown(interaction.user.id, 'sch_add_confirm', 1000)) return interaction.editReply({ content: '⏳ Vui lòng đợi một chút...' });
       setState(guild.id, interaction.user.id, { step: 2 });
       const state = getState(guild.id, interaction.user.id);
       return interaction.editReply(renderAddViewStep2(guild, state));
@@ -89,6 +95,7 @@ class SetupScheduleHandler extends InteractionHandler {
 
     if (customId === 'setup:sch:add:r:step1:cancel' || customId === 'setup:sch:add:r:step2:cancel') {
       await interaction.deferUpdate();
+      if (!checkCooldown(interaction.user.id, 'sch_add_cancel', 1000)) return interaction.editReply({ content: '⏳ Vui lòng đợi một chút...' });
       clearState(guild.id, interaction.user.id);
       const schedules = await scheduledService.getScheduledSessions(guild.id).catch(() => []);
       return interaction.editReply(ScheduleView.render({ schedules, guild, page: 0 }));
@@ -96,6 +103,7 @@ class SetupScheduleHandler extends InteractionHandler {
 
     if (customId === 'setup:sch:add:r:step2:confirm') {
       await interaction.deferUpdate();
+      if (!checkCooldown(interaction.user.id, 'sch_add_confirm', 5000)) return interaction.editReply({ content: '⏳ Vui lòng đợi một chút trước khi thực hiện hành động này.' });
       const state = getState(guild.id, interaction.user.id);
       if (state.day == null || state.hour == null || state.minute == null) {
         clearState(guild.id, interaction.user.id);
@@ -131,6 +139,7 @@ class SetupScheduleHandler extends InteractionHandler {
           channel_id: state.channel,
         });
         log.info('SCH_ADD', guild.id, 'Đã thêm lịch định kỳ');
+        auditLog({ guildId: guild.id, actorId: interaction.user.id, action: 'SCHEDULE_CREATE', metadata: { type: 'recurring', day: state.day, hour: state.hour, minute: state.minute } }).catch(() => {});
       } catch (e) {
         log.error('SCH_ADD', guild.id, 'addRecurringSession lỗi: %s', e.message);
         clearState(guild.id, interaction.user.id);
@@ -145,6 +154,7 @@ class SetupScheduleHandler extends InteractionHandler {
     // ── Edit recurring schedule flow (select menus) ───────────────────
     if (customId === 'setup:sch:edit:r:step1:next') {
       await interaction.deferUpdate();
+      if (!checkCooldown(interaction.user.id, 'sch_edit_confirm', 1000)) return interaction.editReply({ content: '⏳ Vui lòng đợi một chút...' });
       const footer = interaction.message?.embeds?.[0]?.footer?.text ?? '';
       const sidMatch = footer.match(/sid:(\d+)/);
       const scheduleId = sidMatch ? sidMatch[1] : null;
@@ -159,6 +169,7 @@ class SetupScheduleHandler extends InteractionHandler {
 
     if (customId === 'setup:sch:edit:r:step1:cancel' || customId === 'setup:sch:edit:r:step2:cancel') {
       await interaction.deferUpdate();
+      if (!checkCooldown(interaction.user.id, 'sch_edit_cancel', 1000)) return interaction.editReply({ content: '⏳ Vui lòng đợi một chút...' });
       const footer = interaction.message?.embeds?.[0]?.footer?.text ?? '';
       const sidMatch = footer.match(/sid:(\d+)/);
       if (sidMatch) clearEditState(guild.id, interaction.user.id, sidMatch[1]);
@@ -168,6 +179,7 @@ class SetupScheduleHandler extends InteractionHandler {
 
     if (customId === 'setup:sch:edit:r:step2:confirm') {
       await interaction.deferUpdate();
+      if (!checkCooldown(interaction.user.id, 'sch_edit_confirm', 5000)) return interaction.editReply({ content: '⏳ Vui lòng đợi một chút trước khi thực hiện hành động này.' });
       const footer = interaction.message?.embeds?.[0]?.footer?.text ?? '';
       const sidMatch = footer.match(/sid:(\d+)/);
       const scheduleId = sidMatch ? sidMatch[1] : null;
@@ -209,6 +221,7 @@ class SetupScheduleHandler extends InteractionHandler {
           channel_id: state.channel || null,
         });
         log.info('SCH_EDIT', guild.id, 'Đã sửa lịch định kỳ %s', scheduleId);
+        auditLog({ guildId: guild.id, actorId: interaction.user.id, action: 'SCHEDULE_UPDATE', targetId: scheduleId, metadata: { type: 'recurring', day: state.day, hour: state.hour, minute: state.minute } }).catch(() => {});
       } catch (e) {
         log.error('SCH_EDIT', guild.id, 'updateScheduledSession lỗi: %s', e.message);
         clearEditState(guild.id, interaction.user.id, scheduleId);
@@ -226,6 +239,7 @@ class SetupScheduleHandler extends InteractionHandler {
       !customId.startsWith(CUSTOM_ID.DEL_CANCEL)
     ) {
       const schId = customId.slice(CUSTOM_ID.DEL_PREFIX.length);
+      if (!checkCooldown(interaction.user.id, 'sch_del', 1000)) return interaction.reply({ content: '⏳ Vui lòng đợi một chút...', flags: require('discord.js').MessageFlags.Ephemeral });
       await interaction.reply({
         content: `⚠️ Xác nhận xoá lịch cố định **#${schId}**?`,
         flags: MessageFlags.Ephemeral,
@@ -243,10 +257,12 @@ class SetupScheduleHandler extends InteractionHandler {
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       const { ok } = await requireAdmin(interaction, { context: 'xoá lịch', deferred: true });
       if (!ok) return;
+      if (!checkCooldown(interaction.user.id, 'sch_del_confirm', 5000)) return interaction.editReply({ content: '⏳ Vui lòng đợi một chút trước khi thực hiện hành động này.' });
       const schId = customId.slice(CUSTOM_ID.DEL_CONFIRM.length);
       try {
         await scheduledService.deleteScheduledSession(guild.id, schId);
         log.info('SCH_DEL', guild.id, 'Xoá lịch %s', schId);
+        auditLog({ guildId: guild.id, actorId: interaction.user.id, action: 'SCHEDULE_DELETE', targetId: schId }).catch(() => {});
         return interaction.editReply({ content: '✅ Đã xoá lịch cố định.' });
       } catch (e) {
         log.error('SCH_DEL', guild.id, 'deleteScheduledSession thất bại: %s', e.message);
@@ -256,6 +272,7 @@ class SetupScheduleHandler extends InteractionHandler {
 
     if (customId.startsWith(CUSTOM_ID.DEL_CANCEL)) {
       await interaction.deferUpdate();
+      if (!checkCooldown(interaction.user.id, 'sch_del_cancel', 1000)) return interaction.editReply({ content: '⏳ Vui lòng đợi một chút...' });
       const schedules = await scheduledService.getScheduledSessions(guild.id).catch(() => []);
       return interaction.editReply({ ...ScheduleView.render({ schedules, guild, page: 0 }), content: null });
     }

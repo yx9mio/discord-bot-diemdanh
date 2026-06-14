@@ -8,6 +8,7 @@ const log = require('../../../utils/logger.js');
 const { buildCsvBuffer, buildCsvFilename } = require('../../../utils/csvHelper.js');
 const { statusFull } = require('../../../utils/design-tokens.js');
 const { wrapHandler } = require('../../../utils/error-boundary.js');
+const { checkCooldown } = require('../../../utils/cooldown.js');
 
 const PREFIX_EXPORT = 'setup:session:export:';
 
@@ -24,6 +25,7 @@ class SetupSessionExportHandler extends InteractionHandler {
   async run(interaction) {
     return wrapHandler(async (interaction) => {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    if (!checkCooldown(interaction.user.id, 'sch_export', 1000)) return interaction.editReply({ content: '⏳ Vui lòng đợi một chút...' });
 
     const sessionId = interaction.customId.slice(PREFIX_EXPORT.length);
     const { guild } = interaction;

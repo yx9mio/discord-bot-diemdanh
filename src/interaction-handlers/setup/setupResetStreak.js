@@ -8,7 +8,9 @@ const memberService = require('../../../services/memberService.js');
 const { requireAdmin } = require('../../../utils/permissions.js');
 const { replyErrEdit } = require('../../../utils/embeds.js');
 const log = require('../../../utils/logger.js');
+const { auditLog } = require('../../../utils/auditLog.js');
 const { wrapHandler } = require('../../../utils/error-boundary.js');
+const { checkCooldown } = require('../../../utils/cooldown.js');
 
 const RESET_PREFIX   = 'setup:mem:reset:';
 const CONFIRM_PREFIX = 'setup:mem:reset:confirm:';
@@ -42,6 +44,7 @@ class SetupResetStreakHandler extends InteractionHandler {
 
     if (customId === 'setup:mem:reset:all') {
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+      if (!checkCooldown(interaction.user.id, 'streak_reset', 5000)) return;
       const { ok } = await requireAdmin(interaction, { context: 'reset tất cả streak', deferred: true });
       if (!ok) return;
       const row = new ActionRowBuilder().addComponents(
@@ -53,12 +56,14 @@ class SetupResetStreakHandler extends InteractionHandler {
 
     if (customId === 'setup:mem:reset:all:confirm') {
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+      if (!checkCooldown(interaction.user.id, 'streak_reset_all', 5000)) return;
       const { ok } = await requireAdmin(interaction, { context: 'reset tất cả streak', deferred: true });
       if (!ok) return;
       try {
         const members = await memberService.getMembers(guild.id);
         await memberService.batchResetStreak(guild.id, members.map(m => m.user_id));
         log.info('SETUP_RESET_STREAK_ALL', guild.id, 'Reset streak tất cả %d thành viên', members.length);
+        auditLog({ guildId: guild.id, actorId: interaction.user.id, action: 'RESET_STREAK', metadata: { type: 'all', count: members.length } }).catch(() => {});
         return interaction.editReply({ content: `✅ Đã reset streak của **${members.length}** thành viên về 0.`, components: [] });
       } catch (e) {
         log.error('SETUP_RESET_STREAK_ALL', guild.id, 'Reset all streak thất bại: %s', e.message);
@@ -68,17 +73,20 @@ class SetupResetStreakHandler extends InteractionHandler {
 
     if (customId === 'setup:mem:reset:all:cancel') {
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+      if (!checkCooldown(interaction.user.id, 'streak_cancel', 1000)) return;
       return interaction.editReply({ content: '↩️ Đã hủy.', components: [] });
     }
 
     if (customId.startsWith(CONFIRM_PREFIX)) {
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+      if (!checkCooldown(interaction.user.id, 'streak_reset', 5000)) return;
       const { ok } = await requireAdmin(interaction, { context: 'reset streak', deferred: true });
       if (!ok) return;
       const userId = customId.slice(CONFIRM_PREFIX.length);
       try {
         await memberService.resetStreak(guild.id, userId);
         log.info('SETUP_RESET_STREAK', guild.id, 'Reset streak userId=%s', userId);
+        auditLog({ guildId: guild.id, actorId: interaction.user.id, action: 'RESET_STREAK', targetId: userId, metadata: { type: 'single' } }).catch(() => {});
         return interaction.editReply({ content: `✅ Đã reset streak của <@${userId}>.`, components: [] });
       } catch (e) {
         log.error('SETUP_RESET_STREAK', guild.id, 'Reset streak thất bại userId=%s: %s', userId, e.message);
@@ -88,11 +96,13 @@ class SetupResetStreakHandler extends InteractionHandler {
 
     if (customId.startsWith(CANCEL_PREFIX)) {
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+      if (!checkCooldown(interaction.user.id, 'streak_cancel', 1000)) return;
       return interaction.editReply({ content: '↩️ Đã hủy.', components: [] });
     }
 
     if (customId.startsWith(RESET_PREFIX)) {
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+      if (!checkCooldown(interaction.user.id, 'streak_reset', 5000)) return;
       const { ok } = await requireAdmin(interaction, { context: 'reset streak', deferred: true });
       if (!ok) return;
       const userId = customId.slice(RESET_PREFIX.length);
