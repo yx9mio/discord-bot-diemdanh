@@ -16,6 +16,13 @@ function _durationStr(start, end) {
   return formatDuration(diff);
 }
 
+function _runningDurationStr(start) {
+  if (!start) return '';
+  const diff = Math.floor((Date.now() - new Date(start).getTime()) / 1000);
+  if (diff <= 0) return '';
+  return `⏱️ Đang diễn ra: ${formatDuration(diff)}`;
+}
+
 function _buildGroups(slice, guild, phaiRoleIds, emojiMap) {
   const groups = { tham_gia: [], tre: [], khong_tham_gia: [], co_phep: [] };
   for (const a of slice) {
@@ -58,7 +65,37 @@ function _phaiStats(phaiRoleIds, guild, attended, eligibleSet, emojiMap) {
   return lines;
 }
 
+function _buildPendingView(guild, session, phaiRoleIds = [], emojiMap = null) {
+  const ch = session.channel_id ? `<#${session.channel_id}>` : '_Chưa có kênh_';
+  const eligibleCount = session.eligible_member_ids?.length ?? 0;
+  const startTs = session.started_at ? Math.floor(new Date(session.started_at).getTime() / 1000) : 0;
+  const description = session.description;
+
+  const infoLines = [`▸ ${ch}`];
+  if (eligibleCount > 0) infoLines.push(`▸ **${eligibleCount}** người đủ điều kiện`);
+  if (description) infoLines.push(`▸ _${description}_`);
+
+  const embed = new EmbedBuilder()
+    .setColor(COLORS.NEUTRAL)
+    .setAuthor(buildAuthor(guild))
+    .setTitle(`🕐 Chờ mở — ${session.session_name ?? 'Phiên'}`)
+    .setDescription([
+      `Phiên sẽ mở <t:${startTs}:R>`,
+      '',
+      `📅 **Thông tin phiên**`,
+      ...infoLines,
+    ].join('\n'))
+    .setFooter({ text: `${FOOTER_DEFAULT} · Chưa mở` })
+    .setTimestamp();
+
+  return { embed, components: [], totalPages: 1 };
+}
+
 function buildSessionEmbed(guild, session, attended = [], phaiRoleIds = [], _isEditing = false, page = 1, emojiMap = null) {
+  if (!session.is_active) {
+    return _buildPendingView(guild, session, phaiRoleIds, emojiMap);
+  }
+
   const total   = attended.length;
   const joined  = attended.filter(a => a.status === 'tham_gia' || a.status === 'tre').length;
   const late    = attended.filter(a => a.status === 'tre').length;
@@ -81,29 +118,27 @@ function buildSessionEmbed(guild, session, attended = [], phaiRoleIds = [], _isE
 
   const color = pct >= 80 ? COLORS.GREEN : pct >= 50 ? COLORS.YELLOW : COLORS.RED;
 
+  const runningStr = _runningDurationStr(session.started_at);
+
   const infoLines = [
     `▸ ${ch} · <t:${startTs}:R>${startedBy ? ` · bởi ${startedBy}` : ''}`,
   ];
   if (eligibleCount > 0) {
     infoLines.push(`▸ **${total}/${eligibleCount}** đã điểm danh`);
   }
-  if (session.auto_close_at) {
-    const msLeft = new Date(session.auto_close_at).getTime() - Date.now();
-    if (msLeft > 0) {
-      infoLines.push(`▸ ⏳ Đóng <t:${Math.floor(new Date(session.auto_close_at).getTime() / 1000)}:R>`);
-    }
-  }
   if (session.description) {
     infoLines.push(`▸ _${session.description}_`);
   }
 
-  const desc = [
+  const descParts = [
+    ...(runningStr ? [runningStr, ''] : []),
     `📅 **Thông tin phiên**`,
     ...infoLines,
     '',
     `${pctEmoji(pct)} **${pct}%** — ${pctLabel(pct)}`,
     `\`${bar}\``,
-  ].join('\n');
+  ];
+  const desc = descParts.join('\n');
 
   const embed = new EmbedBuilder()
     .setColor(color)
@@ -129,6 +164,16 @@ function buildSessionEmbed(guild, session, attended = [], phaiRoleIds = [], _isE
   if (eligibleCount > 0 && total > 0) {
     fields.push({ name: '🎯 Đạt', value: `**${pct}%**`, inline: true });
   }
+  if (session.auto_close_at) {
+    const msLeft = new Date(session.auto_close_at).getTime() - Date.now();
+    if (msLeft > 0) {
+      fields.push({
+        name: '⏳ Tự động đóng',
+        value: `<t:${Math.floor(new Date(session.auto_close_at).getTime() / 1000)}:R>`,
+        inline: false,
+      });
+    }
+  }
 
   const safeEligible = session.eligible_member_ids ?? [];
   const eligibleSet = new Set(safeEligible.map ? safeEligible.map(m => m.id ?? m) : []);
@@ -140,7 +185,9 @@ function buildSessionEmbed(guild, session, attended = [], phaiRoleIds = [], _isE
   const listTitle = total > 0
     ? `📋 Danh sách (${total}${totalPages > 1 ? ` · trang ${clampedPage}/${totalPages}` : ''})`
     : '📋 Danh sách';
-  const listValue = lines.length ? lines.join('\n') : '_Chưa có ai điểm danh_';
+  const listValue = lines.length
+    ? lines.join('\n')
+    : `_Chưa có ai điểm danh — Hãy chọn trạng thái từ menu bên dưới để tham gia._`;
   embed.addFields(...fields, { name: listTitle, value: listValue, inline: false });
 
   const components = [];

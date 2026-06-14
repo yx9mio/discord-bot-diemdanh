@@ -78,7 +78,20 @@ function buildSummaryEmbed(session, attended = [], guild, phai_role_ids = [], em
     phaiLines.push(`${icon} **${role.name}**: ${rPresent}/${rTotal} (${rPct}%) \`${pBar}\``);
   }
 
+  // MVP: first to check in
+  const joinedSorted = attended
+    .filter(a => a.checked_in_at && (a.status === 'tham_gia' || a.status === 'tre'))
+    .sort((a, b) => new Date(a.checked_in_at) - new Date(b.checked_in_at));
+  const firstAttendee = joinedSorted[0];
+  let highlightLine = '';
+  if (firstAttendee) {
+    const mvpMember = guild?.members?.cache?.get(firstAttendee.user_id);
+    const mvpName = mvpMember?.displayName ?? `<@${firstAttendee.user_id}>`;
+    highlightLine = `🏆 **MVP**: ${mvpName} — điểm danh đầu tiên`;
+  }
+
   const desc = [
+    ...(highlightLine ? [highlightLine, ''] : []),
     ...infoParts,
     '',
     `${pctEmoji(pct)} **Tỉ lệ tham gia: ${pct}%** — ${pctLabel(pct)}`,
@@ -110,7 +123,7 @@ function buildSummaryEmbed(session, attended = [], guild, phai_role_ids = [], em
   if (lines.length) {
     embed.addFields({ name: '📋 Chi tiết', value: lines.join('\n'), inline: false });
   } else {
-    embed.addFields({ name: '📋 Chi tiết', value: '_Không có ai_', inline: false });
+    embed.addFields({ name: '📋 Chi tiết', value: '> _Không có ai tham gia phiên này._\n> 💡 Hãy nhắc nhở mọi người điểm danh đúng giờ ở các phiên sau.', inline: false });
   }
 
   embed

@@ -6,7 +6,7 @@ const attendanceService = require('../../services/attendanceService.js');
 const configService     = require('../../services/configService.js');
 const log               = require('../../utils/logger.js');
 const { getSessionChannel } = require('../../utils/channel.js');
-const { replyErr, buildSessionEmbed, buildAttendanceSelectRow, buildSessionActionRow } = require('../../utils/embeds.js');
+const { replyErr, buildSessionEmbed, buildAttendanceSelectRow, buildSessionActionRow, buildAttendConfirmEmbed } = require('../../utils/embeds.js');
 const { checkCooldown } = require('../../utils/cooldown.js');
 
 class PhaiSelectHandler extends InteractionHandler {
@@ -68,20 +68,14 @@ class PhaiSelectHandler extends InteractionHandler {
         checked_in_at: new Date().toISOString(),
       });
 
-      const statusLabel = {
-        tham_gia:       '✅ Tham gia',
-        tre:            '⏰ Trễ',
-        co_phep:        '📋 Có phép',
-        khong_tham_gia: '❌ Vắng',
-      }[status] ?? status;
-
       // Cập nhật embed phiên
+      let attended;
       try {
         const ch = await getSessionChannel(guild, session);
         if (ch && session.message_id) {
           const msg = await ch.messages.fetch(session.message_id).catch(() => null);
           if (msg) {
-            const attended = await attendanceService.getAttendances(session.id);
+            attended = await attendanceService.getAttendances(session.id);
             const cfg8 = await configService.getGuildConfig(guild.id).catch(() => null);
             const phaiIds = session.phai_role_ids?.length
               ? session.phai_role_ids
@@ -101,10 +95,11 @@ class PhaiSelectHandler extends InteractionHandler {
         log.error('PHAI_SELECT', guild.id, 'Update embed fail: %s', e.message);
       }
 
+      const sTotal = attended?.length ?? 0;
+      const sJoined = sTotal > 0 ? attended.filter(a => a.status === 'tham_gia' || a.status === 'tre').length : 0;
+
       log.info('PHAI_SELECT', guild.id, '%s điểm danh: %s (phái %s)', user.tag, status, roleId);
-      return interaction.editReply({
-        content: `✅ Đã thêm phái <@&${roleId}>. ${statusLabel} — Đã ghi nhận điểm danh của bạn.`,
-      });
+      return interaction.editReply(buildAttendConfirmEmbed(memberData, status, session.session_name, 0, sTotal, sJoined));
     } catch (e) {
       log.error('PHAI_SELECT', guild.id, 'Lỗi upsertAttendance: %s', e.message);
       return interaction.editReply(replyErr('❌ Không thể ghi nhận điểm danh, thử lại sau.'));

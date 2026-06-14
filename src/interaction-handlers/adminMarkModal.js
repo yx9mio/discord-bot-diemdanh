@@ -3,7 +3,7 @@
 // [BUG-E] Guard role mention <@&...> để tránh fetch member với role ID
 // [EDIT] Thêm update embed sau khi điểm danh (giống attendanceSelect.js pattern)
 'use strict';
-const { MessageFlags } = require('discord.js');
+const { MessageFlags, EmbedBuilder } = require('discord.js');
 const {
   InteractionHandler, InteractionHandlerTypes,
 } = require('@sapphire/framework');
@@ -136,9 +136,21 @@ class AdminMarkModalHandler extends InteractionHandler {
       log.error('ADMIN_MARK', guild.id, 'Lỗi update embed: %s', e.message);
     }
 
-    return interaction.editReply({
-      content: `✅ Đã điểm danh thay cho **${username}** (${statusFull(status)})`,
-    });
+    const confirmEmbed = new EmbedBuilder()
+      .setColor(0x57f287)
+      .setAuthor({ name: user.username, iconURL: user.displayAvatarURL({ size: 32 }) })
+      .setTitle(`✅ Admin điểm danh thay`)
+      .setDescription([
+        `**${targetMember.displayName}** đã được điểm danh với trạng thái:`,
+        `${statusFull(status)}`,
+      ].join('\n'))
+      .addFields(
+        { name: 'Phiên', value: `**${session.session_name ?? 'Phiên'}**`, inline: true },
+        { name: 'Người điểm danh', value: `<@${user.id}>`, inline: true },
+      )
+      .setTimestamp();
+
+    return interaction.editReply({ embeds: [confirmEmbed] });
   }
 }
 

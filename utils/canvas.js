@@ -1,6 +1,5 @@
 'use strict';
 const { createCanvas, GlobalFonts } = require('@napi-rs/canvas');
-
 try {
   GlobalFonts.registerFromPath('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', 'DejaVuSans');
   GlobalFonts.registerFromPath('/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf', 'DejaVuSans Bold');
@@ -26,6 +25,21 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.lineTo(x, y + r);
   ctx.quadraticCurveTo(x, y, x + r, y);
   ctx.closePath();
+}
+
+const RANK_COLORS = [
+  { bg: '#d19900', text: '#fff', gradient: ['#d19900', '#f0d000'], name: 'gold' },       // #1
+  { bg: '#7a8a9a', text: '#fff', gradient: ['#7a8a9a', '#b0bec5'], name: 'silver' },      // #2
+  { bg: '#cd7f32', text: '#fff', gradient: ['#cd7f32', '#e8a96f'], name: 'bronze' },      // #3
+];
+
+const AVATAR_COLORS = [
+  '#57f287', '#5865f2', '#f0a500', '#eb459e', '#1abc9c',
+  '#9b59b6', '#e91e63', '#00bcd4', '#ff5722', '#8bc34a',
+];
+
+function _getInitial(name) {
+  return (name || '?').trim().charAt(0).toUpperCase() || '?';
 }
 
 function generateRankImage(rows = [], guildName = '', topN = 10) {
@@ -69,39 +83,76 @@ function generateRankImage(rows = [], guildName = '', topN = 10) {
   ctx.fillText(`${guildName}  |  Cap nhat ${ds}`, PAD, 58);
 
   const rowY0 = 90;
-  const rankBadgeColors = ['#d19900', '#9ca3af', '#cd7f32'];
 
   for (let i = 0; i < count; i++) {
     const r = rows[i];
     const y = rowY0 + i * ROW_H;
     const isAlt = i % 2 === 0;
 
+    // Row background
     ctx.fillStyle = isAlt ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.07)';
     ctx.fillRect(PAD, y, W - PAD * 2, ROW_H - 4);
 
-    // Rank badge
+    // Rank badge with gradient
+    const rc = RANK_COLORS[i];
+
     const bx = PAD + 8, by = y + 6;
-    const bc = rankBadgeColors[i] || '#4a5568';
-    ctx.fillStyle = bc;
-    roundRect(ctx, bx, by, 34, ROW_H - 16, 7);
+    const badgeW = 34, badgeH = ROW_H - 16;
+    if (rc) {
+      const bg = ctx.createLinearGradient(bx, by, bx, by + badgeH);
+      bg.addColorStop(0, rc.gradient[0]);
+      bg.addColorStop(1, rc.gradient[1]);
+      ctx.fillStyle = bg;
+    } else {
+      ctx.fillStyle = '#4a5568';
+    }
+    roundRect(ctx, bx, by, badgeW, badgeH, 7);
     ctx.fill();
 
     ctx.fillStyle = i < 3 ? '#ffffff' : '#1a1a2e';
     ctx.font = `14px ${BOLD}`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(`#${i + 1}`, bx + 17, by + (ROW_H - 16) / 2);
+    ctx.fillText(`#${i + 1}`, bx + 17, by + badgeH / 2);
+
+    // Avatar circle
+    const avatarX = bx + badgeW + 14;
+    const avatarY = y + 8;
+    const avatarR = 22;
+
+    const ac = AVATAR_COLORS[i % AVATAR_COLORS.length];
+    ctx.fillStyle = ac;
+    ctx.beginPath();
+    ctx.arc(avatarX + avatarR, avatarY + avatarR, avatarR, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Avatar border glow for top 3
+    if (i < 3) {
+      ctx.strokeStyle = rc.bg;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(avatarX + avatarR, avatarY + avatarR, avatarR + 1.5, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    // Initial letter
+    const initial = _getInitial(r.displayName);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `bold 16px ${BOLD}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(initial, avatarX + avatarR, avatarY + avatarR);
 
     // Name
-    const nx = bx + 48;
-    const nm = (r.displayName || `<@${r.user_id}>`).slice(0, 22);
+    const nx = avatarX + avatarR * 2 + 14;
+    const nm = (r.displayName || `<@${r.user_id}>`).slice(0, 18);
     ctx.fillStyle = '#e2e8f0';
     ctx.font = `15px ${BOLD}`;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
     ctx.fillText(nm, nx, y + 22);
 
-    const phong = (r.phong_ban || '').slice(0, 18);
+    const phong = (r.phong_ban || '').slice(0, 16);
     if (phong) {
       ctx.fillStyle = '#94a3b8';
       ctx.font = `11px ${FONT}`;
@@ -119,17 +170,17 @@ function generateRankImage(rows = [], guildName = '', topN = 10) {
     ctx.fillStyle = '#e2e8f0';
     ctx.font = `14px ${BOLD}`;
     ctx.textAlign = 'right';
-    ctx.fillText(`${joined} phien`, sx, y + 20);
+    ctx.fillText(`${joined} phien`, sx, y + 18);
     ctx.fillStyle = statColor;
     ctx.font = `12px ${FONT}`;
-    ctx.fillText(`${pct}%`, sx, y + 42);
+    ctx.fillText(`${pct}%`, sx, y + 40);
     if (streak > 0) {
       ctx.fillStyle = '#94a3b8';
-      ctx.fillText(`${streak} lien tiep`, sx - 60, y + 42);
+      ctx.fillText(`${streak} lien tiep`, sx - 55, y + 40);
     }
 
-    // Progress bar
-    const bx2 = nx, by2 = y + 34, bw = 320, bh = 8;
+    // Progress bar (below name, wider)
+    const bx2 = nx, by2 = y + 34, bw = 280, bh = 8;
     ctx.fillStyle = '#2d3748';
     roundRect(ctx, bx2, by2, bw, bh, 4);
     ctx.fill();

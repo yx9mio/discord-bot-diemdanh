@@ -39,7 +39,21 @@ async function _renderServerStats(interaction, period = 'all') {
     getServerStats(interaction.guild.id, startDate, endDate),
     getTopMembers(interaction.guild.id, 5),
   ]);
-  return interaction.editReply(await StatsView.renderServerStats(stats, top, interaction.guild, period));
+
+  // Fetch previous period for trend
+  let prevStats = null;
+  if (period !== 'all') {
+    const now = DateTime.now();
+    const prevStart = period === 'week'
+      ? now.minus({ weeks: 1 }).startOf('week').toISO()
+      : now.minus({ months: 1 }).startOf('month').toISO();
+    const prevEnd = period === 'week'
+      ? now.startOf('week').toISO()
+      : now.startOf('month').toISO();
+    prevStats = await getServerStats(interaction.guild.id, prevStart, prevEnd).catch(() => null);
+  }
+
+  return interaction.editReply(await StatsView.renderServerStats(stats, top, interaction.guild, period, prevStats));
 }
 
 function _readPeriod(interaction) {
@@ -144,15 +158,16 @@ class SetupStatsHandler extends InteractionHandler {
     if (customId === CUSTOM_ID.TOI) {
       await interaction.deferUpdate();
       try {
-        const [stats, badges, cfg] = await Promise.all([
+        const [stats, badges, cfg, records] = await Promise.all([
           getMemberStats(guild.id, interaction.user.id),
           getMemberBadges(guild.id, interaction.user.id),
           getGuildConfig(guild.id),
+          getAttendancesByUser(guild.id, interaction.user.id).then(r => Array.isArray(r) ? r.slice(0, 10) : []),
         ]);
         let member;
         try { member = await guild.members.fetch(interaction.user.id); } catch { member = null; }
         // [FIX] truyền viewerId = interaction.user.id (xem của chính mình → không encode uid)
-        return interaction.editReply(StatsView.renderToi(stats, member, guild, badges, interaction.user.id, cfg));
+        return interaction.editReply(StatsView.renderToi(stats, member, guild, badges, interaction.user.id, cfg, records));
       } catch (e) {
         log.error('SETUP_STATS', guild.id, 'getMemberStats thất bại: %s', e.message);
         return interaction.editReply({ content: '❌ Không thể tải stats cá nhân, thử lại sau.', embeds: [], files: [] });
@@ -215,16 +230,17 @@ class SetupStatsHandler extends InteractionHandler {
       try {
         if (ctx === 'toi') {
           const targetId = _readUid(interaction) ?? interaction.user.id;
-          const [stats, badges, cfg] = await Promise.all([
+          const [stats, badges, cfg, records] = await Promise.all([
             getMemberStats(guild.id, targetId),
             getMemberBadges(guild.id, targetId),
             getGuildConfig(guild.id),
+            getAttendancesByUser(guild.id, targetId).then(r => Array.isArray(r) ? r.slice(0, 10) : []),
           ]);
           let member;
           const userId = stats?.user_id ?? targetId;
           try { member = await guild.members.fetch(userId); } catch { member = null; }
           const viewerId = userId !== interaction.user.id ? interaction.user.id : userId;
-          return interaction.editReply(StatsView.renderToi(stats, member, guild, badges, viewerId, cfg));
+          return interaction.editReply(StatsView.renderToi(stats, member, guild, badges, viewerId, cfg, records));
         }
 
         if (ctx === 'rank') {

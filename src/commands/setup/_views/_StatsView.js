@@ -100,7 +100,7 @@ function renderStatsMenu() {
  * @param {string}     [viewerId] — interaction.user.id; nếu khác userId thì encode uid vào footer
  * @param {object}     [cfg]      — guild config
  */
-function renderToi(stats, member, guild, badges, viewerId = null, cfg = null) {
+function renderToi(stats, member, guild, badges, viewerId = null, cfg = null, records = null) {
   const userId  = member?.id ?? member?.user?.id;
   const joined  = stats?.total_joined   ?? 0;
   const total   = stats?.total_sessions ?? 0;
@@ -149,6 +149,23 @@ function renderToi(stats, member, guild, badges, viewerId = null, cfg = null) {
   const phaiRoles = stats?.phai_role_ids ?? [];
   const phaiStr   = formatPhaiList(phaiRoles, guild, cfg?.phai_role_icons);
 
+  // Timeline: last 10 sessions as compact bar
+  let timelineStr = '';
+  if (Array.isArray(records) && records.length > 0) {
+    const MAX_TL = 10;
+    const recent = records.slice(0, MAX_TL);
+    const blocks = recent.map(r => {
+      switch (r.status) {
+        case 'tham_gia':       return '🟢';
+        case 'tre':            return '🟡';
+        case 'co_phep':        return '🟣';
+        case 'khong_tham_gia': return '🔴';
+        default:               return '⚪';
+      }
+    });
+    timelineStr = `${blocks.join('')} \`${recent.length} phiên gần nhất\``;
+  }
+
   const descParts = [
     isViewingOther ? `> 🔍 Đang xem thành viên khác` : null,
     phaiStr ? `> ${phaiStr}` : null,
@@ -157,6 +174,7 @@ function renderToi(stats, member, guild, badges, viewerId = null, cfg = null) {
       ? '> _Chưa có dữ liệu điểm danh._'
       : `${pctEmoji(pct)} **Tỉ lệ tham gia: ${pct}%** — ${pctLabel(pct)}`,
     total > 0 ? `\`${bar}\`` : null,
+    timelineStr,
   ].filter(Boolean);
 
   const embed = new EmbedBuilder()
@@ -178,10 +196,16 @@ function renderToi(stats, member, guild, badges, viewerId = null, cfg = null) {
   let chartAttachment = null;
   if (total > 0 && chartValues.some(v => v > 0)) {
     try {
+      const pieColors = [
+        `#${STATUS_CONFIG.tham_gia.color.toString(16).padStart(6, '0')}`,
+        `#${STATUS_CONFIG.tre.color.toString(16).padStart(6, '0')}`,
+        `#${STATUS_CONFIG.khong_tham_gia.color.toString(16).padStart(6, '0')}`,
+        `#${STATUS_CONFIG.co_phep.color.toString(16).padStart(6, '0')}`,
+      ];
       const chartBuf = generatePieChart(
         ['Tham gia', 'Tre', 'Vang', 'Co phep'],
         [joined - (late ?? 0), late ?? 0, absent ?? 0, excused ?? 0],
-        ['#57f287', '#f0a500', '#ff4444', '#fee75c'],
+        pieColors,
         'Thong ke ca nhan'
       );
       chartAttachment = new AttachmentBuilder(chartBuf, { name: 'chart.png' });
@@ -404,7 +428,15 @@ const PERIOD_LABELS = {
  * @param {object} guild         — Guild object
  * @param {string} [period=all]  — 'week' | 'month' | 'all'
  */
-async function renderServerStats(stats, top, guild, period = 'all') {
+function _trendArrow(current, previous) {
+  if (previous == null || previous === 0) return '';
+  const diff = current - previous;
+  if (diff > 0) return ` 📈 +${Math.abs(diff)}%`;
+  if (diff < 0) return ` 📉 -${Math.abs(diff)}%`;
+  return ' ➡️';
+}
+
+async function renderServerStats(stats, top, guild, period = 'all', prevStats = null) {
   const pct      = stats?.rate_present      ?? 0;
   const total    = stats?.total_sessions    ?? 0;
   const members  = stats?.total_members     ?? 0;
@@ -423,12 +455,15 @@ async function renderServerStats(stats, top, guild, period = 'all') {
   const periodLabel = PERIOD_LABELS[period] ?? 'Tất cả';
   const titleSuffix = period === 'all' ? '' : ` (${periodLabel})`;
 
+  const trend = prevStats ? _trendArrow(pct, prevStats.rate_present) : '';
+  const trendSuffix = trend ? ` ${trend}` : '';
+
   const embed = new EmbedBuilder()
     .setColor(color)
     .setAuthor(buildAuthor(guild))
     .setTitle(`${ICONS.CHART} Thống kê Server${titleSuffix}`)
     .setDescription([
-      `${pctEmoji(pct)} **Tỉ lệ tham gia trung bình: ${pct}%** — ${pctLabel(pct)}`,
+      `${pctEmoji(pct)} **Tỉ lệ tham gia trung bình: ${pct}%**${trendSuffix} — ${pctLabel(pct)}`,
       `\`${buildRichProgressBar(pct)}\``,
     ].join('\n'))
     .addFields(

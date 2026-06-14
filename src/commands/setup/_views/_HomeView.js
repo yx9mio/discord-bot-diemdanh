@@ -60,9 +60,10 @@ function render({ guild, cfg, schedules, members, session, sessions }) {
   }
 
   const tz      = cfg?.timezone ?? 'Asia/Ho_Chi_Minh';
-  const channel = cfg?.notification_channel_id ? `<#${cfg.notification_channel_id}>` : 'Chưa cài';
+  const channelStatus = hasChannel ? '🟢' : '🔴';
   embed1.addFields(
-    { name: `${ICONS.GEAR} Cài đặt chung`, value: `${ICONS.CHANNEL} ${channel} ${ICONS.GLOBE} \`${tz}\``, inline: false },
+    { name: '📡 Kênh thông báo', value: `${channelStatus} ${cfg?.notification_channel_id ? `<#${cfg.notification_channel_id}>` : 'Chưa cài'}`, inline: true },
+    { name: '🌐 Múi giờ', value: `\`${tz}\``, inline: true },
   );
 
   const phaiIds = cfg?.phai_role_ids ?? [];
@@ -75,11 +76,10 @@ function render({ guild, cfg, schedules, members, session, sessions }) {
       return count > 0 ? `${icon} ${role?.name ?? rid}: ${count}` : null;
     }).filter(Boolean).join('\n');
   }
-  embed1.addFields({
-    name: `${ICONS.MEMBER} Thành viên`,
-    value: `${members?.length ?? 0} người${phaiBreakdown ? `\n${phaiBreakdown}` : ''}`,
-    inline: false,
-  });
+  embed1.addFields(
+    { name: `${ICONS.MEMBER} Thành viên`, value: `${(members?.length ?? 0) > 0 ? '🟢' : '🔴'} **${members?.length ?? 0}** người${phaiBreakdown ? `\n${phaiBreakdown}` : ''}`, inline: true },
+    { name: '⚔️ Phái / Nhóm', value: phaiIds.length > 0 ? `🟢 **${phaiIds.length}** nhóm` : '🔴 Chưa cài', inline: true },
+  );
 
   const embed2 = new EmbedBuilder()
     .setColor(COLORS.PRIMARY)
@@ -94,13 +94,13 @@ function render({ guild, cfg, schedules, members, session, sessions }) {
       ? `**${name}** · ${ch} · bởi ${by}`
       : `**${name}** + ${cnt - 1} phiên khác · ${ch} · bởi ${by}`;
     embed2.addFields({
-      name: `${ICONS.SESSION} Phiên đang mở`,
+      name: '🟢 Phiên đang mở',
       value: sessionLine,
       inline: false,
     });
   } else {
     embed2.addFields({
-      name: `${ICONS.SESSION} Phiên đang mở`,
+      name: '🔴 Phiên đang mở',
       value: `Chưa có phiên nào. Bấm **${ICONS.PLUS} Mở phiên mới** để bắt đầu.`,
       inline: false,
     });
@@ -110,14 +110,14 @@ function render({ guild, cfg, schedules, members, session, sessions }) {
     const top  = schedules.slice(0, 3).map((s, i) => `${i + 1}. ${_fmtSchedule(s)}`).join('\n');
     const more = schedules.length > 3 ? `\n_...và ${schedules.length - 3} lịch khác_` : '';
     embed2.addFields({
-      name: `${ICONS.CALENDAR} Lịch cố định`,
+      name: `📅 Lịch cố định (${schedules.length})`,
       value: `${top}${more}`,
       inline: false,
     });
   } else {
     embed2.addFields({
-      name: `${ICONS.CALENDAR} Lịch cố định`,
-      value: `Chưa có lịch. Bấm **${ICONS.PLUS} Quản lý lịch** để thêm.`,
+      name: '📅 Lịch cố định',
+      value: `🔴 Chưa có lịch. Bấm **${ICONS.PLUS} Quản lý lịch** để thêm.`,
       inline: false,
     });
   }

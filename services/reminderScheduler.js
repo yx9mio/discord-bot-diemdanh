@@ -17,6 +17,7 @@ const scheduledService = require('./scheduledService.js');
 const sessionService   = require('./sessionService.js');
 const log = require('../utils/logger.js');
 const { DateTime } = require('luxon');
+const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { buildSessionEmbed } = require('../utils/_views/sessionView.js');
 const { buildAttendanceSelectRow, buildSessionActionRow } = require('../utils/_views/rows.js');
 const { startAutoRefresh, scheduleCloseTimer } = require('../utils/timers.js');
@@ -91,16 +92,31 @@ async function processOneReminder(guild, cfg, sched, now, tz) {
     const shouldRemind = (minsToOpen === remind1) || (minsToOpen === remind2);
     if (!shouldRemind) return;
 
-    const msg = `⏰ **Nhắc lịch:** Phiên **${sched.session_name}** sẽ mở sau **${minsToOpen} phút**.`;
-
     // Gửi vào kênh thông báo
     const ch = await guild.channels.fetch(cfg.notification_channel_id).catch(() => null);
     if (ch) {
-      await ch.send(msg).catch(() => {});
+      const embed = new EmbedBuilder()
+        .setColor(0x5865f2)
+        .setTitle('⏰ Nhắc lịch điểm danh')
+        .setDescription(`Phiên **${sched.session_name}** sẽ mở sau **${minsToOpen} phút**.`)
+        .addFields(
+          { name: '🕐 Giờ mở', value: `${String(sched.hour).padStart(2, '0')}:${String(sched.minute ?? 0).padStart(2, '0')}`, inline: true },
+          { name: '📅 Loại', value: sched.type === 'one_time' ? 'Một lần' : 'Hàng tuần', inline: true },
+        )
+        .setTimestamp();
+      const confirmRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`reminder:confirm:${sched.id}`)
+          .setLabel('Có mặt')
+          .setEmoji('✅')
+          .setStyle(ButtonStyle.Success),
+      );
+      await ch.send({ embeds: [embed], components: [confirmRow] }).catch(() => {});
     }
 
     // Gửi DM cho thành viên đủ điều kiện
-    await _sendDmReminders(guild, cfg, sched, msg);
+    const dmMsg = `⏰ **Nhắc lịch:** Phiên **${sched.session_name}** sẽ mở sau **${minsToOpen} phút**.`;
+    await _sendDmReminders(guild, cfg, sched, dmMsg);
 
     log.info('REMINDER', guild.id, 'Sent %dmin reminder for %s', minsToOpen, sched.session_name);
   } catch (e) {

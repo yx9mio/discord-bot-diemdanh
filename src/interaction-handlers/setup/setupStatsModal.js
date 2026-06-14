@@ -6,6 +6,7 @@
 const { MessageFlags } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const { getMemberStats, getMemberBadges } = require('../../../services/memberService.js');
+const { getAttendancesByUser } = require('../../../services/attendanceService.js');
 const log = require('../../../utils/logger.js');
 const { replyErrEdit } = require('../../../utils/embeds.js');
 const { StatsView } = require('../../commands/setup/_views/_StatsView.js');
@@ -45,9 +46,10 @@ class SetupStatsModalHandler extends InteractionHandler {
         return interaction.editReply(replyErrEdit('Không tìm thấy thành viên. Nhập User ID (số) hoặc @username chính xác.'));
       }
 
-      const [stats, badges] = await Promise.all([
+      const [stats, badges, records] = await Promise.all([
         getMemberStats(guild.id, targetUserId),
         getMemberBadges(guild.id, targetUserId),
+        getAttendancesByUser(guild.id, targetUserId).then(r => Array.isArray(r) ? r.slice(0, 10) : []),
       ]);
 
       let member;
@@ -56,7 +58,7 @@ class SetupStatsModalHandler extends InteractionHandler {
       // [FIX] Truyền viewerId = interaction.user.id → renderToi encode uid:targetUserId vào footer
       // → REFRESH sau này đọc được uid để reload đúng target
       return interaction.editReply(
-        StatsView.renderToi(stats, member, guild, badges, interaction.user.id)
+        StatsView.renderToi(stats, member, guild, badges, interaction.user.id, null, records)
       );
     } catch (e) {
       log.error('STATS_MODAL', guild?.id, 'xem người khác thất bại: %s', e.message);
