@@ -13,12 +13,15 @@ const COMMAND_REGISTRY = [
   { name: 'cancel',  desc: 'Hủy phiên điểm danh đang mở',                                  category: 'session', audience: 'admin' },
   { name: 'status',  desc: 'Xem trạng thái phiên hiện tại',                                category: 'session', audience: 'both',  examples: ['/status'] },
 
-  { name: 'mystats',     desc: 'Xem thống kê điểm danh của bạn',                           category: 'stats', audience: 'user',  examples: ['/mystats'] },
-  { name: 'stats',       desc: 'Xem thống kê điểm danh của một thành viên',                category: 'stats', audience: 'admin', examples: ['/stats user:@user'] },
-  { name: 'leaderboard', desc: 'Bảng xếp hạng điểm danh',                                  category: 'stats', audience: 'both',  examples: ['/leaderboard'] },
+  { name: 'mystats',     desc: 'Xem thống kê điểm danh của bạn',                           category: 'stats',   audience: 'user',  examples: ['/mystats'] },
+  { name: 'stats',       desc: 'Xem thống kê điểm danh của một thành viên',                category: 'stats',   audience: 'admin', examples: ['/stats user:@user'] },
+  { name: 'leaderboard', desc: 'Bảng xếp hạng điểm danh',                                  category: 'stats',   audience: 'both',  examples: ['/leaderboard'] },
 
-  { name: 'setup', desc: 'Mở bảng điều khiển quản trị',                                    category: 'admin', audience: 'admin', examples: ['/setup'] },
-  { name: 'mark',  desc: 'Điểm danh thay cho thành viên',                                  category: 'admin', audience: 'admin', examples: ['/mark user:@user status:tham_gia'] },
+  { name: 'setup', desc: 'Mở bảng điều khiển quản trị',                                    category: 'admin',   audience: 'admin', examples: ['/setup'] },
+  { name: 'mark',  desc: 'Điểm danh thay cho thành viên',                                  category: 'admin',   audience: 'admin', examples: ['/mark user:@user status:tham_gia'] },
+  { name: 'config', desc: 'Xem hoặc chỉnh sửa cấu hình server',                            category: 'admin',   audience: 'admin' },
+  { name: 'members', desc: 'Quản lý danh sách thành viên được theo dõi',                   category: 'admin',   audience: 'admin' },
+  { name: 'schedules', desc: 'Quản lý lịch điểm danh cố định',                             category: 'admin',   audience: 'admin' },
 
   { name: 'help',  desc: 'Hiển thị danh sách lệnh + hướng dẫn',                            category: 'general', audience: 'both', examples: ['/help'] },
 ];

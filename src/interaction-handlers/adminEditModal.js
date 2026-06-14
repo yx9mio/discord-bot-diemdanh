@@ -1,7 +1,7 @@
 // interaction-handlers/adminEditModal.js
 // Modal cho admin sửa điểm danh của member — upsert + update embed
 'use strict';
-const { MessageFlags } = require('discord.js');
+const { MessageFlags, EmbedBuilder } = require('discord.js');
 const {
   InteractionHandler, InteractionHandlerTypes,
 } = require('@sapphire/framework');
@@ -128,9 +128,21 @@ class AdminEditModalHandler extends InteractionHandler {
       log.error('ADMIN_EDIT', guild.id, 'Lỗi update embed: %s', e.message);
     }
 
-    return interaction.editReply({
-      content: `✅ Đã sửa điểm danh của **${username}** → ${statusFull(resolvedStatus)}`,
-    });
+    const editEmbed = new EmbedBuilder()
+      .setColor(0xf0a500)
+      .setAuthor({ name: user.username, iconURL: user.displayAvatarURL({ size: 32 }) })
+      .setTitle('🔧 Admin đã sửa điểm danh')
+      .setDescription([
+        `**${targetMember.displayName}** đã được cập nhật sang:`,
+        `${statusFull(resolvedStatus)}`,
+      ].join('\n'))
+      .addFields(
+        { name: 'Phiên', value: `**${session.session_name ?? 'Phiên'}**`, inline: true },
+        { name: 'Người sửa', value: `<@${user.id}>`, inline: true },
+      )
+      .setTimestamp();
+
+    return interaction.editReply({ embeds: [editEmbed] });
   }, 'AdminEditModalHandler')(interaction); }
 }
 

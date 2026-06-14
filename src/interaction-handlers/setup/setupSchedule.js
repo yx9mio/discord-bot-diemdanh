@@ -152,8 +152,8 @@ class SetupScheduleHandler extends InteractionHandler {
         const schedules = await scheduledService.getScheduledSessions(guild.id).catch(() => []);
         return interaction.editReply(ScheduleView.render({ schedules, guild, page: 0 }));
       }
-      setEditState(guild.id, scheduleId, { step: 2 });
-      const state = getEditState(guild.id, scheduleId);
+      setEditState(guild.id, interaction.user.id, scheduleId, { step: 2 });
+      const state = getEditState(guild.id, interaction.user.id, scheduleId);
       return interaction.editReply(renderEditViewStep2(guild, state));
     }
 
@@ -161,7 +161,7 @@ class SetupScheduleHandler extends InteractionHandler {
       await interaction.deferUpdate();
       const footer = interaction.message?.embeds?.[0]?.footer?.text ?? '';
       const sidMatch = footer.match(/sid:(\d+)/);
-      if (sidMatch) clearEditState(guild.id, sidMatch[1]);
+      if (sidMatch) clearEditState(guild.id, interaction.user.id, sidMatch[1]);
       const schedules = await scheduledService.getScheduledSessions(guild.id).catch(() => []);
       return interaction.editReply(ScheduleView.render({ schedules, guild, page: 0 }));
     }
@@ -175,15 +175,15 @@ class SetupScheduleHandler extends InteractionHandler {
         const schedules = await scheduledService.getScheduledSessions(guild.id).catch(() => []);
         return interaction.editReply(ScheduleView.render({ schedules, guild, page: 0 }));
       }
-      const state = getEditState(guild.id, scheduleId);
+      const state = getEditState(guild.id, interaction.user.id, scheduleId);
       if (!state || state.day == null || state.hour == null || state.minute == null) {
-        clearEditState(guild.id, scheduleId);
+        clearEditState(guild.id, interaction.user.id, scheduleId);
         const schedules = await scheduledService.getScheduledSessions(guild.id).catch(() => []);
         return interaction.editReply({ content: '❌ Thiếu thông tin, vui lòng thử lại.', ...ScheduleView.render({ schedules, guild, page: 0 }) });
       }
       const noAutoClose = state.closeDayOffset === '-1';
       if (!noAutoClose && (state.closeDayOffset == null || state.closeHour == null || state.closeMinute == null)) {
-        clearEditState(guild.id, scheduleId);
+        clearEditState(guild.id, interaction.user.id, scheduleId);
         const schedules = await scheduledService.getScheduledSessions(guild.id).catch(() => []);
         return interaction.editReply({ content: '❌ Vui lòng chọn ngày/giờ kết thúc hoặc chọn Không tự đóng.', ...ScheduleView.render({ schedules, guild, page: 0 }) });
       }
@@ -211,11 +211,11 @@ class SetupScheduleHandler extends InteractionHandler {
         log.info('SCH_EDIT', guild.id, 'Đã sửa lịch định kỳ %s', scheduleId);
       } catch (e) {
         log.error('SCH_EDIT', guild.id, 'updateScheduledSession lỗi: %s', e.message);
-        clearEditState(guild.id, scheduleId);
+        clearEditState(guild.id, interaction.user.id, scheduleId);
         const schedules = await scheduledService.getScheduledSessions(guild.id).catch(() => []);
         return interaction.editReply({ content: `❌ Không thể lưu: ${e.message}`, ...ScheduleView.render({ schedules, guild, page: 0 }) });
       }
-      clearEditState(guild.id, scheduleId);
+      clearEditState(guild.id, interaction.user.id, scheduleId);
       const schedules = await scheduledService.getScheduledSessions(guild.id).catch(() => []);
       return interaction.editReply({ content: '✅ Đã cập nhật lịch.', ...ScheduleView.render({ schedules, guild, page: 0 }) });
     }

@@ -9,6 +9,8 @@
     "dev": "nodemon index.js",
     "lint": "eslint . --ext .js",
     "lint:fix": "eslint . --ext .js --fix",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "reload": "node -e \"process.exit(0)\"",
     "supabase:start": "supabase start",
     "supabase:stop": "supabase stop",
@@ -38,6 +40,7 @@
     "eslint": "^9.27.0",
     "nodemon": "^3.1.10",
     "pino-pretty": "^13.0.0",
-    "supabase": "^2.105.0"
+    "supabase": "^2.105.0",
+    "vitest": "^3.2.6"
   }
 }
