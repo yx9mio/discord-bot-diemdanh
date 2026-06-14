@@ -13,6 +13,7 @@ const log               = require('../../utils/logger.js');
 const { getSessionChannel } = require('../../utils/channel.js');
 const { replyErr, buildSessionEmbed, buildAttendanceSelectRow, buildSessionActionRow, buildAttendConfirmEmbed } = require('../../utils/embeds.js');
 const { checkCooldown } = require('../../utils/cooldown.js');
+const { wrapHandler } = require('../../utils/error-boundary.js');
 
 const SELECT_CUSTOM_ID = 'attendance:select';
 
@@ -27,6 +28,7 @@ class AttendanceSelectHandler extends InteractionHandler {
   }
 
   async run(interaction) {
+    return wrapHandler(async (interaction) => {
     const { guild, user } = interaction;
     const status = interaction.values[0];
 
@@ -135,7 +137,7 @@ class AttendanceSelectHandler extends InteractionHandler {
     } finally {
       await attendanceService.releaseAttendanceLock(session.id, user.id).catch(() => {});
     }
-  }
+  }, 'AttendanceSelectHandler')(interaction); }
 }
 
 module.exports = { AttendanceSelectHandler };

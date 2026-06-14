@@ -6,6 +6,7 @@ const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/frame
 const { requireAdmin } = require('../../../utils/permissions.js');
 const { clearState } = require('../../../utils/scheduleAddState.js');
 const { renderAddViewStep1 } = require('../../../utils/scheduleAddViews.js');
+const { wrapHandler } = require('../../../utils/error-boundary.js');
 
 const ADD_R = 'setup:sch:add:r';
 const ADD_O = 'setup:sch:add:o';
@@ -49,6 +50,7 @@ class SetupScheduleAddTypeModalHandler extends InteractionHandler {
   }
 
   async run(interaction) {
+    return wrapHandler(async (interaction) => {
     const { ok } = await requireAdmin(interaction, { context: 'thêm lịch', deferred: false });
     if (!ok) return;
 
@@ -58,9 +60,9 @@ class SetupScheduleAddTypeModalHandler extends InteractionHandler {
 
     // Recurring: show select menus
     await interaction.deferUpdate();
-    clearState(interaction.guild.id);
+    clearState(interaction.guild.id, interaction.user.id);
     return interaction.editReply(renderAddViewStep1(interaction.guild, {}));
-  }
+  }, 'SetupScheduleAddTypeModalHandler')(interaction); }
 }
 
 module.exports = { SetupScheduleAddTypeModalHandler };

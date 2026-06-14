@@ -3,6 +3,7 @@
 'use strict';
 const { ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
+const { wrapHandler } = require('../../../utils/error-boundary.js');
 
 const BROADCAST_MODAL_ID = 'setup:session:broadcast:modal';
 
@@ -15,6 +16,7 @@ class SetupBroadcastHandler extends InteractionHandler {
     return this.none();
   }
   run(interaction) {
+    return wrapHandler(async (interaction) => {
     const modal = new ModalBuilder()
       .setCustomId(BROADCAST_MODAL_ID)
       .setTitle('📢 Phát tin')
@@ -31,7 +33,7 @@ class SetupBroadcastHandler extends InteractionHandler {
         ),
       );
     return interaction.showModal(modal);
-  }
+  }, 'SetupBroadcastHandler')(interaction); }
 }
 
 module.exports = { SetupBroadcastHandler };

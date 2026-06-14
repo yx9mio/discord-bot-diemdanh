@@ -6,6 +6,7 @@
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const { getGuildConfig } = require('../../../services/configService.js');
 const { ConfigView } = require('../../commands/setup/_views/_ConfigView.js');
+const { wrapHandler } = require('../../../utils/error-boundary.js');
 
 class SetupConfigHandler extends InteractionHandler {
   constructor(ctx, options) {
@@ -18,11 +19,12 @@ class SetupConfigHandler extends InteractionHandler {
   }
 
   async run(interaction) {
+    return wrapHandler(async (interaction) => {
     await interaction.deferUpdate();
     const cfg = await getGuildConfig(interaction.guild.id);
     ConfigView.storeMessageId(interaction.guild.id, interaction.message.id);
     return interaction.editReply(ConfigView.render({ cfg, guild: interaction.guild }));
-  }
+  }, 'SetupConfigHandler')(interaction); }
 }
 
 module.exports = { SetupConfigHandler };

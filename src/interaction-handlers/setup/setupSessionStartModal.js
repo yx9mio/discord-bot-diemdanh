@@ -12,6 +12,7 @@ const { fmtTs }          = require('../../../utils/format.js');
 const { startAutoRefresh, scheduleCloseTimer } = require('../../../utils/timers.js');
 const { buildSessionEmbed } = require('../../../utils/_views/sessionView.js');
 const { buildAttendanceSelectRow, buildSessionActionRow } = require('../../../utils/_views/rows.js');
+const { wrapHandler } = require('../../../utils/error-boundary.js');
 
 const MODAL_ID = 'setup:session:start:modal';
 
@@ -26,6 +27,7 @@ class SetupSessionStartModalHandler extends InteractionHandler {
   }
 
   async run(interaction) {
+    return wrapHandler(async (interaction) => {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const { ok } = await requireAdmin(interaction, { context: 'mở phiên', deferred: true });
     if (!ok) return;
@@ -96,7 +98,7 @@ class SetupSessionStartModalHandler extends InteractionHandler {
       log.error('SESSION_START_MODAL', guild.id, 'Lỗi tạo phiên: %s', e.message);
       return interaction.editReply(replyErrEdit(`Không thể tạo phiên: ${e.message}`));
     }
-  }
+  }, 'SetupSessionStartModalHandler')(interaction); }
 }
 
 module.exports = { SetupSessionStartModalHandler };

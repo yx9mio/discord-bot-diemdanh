@@ -5,6 +5,7 @@ const attendanceService = require('../../../services/attendanceService.js');
 const { getGuildConfig } = require('../../../services/configService.js');
 const { getMembers } = require('../../../services/memberService.js');
 const log = require('../../../utils/logger.js');
+const { wrapHandler } = require('../../../utils/error-boundary.js');
 
 const PREFIX_REFRESH = 'setup:session:refresh';
 const PREFIX_DETAIL  = 'setup:session:detail:';
@@ -23,6 +24,7 @@ class SetupSessionHandler extends InteractionHandler {
   }
 
   async run(interaction) {
+    return wrapHandler(async (interaction) => {
     const { customId, guild, component } = interaction;
 
     let detailId = null;
@@ -61,7 +63,7 @@ class SetupSessionHandler extends InteractionHandler {
       log.error('SETUP_SESSION', guild.id, 'Session list load thất bại: %s', e.message);
       return interaction.editReply({ content: '❌ Không thể tải danh sách phiên, thử lại sau.' });
     }
-  }
+  }, 'SetupSessionHandler')(interaction); }
 }
 
 module.exports = { SetupSessionHandler };

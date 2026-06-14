@@ -3,6 +3,7 @@
 'use strict';
 const { ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
+const { wrapHandler } = require('../../../utils/error-boundary.js');
 
 const MODAL_ID = 'setup:session:start:modal';
 
@@ -17,6 +18,7 @@ class SetupSessionStartHandler extends InteractionHandler {
   }
 
   run(interaction) {
+    return wrapHandler(async (interaction) => {
     const modal = new ModalBuilder()
       .setCustomId(MODAL_ID)
       .setTitle('Mở phiên điểm danh mới');
@@ -43,7 +45,7 @@ class SetupSessionStartHandler extends InteractionHandler {
       ),
     );
     return interaction.showModal(modal);
-  }
+  }, 'SetupSessionStartHandler')(interaction); }
 }
 
 module.exports = { SetupSessionStartHandler };

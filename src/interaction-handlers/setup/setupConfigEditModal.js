@@ -6,6 +6,7 @@ const configService = require('../../../services/configService.js');
 const log = require('../../../utils/logger.js');
 const { requireAdmin } = require('../../../utils/permissions.js');
 const { replyErrEdit } = require('../../../utils/embeds.js');
+const { wrapHandler } = require('../../../utils/error-boundary.js');
 
 const MODAL_PREFIX = 'setup:cfg:modal:';
 
@@ -43,6 +44,7 @@ class SetupConfigEditModalHandler extends InteractionHandler {
   }
 
   async run(interaction) {
+    return wrapHandler(async (interaction) => {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const { ok } = await requireAdmin(interaction, { context: 'sửa cấu hình', deferred: true });
     if (!ok) return;
@@ -126,7 +128,7 @@ class SetupConfigEditModalHandler extends InteractionHandler {
       log.error('CFG_EDIT_MODAL', guildId, 'Lỗi lưu field %s: %s', suffix, e.message);
       return interaction.editReply(replyErrEdit(`Không thể lưu cấu hình: ${e.message}`));
     }
-  }
+  }, 'SetupConfigEditModalHandler')(interaction); }
 }
 
 module.exports = { SetupConfigEditModalHandler };

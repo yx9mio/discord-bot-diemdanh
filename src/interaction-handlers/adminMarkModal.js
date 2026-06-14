@@ -17,6 +17,7 @@ const { addBreadcrumb } = require('../../utils/sentry.js');
 const { getSessionChannel } = require('../../utils/channel.js');
 const { buildSessionEmbed, buildAttendanceSelectRow, buildSessionActionRow } = require('../../utils/embeds.js');
 const { statusFull } = require('../../utils/design-tokens.js');
+const { wrapHandler } = require('../../utils/error-boundary.js');
 
 class AdminMarkModalHandler extends InteractionHandler {
   constructor(ctx, options) {
@@ -29,6 +30,7 @@ class AdminMarkModalHandler extends InteractionHandler {
   }
 
   async run(interaction) {
+    return wrapHandler(async (interaction) => {
     addBreadcrumb('interaction', 'adminMarkModal', {
       customId: interaction.customId,
       userId: interaction.user?.id,
@@ -151,7 +153,7 @@ class AdminMarkModalHandler extends InteractionHandler {
       .setTimestamp();
 
     return interaction.editReply({ embeds: [confirmEmbed] });
-  }
+  }, 'AdminMarkModalHandler')(interaction); }
 }
 
 module.exports = { AdminMarkModalHandler };

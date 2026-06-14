@@ -20,6 +20,7 @@ const { endSession, announceBadges, disableAttendanceUI } = require('../../utils
 const { cancelTimers, stopAutoRefresh } = require('../../utils/timers.js');
 const { buildAdminMarkModal } = require('../../utils/adminMarkModal.js');
 const { buildAdminEditModal } = require('../../utils/adminEditModal.js');
+const { wrapHandler } = require('../../utils/error-boundary.js');
 
 // [BUG-FIX] Đồng bộ với tất cả customId được dùng trong file này
 const SESSION_BUTTON_IDS = new Set([
@@ -49,6 +50,7 @@ class SessionButtonHandler extends InteractionHandler {
   }
 
   async run(interaction) {
+    return wrapHandler(async (interaction) => {
     const { customId, guild } = interaction;
 
     // ── attend_view / attend_view:prev / attend_view:next ────────────────────────
@@ -312,7 +314,7 @@ class SessionButtonHandler extends InteractionHandler {
     if (customId === 'session:cancel_close:all') {
       return interaction.update({ content: '↩️ Đã hủy. Các phiên vẫn đang mở.', embeds: [], components: [] });
     }
-  }
+  }, 'SessionButtonHandler')(interaction); }
 }
 
 module.exports = { SessionButtonHandler };

@@ -3,6 +3,7 @@ const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/frame
 const { getTopMembers, getDistinctPhongBan } = require('../../../services/memberService.js');
 const log = require('../../../utils/logger.js');
 const { StatsView } = require('../../commands/setup/_views/_StatsView.js');
+const { wrapHandler } = require('../../../utils/error-boundary.js');
 
 class SetupStatsPhongBanHandler extends InteractionHandler {
   constructor(ctx, options) {
@@ -15,6 +16,7 @@ class SetupStatsPhongBanHandler extends InteractionHandler {
   }
 
   async run(interaction) {
+    return wrapHandler(async (interaction) => {
     await interaction.deferUpdate();
     const { guild } = interaction;
     const selectedPhongBan = interaction.values[0] === '__all' ? '' : interaction.values[0];
@@ -29,7 +31,7 @@ class SetupStatsPhongBanHandler extends InteractionHandler {
       log.error('SETUP_STATS_PB', guild.id, 'phòng ban filter thất bại: %s', e.message);
       return interaction.editReply({ content: '❌ Không thể lọc theo phòng ban, thử lại sau.', embeds: [], files: [] });
     }
-  }
+  }, 'SetupStatsPhongBanHandler')(interaction); }
 }
 
 module.exports = { SetupStatsPhongBanHandler };

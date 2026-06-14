@@ -14,6 +14,7 @@ const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/frame
 
 const configService = require('../../../services/configService.js');
 const log = require('../../../utils/logger.js');
+const { wrapHandler } = require('../../../utils/error-boundary.js');
 
 const EDIT_CHANNEL         = 'setup:cfg:edit:channel';
 const EDIT_TZ              = 'setup:cfg:edit:tz';
@@ -156,6 +157,7 @@ class SetupConfigEditHandler extends InteractionHandler {
   }
 
   async run(interaction) {
+    return wrapHandler(async (interaction) => {
     try {
       await handleButton(interaction);
     } catch (e) {
@@ -165,7 +167,7 @@ class SetupConfigEditHandler extends InteractionHandler {
       }
       return interaction.reply({ content: '❌ Lỗi xử lý, thử lại sau.', flags: MessageFlags.Ephemeral }).catch(() => null);
     }
-  }
+  }, 'SetupConfigEditHandler')(interaction); }
 }
 
 module.exports = SetupConfigEditHandler;

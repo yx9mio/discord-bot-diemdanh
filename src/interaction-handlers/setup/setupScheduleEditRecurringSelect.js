@@ -4,6 +4,7 @@ const { setState, getState } = require('../../../utils/scheduleEditState.js');
 const { renderEditViewStep1, renderEditViewStep2 } = require('../../../utils/scheduleEditViews.js');
 const scheduledService = require('../../../services/scheduledService.js');
 const log = require('../../../utils/logger.js');
+const { wrapHandler } = require('../../../utils/error-boundary.js');
 
 const HANDLED = ['setup:sch:edit:r:day', 'setup:sch:edit:r:hour', 'setup:sch:edit:r:min',
   'setup:sch:edit:r:close_day', 'setup:sch:edit:r:close_hour', 'setup:sch:edit:r:close_min',
@@ -20,6 +21,7 @@ class SetupScheduleEditRecurringSelectHandler extends InteractionHandler {
   }
 
   async run(interaction) {
+    return wrapHandler(async (interaction) => {
     await interaction.deferUpdate();
     const { guild, customId, values, message } = interaction;
 
@@ -56,7 +58,7 @@ class SetupScheduleEditRecurringSelectHandler extends InteractionHandler {
       const { ScheduleView } = require('../../commands/setup/_views/_ScheduleView.js');
       return interaction.editReply({ content: '❌ Lỗi xử lý, vui lòng thử lại.', ...ScheduleView.render({ schedules, guild, page: 0 }) });
     }
-  }
+  }, 'SetupScheduleEditRecurringSelectHandler')(interaction); }
 }
 
 module.exports = { SetupScheduleEditRecurringSelectHandler };

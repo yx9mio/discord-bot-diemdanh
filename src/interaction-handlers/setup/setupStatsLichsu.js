@@ -6,6 +6,7 @@ const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/frame
 const { getAttendancesByUser } = require('../../../services/attendanceService.js');
 const log = require('../../../utils/logger.js');
 const { StatsView } = require('../../commands/setup/_views/_StatsView.js');
+const { wrapHandler } = require('../../../utils/error-boundary.js');
 
 const LICHSU_NEXT = 'setup:stats:lichsu:next';
 const LICHSU_PREV = 'setup:stats:lichsu:prev';
@@ -21,6 +22,7 @@ class SetupStatsLichsuHandler extends InteractionHandler {
   }
 
   async run(interaction) {
+    return wrapHandler(async (interaction) => {
     await interaction.deferUpdate();
     const { guild, customId } = interaction;
 
@@ -44,7 +46,7 @@ class SetupStatsLichsuHandler extends InteractionHandler {
       log.error('STATS_LICHSU', guild?.id, 'pagination thất bại: %s', e.message);
       return interaction.editReply({ content: '❌ Không thể tải trang, thử lại sau.' });
     }
-  }
+  }, 'SetupStatsLichsuHandler')(interaction); }
 }
 
 module.exports = { SetupStatsLichsuHandler };

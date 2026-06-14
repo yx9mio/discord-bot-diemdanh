@@ -217,7 +217,13 @@ async function autoOpenSession(guild, cfg, sched) {
 
 async function _sendDmReminders(guild, cfg, sched, msg) {
   try {
-    await guild.members.fetch().catch(() => {});
+    if (guild.members.cache.size === 0) {
+      await guild.members.fetch().catch(() => {});
+      if (guild.members.cache.size === 0) {
+        log.warn('REMINDER_DM', guild.id, 'Members cache trống, bỏ qua gửi DM');
+        return;
+      }
+    }
     const targetIds = new Set();
 
     // Ưu tiên: allowed_role_id → phai_role_ids → attendance_role_id → tất cả

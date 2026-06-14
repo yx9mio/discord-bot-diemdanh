@@ -13,6 +13,7 @@ const { getState, setState, clearState } = require('../../../utils/scheduleAddSt
 const { renderAddViewStep2, renderAddViewStep1 } = require('../../../utils/scheduleAddViews.js');
 const { getState: getEditState, setState: setEditState, clearState: clearEditState } = require('../../../utils/scheduleEditState.js');
 const { renderEditViewStep1, renderEditViewStep2 } = require('../../../utils/scheduleEditViews.js');
+const { wrapHandler } = require('../../../utils/error-boundary.js');
 
 class SetupScheduleHandler extends InteractionHandler {
   constructor(ctx, options) {
@@ -41,6 +42,7 @@ class SetupScheduleHandler extends InteractionHandler {
   }
 
   async run(interaction) {
+    return wrapHandler(async (interaction) => {
     const { customId, guild } = interaction;
 
     if (customId === CUSTOM_ID.REFRESH) {
@@ -80,29 +82,29 @@ class SetupScheduleHandler extends InteractionHandler {
     // ── Add recurring schedule flow ───────────────────────────────────
     if (customId === 'setup:sch:add:r:step1:next') {
       await interaction.deferUpdate();
-      setState(guild.id, { step: 2 });
-      const state = getState(guild.id);
+      setState(guild.id, interaction.user.id, { step: 2 });
+      const state = getState(guild.id, interaction.user.id);
       return interaction.editReply(renderAddViewStep2(guild, state));
     }
 
     if (customId === 'setup:sch:add:r:step1:cancel' || customId === 'setup:sch:add:r:step2:cancel') {
       await interaction.deferUpdate();
-      clearState(guild.id);
+      clearState(guild.id, interaction.user.id);
       const schedules = await scheduledService.getScheduledSessions(guild.id).catch(() => []);
       return interaction.editReply(ScheduleView.render({ schedules, guild, page: 0 }));
     }
 
     if (customId === 'setup:sch:add:r:step2:confirm') {
       await interaction.deferUpdate();
-      const state = getState(guild.id);
+      const state = getState(guild.id, interaction.user.id);
       if (state.day == null || state.hour == null || state.minute == null) {
-        clearState(guild.id);
+        clearState(guild.id, interaction.user.id);
         const schedules = await scheduledService.getScheduledSessions(guild.id).catch(() => []);
         return interaction.editReply({ content: '❌ Thiếu thông tin, vui lòng thử lại.', ...ScheduleView.render({ schedules, guild, page: 0 }) });
       }
       const noAutoClose = state.closeDayOffset === '-1';
       if (!noAutoClose && (state.closeDayOffset == null || state.closeHour == null || state.closeMinute == null)) {
-        clearState(guild.id);
+        clearState(guild.id, interaction.user.id);
         const schedules = await scheduledService.getScheduledSessions(guild.id).catch(() => []);
         return interaction.editReply({ content: '❌ Vui lòng chọn ngày/giờ kết thúc hoặc chọn Không tự đóng.', ...ScheduleView.render({ schedules, guild, page: 0 }) });
       }
@@ -131,11 +133,11 @@ class SetupScheduleHandler extends InteractionHandler {
         log.info('SCH_ADD', guild.id, 'Đã thêm lịch định kỳ');
       } catch (e) {
         log.error('SCH_ADD', guild.id, 'addRecurringSession lỗi: %s', e.message);
-        clearState(guild.id);
+        clearState(guild.id, interaction.user.id);
         const schedules = await scheduledService.getScheduledSessions(guild.id).catch(() => []);
         return interaction.editReply({ content: `❌ Không thể thêm lịch: ${e.message}`, ...ScheduleView.render({ schedules, guild, page: 0 }) });
       }
-      clearState(guild.id);
+      clearState(guild.id, interaction.user.id);
       const schedules = await scheduledService.getScheduledSessions(guild.id).catch(() => []);
       return interaction.editReply({ content: '✅ Đã thêm lịch.', ...ScheduleView.render({ schedules, guild, page: 0 }) });
     }
@@ -257,7 +259,7 @@ class SetupScheduleHandler extends InteractionHandler {
       const schedules = await scheduledService.getScheduledSessions(guild.id).catch(() => []);
       return interaction.editReply({ ...ScheduleView.render({ schedules, guild, page: 0 }), content: null });
     }
-  }
+  }, 'SetupScheduleHandler')(interaction); }
 }
 
 module.exports = { SetupScheduleHandler };

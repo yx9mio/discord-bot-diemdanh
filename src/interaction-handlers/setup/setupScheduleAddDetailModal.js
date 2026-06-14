@@ -10,6 +10,7 @@ const configService    = require('../../../services/configService.js');
 const log = require('../../../utils/logger.js');
 const { requireAdmin } = require('../../../utils/permissions.js');
 const { replyErrEdit } = require('../../../utils/embeds.js');
+const { wrapHandler } = require('../../../utils/error-boundary.js');
 
 const MODAL_RECURRING_ID = 'setup:sch:add:recurring:detail';
 const MODAL_ONETIME_ID   = 'setup:sch:add:onetime:detail';
@@ -36,6 +37,7 @@ class SetupScheduleAddDetailModalHandler extends InteractionHandler {
   }
 
   async run(interaction) {
+    return wrapHandler(async (interaction) => {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const { ok } = await requireAdmin(interaction, { deferred: true, context: 'thêm lịch' });
     if (!ok) return;
@@ -107,7 +109,7 @@ class SetupScheduleAddDetailModalHandler extends InteractionHandler {
       log.error('SCH_ADD_DETAIL', guild.id, 'Lỗi thêm lịch: %s', e.message);
       return interaction.editReply(replyErrEdit(`Không thể thêm lịch: ${e.message}`));
     }
-  }
+  }, 'SetupScheduleAddDetailModalHandler')(interaction); }
 }
 
 module.exports = { SetupScheduleAddDetailModalHandler, MODAL_RECURRING_ID, MODAL_ONETIME_ID };

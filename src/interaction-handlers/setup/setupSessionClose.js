@@ -5,6 +5,7 @@ const { requireAdmin } = require('../../../utils/permissions.js');
 const { replyConfirm, replyErrEdit } = require('../../../utils/embeds.js');
 const sessionService = require('../../../services/sessionService.js');
 const log = require('../../../utils/logger.js');
+const { wrapHandler } = require('../../../utils/error-boundary.js');
 
 const PREFIX = 'setup:session:close:';
 const CLOSE_ALL = 'setup:session:close:all';
@@ -23,6 +24,7 @@ class SetupSessionCloseHandler extends InteractionHandler {
   }
 
   async run(interaction) {
+    return wrapHandler(async (interaction) => {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const { ok } = await requireAdmin(interaction, { context: 'đóng phiên', deferred: true });
     if (!ok) return;
@@ -73,7 +75,7 @@ class SetupSessionCloseHandler extends InteractionHandler {
       log.error('SESSION_CLOSE', guild.id, 'Kiểm tra phiên thất bại: %s', e.message);
       return interaction.editReply(replyErrEdit('Không thể kiểm tra phiên, thử lại sau.'));
     }
-  }
+  }, 'SetupSessionCloseHandler')(interaction); }
 }
 
 module.exports = { SetupSessionCloseHandler };

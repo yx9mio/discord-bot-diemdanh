@@ -2,6 +2,7 @@
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const { setState, getState } = require('../../../utils/scheduleAddState.js');
 const { renderAddViewStep1, renderAddViewStep2 } = require('../../../utils/scheduleAddViews.js');
+const { wrapHandler } = require('../../../utils/error-boundary.js');
 
 const HANDLED = ['setup:sch:add:r:day', 'setup:sch:add:r:hour', 'setup:sch:add:r:min',
   'setup:sch:add:r:close_day', 'setup:sch:add:r:close_hour', 'setup:sch:add:r:close_min',
@@ -18,24 +19,25 @@ class SetupScheduleAddRecurringSelectHandler extends InteractionHandler {
   }
 
   async run(interaction) {
+    return wrapHandler(async (interaction) => {
     await interaction.deferUpdate();
     const { guild, customId, values } = interaction;
     const val = values[0];
 
-    if (customId === 'setup:sch:add:r:day') setState(guild.id, { day: parseInt(val, 10) });
-    else if (customId === 'setup:sch:add:r:hour') setState(guild.id, { hour: parseInt(val, 10) });
-    else if (customId === 'setup:sch:add:r:min') setState(guild.id, { minute: parseInt(val, 10) });
-    else if (customId === 'setup:sch:add:r:close_day') setState(guild.id, { closeDayOffset: val });
-    else if (customId === 'setup:sch:add:r:close_hour') setState(guild.id, { closeHour: parseInt(val, 10) });
-    else if (customId === 'setup:sch:add:r:close_min') setState(guild.id, { closeMinute: parseInt(val, 10) });
-    else if (customId === 'setup:sch:add:r:channel') setState(guild.id, { channel: val });
+    if (customId === 'setup:sch:add:r:day') setState(guild.id, interaction.user.id, { day: parseInt(val, 10) });
+    else if (customId === 'setup:sch:add:r:hour') setState(guild.id, interaction.user.id, { hour: parseInt(val, 10) });
+    else if (customId === 'setup:sch:add:r:min') setState(guild.id, interaction.user.id, { minute: parseInt(val, 10) });
+    else if (customId === 'setup:sch:add:r:close_day') setState(guild.id, interaction.user.id, { closeDayOffset: val });
+    else if (customId === 'setup:sch:add:r:close_hour') setState(guild.id, interaction.user.id, { closeHour: parseInt(val, 10) });
+    else if (customId === 'setup:sch:add:r:close_min') setState(guild.id, interaction.user.id, { closeMinute: parseInt(val, 10) });
+    else if (customId === 'setup:sch:add:r:channel') setState(guild.id, interaction.user.id, { channel: val });
 
-    const state = getState(guild.id);
+    const state = getState(guild.id, interaction.user.id);
     const view = state.step === 2
       ? renderAddViewStep2(guild, state)
       : renderAddViewStep1(guild, state);
     return interaction.editReply(view);
-  }
+  }, 'SetupScheduleAddRecurringSelectHandler')(interaction); }
 }
 
 module.exports = { SetupScheduleAddRecurringSelectHandler };

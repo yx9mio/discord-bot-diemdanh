@@ -4,6 +4,7 @@ const { HistoryView } = require('../../commands/setup/_views/_HistoryView.js');
 const sessionService = require('../../../services/sessionService.js');
 const log = require('../../../utils/logger.js');
 const { CUSTOM_ID } = HistoryView;
+const { wrapHandler } = require('../../../utils/error-boundary.js');
 
 class SetupHistoryHandler extends InteractionHandler {
   constructor(ctx, options) {
@@ -17,6 +18,7 @@ class SetupHistoryHandler extends InteractionHandler {
   }
 
   async run(interaction) {
+    return wrapHandler(async (interaction) => {
     await interaction.deferUpdate();
     const { guild, customId } = interaction;
 
@@ -36,7 +38,7 @@ class SetupHistoryHandler extends InteractionHandler {
       log.error('HISTORY', guild?.id, 'run thất bại: %s', e?.message ?? e);
       return interaction.editReply({ content: '❌ Không thể tải nhật ký. Vui lòng thử lại sau.', embeds: [], components: [] });
     }
-  }
+  }, 'SetupHistoryHandler')(interaction); }
 }
 
 module.exports = { SetupHistoryHandler };

@@ -17,6 +17,7 @@ const log = require('../../../utils/logger.js');
 const { requireAdmin } = require('../../../utils/permissions.js');
 const { MemberView } = require('../../commands/setup/_views/_MemberView.js');
 const { CUSTOM_ID } = MemberView;
+const { wrapHandler } = require('../../../utils/error-boundary.js');
 
 class SetupMemberHandler extends InteractionHandler {
   constructor(ctx, options) {
@@ -40,6 +41,7 @@ class SetupMemberHandler extends InteractionHandler {
   }
 
   async run(interaction) {
+    return wrapHandler(async (interaction) => {
     const { guild, customId } = interaction;
 
     function _readFilterPhai(text) {
@@ -138,7 +140,7 @@ class SetupMemberHandler extends InteractionHandler {
     }
 
     // ── Reset streak (handled by setupResetStreak.js) ─────────────────
-  }
+  }, 'SetupMemberHandler')(interaction); }
 }
 
 module.exports = { SetupMemberHandler };

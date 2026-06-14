@@ -10,6 +10,7 @@ const { getAttendancesByUser } = require('../../../services/attendanceService.js
 const log = require('../../../utils/logger.js');
 const { replyErrEdit } = require('../../../utils/embeds.js');
 const { StatsView } = require('../../commands/setup/_views/_StatsView.js');
+const { wrapHandler } = require('../../../utils/error-boundary.js');
 
 const MODAL_ID = 'setup:stats:xem:modal';
 
@@ -24,6 +25,7 @@ class SetupStatsModalHandler extends InteractionHandler {
   }
 
   async run(interaction) {
+    return wrapHandler(async (interaction) => {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const { guild } = interaction;
 
@@ -64,7 +66,7 @@ class SetupStatsModalHandler extends InteractionHandler {
       log.error('STATS_MODAL', guild?.id, 'xem người khác thất bại: %s', e.message);
       return interaction.editReply(replyErrEdit('Không thể tải stats, thử lại sau.'));
     }
-  }
+  }, 'SetupStatsModalHandler')(interaction); }
 }
 
 module.exports = { SetupStatsModalHandler };

@@ -9,6 +9,7 @@ const { DAY_NAMES: DAY_VI } = require('../../../utils/format.js');
 const { requireAdmin } = require('../../../utils/permissions.js');
 const { setState } = require('../../../utils/scheduleEditState.js');
 const { renderEditViewStep1 } = require('../../../utils/scheduleEditViews.js');
+const { wrapHandler } = require('../../../utils/error-boundary.js');
 
 const EDIT_PREFIX = 'setup:sch:edit:';
 
@@ -33,6 +34,7 @@ class SetupScheduleEditOneTimeModalHandler extends InteractionHandler {
   }
 
   async run(interaction) {
+    return wrapHandler(async (interaction) => {
     const { ok } = await requireAdmin(interaction, { context: 'sửa lịch', deferred: false });
     if (!ok) return;
 
@@ -120,7 +122,7 @@ class SetupScheduleEditOneTimeModalHandler extends InteractionHandler {
       log.error('SCH_EDIT_MODAL', guild.id, 'Lỗi mở sửa %s: %s', scheduleId, e.message);
       return interaction.reply({ content: `❌ Không thể mở form sửa: ${e.message}`, flags: MessageFlags.Ephemeral });
     }
-  }
+  }, 'SetupScheduleEditOneTimeModalHandler')(interaction); }
 }
 
 module.exports = { SetupScheduleEditOneTimeModalHandler };

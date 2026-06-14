@@ -8,6 +8,7 @@ const log               = require('../../utils/logger.js');
 const { getSessionChannel } = require('../../utils/channel.js');
 const { replyErr, buildSessionEmbed, buildAttendanceSelectRow, buildSessionActionRow, buildAttendConfirmEmbed } = require('../../utils/embeds.js');
 const { checkCooldown } = require('../../utils/cooldown.js');
+const { wrapHandler } = require('../../utils/error-boundary.js');
 
 class PhaiSelectHandler extends InteractionHandler {
   constructor(ctx, options) {
@@ -20,6 +21,7 @@ class PhaiSelectHandler extends InteractionHandler {
   }
 
   async run(interaction) {
+    return wrapHandler(async (interaction) => {
     const { guild, user } = interaction;
     const roleId = interaction.values[0];
     const status = interaction.customId.slice('phai:select:'.length);
@@ -106,7 +108,7 @@ class PhaiSelectHandler extends InteractionHandler {
     } finally {
       await attendanceService.releaseAttendanceLock(session.id, user.id).catch(() => {});
     }
-  }
+  }, 'PhaiSelectHandler')(interaction); }
 }
 
 module.exports = { PhaiSelectHandler };

@@ -8,6 +8,7 @@ const memberService = require('../../../services/memberService.js');
 const { requireAdmin } = require('../../../utils/permissions.js');
 const { replyErrEdit } = require('../../../utils/embeds.js');
 const log = require('../../../utils/logger.js');
+const { wrapHandler } = require('../../../utils/error-boundary.js');
 
 const RESET_PREFIX   = 'setup:mem:reset:';
 const CONFIRM_PREFIX = 'setup:mem:reset:confirm:';
@@ -36,6 +37,7 @@ class SetupResetStreakHandler extends InteractionHandler {
   }
 
   async run(interaction) {
+    return wrapHandler(async (interaction) => {
     const { guild, customId } = interaction;
 
     if (customId === 'setup:mem:reset:all') {
@@ -100,7 +102,7 @@ class SetupResetStreakHandler extends InteractionHandler {
       );
       return interaction.editReply({ content: `⚠️ Xác nhận reset streak của <@${userId}>?`, components: [row] });
     }
-  }
+  }, 'SetupResetStreakHandler')(interaction); }
 }
 
 module.exports = { SetupResetStreakHandler };

@@ -8,6 +8,7 @@ const { getGuildConfig } = require('../../../services/configService.js');
 const log = require('../../../utils/logger.js');
 const { requireAdmin } = require('../../../utils/permissions.js');
 const { FOOTER_DEFAULT, replyErrEdit } = require('../../../utils/embeds.js');
+const { wrapHandler } = require('../../../utils/error-boundary.js');
 
 const BROADCAST_MODAL_ID = 'setup:session:broadcast:modal';
 
@@ -22,6 +23,7 @@ class SetupBroadcastModalHandler extends InteractionHandler {
   }
 
   async run(interaction) {
+    return wrapHandler(async (interaction) => {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const { ok } = await requireAdmin(interaction, { context: 'phát tin', deferred: true });
     if (!ok) return;
@@ -61,7 +63,7 @@ class SetupBroadcastModalHandler extends InteractionHandler {
 
     log.info('BROADCAST', guild.id, '%s phát tin: %.50s', authorName, content);
     return interaction.editReply({ content: '✅ Đã gửi thông báo.' });
-  }
+  }, 'SetupBroadcastModalHandler')(interaction); }
 }
 
 module.exports = { SetupBroadcastModalHandler };

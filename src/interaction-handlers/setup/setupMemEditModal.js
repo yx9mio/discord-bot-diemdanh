@@ -11,6 +11,7 @@ const log = require('../../../utils/logger.js');
 const { requireAdmin } = require('../../../utils/permissions.js');
 const { replyErrEdit } = require('../../../utils/embeds.js');
 const { MemberView } = require('../../commands/setup/_views/_MemberView.js');
+const { wrapHandler } = require('../../../utils/error-boundary.js');
 
 const MODAL_EDIT = 'setup:mem:edit:modal:';
 
@@ -25,6 +26,7 @@ class SetupMemEditModalHandler extends InteractionHandler {
   }
 
   async run(interaction) {
+    return wrapHandler(async (interaction) => {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const { ok } = await requireAdmin(interaction, { context: 'sửa thành viên', deferred: true });
     if (!ok) return;
@@ -67,7 +69,7 @@ class SetupMemEditModalHandler extends InteractionHandler {
     ]);
     await interaction.editReply({ content: '✅ Đã cập nhật thành viên.' });
     await interaction.message?.edit(MemberView.render({ guild, members, cfg })).catch(() => null);
-  }
+  }, 'SetupMemEditModalHandler')(interaction); }
 }
 
 module.exports = { SetupMemEditModalHandler };

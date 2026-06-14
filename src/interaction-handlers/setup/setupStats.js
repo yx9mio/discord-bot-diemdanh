@@ -12,6 +12,7 @@ const { getGuildConfig } = require('../../../services/configService.js');
 const log = require('../../../utils/logger.js');
 const { StatsView } = require('../../commands/setup/_views/_StatsView.js');
 const { CUSTOM_ID } = StatsView;
+const { wrapHandler } = require('../../../utils/error-boundary.js');
 
 // CustomId mà HomeView gửi khi bấm nút "Thống kê"
 const HOME_STATS_ID = 'setup:stats';
@@ -102,6 +103,7 @@ class SetupStatsHandler extends InteractionHandler {
   }
 
   async run(interaction) {
+    return wrapHandler(async (interaction) => {
     const { guild, customId } = interaction;
 
     // ── Mở menu thống kê từ dashboard ─────────────────────────────────
@@ -283,7 +285,7 @@ class SetupStatsHandler extends InteractionHandler {
         return interaction.editReply({ content: '❌ Không thể làm mới, thử lại sau.', embeds: [], files: [] });
       }
     }
-  }
+  }, 'SetupStatsHandler')(interaction); }
 }
 
 module.exports = { SetupStatsHandler };

@@ -4,6 +4,7 @@
 'use strict';
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const { HelpCommand, CUSTOM_ID } = require('../commands/general/help.js');
+const { wrapHandler } = require('../../utils/error-boundary.js');
 
 class HelpPageHandler extends InteractionHandler {
   constructor(ctx) {
@@ -18,9 +19,10 @@ class HelpPageHandler extends InteractionHandler {
   }
 
   async run(interaction) {
+    return wrapHandler(async (interaction) => {
     const audience = interaction.customId === CUSTOM_ID.ADMIN_PAGE ? 'admin' : 'user';
     return HelpCommand.render(audience, interaction);
-  }
+  }, 'HelpPageHandler')(interaction); }
 }
 
 module.exports = { HelpPageHandler };

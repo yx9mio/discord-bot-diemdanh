@@ -6,6 +6,7 @@ const configService    = require('../../../services/configService.js');
 const { requireAdmin } = require('../../../utils/permissions.js');
 const { replyErrEdit } = require('../../../utils/embeds.js');
 const log = require('../../../utils/logger.js');
+const { wrapHandler } = require('../../../utils/error-boundary.js');
 
 const EDIT_ONETIME_PREFIX    = 'setup:sch:edit:onetime:';
 const EDIT_RECURRING_PREFIX  = 'setup:sch:edit:recurring:';
@@ -33,6 +34,7 @@ class SetupScheduleEditOneTimeModalSubmitHandler extends InteractionHandler {
   }
 
   async run(interaction) {
+    return wrapHandler(async (interaction) => {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const { ok } = await requireAdmin(interaction, { context: 'sửa lịch', deferred: true });
     if (!ok) return;
@@ -99,7 +101,7 @@ class SetupScheduleEditOneTimeModalSubmitHandler extends InteractionHandler {
       log.error('SCH_EDIT_SUBMIT', guild.id, 'Lỗi lưu sửa %s: %s', scheduleId, e.message);
       return interaction.editReply(replyErrEdit(`Không thể lưu thay đổi: ${e.message}`));
     }
-  }
+  }, 'SetupScheduleEditOneTimeModalSubmitHandler')(interaction); }
 }
 
 module.exports = { SetupScheduleEditOneTimeModalSubmitHandler };

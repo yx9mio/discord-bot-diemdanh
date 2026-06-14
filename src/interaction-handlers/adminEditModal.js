@@ -14,6 +14,7 @@ const { addBreadcrumb } = require('../../utils/sentry.js');
 const { getSessionChannel } = require('../../utils/channel.js');
 const { buildSessionEmbed, buildAttendanceSelectRow, buildSessionActionRow } = require('../../utils/embeds.js');
 const { statusFull } = require('../../utils/design-tokens.js');
+const { wrapHandler } = require('../../utils/error-boundary.js');
 
 class AdminEditModalHandler extends InteractionHandler {
   constructor(ctx, options) {
@@ -26,6 +27,7 @@ class AdminEditModalHandler extends InteractionHandler {
   }
 
   async run(interaction) {
+    return wrapHandler(async (interaction) => {
     addBreadcrumb('interaction', 'adminEditModal', {
       customId: interaction.customId,
       userId: interaction.user?.id,
@@ -129,7 +131,7 @@ class AdminEditModalHandler extends InteractionHandler {
     return interaction.editReply({
       content: `✅ Đã sửa điểm danh của **${username}** → ${statusFull(resolvedStatus)}`,
     });
-  }
+  }, 'AdminEditModalHandler')(interaction); }
 }
 
 module.exports = { AdminEditModalHandler };

@@ -7,6 +7,7 @@ const { getActiveSessions } = require('../../../services/sessionService.js');
 const { HomeView } = require('../../commands/setup/_views/_HomeView.js');
 const { CUSTOM_ID } = HomeView;
 const log = require('../../../utils/logger.js');
+const { wrapHandler } = require('../../../utils/error-boundary.js');
 
 class SetupHomeHandler extends InteractionHandler {
   constructor(ctx, options) {
@@ -20,6 +21,7 @@ class SetupHomeHandler extends InteractionHandler {
   }
 
   async run(interaction) {
+    return wrapHandler(async (interaction) => {
     await interaction.deferUpdate();
     const { guild } = interaction;
     try {
@@ -34,7 +36,7 @@ class SetupHomeHandler extends InteractionHandler {
       log.error('SETUP_HOME', guild.id, 'Dashboard load thất bại: %s', e.message);
       return interaction.editReply({ content: '❌ Không thể tải dashboard, thử lại sau.' });
     }
-  }
+  }, 'SetupHomeHandler')(interaction); }
 }
 
 module.exports = { SetupHomeHandler };

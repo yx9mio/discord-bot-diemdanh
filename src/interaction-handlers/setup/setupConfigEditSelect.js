@@ -5,6 +5,7 @@ const configService = require('../../../services/configService.js');
 const log = require('../../../utils/logger.js');
 const { requireAdmin } = require('../../../utils/permissions.js');
 const { replyErrEdit } = require('../../../utils/embeds.js');
+const { wrapHandler } = require('../../../utils/error-boundary.js');
 
 const SELECT_PREFIX = 'setup:cfg:select:';
 
@@ -28,6 +29,7 @@ class SetupConfigEditSelectHandler extends InteractionHandler {
   }
 
   async run(interaction) {
+    return wrapHandler(async (interaction) => {
     await interaction.deferUpdate();
     const { ok } = await requireAdmin(interaction, { context: 'sửa cấu hình', deferred: true });
     if (!ok) return;
@@ -49,7 +51,7 @@ class SetupConfigEditSelectHandler extends InteractionHandler {
       log.error('CFG_EDIT_SELECT', guildId, 'Lỗi lưu field %s: %s', suffix, e.message);
       return interaction.editReply(replyErrEdit(`Không thể lưu cấu hình: ${e.message}`));
     }
-  }
+  }, 'SetupConfigEditSelectHandler')(interaction); }
 }
 
 module.exports = { SetupConfigEditSelectHandler };
