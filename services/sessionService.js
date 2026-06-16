@@ -72,7 +72,7 @@ async function closeSession(sessionId, guildId) {
     .update({ is_active: false, ended_at: new Date().toISOString() })
     .eq('id', sessionId);
   q.eq('guild_id', guildId);
-  const { data, error } = await q.select().single();
+  const { data, error } = await q.select().maybeSingle();
   _throwSupabase(error, 'closeSession');
   addBreadcrumb('session', 'closeSession', { sessionId, guildId });
   return _validateSession(data, 'closeSession');
@@ -85,7 +85,7 @@ async function cancelSession(sessionId, guildId) {
     .update({ is_active: false, cancelled: true, ended_at: new Date().toISOString() })
     .eq('id', sessionId)
     .eq('guild_id', guildId);
-  const { data, error } = await q.select().single();
+  const { data, error } = await q.select().maybeSingle();
   _throwSupabase(error, 'cancelSession');
   return _validateSession(data, 'cancelSession');
 }
@@ -106,14 +106,14 @@ async function updateSessionMessage(sessionId, msgOrId) {
 
 async function updateSessionName(sessionId, newName) {
   const { data, error } = await getClient()
-    .from('sessions').update({ session_name: newName }).eq('id', sessionId).select().single();
+    .from('sessions').update({ session_name: newName }).eq('id', sessionId).select().maybeSingle();
   _throwSupabase(error, 'updateSessionName');
   return _validateSession(data, 'updateSessionName');
 }
 
 async function updateSessionEligible(sessionId, memberIds) {
   const { data, error } = await getClient()
-    .from('sessions').update({ eligible_member_ids: memberIds }).eq('id', sessionId).select().single();
+    .from('sessions').update({ eligible_member_ids: memberIds }).eq('id', sessionId).select().maybeSingle();
   _throwSupabase(error, 'updateSessionEligible');
   return _validateSession(data, 'updateSessionEligible');
 }

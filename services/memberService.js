@@ -30,8 +30,8 @@ async function deleteMember(guildId, userId) {
   _throwSupabase(error, 'deleteMember');
 }
 
-function upsertMember({ guildId, userId, phongBan = null, ghiChu = null, username = null, phaiRoleIds = null }) {
-  return addMember({ guild_id: guildId, user_id: userId, phong_ban: phongBan, ghi_chu: ghiChu, username, phai_role_ids: phaiRoleIds });
+async function upsertMember({ guildId, userId, phongBan = null, ghiChu = null, username = null, phaiRoleIds = null }) {
+  return await addMember({ guild_id: guildId, user_id: userId, phong_ban: phongBan, ghi_chu: ghiChu, username, phai_role_ids: phaiRoleIds });
 }
 
 // ─── Member Stats ─────────────────────────────────────────────────────────────

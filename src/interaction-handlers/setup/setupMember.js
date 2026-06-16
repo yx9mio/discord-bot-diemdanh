@@ -9,6 +9,7 @@ const {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
+  MessageFlags,
 } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const memberService = require('../../../services/memberService.js');
@@ -60,8 +61,10 @@ class SetupMemberHandler extends InteractionHandler {
       customId === CUSTOM_ID.FILTER_ALL ||
       customId.startsWith(CUSTOM_ID.FILTER_PHAI_PREFIX)
     ) {
+      if (!checkCooldown(interaction.user.id, 'mem_list', 1000)) {
+        return interaction.reply({ content: '⏳ Vui lòng đợi một chút...', flags: MessageFlags.Ephemeral });
+      }
       await interaction.deferUpdate();
-      if (!checkCooldown(interaction.user.id, 'mem_list', 1000)) return;
       const footer = interaction.message?.embeds?.[0]?.footer?.text ?? '';
       let currentPage = 0;
       const m = footer.match(/Trang (\d+)\/(\d+)/);
@@ -99,8 +102,10 @@ class SetupMemberHandler extends InteractionHandler {
 
     // ── Xoá thành viên (bước 1: confirm) ─────────────────────────────
     if (customId.startsWith(CUSTOM_ID.DEL_PREFIX) && !customId.startsWith(CUSTOM_ID.DEL_CONFIRM_PREFIX) && !customId.startsWith(CUSTOM_ID.DEL_CANCEL_PREFIX)) {
+      if (!checkCooldown(interaction.user.id, 'mem_del', 5000)) {
+        return interaction.reply({ content: '⏳ Vui lòng đợi một chút...', flags: MessageFlags.Ephemeral });
+      }
       await interaction.deferUpdate();
-      if (!checkCooldown(interaction.user.id, 'mem_del', 5000)) return;
       const { ok } = await requireAdmin(interaction, { context: 'xoá thành viên', deferred: true });
       if (!ok) return;
       const userId = customId.slice(CUSTOM_ID.DEL_PREFIX.length);
@@ -119,8 +124,10 @@ class SetupMemberHandler extends InteractionHandler {
 
     // ── Xoá thành viên (bước 2: thực hiện) ───────────────────────────
     if (customId.startsWith(CUSTOM_ID.DEL_CONFIRM_PREFIX)) {
+      if (!checkCooldown(interaction.user.id, 'mem_del_confirm', 5000)) {
+        return interaction.reply({ content: '⏳ Vui lòng đợi một chút...', flags: MessageFlags.Ephemeral });
+      }
       await interaction.deferUpdate();
-      if (!checkCooldown(interaction.user.id, 'mem_del_confirm', 5000)) return;
       const { ok } = await requireAdmin(interaction, { context: 'xoá thành viên', deferred: true });
       if (!ok) return;
       const userId = customId.slice(CUSTOM_ID.DEL_CONFIRM_PREFIX.length);
@@ -140,8 +147,10 @@ class SetupMemberHandler extends InteractionHandler {
 
     // ── Huỷ xoá ──────────────────────────────────────────────────────
     if (customId.startsWith(CUSTOM_ID.DEL_CANCEL_PREFIX)) {
+      if (!checkCooldown(interaction.user.id, 'mem_del_cancel', 1000)) {
+        return interaction.reply({ content: '⏳ Vui lòng đợi một chút...', flags: MessageFlags.Ephemeral });
+      }
       await interaction.deferUpdate();
-      if (!checkCooldown(interaction.user.id, 'mem_del_cancel', 1000)) return;
       const [members, cfg] = await Promise.all([
         memberService.getMembers(guild.id),
         getGuildConfig(guild.id),

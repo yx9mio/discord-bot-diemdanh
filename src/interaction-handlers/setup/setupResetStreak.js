@@ -43,8 +43,10 @@ class SetupResetStreakHandler extends InteractionHandler {
     const { guild, customId } = interaction;
 
     if (customId === 'setup:mem:reset:all') {
+      if (!checkCooldown(interaction.user.id, 'streak_reset', 5000)) {
+        return interaction.reply({ content: '⏳ Vui lòng đợi một chút...', flags: MessageFlags.Ephemeral });
+      }
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-      if (!checkCooldown(interaction.user.id, 'streak_reset', 5000)) return;
       const { ok } = await requireAdmin(interaction, { context: 'reset tất cả streak', deferred: true });
       if (!ok) return;
       const row = new ActionRowBuilder().addComponents(
@@ -55,8 +57,10 @@ class SetupResetStreakHandler extends InteractionHandler {
     }
 
     if (customId === 'setup:mem:reset:all:confirm') {
+      if (!checkCooldown(interaction.user.id, 'streak_reset_all', 5000)) {
+        return interaction.reply({ content: '⏳ Vui lòng đợi một chút...', flags: MessageFlags.Ephemeral });
+      }
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-      if (!checkCooldown(interaction.user.id, 'streak_reset_all', 5000)) return;
       const { ok } = await requireAdmin(interaction, { context: 'reset tất cả streak', deferred: true });
       if (!ok) return;
       try {
@@ -72,14 +76,18 @@ class SetupResetStreakHandler extends InteractionHandler {
     }
 
     if (customId === 'setup:mem:reset:all:cancel') {
+      if (!checkCooldown(interaction.user.id, 'streak_cancel', 1000)) {
+        return interaction.reply({ content: '⏳ Vui lòng đợi một chút...', flags: MessageFlags.Ephemeral });
+      }
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-      if (!checkCooldown(interaction.user.id, 'streak_cancel', 1000)) return;
       return interaction.editReply({ content: '↩️ Đã hủy.', components: [] });
     }
 
     if (customId.startsWith(CONFIRM_PREFIX)) {
+      if (!checkCooldown(interaction.user.id, 'streak_reset', 5000)) {
+        return interaction.reply({ content: '⏳ Vui lòng đợi một chút...', flags: MessageFlags.Ephemeral });
+      }
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-      if (!checkCooldown(interaction.user.id, 'streak_reset', 5000)) return;
       const { ok } = await requireAdmin(interaction, { context: 'reset streak', deferred: true });
       if (!ok) return;
       const userId = customId.slice(CONFIRM_PREFIX.length);
@@ -95,14 +103,18 @@ class SetupResetStreakHandler extends InteractionHandler {
     }
 
     if (customId.startsWith(CANCEL_PREFIX)) {
+      if (!checkCooldown(interaction.user.id, 'streak_cancel', 1000)) {
+        return interaction.reply({ content: '⏳ Vui lòng đợi một chút...', flags: MessageFlags.Ephemeral });
+      }
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-      if (!checkCooldown(interaction.user.id, 'streak_cancel', 1000)) return;
       return interaction.editReply({ content: '↩️ Đã hủy.', components: [] });
     }
 
     if (customId.startsWith(RESET_PREFIX)) {
+      if (!checkCooldown(interaction.user.id, 'streak_reset', 5000)) {
+        return interaction.reply({ content: '⏳ Vui lòng đợi một chút...', flags: MessageFlags.Ephemeral });
+      }
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-      if (!checkCooldown(interaction.user.id, 'streak_reset', 5000)) return;
       const { ok } = await requireAdmin(interaction, { context: 'reset streak', deferred: true });
       if (!ok) return;
       const userId = customId.slice(RESET_PREFIX.length);

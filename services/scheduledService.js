@@ -25,24 +25,27 @@ async function createScheduledSession(payload) {
 
 async function updateScheduledSession(guildId, id, payload) {
   const { data, error } = await getClient()
-    .from('scheduled_sessions').update(payload).eq('id', id).eq('guild_id', guildId).select().single();
+    .from('scheduled_sessions').update(payload).eq('id', id).eq('guild_id', guildId).select().maybeSingle();
   _throwSupabase(error, 'updateScheduledSession');
   return data;
 }
 
 async function deleteScheduledSession(guildId, id) {
-  // Check existence first, then delete (atomicity best-effort — unique PK prevents races)
-  const existing = await getClient().from('scheduled_sessions').select('id').eq('id', id).eq('guild_id', guildId).maybeSingle();
-  if (existing.error) _throwSupabase(existing.error, 'deleteScheduledSession.check');
-  if (!existing.data) return false;
-  const { error } = await getClient().from('scheduled_sessions').delete().eq('id', id).eq('guild_id', guildId);
+  // Atomic delete-and-return — avoids TOCTOU race between check and delete
+  const { data, error } = await getClient()
+    .from('scheduled_sessions')
+    .delete()
+    .eq('id', id)
+    .eq('guild_id', guildId)
+    .select()
+    .maybeSingle();
   _throwSupabase(error, 'deleteScheduledSession');
-  return true;
+  return !!data;
 }
 
 async function skipScheduledSession(id, skipUntil) {
   const { data, error } = await getClient()
-    .from('scheduled_sessions').update({ skip_until: skipUntil }).eq('id', id).select().single();
+    .from('scheduled_sessions').update({ skip_until: skipUntil }).eq('id', id).select().maybeSingle();
   _throwSupabase(error, 'skipScheduledSession');
   return !!data;
 }

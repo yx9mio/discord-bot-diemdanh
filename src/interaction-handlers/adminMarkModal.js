@@ -37,12 +37,14 @@ class AdminMarkModalHandler extends InteractionHandler {
       customId: interaction.customId,
       userId: interaction.user?.id,
     });
+    const { guild, user } = interaction;
+    if (!checkCooldown(user.id, 'admin_mark_modal', 5000)) {
+      return interaction.reply({ content: '⏳ Vui lòng đợi một chút...', flags: MessageFlags.Ephemeral });
+    }
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-    const { guild, user } = interaction;
     const { ok } = await requireAdmin(interaction, { context: 'điểm danh thay', deferred: true });
     if (!ok) return;
-    if (!checkCooldown(user.id, 'admin_mark_modal', 5000)) return;
 
     const session = await getActiveSession(guild.id);
     if (!session) {
@@ -55,8 +57,8 @@ class AdminMarkModalHandler extends InteractionHandler {
       return interaction.editReply({ content: '❌ Bang Chiến không hợp lệ.' });
     }
 
-    const userField = interaction.fields.getTextInputValue('user_id').trim();
-    const statusField = interaction.fields.getTextInputValue('status').trim().toLowerCase();
+    const userField = interaction.fields.getTextInputValue('user_id')?.trim();
+    const statusField = interaction.fields.getTextInputValue('status')?.trim().toLowerCase();
 
     const STATUS_ALIASES = {
       'tham_gia': 'tham_gia', 'tham gia': 'tham_gia', 'có mặt': 'tham_gia', 'comat': 'tham_gia', 'co mat': 'tham_gia',

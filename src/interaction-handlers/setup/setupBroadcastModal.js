@@ -25,15 +25,15 @@ class SetupBroadcastModalHandler extends InteractionHandler {
 
   async run(interaction) {
     return wrapHandler(async (interaction) => {
+    if (!checkCooldown(interaction.user.id, 'setup_broadcast_modal', 5000)) {
+      return interaction.reply({ content: '⏳ Vui lòng đợi một chút trước khi thực hiện hành động này.', flags: MessageFlags.Ephemeral });
+    }
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const { ok } = await requireAdmin(interaction, { context: 'phát tin', deferred: true });
     if (!ok) return;
-    if (!checkCooldown(interaction.user.id, 'setup_broadcast_modal', 5000)) {
-      return interaction.editReply({ content: '⏳ Vui lòng đợi một chút trước khi thực hiện hành động này.' });
-    }
 
     const { guild, channel } = interaction;
-    const content = interaction.fields.getTextInputValue('message').trim();
+    const content = interaction.fields.getTextInputValue('message')?.trim();
     if (!content) return interaction.editReply(replyErrEdit('Nội dung tin nhắn không được để trống.'));
     if (content.length > 4000) {
       return interaction.editReply(replyErrEdit(`Nội dung quá dài (${content.length}/4000 ký tự tối đa).`));

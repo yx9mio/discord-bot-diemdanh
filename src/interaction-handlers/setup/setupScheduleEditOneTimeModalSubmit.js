@@ -37,10 +37,12 @@ class SetupScheduleEditOneTimeModalSubmitHandler extends InteractionHandler {
 
   async run(interaction) {
     return wrapHandler(async (interaction) => {
+    if (!checkCooldown(interaction.user.id, 'sch_edit_submit', 5000)) {
+      return interaction.reply({ content: '⏳ Vui lòng đợi một chút trước khi thực hiện hành động này.', flags: MessageFlags.Ephemeral });
+    }
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const { ok } = await requireAdmin(interaction, { context: 'sửa lịch', deferred: true });
     if (!ok) return;
-    if (!checkCooldown(interaction.user.id, 'sch_edit_submit', 5000)) return interaction.editReply({ content: '⏳ Vui lòng đợi một chút trước khi thực hiện hành động này.' });
 
     const { guild, customId } = interaction;
     const isRecurring = customId.startsWith(EDIT_RECURRING_PREFIX);
@@ -50,7 +52,7 @@ class SetupScheduleEditOneTimeModalSubmitHandler extends InteractionHandler {
       const cfg = await configService.getGuildConfig(guild.id);
       const tz = cfg?.timezone ?? 'Asia/Ho_Chi_Minh';
 
-      const gioMo      = interaction.fields.getTextInputValue('gio_mo').trim();
+      const gioMo      = interaction.fields.getTextInputValue('gio_mo')?.trim();
       const phutBu     = interaction.fields.getTextInputValue('phut_bu')?.trim() || '0';
       const ten        = interaction.fields.getTextInputValue('ten')?.trim() ?? '';
       const channelRaw = interaction.fields.getTextInputValue('channel_id')?.trim() ?? '';
@@ -80,7 +82,7 @@ class SetupScheduleEditOneTimeModalSubmitHandler extends InteractionHandler {
       };
 
       if (isRecurring) {
-        const thuRaw = interaction.fields.getTextInputValue('day_of_week').trim();
+        const thuRaw = interaction.fields.getTextInputValue('day_of_week')?.trim();
         const dayOfWeek = parseDay(thuRaw);
         if (!dayOfWeek) return interaction.editReply(replyErrEdit(`Thứ không hợp lệ: "${thuRaw}"`));
         await scheduledService.updateScheduledSession(guild.id, scheduleId, {
@@ -88,7 +90,7 @@ class SetupScheduleEditOneTimeModalSubmitHandler extends InteractionHandler {
           day_of_week: dayOfWeek,
         });
       } else {
-        const ngay = interaction.fields.getTextInputValue('ngay').trim();
+        const ngay = interaction.fields.getTextInputValue('ngay')?.trim();
         if (!ngay) return interaction.editReply(replyErrEdit('Ngày không được để trống.'));
         await scheduledService.updateScheduledSession(guild.id, scheduleId, {
           ...basePayload,

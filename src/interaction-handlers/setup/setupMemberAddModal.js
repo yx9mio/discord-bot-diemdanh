@@ -28,19 +28,19 @@ class SetupMemberAddModalHandler extends InteractionHandler {
 
   async run(interaction) {
     return wrapHandler(async (interaction) => {
+    if (!checkCooldown(interaction.user.id, 'setup_mem_add_modal', 5000)) {
+      return interaction.reply({ content: '⏳ Vui lòng đợi một chút trước khi thực hiện hành động này.', flags: MessageFlags.Ephemeral });
+    }
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const { ok } = await requireAdmin(interaction, { context: 'thêm thành viên', deferred: true });
     if (!ok) return;
-    if (!checkCooldown(interaction.user.id, 'setup_mem_add_modal', 5000)) {
-      return interaction.editReply({ content: '⏳ Vui lòng đợi một chút trước khi thực hiện hành động này.' });
-    }
     const { guild } = interaction;
 
-    const rawId = interaction.fields.getTextInputValue('user_id').trim();
+    const rawId = interaction.fields.getTextInputValue('user_id')?.trim();
     if (!rawId) return interaction.editReply(replyErrEdit('Vui lòng nhập ID hoặc mention thành viên.'));
     if (rawId.startsWith('<@&')) return interaction.editReply(replyErrEdit('Vui lòng nhập ID người dùng, không phải role.'));
     const userId = rawId.replace(/[<@!>]/g, '');
-    const username = interaction.fields.getTextInputValue('username').trim();
+    const username = interaction.fields.getTextInputValue('username')?.trim();
     const phongBan = interaction.fields.getTextInputValue('phong_ban')?.trim() ?? '';
     const ghiChu = interaction.fields.getTextInputValue('ghi_chu')?.trim() ?? '';
 

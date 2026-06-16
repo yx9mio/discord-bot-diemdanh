@@ -27,12 +27,14 @@ class SetupStatsModalHandler extends InteractionHandler {
 
   async run(interaction) {
     return wrapHandler(async (interaction) => {
+    if (!checkCooldown(interaction.user.id, 'stats_xem_modal', 1000)) {
+      return interaction.reply({ content: '⏳ Vui lòng đợi một chút...', flags: MessageFlags.Ephemeral });
+    }
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-    if (!checkCooldown(interaction.user.id, 'stats_xem_modal', 1000)) return interaction.editReply({ content: '⏳ Vui lòng đợi một chút...' });
     const { guild } = interaction;
 
     try {
-      const raw = interaction.fields.getTextInputValue('user_id').trim();
+      const raw = interaction.fields.getTextInputValue('user_id')?.trim();
       // Hỗ trợ <@id>, id thuần, hoặc username
       const idMatch = raw.match(/(\d{10,20})/);
       let targetUserId = idMatch ? idMatch[1] : null;

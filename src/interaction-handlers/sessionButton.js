@@ -68,8 +68,10 @@ class SessionButtonHandler extends InteractionHandler {
       const attended = await attendanceService.getAttendances(session.id);
 
       if (customId.startsWith('attend_view:')) {
+        if (!checkCooldown(interaction.user.id, 'session_view', 1000)) {
+          return interaction.reply({ content: '⏳ Vui lòng đợi một chút...', flags: MessageFlags.Ephemeral });
+        }
         await interaction.deferUpdate();
-        if (!checkCooldown(interaction.user.id, 'session_view', 1000)) return;
         const parts = customId.split(':');
         const action = parts[1];
         const currentPage = parseInt(parts[2], 10) || 1;
@@ -100,8 +102,10 @@ class SessionButtonHandler extends InteractionHandler {
 
     // ── attend_refresh ────────────────────────────────────────────────────────────
     if (customId === 'attend_refresh') {
+      if (!checkCooldown(interaction.user.id, 'session_refresh', 1000)) {
+        return interaction.reply({ content: '⏳ Vui lòng đợi một chút...', flags: MessageFlags.Ephemeral });
+      }
       await interaction.deferUpdate();
-      if (!checkCooldown(interaction.user.id, 'session_refresh', 1000)) return;
       try {
         const session = await sessionService.getActiveSession(interaction.guildId);
         if (!session) return interaction.followUp({ ...replyErr('Không có Kỳ điểm danh đang mở.'), flags: MessageFlags.Ephemeral });
@@ -147,8 +151,10 @@ class SessionButtonHandler extends InteractionHandler {
 
     // ── session:cancel ──────────────────────────────────────────────────────────
     if (customId === 'session:cancel') {
+      if (!checkCooldown(interaction.user.id, 'session_cancel', 5000)) {
+        return interaction.reply({ content: '⏳ Vui lòng đợi một chút...', flags: MessageFlags.Ephemeral });
+      }
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-      if (!checkCooldown(interaction.user.id, 'session_cancel', 5000)) return;
       const { ok } = await requireAdmin(interaction, { context: 'hủy phiên', deferred: true });
       if (!ok) return;
       const session = await sessionService.getActiveSession(guild.id);
@@ -165,8 +171,10 @@ class SessionButtonHandler extends InteractionHandler {
     // ── session:confirm_cancel ───────────────────────────────────────────────────
     if (customId === 'session:confirm_cancel') {
       const { channel } = interaction;
+      if (!checkCooldown(interaction.user.id, 'session_confirm_cancel', 5000)) {
+        return interaction.reply({ content: '⏳ Vui lòng đợi một chút...', flags: MessageFlags.Ephemeral });
+      }
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-      if (!checkCooldown(interaction.user.id, 'session_confirm_cancel', 5000)) return;
       // [SEC-FIX-1] Re-validate admin
       const { ok: okCancel } = await requireAdmin(interaction, { context: 'xác nhận hủy phiên', deferred: true });
       if (!okCancel) return;
@@ -198,14 +206,18 @@ class SessionButtonHandler extends InteractionHandler {
 
     // ── session:cancel_cancel ───────────────────────────────────────────────────
     if (customId === 'session:cancel_cancel') {
-      if (!checkCooldown(interaction.user.id, 'session_cancel_cancel', 1000)) return;
+      if (!checkCooldown(interaction.user.id, 'session_cancel_cancel', 1000)) {
+        return interaction.reply({ content: '⏳ Vui lòng đợi một chút...', flags: MessageFlags.Ephemeral });
+      }
       return interaction.reply({ content: '↩️ Đã hủy. Kỳ vẫn đang mở.', flags: MessageFlags.Ephemeral });
     }
 
     // ── attend_close ─────────────────────────────────────────────────────────────
     if (customId === 'attend_close') {
+      if (!checkCooldown(interaction.user.id, 'session_close', 5000)) {
+        return interaction.reply({ content: '⏳ Vui lòng đợi một chút...', flags: MessageFlags.Ephemeral });
+      }
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-      if (!checkCooldown(interaction.user.id, 'session_close', 5000)) return;
       const { ok } = await requireAdmin(interaction, { context: 'đóng phiên', deferred: true });
       if (!ok) return;
       const session = await sessionService.getActiveSession(guild.id);
@@ -222,8 +234,10 @@ class SessionButtonHandler extends InteractionHandler {
     // ── session:confirm_close ───────────────────────────────────────────────────
     if (customId === 'session:confirm_close') {
       const { channel } = interaction;
+      if (!checkCooldown(interaction.user.id, 'session_confirm_close', 5000)) {
+        return interaction.reply({ content: '⏳ Vui lòng đợi một chút...', flags: MessageFlags.Ephemeral });
+      }
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-      if (!checkCooldown(interaction.user.id, 'session_confirm_close', 5000)) return;
       // [SEC-FIX-1] Re-validate admin
       const { ok: okClose } = await requireAdmin(interaction, { context: 'xác nhận đóng phiên', deferred: true });
       if (!okClose) return;
@@ -287,14 +301,18 @@ class SessionButtonHandler extends InteractionHandler {
 
     // ── session:cancel_close ────────────────────────────────────────────────────
     if (customId === 'session:cancel_close') {
-      if (!checkCooldown(interaction.user.id, 'session_cancel_close', 1000)) return;
+      if (!checkCooldown(interaction.user.id, 'session_cancel_close', 1000)) {
+        return interaction.reply({ content: '⏳ Vui lòng đợi một chút...', flags: MessageFlags.Ephemeral });
+      }
       return interaction.reply({ content: '↩️ Đã hủy. Kỳ vẫn đang mở.', flags: MessageFlags.Ephemeral });
     }
 
     // ── session:confirm_close:all (batch) ───────────────────────────────────────
     if (customId === 'session:confirm_close:all') {
+      if (!checkCooldown(interaction.user.id, 'session_confirm_close_all', 5000)) {
+        return interaction.reply({ content: '⏳ Vui lòng đợi một chút...', flags: MessageFlags.Ephemeral });
+      }
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-      if (!checkCooldown(interaction.user.id, 'session_confirm_close_all', 5000)) return;
       const { ok: okBatch } = await requireAdmin(interaction, { context: 'đóng tất cả phiên', deferred: true });
       if (!okBatch) return;
 

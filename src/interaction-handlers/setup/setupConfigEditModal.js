@@ -47,12 +47,12 @@ class SetupConfigEditModalHandler extends InteractionHandler {
 
   async run(interaction) {
     return wrapHandler(async (interaction) => {
+    if (!checkCooldown(interaction.user.id, 'setup_cfg_edit_modal', 5000)) {
+      return interaction.reply({ content: '⏳ Vui lòng đợi một chút trước khi thực hiện hành động này.', flags: MessageFlags.Ephemeral });
+    }
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const { ok } = await requireAdmin(interaction, { context: 'sửa cấu hình', deferred: true });
     if (!ok) return;
-    if (!checkCooldown(interaction.user.id, 'setup_cfg_edit_modal', 5000)) {
-      return interaction.editReply({ content: '⏳ Vui lòng đợi một chút trước khi thực hiện hành động này.' });
-    }
     const suffix = interaction.customId.slice(MODAL_PREFIX.length);
     const guildId = interaction.guild.id;
 
@@ -119,7 +119,7 @@ class SetupConfigEditModalHandler extends InteractionHandler {
     const mapping = FIELD_MAP[suffix];
     if (!mapping) return interaction.editReply(replyErrEdit(`Loại cài đặt không xác định: "${suffix}"`));
 
-    const value = interaction.fields.getTextInputValue(mapping.inputId).trim();
+    const value = interaction.fields.getTextInputValue(mapping.inputId)?.trim();
     if (!value) return interaction.editReply(replyErrEdit('Giá trị không được để trống.'));
     if (suffix === 'tz') {
       if (!DateTime.now().setZone(value).isValid) {

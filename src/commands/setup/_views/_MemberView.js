@@ -158,7 +158,39 @@ function render({ members, page = 0, guild, cfg = null, filterPhai = '' }) {
 
   const components = [];
 
-  // Filter row: phái buttons
+  if (btnSlice.length > 0) {
+    const delRow = new ActionRowBuilder();
+    for (const m of btnSlice)
+      delRow.addComponents(
+        new ButtonBuilder()
+          .setCustomId(`${CUSTOM_ID.DEL_PREFIX}${m.user_id}`)
+          .setLabel(`✕ ${(m.username ?? m.user_id).slice(0, 10)}`)
+          .setStyle(ButtonStyle.Danger),
+      );
+    components.push(delRow);
+
+    const editRow = new ActionRowBuilder();
+    for (const m of btnSlice)
+      editRow.addComponents(
+        new ButtonBuilder()
+          .setCustomId(`${CUSTOM_ID.EDIT_PREFIX}${m.user_id}`)
+          .setLabel(`✎ ${(m.username ?? m.user_id).slice(0, 10)}`)
+          .setStyle(ButtonStyle.Secondary),
+      );
+    components.push(editRow);
+
+    const resetRow = new ActionRowBuilder();
+    for (const m of btnSlice)
+      resetRow.addComponents(
+        new ButtonBuilder()
+          .setCustomId(`${CUSTOM_ID.RESET_PREFIX}${m.user_id}`)
+          .setLabel(`↺ ${(m.username ?? m.user_id).slice(0, 10)}`)
+          .setStyle(ButtonStyle.Primary),
+      );
+    components.push(resetRow);
+  }
+
+  // Filter row: phái buttons (placed after per-user rows to keep layout consistent)
   if (phaiIds.length > 0 && phaiIds.length <= 4) {
     const filterRow = new ActionRowBuilder();
     filterRow.addComponents(
@@ -181,58 +213,16 @@ function render({ members, page = 0, guild, cfg = null, filterPhai = '' }) {
     components.push(filterRow);
   }
 
-  if (btnSlice.length > 0) {
-    // Row 1: Nút xoá per-user
-    const delRow = new ActionRowBuilder();
-    for (const m of btnSlice)
-      delRow.addComponents(
-        new ButtonBuilder()
-          .setCustomId(`${CUSTOM_ID.DEL_PREFIX}${m.user_id}`)
-          .setLabel(`✕ ${(m.username ?? m.user_id).slice(0, 10)}`)
-          .setStyle(ButtonStyle.Danger),
-      );
-    components.push(delRow);
-
-    // Row 2: Nút chỉnh sửa per-user
-    const editRow = new ActionRowBuilder();
-    for (const m of btnSlice)
-      editRow.addComponents(
-        new ButtonBuilder()
-          .setCustomId(`${CUSTOM_ID.EDIT_PREFIX}${m.user_id}`)
-          .setLabel(`✎ ${(m.username ?? m.user_id).slice(0, 10)}`)
-          .setStyle(ButtonStyle.Secondary),
-      );
-    components.push(editRow);
-
-    // Row 3: Nút reset streak per-user
-    // [FIX] Thay thế nút reset sai logic (slice[0]?.user_id cứng) bằng per-user row
-    const resetRow = new ActionRowBuilder();
-    for (const m of btnSlice)
-      resetRow.addComponents(
-        new ButtonBuilder()
-          .setCustomId(`${CUSTOM_ID.RESET_PREFIX}${m.user_id}`)
-          .setLabel(`↺ ${(m.username ?? m.user_id).slice(0, 10)}`)
-          .setStyle(ButtonStyle.Primary),
-      );
-    components.push(resetRow);
-  }
-
-  // Row 4: Actions (thêm + reset-all)
-  // [FIX] Bỏ nút reset-streak đầu trang sai logic khỏi đây
-  const actionRow = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId(CUSTOM_ID.ADD).setLabel('Thêm thành viên').setEmoji(ICONS.PLUS).setStyle(ButtonStyle.Success),
-    new ButtonBuilder().setCustomId(CUSTOM_ID.RESET_ALL).setLabel('Reset tất cả').setEmoji(ICONS.WARN).setStyle(ButtonStyle.Danger),
+  // Bottom row: Actions + Nav (merged to stay within 5 ActionRow limit)
+  const bottomRow = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(CUSTOM_ID.ADD).setLabel('＋ Thêm').setEmoji(ICONS.PLUS).setStyle(ButtonStyle.Success),
+    new ButtonBuilder().setCustomId(CUSTOM_ID.RESET_ALL).setLabel('↻ Reset').setEmoji(ICONS.WARN).setStyle(ButtonStyle.Danger),
+    new ButtonBuilder().setCustomId(CUSTOM_ID.PAGE_PREV).setLabel('◀').setStyle(ButtonStyle.Secondary).setDisabled(cPage === 0),
+    new ButtonBuilder().setCustomId(CUSTOM_ID.PAGE_NEXT).setLabel('▶').setStyle(ButtonStyle.Secondary).setDisabled(cPage >= totalPages - 1),
+    new ButtonBuilder().setCustomId(CUSTOM_ID.BACK_HOME).setLabel('←').setEmoji(ICONS.HOME).setStyle(ButtonStyle.Secondary),
   );
 
-  // Row 5: Nav
-  const navRow = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId(CUSTOM_ID.PAGE_PREV).setLabel('◀ Trước').setStyle(ButtonStyle.Secondary).setDisabled(cPage === 0),
-    new ButtonBuilder().setCustomId(CUSTOM_ID.PAGE_NEXT).setLabel('Sau ▶').setStyle(ButtonStyle.Secondary).setDisabled(cPage >= totalPages - 1),
-    new ButtonBuilder().setCustomId(CUSTOM_ID.REFRESH).setLabel('Làm mới').setEmoji(ICONS.REFRESH).setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId(CUSTOM_ID.BACK_HOME).setLabel('← Dashboard').setEmoji(ICONS.HOME).setStyle(ButtonStyle.Secondary),
-  );
-
-  components.push(actionRow, navRow);
+  components.push(bottomRow);
   return { embeds: [embed], components, _page: cPage, _totalPages: totalPages };
 }
 

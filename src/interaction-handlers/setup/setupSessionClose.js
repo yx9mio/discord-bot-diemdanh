@@ -26,12 +26,12 @@ class SetupSessionCloseHandler extends InteractionHandler {
 
   async run(interaction) {
     return wrapHandler(async (interaction) => {
+    if (!checkCooldown(interaction.user.id, 'setup_session_close', 5000)) {
+      return interaction.reply({ content: '⏳ Vui lòng đợi một chút trước khi thực hiện hành động này.', flags: MessageFlags.Ephemeral });
+    }
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const { ok } = await requireAdmin(interaction, { context: 'đóng phiên', deferred: true });
     if (!ok) return;
-    if (!checkCooldown(interaction.user.id, 'setup_session_close', 5000)) {
-      return interaction.editReply({ content: '⏳ Vui lòng đợi một chút trước khi thực hiện hành động này.' });
-    }
 
     const id = interaction.customId;
     const guild = interaction.guild;

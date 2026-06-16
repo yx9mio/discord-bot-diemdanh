@@ -240,7 +240,7 @@ async function renderRank(rows, guild, topN = 10, phongBanList = [], selectedPho
       embeds: [new EmbedBuilder().setColor(COLORS.GOLD).setAuthor(buildAuthor(guild)).setTitle(`${ICONS.TROPHY} BXH Bang Chiến`)
         .setDescription('> _Chưa có dữ liệu._')
         .setFooter({ text: _footer(CTX.RANK) }).setTimestamp()],
-      components: [_navRankPeriodRow(period), _navRow()],
+      components: [_buildRankPeriodRow(period), _navRow()],
       files: [],
     };
   }

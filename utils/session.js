@@ -53,6 +53,7 @@ async function endSession(guild, session, attended) {
   const presentIds = new Set(
     attended.filter(r => PRESENT_STATUSES.has(r.status)).map(r => r.user_id)
   );
+  const attendedIds = new Set(attended.map(r => r.user_id));
 
   const allStats   = await memberService.getAllMemberStats(guild.id);
   const statsCache = new Map(allStats.map(s => [s.user_id, s]));
@@ -104,7 +105,7 @@ async function endSession(guild, session, attended) {
 
   const eligibleIds = session.eligible_member_ids ?? [];
   if (eligibleIds.length > 0) {
-    for (const uid of eligibleIds.filter(id => !presentIds.has(id))) {
+    for (const uid of eligibleIds.filter(id => !attendedIds.has(id))) {
       const stats = getStats(uid);
       if (stats.current_streak === 0) {
         mergePatch(uid, { total_sessions: (stats.total_sessions ?? 0) + 1 });

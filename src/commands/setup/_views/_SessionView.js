@@ -12,6 +12,7 @@ const CUSTOM_ID = {
   REFRESH:     'setup:session:refresh',
   ROSTER_PREV: 'setup:session:roster:prev',
   ROSTER_NEXT: 'setup:session:roster:next',
+  START:       'setup:session:start',
 };
 
 const ROSTER_PAGE_SIZE = 10;

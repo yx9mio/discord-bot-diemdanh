@@ -40,10 +40,12 @@ class SetupScheduleAddDetailModalHandler extends InteractionHandler {
 
   async run(interaction) {
     return wrapHandler(async (interaction) => {
+    if (!checkCooldown(interaction.user.id, 'sch_add_detail', 5000)) {
+      return interaction.reply({ content: '⏳ Vui lòng đợi một chút trước khi thực hiện hành động này.', flags: MessageFlags.Ephemeral });
+    }
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const { ok } = await requireAdmin(interaction, { deferred: true, context: 'thêm lịch' });
     if (!ok) return;
-    if (!checkCooldown(interaction.user.id, 'sch_add_detail', 5000)) return interaction.editReply({ content: '⏳ Vui lòng đợi một chút trước khi thực hiện hành động này.' });
     const { guild, customId } = interaction;
 
     try {
@@ -51,8 +53,8 @@ class SetupScheduleAddDetailModalHandler extends InteractionHandler {
       const tz = cfg?.timezone ?? 'Asia/Ho_Chi_Minh';
 
       if (customId === MODAL_RECURRING_ID) {
-        const day_raw   = interaction.fields.getTextInputValue('day_of_week').trim();
-        const gio_mo    = interaction.fields.getTextInputValue('gio_mo').trim();
+        const day_raw   = interaction.fields.getTextInputValue('day_of_week')?.trim();
+        const gio_mo    = interaction.fields.getTextInputValue('gio_mo')?.trim();
         const phut_bu   = interaction.fields.getTextInputValue('phut_bu')?.trim();
         const pre_close = interaction.fields.getTextInputValue('pre_close')?.trim();
 
@@ -79,8 +81,8 @@ class SetupScheduleAddDetailModalHandler extends InteractionHandler {
         });
         auditLog({ guildId: guild.id, actorId: interaction.user.id, action: 'SCHEDULE_CREATE', metadata: { type: 'recurring', day_of_week: dayOfWeek, hour, minute } }).catch(() => {});
       } else {
-        const ngay       = interaction.fields.getTextInputValue('ngay').trim();
-        const gio_mo     = interaction.fields.getTextInputValue('gio_mo').trim();
+        const ngay       = interaction.fields.getTextInputValue('ngay')?.trim();
+        const gio_mo     = interaction.fields.getTextInputValue('gio_mo')?.trim();
         const phut_bu    = interaction.fields.getTextInputValue('phut_bu')?.trim();
         const pre_close  = interaction.fields.getTextInputValue('pre_close')?.trim();
 
