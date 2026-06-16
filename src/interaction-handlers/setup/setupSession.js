@@ -8,8 +8,7 @@ const log = require('../../../utils/logger.js');
 const { wrapHandler } = require('../../../utils/error-boundary.js');
 const { checkCooldown } = require('../../../utils/cooldown.js');
 
-const PREFIX_REFRESH = 'setup:session:refresh';
-const PREFIX_DETAIL  = 'setup:session:detail:';
+const { SessionView } = require('../../commands/setup/_views/_SessionView.js');
 
 class SetupSessionHandler extends InteractionHandler {
   constructor(ctx, options) {
@@ -18,25 +17,21 @@ class SetupSessionHandler extends InteractionHandler {
 
   parse(interaction) {
     const id = interaction.customId;
-    if (id === 'setup:session') return this.some();
-    if (id === PREFIX_REFRESH) return this.some();
-    if (id.startsWith(PREFIX_DETAIL)) return this.some();
+    if (['setup:session', 'setup:session:refresh', 'setup:session:roster',
+         'setup:session:details', 'setup:session:back',
+         'setup:session:roster:prev', 'setup:session:roster:next'].includes(id)) {
+      return this.some();
+    }
     return this.none();
   }
 
   async run(interaction) {
     return wrapHandler(async (interaction) => {
-    const { customId, guild, component } = interaction;
-
-    let detailId = null;
-    if (customId.startsWith(PREFIX_DETAIL)) {
-      const sessionId = customId.slice(PREFIX_DETAIL.length);
-      const wasExpanded = component?.label?.startsWith('▴') ?? false;
-      detailId = wasExpanded ? null : sessionId;
-    }
-
+    const { customId, guild } = interaction;
     await interaction.deferUpdate();
-    if (!checkCooldown(interaction.user.id, 'setup_session', 1000)) return interaction.editReply({ content: '⏳ Vui lòng đợi một chút trước khi thực hiện hành động này.' });
+    if (!checkCooldown(interaction.user.id, 'setup_session', 1000)) {
+      return interaction.editReply({ content: '⏳ Vui lòng đợi một chút trước khi thực hiện hành động này.' });
+    }
 
     try {
       const [allSessions, cfg, members] = await Promise.all([
@@ -45,25 +40,44 @@ class SetupSessionHandler extends InteractionHandler {
         getMembers(guild.id),
       ]);
 
-      const sessionsWithStats = await Promise.all(allSessions.map(async (s) => {
-        const atts = await attendanceService.getAttendances(s.id).catch(() => []);
-        const eligible = s.eligible_member_ids?.length ?? 0;
-        return {
-          ...s,
-          eligible_count:  eligible,
-          attended_count:  atts.filter(a => a.status === 'tham_gia' || a.status === 'tre').length,
-          late_count:      atts.filter(a => a.status === 'tre').length,
-          absent_count:    atts.filter(a => a.status === 'khong_tham_gia').length,
-          created_by:      s.started_by,
-          created_at:      s.started_at,
-        };
-      }));
+      const session = allSessions[0] ?? null;
+      const attendances = session
+        ? await attendanceService.getAttendances(session.id)
+        : [];
 
-      const { SessionView } = require('../../commands/setup/_views/_SessionView.js');
-      return interaction.editReply(SessionView.render({ sessions: sessionsWithStats, guild, cfg, members, detailId }));
+      if (customId === 'setup:session:refresh') {
+        const ctx = SessionView.parseFooter(interaction.message?.embeds?.[0]?.footer);
+        if (ctx.ctx === 'roster') {
+          return interaction.editReply(SessionView.renderRoster({ session, guild, attendances, page: ctx.page }));
+        }
+        if (ctx.ctx === 'details') {
+          return interaction.editReply(SessionView.renderDetails({ session, guild, members, attendances, cfg }));
+        }
+        return interaction.editReply(SessionView.renderSummary({ session, guild, cfg, members, attendances }));
+      }
+
+      if (customId === 'setup:session:back') {
+        return interaction.editReply(SessionView.renderSummary({ session, guild, cfg, members, attendances }));
+      }
+
+      if (customId === 'setup:session:roster') {
+        return interaction.editReply(SessionView.renderRoster({ session, guild, attendances, page: 0 }));
+      }
+
+      if (customId === 'setup:session:details') {
+        return interaction.editReply(SessionView.renderDetails({ session, guild, members, attendances, cfg }));
+      }
+
+      if (customId === 'setup:session:roster:prev' || customId === 'setup:session:roster:next') {
+        const ctx = SessionView.parseFooter(interaction.message?.embeds?.[0]?.footer);
+        const page = customId === 'setup:session:roster:prev' ? ctx.page - 1 : ctx.page + 1;
+        return interaction.editReply(SessionView.renderRoster({ session, guild, attendances, page }));
+      }
+
+      return interaction.editReply(SessionView.renderSummary({ session, guild, cfg, members, attendances }));
     } catch (e) {
-      log.error('SETUP_SESSION', guild.id, 'Session list load thất bại: %s', e.message);
-      return interaction.editReply({ content: '❌ Không thể tải danh sách phiên, thử lại sau.' });
+      log.error('SETUP_SESSION', guild.id, 'Session load thất bại: %s', e.message);
+      return interaction.editReply({ content: '❌ Không thể tải dữ liệu Bang Chiến, thử lại sau.' });
     }
   }, 'SetupSessionHandler')(interaction); }
 }

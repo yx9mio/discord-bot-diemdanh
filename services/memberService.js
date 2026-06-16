@@ -166,6 +166,44 @@ async function getTopMembers(guildId, limit = 10, phongBan = null, phaiRoleId = 
   return (statsRes.data ?? []).map(r => ({ ...r, phong_ban: phongMap.get(r.user_id) ?? null, phai_role_ids: phaiMap.get(r.user_id) ?? null }));
 }
 
+async function getTopMembersByPeriod(guildId, startDate, endDate, limit = 10) {
+  const { data: sessions, error: sesErr } = await getClient()
+    .from('sessions').select('id').eq('guild_id', guildId).eq('cancelled', false)
+    .gte('started_at', startDate).lt('started_at', endDate);
+  _throwSupabase(sesErr, 'getTopMembersByPeriod.sessions');
+  if (!sessions?.length) return [];
+  const sessionIds = sessions.map(s => s.id);
+
+  const { data: atts, error: attErr } = await getClient()
+    .from('attendances').select('user_id, status')
+    .in('session_id', sessionIds);
+  _throwSupabase(attErr, 'getTopMembersByPeriod.attendances');
+
+  const userStats = {};
+  for (const a of atts ?? []) {
+    if (!userStats[a.user_id]) userStats[a.user_id] = { joined: 0, late: 0, absent: 0, excused: 0 };
+    userStats[a.user_id].joined++;
+    if (a.status === 'tre') userStats[a.user_id].late++;
+    else if (a.status === 'khong_tham_gia') userStats[a.user_id].absent++;
+    else if (a.status === 'co_phep') userStats[a.user_id].excused++;
+  }
+
+  const { data: members } = await getClient()
+    .from('members').select('user_id, phong_ban, phai_role_ids').eq('guild_id', guildId);
+  const memberMap = new Map((members ?? []).map(m => [m.user_id, m]));
+
+  return Object.entries(userStats)
+    .map(([userId, s]) => ({
+      user_id: userId, total_joined: s.joined, total_sessions: sessionIds.length,
+      total_late: s.late, total_absent: s.absent, total_excused: s.excused,
+      current_streak: 0, best_streak: 0,
+      phong_ban: memberMap.get(userId)?.phong_ban ?? null,
+      phai_role_ids: memberMap.get(userId)?.phai_role_ids ?? null,
+    }))
+    .sort((a, b) => b.total_joined - a.total_joined)
+    .slice(0, limit);
+}
+
 async function getDistinctPhongBan(guildId) {
   const { data, error } = await getClient()
     .from('members').select('phong_ban').eq('guild_id', guildId).not('phong_ban', 'is', null);
@@ -317,7 +355,7 @@ module.exports = {
   getMembers, getMember, addMember, deleteMember, upsertMember,
   getMemberStats, getMemberStatsMulti, getAllMemberStats,
   upsertMemberStats, batchUpsertMemberStats, resetStreak, batchResetStreak,
-  getTopMembers, getDistinctPhongBan, getServerStats,
+  getTopMembers, getTopMembersByPeriod, getDistinctPhongBan, getServerStats,
   getBadgeDefinitions, getBadges, getUserBadges, upsertUserBadge,
   getMemberBadges, upsertMemberBadge, getMemberBadgesMulti, batchUpsertUserBadges,
 };

@@ -31,7 +31,7 @@ function buildRankEmbed(rows = [], guild = null, topN = 10) {
     const streak  = r.current_streak ?? 0;
     const pct     = total > 0 ? Math.round(joined / total * 100) : 0;
     const bar     = buildRichProgressBar(pct, 8);
-    return `${medal} **${name}**\n\`${bar}\` ${pct}% · ${joined} phiên · ${ICONS.FIRE}${streak}`;
+    return `${medal} **${name}**\n\`${bar}\` ${pct}% · ${joined} Kỳ · ${ICONS.FIRE}${streak}`;
   });
 
   return new EmbedBuilder()

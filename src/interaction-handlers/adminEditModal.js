@@ -43,11 +43,11 @@ class AdminEditModalHandler extends InteractionHandler {
 
     const session = await getActiveSession(guild.id);
     if (!session) {
-      return interaction.editReply({ content: '🚫 Không có phiên điểm danh nào đang mở.' });
+      return interaction.editReply({ content: '🚫 Không có Bang Chiến nào đang mở.' });
     }
     if (session.guild_id !== guild.id) {
       log.warn('ADMIN_EDIT', guild.id, 'SECURITY: guild mismatch user=%s', user.id);
-      return interaction.editReply({ content: '❌ Phiên không hợp lệ.' });
+      return interaction.editReply({ content: '❌ Bang Chiến không hợp lệ.' });
     }
 
     const userField = interaction.fields.getTextInputValue('user_id').trim();
@@ -141,7 +141,7 @@ class AdminEditModalHandler extends InteractionHandler {
         `${statusFull(resolvedStatus)}`,
       ].join('\n'))
       .addFields(
-        { name: 'Phiên', value: `**${session.session_name ?? 'Phiên'}**`, inline: true },
+        { name: 'Bang Chiến', value: `**${session.session_name ?? 'Bang Chiến'}**`, inline: true },
         { name: 'Người sửa', value: `<@${user.id}>`, inline: true },
       )
       .setTimestamp();

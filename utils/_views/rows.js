@@ -73,12 +73,12 @@ function buildSessionActionRow(isOpen = true) {
     new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId('session:cancel')
-        .setLabel('🗑️ Hủy phiên')
+        .setLabel('🗑️ Hủy Kỳ')
         .setStyle(ButtonStyle.Danger)
         .setDisabled(disabled),
       new ButtonBuilder()
         .setCustomId('attend_close')
-        .setLabel('🔒 Đóng phiên')
+        .setLabel('🔒 Đóng Kỳ')
         .setStyle(ButtonStyle.Danger)
         .setDisabled(disabled),
     ),

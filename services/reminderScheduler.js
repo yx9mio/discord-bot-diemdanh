@@ -107,7 +107,7 @@ async function processOneReminder(guild, cfg, sched, now, tz) {
       const embed = new EmbedBuilder()
         .setColor(0x5865f2)
         .setTitle('⏰ Nhắc lịch điểm danh')
-        .setDescription(`Phiên **${sched.session_name}** sẽ mở sau **${minsToOpen} phút**.`)
+        .setDescription(`Kỳ **${sched.session_name}** sẽ mở sau **${minsToOpen} phút**.`)
         .addFields(
           { name: '🕐 Giờ mở', value: `${String(sched.hour).padStart(2, '0')}:${String(sched.minute ?? 0).padStart(2, '0')}`, inline: true },
           { name: '📅 Loại', value: sched.type === 'one_time' ? 'Một lần' : 'Hàng tuần', inline: true },
@@ -124,7 +124,7 @@ async function processOneReminder(guild, cfg, sched, now, tz) {
     }
 
     // Gửi DM cho thành viên đủ điều kiện
-    const dmMsg = `⏰ **Nhắc lịch:** Phiên **${sched.session_name}** sẽ mở sau **${minsToOpen} phút**.`;
+    const dmMsg = `⏰ **Nhắc lịch:** Kỳ **${sched.session_name}** sẽ mở sau **${minsToOpen} phút**.`;
     await _sendDmReminders(guild, cfg, sched, dmMsg);
 
     log.info('REMINDER', guild.id, 'Sent %dmin reminder for %s', minsToOpen, sched.session_name);
@@ -207,7 +207,7 @@ async function autoOpenSession(guild, cfg, sched) {
 
     if (cfg?.attendance_role_id) {
       await ch.send({
-        content: `<@&${cfg.attendance_role_id}> Phiên điểm danh **${session.session_name}** đã tự động mở!`,
+        content: `<@&${cfg.attendance_role_id}> Kỳ điểm danh **${session.session_name}** đã tự động mở!`,
       }).catch(() => null);
     }
 

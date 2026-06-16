@@ -15,7 +15,7 @@ class SetupCommand extends Command {
   constructor(context) {
     super(context, {
       name: 'setup',
-      description: 'Mở Bảng điều khiển — quản lý lịch, thành viên, phiên, cài đặt',
+      description: 'Mở Bảng điều khiển — quản lý lịch, thành viên, Bang Chiến, cài đặt',
       preconditions: ['AdminOnly'],
     });
   }
@@ -24,7 +24,7 @@ class SetupCommand extends Command {
     registry.registerChatInputCommand(
       new SlashCommandBuilder()
         .setName('setup')
-        .setDescription('Mở Bảng điều khiển — quản lý lịch, thành viên, phiên, cài đặt')
+        .setDescription('Mở Bảng điều khiển — quản lý lịch, thành viên, Bang Chiến, cài đặt')
         .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
     );
   }

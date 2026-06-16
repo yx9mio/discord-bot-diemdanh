@@ -61,9 +61,9 @@ class SessionButtonHandler extends InteractionHandler {
       if (!session) {
         if (customId.startsWith('attend_view:')) {
           await interaction.deferUpdate();
-          return interaction.editReply({ content: '🚫 Phiên đã kết thúc.', embeds: [], components: [] });
+          return interaction.editReply({ content: '🚫 Kỳ đã kết thúc.', embeds: [], components: [] });
         }
-        return interaction.reply({ content: '🚫 Không có phiên điểm danh nào đang mở.', flags: MessageFlags.Ephemeral });
+        return interaction.reply({ content: '🚫 Không có Kỳ điểm danh nào đang mở.', flags: MessageFlags.Ephemeral });
       }
       const attended = await attendanceService.getAttendances(session.id);
 
@@ -104,7 +104,7 @@ class SessionButtonHandler extends InteractionHandler {
       if (!checkCooldown(interaction.user.id, 'session_refresh', 1000)) return;
       try {
         const session = await sessionService.getActiveSession(interaction.guildId);
-        if (!session) return interaction.followUp({ ...replyErr('Không có phiên điểm danh đang mở.'), flags: MessageFlags.Ephemeral });
+        if (!session) return interaction.followUp({ ...replyErr('Không có Kỳ điểm danh đang mở.'), flags: MessageFlags.Ephemeral });
         const attended = await attendanceService.getAttendances(session.id);
         await interaction.guild.members.fetch().catch(() => {});
         const { phaiRoleIds: phaiIds3, emojiMap: emojiMap3 } = await _phaiData(session, interaction.guild.id);
@@ -152,10 +152,10 @@ class SessionButtonHandler extends InteractionHandler {
       const { ok } = await requireAdmin(interaction, { context: 'hủy phiên', deferred: true });
       if (!ok) return;
       const session = await sessionService.getActiveSession(guild.id);
-      if (!session) return interaction.editReply(replyErrEdit('Không có phiên nào đang mở.'));
+      if (!session) return interaction.editReply(replyErrEdit('Không có Kỳ nào đang mở.'));
       return interaction.editReply(
         replyConfirm(
-          `Bạn có chắc muốn **HỦY** phiên **"${session.session_name}"**?\n> Hành động này sẽ hủy phiên và giữ nguyên tất cả điểm danh đã ghi.`,
+          `Bạn có chắc muốn **HỦY** Kỳ **"${session.session_name}"**?\n> Hành động này sẽ hủy Kỳ và giữ nguyên tất cả điểm danh đã ghi.`,
           'session:confirm_cancel',
           'session:cancel_cancel',
         ),
@@ -171,7 +171,7 @@ class SessionButtonHandler extends InteractionHandler {
       const { ok: okCancel } = await requireAdmin(interaction, { context: 'xác nhận hủy phiên', deferred: true });
       if (!okCancel) return;
       const session = await sessionService.getActiveSession(guild.id);
-      if (!session) return interaction.editReply(replyErrEdit('Phiên đã được đóng hoặc hủy trước đó.'));
+      if (!session) return interaction.editReply(replyErrEdit('Kỳ đã được đóng hoặc hủy trước đó.'));
 
       try {
         stopAutoRefresh(session.id);
@@ -182,16 +182,16 @@ class SessionButtonHandler extends InteractionHandler {
         log.error('CANCEL', guild.id, 'cancelSession thất bại %s: %s', session.id, e.message);
         const stillActive = await sessionService.getActiveSession(guild.id).catch(() => null);
         if (!stillActive) {
-          return interaction.editReply(replyOkEdit('✅ Phiên đã được hủy bởi người khác.'));
+          return interaction.editReply(replyOkEdit('✅ Kỳ đã được hủy bởi người khác.'));
         }
-        return interaction.editReply(replyErrEdit('Không thể hủy phiên do lỗi DB, thử lại sau.'));
+        return interaction.editReply(replyErrEdit('Không thể hủy Kỳ do lỗi DB, thử lại sau.'));
       }
 
       metrics.sessionClosed(guild.id, { cancelled: true });
 
       const attended = await attendanceService.getAttendances(session.id);
       await Promise.allSettled([
-        interaction.editReply(replyOkEdit('✅ Phiên điểm danh đã được hủy thành công.')),
+        interaction.editReply(replyOkEdit('✅ Kỳ điểm danh đã được hủy thành công.')),
         disableAttendanceUI(interaction.client, channel, session, attended),
       ]);
     }
@@ -199,7 +199,7 @@ class SessionButtonHandler extends InteractionHandler {
     // ── session:cancel_cancel ───────────────────────────────────────────────────
     if (customId === 'session:cancel_cancel') {
       if (!checkCooldown(interaction.user.id, 'session_cancel_cancel', 1000)) return;
-      return interaction.reply({ content: '↩️ Đã hủy. Phiên vẫn đang mở.', flags: MessageFlags.Ephemeral });
+      return interaction.reply({ content: '↩️ Đã hủy. Kỳ vẫn đang mở.', flags: MessageFlags.Ephemeral });
     }
 
     // ── attend_close ─────────────────────────────────────────────────────────────
@@ -209,10 +209,10 @@ class SessionButtonHandler extends InteractionHandler {
       const { ok } = await requireAdmin(interaction, { context: 'đóng phiên', deferred: true });
       if (!ok) return;
       const session = await sessionService.getActiveSession(guild.id);
-      if (!session) return interaction.editReply(replyErrEdit('Không có phiên nào đang mở.'));
+      if (!session) return interaction.editReply(replyErrEdit('Không có Kỳ nào đang mở.'));
       return interaction.editReply(
         replyConfirm(
-          `Bạn có chắc muốn đóng phiên **"${session.session_name}"**?\n> Hành động này không thể hoàn tác.`,
+          `Bạn có chắc muốn đóng Kỳ **"${session.session_name}"**?\n> Hành động này không thể hoàn tác.`,
           'session:confirm_close',
           'session:cancel_close',
         ),
@@ -228,7 +228,7 @@ class SessionButtonHandler extends InteractionHandler {
       const { ok: okClose } = await requireAdmin(interaction, { context: 'xác nhận đóng phiên', deferred: true });
       if (!okClose) return;
       const session = await sessionService.getActiveSession(guild.id);
-      if (!session) return interaction.editReply(replyErrEdit('Phiên đã được đóng trước đó.'));
+      if (!session) return interaction.editReply(replyErrEdit('Kỳ đã được đóng trước đó.'));
 
       try {
         stopAutoRefresh(session.id);
@@ -239,9 +239,9 @@ class SessionButtonHandler extends InteractionHandler {
         log.error('CLOSE', guild.id, 'closeSession thất bại %s: %s', session.id, e.message);
         const stillActive = await sessionService.getActiveSession(guild.id).catch(() => null);
         if (!stillActive) {
-          return interaction.editReply(replyOkEdit('✅ Phiên đã được đóng bởi người khác.'));
+          return interaction.editReply(replyOkEdit('✅ Kỳ đã được đóng bởi người khác.'));
         }
-        return interaction.editReply(replyErrEdit('Không thể đóng phiên do lỗi DB, thử lại sau.'));
+        return interaction.editReply(replyErrEdit('Không thể đóng Kỳ do lỗi DB, thử lại sau.'));
       }
 
       // Auto-mark khong_tham_gia cho eligible members chưa điểm danh
@@ -282,13 +282,13 @@ class SessionButtonHandler extends InteractionHandler {
       const { phaiRoleIds: phaiIds4, emojiMap: emojiMap4 } = await _phaiData(session, guild.id);
       await channel.send({ embeds: [await buildSummaryEmbed(session, attended, guild, phaiIds4, emojiMap4)] }).catch(() => null);
       await announceBadges(guild, channel, guild.id, session.id, attended, statsMap).catch(() => null);
-      return interaction.editReply(replyOkEdit('✅ Phiên điểm danh đã được đóng thành công.'));
+      return interaction.editReply(replyOkEdit('✅ Kỳ điểm danh đã được đóng thành công.'));
     }
 
     // ── session:cancel_close ────────────────────────────────────────────────────
     if (customId === 'session:cancel_close') {
       if (!checkCooldown(interaction.user.id, 'session_cancel_close', 1000)) return;
-      return interaction.reply({ content: '↩️ Đã hủy. Phiên vẫn đang mở.', flags: MessageFlags.Ephemeral });
+      return interaction.reply({ content: '↩️ Đã hủy. Kỳ vẫn đang mở.', flags: MessageFlags.Ephemeral });
     }
 
     // ── session:confirm_close:all (batch) ───────────────────────────────────────
@@ -299,7 +299,7 @@ class SessionButtonHandler extends InteractionHandler {
       if (!okBatch) return;
 
       const sessions = await sessionService.getActiveSessions(guild.id);
-      if (!sessions.length) return interaction.editReply(replyErrEdit('Không có phiên nào để đóng.'));
+      if (!sessions.length) return interaction.editReply(replyErrEdit('Không có Kỳ nào để đóng.'));
 
       for (const s of sessions) stopAutoRefresh(s.id);
       cancelTimers(guild.id);
@@ -325,15 +325,15 @@ class SessionButtonHandler extends InteractionHandler {
       }
 
       log.info('CLOSE_ALL', guild.id, 'Đã đóng %d/%d phiên (%d lỗi)', closed, sessions.length, failed);
-      let reply = `Đã đóng **${closed}/${sessions.length}** phiên đang mở.`;
-      if (failed > 0) reply += `\n⚠️ ${failed} phiên gặp lỗi (xem log).`;
+      let reply = `Đã đóng **${closed}/${sessions.length}** Kỳ đang mở.`;
+      if (failed > 0) reply += `\n⚠️ ${failed} Kỳ gặp lỗi (xem log).`;
       return interaction.editReply(replyOkEdit(reply));
     }
 
     // ── session:cancel_close:all (batch) ─────────────────────────────────────────
     if (customId === 'session:cancel_close:all') {
       if (!checkCooldown(interaction.user.id, 'session_cancel_close_all', 1000)) return;
-      return interaction.reply({ content: '↩️ Đã hủy. Các phiên vẫn đang mở.', flags: MessageFlags.Ephemeral });
+      return interaction.reply({ content: '↩️ Đã hủy. Các Kỳ vẫn đang mở.', flags: MessageFlags.Ephemeral });
     }
   }, 'SessionButtonHandler')(interaction); }
 }

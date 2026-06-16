@@ -41,7 +41,7 @@ class SetupConfigEditSelectHandler extends InteractionHandler {
     const suffix = interaction.customId.slice(SELECT_PREFIX.length);
     const guildId = interaction.guild.id;
     const col = SELECT_FIELD_MAP[suffix];
-    if (!col) return interaction.editReply(replyErrEdit(`Loại cấu hình không xác định: "${suffix}"`));
+    if (!col) return interaction.editReply(replyErrEdit(`Loại cài đặt không xác định: "${suffix}"`));
 
     const value = SELECT_FIELD_IS_ARRAY.has(suffix)
       ? interaction.values
@@ -55,7 +55,7 @@ class SetupConfigEditSelectHandler extends InteractionHandler {
       return interaction.editReply(ConfigView.render({ cfg, guild: interaction.guild }));
     } catch (e) {
       log.error('CFG_EDIT_SELECT', guildId, 'Lỗi lưu field %s: %s', suffix, e.message);
-      return interaction.editReply(replyErrEdit(`Không thể lưu cấu hình: ${e.message}`));
+      return interaction.editReply(replyErrEdit(`Không thể lưu cài đặt: ${e.message}`));
     }
   }, 'SetupConfigEditSelectHandler')(interaction); }
 }

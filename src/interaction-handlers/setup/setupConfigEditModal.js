@@ -32,7 +32,7 @@ async function _refreshConfigAndReply(interaction, guildId) {
       log.warn('CFG_EDIT_MODAL', guildId, 'ConfigView msg not found (deleted?)');
     }
   }
-  return interaction.editReply({ content: '✅ Đã lưu cấu hình.' });
+  return interaction.editReply({ content: '✅ Đã lưu cài đặt.' });
 }
 
 class SetupConfigEditModalHandler extends InteractionHandler {
@@ -117,7 +117,7 @@ class SetupConfigEditModalHandler extends InteractionHandler {
     }
 
     const mapping = FIELD_MAP[suffix];
-    if (!mapping) return interaction.editReply(replyErrEdit(`Loại cấu hình không xác định: "${suffix}"`));
+    if (!mapping) return interaction.editReply(replyErrEdit(`Loại cài đặt không xác định: "${suffix}"`));
 
     const value = interaction.fields.getTextInputValue(mapping.inputId).trim();
     if (!value) return interaction.editReply(replyErrEdit('Giá trị không được để trống.'));
@@ -133,7 +133,7 @@ class SetupConfigEditModalHandler extends InteractionHandler {
       return await _refreshConfigAndReply(interaction, guildId);
     } catch (e) {
       log.error('CFG_EDIT_MODAL', guildId, 'Lỗi lưu field %s: %s', suffix, e.message);
-      return interaction.editReply(replyErrEdit(`Không thể lưu cấu hình: ${e.message}`));
+      return interaction.editReply(replyErrEdit(`Không thể lưu cài đặt: ${e.message}`));
     }
   }, 'SetupConfigEditModalHandler')(interaction); }
 }

@@ -19,7 +19,7 @@ class ReminderConfirmHandler extends InteractionHandler {
     if (!checkCooldown(interaction.user.id, 'reminder', 2000)) return interaction.reply({ content: '⏳ Vui lòng đợi một chút trước khi thực hiện hành động này.', flags: MessageFlags.Ephemeral });
     const schedId = interaction.customId.slice('reminder:confirm:'.length);
     return interaction.reply({
-      content: `✅ Đã ghi nhận! Bạn sẽ được nhắc khi phiên bắt đầu.`,
+      content: `✅ Đã ghi nhận! Bạn sẽ được nhắc khi Kỳ bắt đầu.`,
       flags: MessageFlags.Ephemeral,
     });
   }, 'ReminderConfirmHandler')(interaction); }

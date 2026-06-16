@@ -41,7 +41,7 @@ function _fmtSchedule(s) {
     : '';
   const remind = s.reminder_1_min != null ? ` · 🔔 ${s.reminder_1_min}p` : '';
   const label = isOneTime ? `📅 ${day}` : `${day}`;
-  return `**${label} ${open}** — ${s.session_name ?? 'Phiên'}${closeStr}${remind}${ch}`;
+  return `**${label} ${open}** — ${s.session_name ?? 'Bang Chiến'}${closeStr}${remind}${ch}`;
 }
 
 function render({ schedules, page = 0, guild }) {
@@ -53,13 +53,13 @@ function render({ schedules, page = 0, guild }) {
   const slice      = safe.slice(start, start + PAGE_SIZE);
 
   const desc = total === 0
-    ? `*Chưa có lịch cố định nào.*\n> Bấm **+ Thêm hằng tuần** hoặc **+ Thêm một lần** để tạo.`
+    ? `*Chưa có lịch nào.*\n> Bấm **+ Thêm hằng tuần** hoặc **+ Thêm một lần** để tạo.`
     : slice.map((s, i) => `${start + i + 1}. ${_fmtSchedule(s)}`).join('\n');
 
   const embed = new EmbedBuilder()
     .setColor(COLORS.PRIMARY)
     .setAuthor(buildAuthor(guild))
-    .setTitle(`${ICONS.CALENDAR} Lịch cố định`)
+    .setTitle(`${ICONS.CALENDAR} Lịch Bang Chiến`)
     .setDescription(desc)
     .setFooter({ text: `${FOOTER_DEFAULT} · Trang ${cPage + 1}/${totalPages} · Tổng ${total} lịch` })
     .setTimestamp();

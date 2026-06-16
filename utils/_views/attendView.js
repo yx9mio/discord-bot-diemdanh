@@ -20,7 +20,7 @@ function buildAttendConfirmEmbed(member, status, sessionName, streak = 0, sessio
   ];
   if (sessionTotal > 0) {
     const pct = Math.round(sessionJoined / sessionTotal * 100);
-    descParts.push(`📊 Tỷ lệ phiên: **${sessionJoined}/${sessionTotal}** (${pct}%)`);
+    descParts.push(`📊 Tỷ lệ Kỳ: **${sessionJoined}/${sessionTotal}** (${pct}%)`);
   }
 
   const embed = new EmbedBuilder()
@@ -41,7 +41,7 @@ function buildAdminOverrideSuccessEmbed(targetUsername, status, sessionName) {
   const embed = new EmbedBuilder()
     .setColor(0xf0a500)
     .setTitle('🔧 Admin đã cập nhật điểm danh')
-    .setDescription(`Đã điểm danh cho **${targetUsername ?? 'user'}**: ${label}\nPhiên: **${sessionName ?? ''}**`)
+    .setDescription(`Đã điểm danh cho **${targetUsername ?? 'user'}**: ${label}\nKỳ: **${sessionName ?? ''}**`)
     .setTimestamp();
 
   return { embeds: [embed] };

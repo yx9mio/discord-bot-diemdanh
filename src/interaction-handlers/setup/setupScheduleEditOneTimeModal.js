@@ -105,7 +105,7 @@ class SetupScheduleEditOneTimeModalHandler extends InteractionHandler {
         ),
         new ActionRowBuilder().addComponents(
           new TextInputBuilder()
-            .setCustomId('ten').setLabel('Tên phiên (tuỳ chọn)')
+            .setCustomId('ten').setLabel('Tên Bang Chiến (tuỳ chọn)')
             .setStyle(TextInputStyle.Short).setRequired(false).setValue(ten),
         ),
         new ActionRowBuilder().addComponents(

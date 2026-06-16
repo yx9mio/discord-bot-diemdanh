@@ -1,128 +1,250 @@
 'use strict';
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const { COLORS, ICONS, getPhaiIcon }  = require('../../../../utils/theme.js');
+const { COLORS, ICONS, getPhaiIcon } = require('../../../../utils/theme.js');
 const { FOOTER_DEFAULT, buildAuthor } = require('../../../../utils/embeds.js');
-const { fmtTs }          = require('../../../../utils/format.js');
+const { fmtTs } = require('../../../../utils/format.js');
 
 const CUSTOM_ID = {
-  SESSION_START:     'setup:session:start',
-  SESSION_CLOSE:     'setup:session:close:',
-  SESSION_CLOSE_ALL: 'setup:session:close:all',
-  SESSION_EXPORT:    'setup:session:export:',
-  SESSION_DETAIL:    'setup:session:detail:',
-  SESSION_REFRESH:   'setup:session:refresh',
-  BACK_HOME:         'setup:home',
+  SUMMARY:     'setup:session',
+  ROSTER:      'setup:session:roster',
+  DETAILS:     'setup:session:details',
+  BACK:        'setup:session:back',
+  REFRESH:     'setup:session:refresh',
+  ROSTER_PREV: 'setup:session:roster:prev',
+  ROSTER_NEXT: 'setup:session:roster:next',
 };
 
-const PAGE_SIZE = 5;
+const ROSTER_PAGE_SIZE = 10;
 
-function _progressBar(value, max) {
-  if (!max || max <= 0) return '░'.repeat(10);
-  const filled = Math.round((value / max) * 10);
-  return '█'.repeat(filled) + '░'.repeat(10 - filled);
+function _bar(value, max, len) {
+  if (!max || max <= 0) return '░'.repeat(len);
+  const filled = Math.round(Math.min(value / max, 1) * len);
+  return '█'.repeat(filled) + '░'.repeat(len - filled);
 }
 
-function _sessionCard(session, idx) {
-  const totalEligible = session.eligible_count ?? 0;
-  const totalIn       = session.attended_count ?? 0;
-  const totalLate     = session.late_count     ?? 0;
-  const totalAbsent   = session.absent_count   ?? 0;
-  const pct = totalEligible > 0 ? Math.round((totalIn / totalEligible) * 100) : 0;
-  const bar = _progressBar(totalIn, totalEligible || 1);
-
-  return [
-    `**#${idx} — ${session.session_name ?? 'Phiên điểm danh'}**`,
-    session.description ? `_${session.description}_` : null,
-    `${bar} **${pct}%** điểm danh (${totalIn}/${totalEligible})`,
-    `▸ Bắt đầu: ${fmtTs(session.started_at)}`,
-    session.auto_close_at ? `▸ Tự đóng: ${fmtTs(session.auto_close_at)}` : null,
-    totalLate > 0 || totalAbsent > 0 ? `▸ ⏰ Trễ ${totalLate} · ❌ Vắng ${totalAbsent}` : null,
-  ].filter(Boolean).join('\n');
+function _fmtFooter(ctx, sessionId, page) {
+  let s = `⚔️ · ${ctx}`;
+  if (sessionId != null) s += ` · sid:${sessionId}`;
+  if (page != null) s += ` · p:${page}`;
+  return { text: `${s} · ${FOOTER_DEFAULT}` };
 }
 
-function _sessionCardExpanded(session, idx, cfg = null, guild = null) {
-  const card = _sessionCard(session, idx);
+function parseFooter(footer) {
+  const res = { ctx: 'summary', sessionId: null, page: 0 };
+  if (!footer?.text) return res;
+  for (const part of footer.text.split(' · ')) {
+    if (part === 'roster') res.ctx = 'roster';
+    else if (part === 'details') res.ctx = 'details';
+    else if (part.startsWith('sid:')) res.sessionId = part.slice(4);
+    else if (part.startsWith('p:')) res.page = parseInt(part.slice(2), 10) || 0;
+  }
+  return res;
+}
+
+function _computePhai(session, guild, members, attendances, cfg) {
   const phaiIds = cfg?.phai_role_ids ?? [];
-  const extra = [
-    `▸ ID: \`${session.id}\``,
-    `▸ Tạo bởi: <@${session.created_by}>`,
-    session.phai_role_ids?.length ? `▸ Phái:\n${session.phai_role_ids.map(r => `${getPhaiIcon(r, phaiIds, guild, cfg?.phai_role_icons)} <@&${r}>`).join('\n')}` : null,
-    session.eligible_member_ids?.length ? `▸ Thành viên: ${session.eligible_member_ids.length} người` : null,
-    session.created_at ? `▸ Tạo lúc: ${fmtTs(session.created_at)}` : null,
-  ].filter(Boolean).join('\n');
-  return card + '\n' + extra;
+  if (!phaiIds.length) return [];
+  const attMap = {};
+  for (const a of attendances) attMap[a.user_id] = a.status;
+
+  return phaiIds.map(roleId => {
+    const membersIn = members.filter(m => (m.phai_role_ids ?? []).includes(roleId));
+    const total = membersIn.length;
+    if (!total) return null;
+    const attended = membersIn.filter(m =>
+      attMap[m.user_id] && ['tham_gia', 'tre'].includes(attMap[m.user_id])
+    ).length;
+    const role = guild?.roles?.cache?.get(roleId);
+    const icon = getPhaiIcon(roleId, phaiIds, guild, cfg?.phai_role_icons);
+    return { icon, name: role?.name ?? `<@&${roleId}>`, attended, total };
+  }).filter(Boolean);
 }
 
-function render({ sessions, page = 0, guild, cfg, members = [], detailId = null }) {
-  const all   = Array.isArray(sessions) ? sessions.filter(s => s.is_active) : [];
-  const total = all.length;
+function _resolveName(guild, userId, fallback) {
+  const m = guild?.members?.cache?.get(userId);
+  return m ? (m.displayName || m.user.username) : (fallback ?? userId);
+}
 
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const cPage      = Math.max(0, Math.min(page, totalPages - 1));
-  const start      = cPage * PAGE_SIZE;
-  const slice      = all.slice(start, start + PAGE_SIZE);
+function renderSummary({ session, guild, cfg, members, attendances }) {
+  const active = !!session;
+  const eligible = session?.eligible_member_ids?.length ?? 0;
+  const attended = attendances.filter(a => a.status === 'tham_gia').length;
+  const late = attendances.filter(a => a.status === 'tre').length;
+  const absent = attendances.filter(a => a.status === 'khong_tham_gia').length;
+  const excused = attendances.filter(a => a.status === 'co_phep').length;
+  const totalPresent = attended + late;
+  const pct = eligible > 0 ? Math.round((totalPresent / eligible) * 100) : 0;
 
   const embed = new EmbedBuilder()
-    .setColor(total > 0 ? COLORS.SUCCESS : COLORS.PRIMARY)
-    .setAuthor(buildAuthor(guild))
-    .setTitle(`${total > 0 ? ICONS.SESSION : '⚪'} Quản lý phiên`)
-    .setFooter({ text: `${FOOTER_DEFAULT} · Trang ${cPage + 1}/${totalPages} · Tổng ${total} phiên` })
-    .setTimestamp();
+    .setColor(active ? COLORS.PRIMARY : COLORS.NEUTRAL)
+    .setAuthor(buildAuthor(guild));
 
-  if (total === 0) {
-    embed.setDescription('_Không có phiên nào đang mở._\nNhấn **Mở phiên mới** để bắt đầu điểm danh.');
-    if (members.length > 0) {
-      embed.addFields({ name: '👥 Thành viên', value: `${members.length} người`, inline: true });
+  if (active) {
+    const name = session.session_name ?? 'Bang Chiến';
+    const shortDay = session.started_at ? fmtTs(session.started_at).split(' ')[0] : '';
+    embed.setTitle(`⚔️ Bang Chiến ${name}`);
+
+    const bar = _bar(totalPresent, eligible || 1, 14);
+    const emoji = pct >= 90 ? '🏆' : pct >= 75 ? '🥇' : pct >= 50 ? '🥈' : '📉';
+
+    let desc = `${emoji} **${pct}%** tham gia\n${bar}\n\n`;
+    desc += `👥 **Quân số**\n`;
+    desc += `${ICONS.ATTEND_YES} ${attended}　${ICONS.ATTEND_LATE} ${late}\n`;
+    desc += `${ICONS.ATTEND_NO} ${absent}　${ICONS.ATTEND_EXCUSE} ${excused}`;
+
+    const phai = _computePhai(session, guild, members, attendances, cfg);
+    if (phai.length) {
+      const lines = phai.map(p => `${p.icon} ${p.name}  ${p.attended}/${p.total}`);
+      desc += `\n\n⚔️ **Theo phái**\n${lines.join('\n')}`;
     }
-  } else {
-    const desc = slice.map((s, i) => {
-      const idx = start + i + 1;
-      return s.id === detailId
-        ? _sessionCardExpanded(s, idx, cfg, guild)
-        : _sessionCard(s, idx);
-    }).join('\n\n');
+
     embed.setDescription(desc);
+    embed.setFooter(_fmtFooter('summary', session.id));
+  } else {
+    embed.setTitle('⚔️ Bang Chiến')
+      .setDescription('_Chưa có Kỳ Bang Chiến nào đang mở._\nNhấn **➕ Mở Kỳ mới** để bắt đầu điểm danh.')
+      .setFooter({ text: FOOTER_DEFAULT });
+    if (members?.length > 0) {
+      embed.addFields({ name: '👥 Quân số', value: `${members.length} người`, inline: true });
+    }
   }
 
   const components = [];
 
-  if (total > 0) {
-    const closeRow = new ActionRowBuilder();
-    const detailRow = new ActionRowBuilder();
-    for (const s of slice) {
-      const idx = start + slice.indexOf(s) + 1;
-      const isExpanded = s.id === detailId;
-      closeRow.addComponents(
-        new ButtonBuilder()
-          .setCustomId(`${CUSTOM_ID.SESSION_CLOSE}${s.id}`)
-          .setLabel(`✖ #${idx}`)
-          .setStyle(ButtonStyle.Danger),
-      );
-      detailRow.addComponents(
-        new ButtonBuilder()
-          .setCustomId(`${CUSTOM_ID.SESSION_DETAIL}${s.id}`)
-          .setLabel(isExpanded ? `▴ #${idx}` : `▾ #${idx}`)
-          .setStyle(ButtonStyle.Secondary),
-      );
-    }
-    components.push(detailRow, closeRow);
-  }
-
-  const ctrlRow = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId(CUSTOM_ID.SESSION_START).setLabel('Mở phiên mới').setEmoji(ICONS.PLUS).setStyle(ButtonStyle.Success),
-    new ButtonBuilder().setCustomId(CUSTOM_ID.SESSION_REFRESH).setLabel('Làm mới').setEmoji(ICONS.REFRESH).setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId(CUSTOM_ID.BACK_HOME).setLabel('← Dashboard').setEmoji(ICONS.HOME).setStyle(ButtonStyle.Secondary),
-  );
-
-  if (total > 1) {
-    ctrlRow.addComponents(
-      new ButtonBuilder().setCustomId(CUSTOM_ID.SESSION_CLOSE_ALL).setLabel(`✖ Đóng tất cả (${total})`).setEmoji(ICONS.CLOSE).setStyle(ButtonStyle.Danger),
+  if (active) {
+    components.push(
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(CUSTOM_ID.ROSTER).setLabel('👥 Danh sách').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(CUSTOM_ID.DETAILS).setLabel('📊 Chi tiết').setStyle(ButtonStyle.Secondary),
+      ),
     );
   }
 
-  components.push(ctrlRow);
+  const actionRow = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(CUSTOM_ID.REFRESH).setLabel('Làm mới').setEmoji('🔄').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(CUSTOM_ID.START).setLabel('➕ Mở Kỳ mới').setStyle(ButtonStyle.Success),
+  );
+  if (active) {
+    actionRow.addComponents(
+      new ButtonBuilder().setCustomId(`${'setup:session:close:'}${session.id}`).setLabel('✖ Đóng Kỳ').setStyle(ButtonStyle.Danger),
+    );
+  }
+  components.push(actionRow);
 
-  return { embeds: [embed], components, _page: cPage, _totalPages: totalPages, _detailId: detailId };
+  components.push(
+    new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId('setup:home').setLabel('← Dashboard').setStyle(ButtonStyle.Secondary),
+    ),
+  );
+
+  return { embeds: [embed], components };
 }
 
-module.exports = { SessionView: { render, CUSTOM_ID } };
+function renderRoster({ session, guild, attendances, page }) {
+  const rows = [];
+  const byStatus = { tham_gia: [], tre: [], khong_tham_gia: [], co_phep: [] };
+  for (const a of attendances) {
+    if (byStatus[a.status]) byStatus[a.status].push(a);
+  }
+
+  const flat = [];
+  const groups = [
+    { id: 'tham_gia', label: `${ICONS.ATTEND_YES} Đúng giờ` },
+    { id: 'tre', label: `${ICONS.ATTEND_LATE} Trễ` },
+    { id: 'khong_tham_gia', label: `${ICONS.ATTEND_NO} Vắng` },
+    { id: 'co_phep', label: `${ICONS.ATTEND_EXCUSE} Có phép` },
+  ];
+  for (const g of groups) {
+    if (byStatus[g.id].length) {
+      flat.push(`__${g.label}__`);
+      for (const a of byStatus[g.id]) {
+        flat.push(`‣ ${_resolveName(guild, a.user_id, a.username)}`);
+      }
+    }
+  }
+
+  const totalPages = Math.max(1, Math.ceil(flat.length / ROSTER_PAGE_SIZE));
+  const cPage = Math.max(0, Math.min(page ?? 0, totalPages - 1));
+  const start = cPage * ROSTER_PAGE_SIZE;
+  const slice = flat.slice(start, start + ROSTER_PAGE_SIZE);
+
+  const name = session?.session_name ?? 'Bang Chiến';
+  const embed = new EmbedBuilder()
+    .setColor(COLORS.PRIMARY)
+    .setAuthor(buildAuthor(guild))
+    .setTitle(`👥 Danh sách — ${name}`)
+    .setDescription(slice.length ? slice.join('\n') : '_Trống_')
+    .setFooter(_fmtFooter('roster', session?.id, cPage));
+
+  const components = [];
+  const navRow = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(CUSTOM_ID.BACK).setLabel('← ⚔️ Bang Chiến').setStyle(ButtonStyle.Secondary),
+  );
+  if (totalPages > 1) {
+    navRow.addComponents(
+      new ButtonBuilder().setCustomId(CUSTOM_ID.ROSTER_PREV).setLabel('◀').setStyle(ButtonStyle.Secondary).setDisabled(cPage <= 0),
+      new ButtonBuilder().setCustomId(CUSTOM_ID.ROSTER_NEXT).setLabel('▶').setStyle(ButtonStyle.Secondary).setDisabled(cPage >= totalPages - 1),
+    );
+  }
+  components.push(navRow);
+
+  components.push(
+    new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(CUSTOM_ID.REFRESH).setLabel('Làm mới').setEmoji('🔄').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId('setup:home').setLabel('← Dashboard').setStyle(ButtonStyle.Secondary),
+    ),
+  );
+
+  return { embeds: [embed], components };
+}
+
+function renderDetails({ session, guild, members, attendances, cfg }) {
+  const eligible = session?.eligible_member_ids?.length ?? 0;
+  const attended = attendances.filter(a => a.status === 'tham_gia').length;
+  const late = attendances.filter(a => a.status === 'tre').length;
+  const absent = attendances.filter(a => a.status === 'khong_tham_gia').length;
+  const excused = attendances.filter(a => a.status === 'co_phep').length;
+  const totalPresent = attended + late;
+  const pct = eligible > 0 ? Math.round((totalPresent / eligible) * 100) : 0;
+
+  const phai = _computePhai(session, guild, members, attendances, cfg);
+  let most = null, least = null;
+  if (phai.length) {
+    phai.sort((a, b) => b.attended - a.attended);
+    most = phai[0];
+    least = phai[phai.length - 1];
+  }
+
+  const name = session?.session_name ?? 'Bang Chiến';
+  const emoji = pct >= 90 ? '🏆' : pct >= 75 ? '🥇' : pct >= 50 ? '🥈' : '📉';
+
+  let desc = `${emoji} **Tỷ lệ:** ${pct}% (${totalPresent}/${eligible})\n`;
+  desc += `👥 **Tổng:** ${eligible} người\n`;
+  desc += `${ICONS.ATTEND_YES} Đúng giờ: ${attended}\n`;
+  desc += `${ICONS.ATTEND_LATE} Trễ: ${late}\n`;
+  desc += `${ICONS.ATTEND_NO} Vắng: ${absent}\n`;
+  desc += `${ICONS.ATTEND_EXCUSE} Có phép: ${excused}\n`;
+  if (most) desc += `\n🔥 **Phái đông nhất:** ${most.icon} ${most.name} (${most.attended}/${most.total})`;
+  if (least && least !== most) desc += `\n📉 **Phái ít nhất:** ${least.icon} ${least.name} (${least.attended}/${least.total})`;
+
+  const embed = new EmbedBuilder()
+    .setColor(COLORS.PRIMARY)
+    .setAuthor(buildAuthor(guild))
+    .setTitle(`📊 Chi tiết — ${name}`)
+    .setDescription(desc)
+    .setFooter(_fmtFooter('details', session?.id));
+
+  const components = [
+    new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(CUSTOM_ID.BACK).setLabel('← ⚔️ Bang Chiến').setStyle(ButtonStyle.Secondary),
+    ),
+    new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(CUSTOM_ID.REFRESH).setLabel('Làm mới').setEmoji('🔄').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId('setup:home').setLabel('← Dashboard').setStyle(ButtonStyle.Secondary),
+    ),
+  ];
+
+  return { embeds: [embed], components };
+}
+
+module.exports = { SessionView: { renderSummary, renderRoster, renderDetails, CUSTOM_ID, parseFooter } };

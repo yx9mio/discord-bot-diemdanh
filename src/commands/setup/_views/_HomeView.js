@@ -15,129 +15,90 @@ const CUSTOM_ID = {
   HISTORY:   'setup:history',
   BROADCAST: 'setup:session:broadcast',
   STATS:     'setup:stats',
+  AUDIT:     'setup:audit',
 };
 
 function _fmtSchedule(s) {
   const day  = DAY_VI[s.day_of_week] ?? '?';
   const time = `${String(s.hour).padStart(2, '0')}:${String(s.minute).padStart(2, '0')}`;
   const remind = s.reminder_1_min != null ? ` ⏱️ ${s.reminder_1_min}p` : '';
-  return `**${day} ${time}** — ${s.session_name ?? 'Phiên'}${remind}`;
+  return `**${day} ${time}** — ${s.session_name ?? 'Bang Chiến'}${remind}`;
 }
 
-function _buildStatusBanner(cfg, members) {
-  const hasChannel = !!cfg?.notification_channel_id;
-  const hasMembers = (members?.length ?? 0) > 0;
-  const allDone = hasChannel && hasMembers;
-
-  if (allDone) {
-    return `🎉 **Sẵn sàng!** Nhấn **${ICONS.PLUS} Mở phiên mới** để bắt đầu điểm danh.`;
-  }
-
+function _buildStatusLine(cfg, members) {
+  const ok = !!cfg?.notification_channel_id && (members?.length ?? 0) > 0;
+  if (ok) return '> 🟢 **Hệ thống sẵn sàng.** Bấm **➕ Mở Bang Chiến** bên dưới để điểm danh.';
   const steps = [];
-  if (!hasChannel) steps.push(`⬜ \`───\` **Cài đặt chung**: chọn kênh thông báo + timezone`);
-  if (!hasMembers) steps.push(`⬜ \`───\` **Thành viên**: thêm người vào hệ thống`);
-  steps.push(`📌 \`───\` **Lịch cố định**: (tùy chọn) tạo lịch tự động`);
-
-  return steps.join('\n');
+  if (!cfg?.notification_channel_id) steps.push('⬜ Cài đặt kênh + múi giờ');
+  if (!members?.length) steps.push('⬜ Thêm thành viên');
+  return `> ⚠️ **Cần hoàn tất:** ${steps.join(' · ')}`;
 }
 
 function render({ guild, cfg, schedules, members, session, sessions }) {
   const activeSessions = sessions ?? (session ? [session] : []);
   const cnt = activeSessions.length;
+  const tz  = cfg?.timezone ?? 'Asia/Ho_Chi_Minh';
   const hasChannel = !!cfg?.notification_channel_id;
   const hasMembers = (members?.length ?? 0) > 0;
 
-  const embed1 = new EmbedBuilder()
-    .setColor(COLORS.PRIMARY)
-    .setAuthor(buildAuthor(guild))
-    .setTitle(`${ICONS.HOME} Bảng điều khiển`)
-    .setThumbnail(guild.iconURL({ size: 64 }) ?? null)
-    .setFooter({ text: FOOTER_DEFAULT })
-    .setTimestamp();
-
-  if (!hasChannel || !hasMembers) {
-    embed1.setDescription(_buildStatusBanner(cfg, members));
-  }
-
-  const tz      = cfg?.timezone ?? 'Asia/Ho_Chi_Minh';
-  const channelStatus = hasChannel ? '🟢' : '🔴';
-  embed1.addFields(
-    { name: '📡 Kênh thông báo', value: `${channelStatus} ${cfg?.notification_channel_id ? `<#${cfg.notification_channel_id}>` : 'Chưa cài'}`, inline: true },
-    { name: '🌐 Múi giờ', value: `\`${tz}\``, inline: true },
-  );
-
   const phaiIds = cfg?.phai_role_ids ?? [];
-  let phaiBreakdown = '';
+  let phaiLine = '';
   if (phaiIds.length && members?.length) {
-    phaiBreakdown = phaiIds.map(rid => {
+    phaiLine = phaiIds.map(rid => {
       const count = members.filter(m => (m.phai_role_ids ?? []).includes(rid)).length;
       const icon  = getPhaiIcon(rid, phaiIds, guild, cfg?.phai_role_icons);
       const role  = guild?.roles?.cache?.get(rid);
       return count > 0 ? `${icon} ${role?.name ?? rid}: ${count}` : null;
-    }).filter(Boolean).join('\n');
+    }).filter(Boolean).join(' · ');
   }
-  embed1.addFields(
-    { name: `${ICONS.MEMBER} Thành viên`, value: `${(members?.length ?? 0) > 0 ? '🟢' : '🔴'} **${members?.length ?? 0}** người${phaiBreakdown ? `\n${phaiBreakdown}` : ''}`, inline: true },
-    { name: '⚔️ Phái / Nhóm', value: phaiIds.length > 0 ? `🟢 **${phaiIds.length}** nhóm` : '🔴 Chưa cài', inline: true },
-  );
 
-  const embed2 = new EmbedBuilder()
-    .setColor(COLORS.PRIMARY)
-    .setTitle(`📋 Hoạt động gần đây`);
+  let desc = _buildStatusLine(cfg, members);
+  desc += `\n📡 ${hasChannel ? `<#${cfg.notification_channel_id}>` : '🔴 Chưa cài'} · 🌐 \`${tz}\``;
+  desc += `\n${ICONS.MEMBER} **${members?.length ?? 0}** quân${phaiLine ? ` · ${phaiLine}` : ''}${phaiIds.length ? ` · ⚔️ **${phaiIds.length}** phái` : ''}`;
 
+  // Active session indicator
   if (cnt > 0) {
     const s    = activeSessions[0];
-    const ch   = s.channel_id ? `<#${s.channel_id}>` : 'Chưa có kênh';
-    const by   = s.started_by ? `<@${s.started_by}>` : 'không rõ';
-    const name = s.session_name ?? 'Phiên';
-    const sessionLine = cnt === 1
-      ? `**${name}** · ${ch} · bởi ${by}`
-      : `**${name}** + ${cnt - 1} phiên khác · ${ch} · bởi ${by}`;
-    embed2.addFields({
-      name: '🟢 Phiên đang mở',
-      value: sessionLine,
-      inline: false,
-    });
-  } else {
-    embed2.addFields({
-      name: '🔴 Phiên đang mở',
-      value: `Chưa có phiên nào. Bấm **${ICONS.PLUS} Mở phiên mới** để bắt đầu.`,
-      inline: false,
-    });
+    const ch   = s.channel_id ? `<#${s.channel_id}>` : '?';
+    const by   = s.started_by ? `<@${s.started_by}>` : '?';
+    const name = s.session_name ?? 'Bang Chiến';
+    const extras = cnt > 1 ? ` +${cnt - 1} Bang Chiến khác` : '';
+    desc += `\n🟢 **${name}**${extras} · ${ch} · ${by}`;
   }
 
+  // Schedule summary
   if (schedules?.length) {
-    const top  = schedules.slice(0, 3).map((s, i) => `${i + 1}. ${_fmtSchedule(s)}`).join('\n');
-    const more = schedules.length > 3 ? `\n_...và ${schedules.length - 3} lịch khác_` : '';
-    embed2.addFields({
-      name: `📅 Lịch cố định (${schedules.length})`,
-      value: `${top}${more}`,
-      inline: false,
-    });
-  } else {
-    embed2.addFields({
-      name: '📅 Lịch cố định',
-      value: `🔴 Chưa có lịch. Bấm **${ICONS.PLUS} Quản lý lịch** để thêm.`,
-      inline: false,
-    });
+    const top = schedules.slice(0, 2).map((s, i) => `　${i + 1}. ${_fmtSchedule(s)}`).join('\n');
+    const more = schedules.length > 2 ? `　_+${schedules.length - 2} lịch khác_` : '';
+    desc += `\n📅 **Lịch (${schedules.length})**\n${top}${more}`;
   }
 
-  const navRow = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId(CUSTOM_ID.CFG).setLabel('Cài đặt').setEmoji(ICONS.GEAR).setStyle(hasChannel ? ButtonStyle.Secondary : ButtonStyle.Primary),
-    new ButtonBuilder().setCustomId(CUSTOM_ID.SCH).setLabel('Lịch cố định').setEmoji(ICONS.CALENDAR).setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId(CUSTOM_ID.MEM).setLabel('Thành viên').setEmoji(ICONS.MEMBER).setStyle(hasMembers ? ButtonStyle.Secondary : ButtonStyle.Primary),
-    new ButtonBuilder().setCustomId(CUSTOM_ID.HISTORY).setLabel('Nhật ký').setEmoji(ICONS.CHART).setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId(CUSTOM_ID.STATS).setLabel('Thống kê').setEmoji(ICONS.TROPHY).setStyle(ButtonStyle.Secondary),
+  const embed = new EmbedBuilder()
+    .setColor(COLORS.PRIMARY)
+    .setAuthor(buildAuthor(guild))
+    .setTitle('⚔️ Trung Tâm Chỉ Huy — Bang Chiến')
+    .setThumbnail(guild.iconURL({ size: 64 }) ?? null)
+    .setDescription(desc)
+    .setFooter({ text: FOOTER_DEFAULT })
+    .setTimestamp();
+
+  const primaryRow = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(CUSTOM_ID.SESSION).setLabel('⚔️ Bang Chiến').setStyle(cnt > 0 ? ButtonStyle.Primary : ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(CUSTOM_ID.STATS).setLabel('🏆 BXH').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(CUSTOM_ID.AUDIT).setLabel('📜 Log').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(CUSTOM_ID.CFG).setLabel('Cài Đặt').setEmoji(ICONS.GEAR).setStyle(hasChannel ? ButtonStyle.Secondary : ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId(CUSTOM_ID.MEM).setLabel('Quân Số').setEmoji(ICONS.MEMBER).setStyle(hasMembers ? ButtonStyle.Secondary : ButtonStyle.Primary),
   );
 
-  const actionRow = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId(CUSTOM_ID.START).setLabel('Mở phiên mới').setEmoji(ICONS.PLUS).setStyle(ButtonStyle.Success),
-    new ButtonBuilder().setCustomId(CUSTOM_ID.SESSION).setLabel('Quản lý phiên').setEmoji(ICONS.SESSION).setStyle(cnt > 0 ? ButtonStyle.Primary : ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId(CUSTOM_ID.REFRESH).setLabel('Làm mới').setEmoji(ICONS.REFRESH).setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId(CUSTOM_ID.BROADCAST).setLabel('Phát tin').setEmoji(ICONS.BELL).setStyle(ButtonStyle.Secondary),
+  const secondaryRow = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(CUSTOM_ID.START).setLabel('Mở Bang Chiến').setEmoji(ICONS.PLUS).setStyle(ButtonStyle.Success),
+    new ButtonBuilder().setCustomId(CUSTOM_ID.SCH).setLabel('Lịch').setEmoji(ICONS.CALENDAR).setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(CUSTOM_ID.HISTORY).setLabel('Nhật Ký').setEmoji(ICONS.CHART).setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(CUSTOM_ID.BROADCAST).setLabel('Phát Tin').setEmoji(ICONS.BELL).setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(CUSTOM_ID.REFRESH).setLabel('Làm Mới').setEmoji(ICONS.REFRESH).setStyle(ButtonStyle.Secondary),
   );
 
-  return { embeds: [embed1, embed2], components: [navRow, actionRow] };
+  return { embeds: [embed], components: [primaryRow, secondaryRow] };
 }
 
 module.exports = { HomeView: { render, CUSTOM_ID } };

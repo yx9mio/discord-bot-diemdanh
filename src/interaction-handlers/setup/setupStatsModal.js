@@ -66,7 +66,7 @@ class SetupStatsModalHandler extends InteractionHandler {
       );
     } catch (e) {
       log.error('STATS_MODAL', guild?.id, 'xem người khác thất bại: %s', e.message);
-      return interaction.editReply(replyErrEdit('Không thể tải stats, thử lại sau.'));
+      return interaction.editReply(replyErrEdit('Không thể tải BXH, thử lại sau.'));
     }
   }, 'SetupStatsModalHandler')(interaction); }
 }

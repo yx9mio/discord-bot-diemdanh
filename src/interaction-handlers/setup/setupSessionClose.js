@@ -39,14 +39,14 @@ class SetupSessionCloseHandler extends InteractionHandler {
     try {
       if (id === CLOSE_ALL) {
         const sessions = await sessionService.getActiveSessions(guild.id);
-        if (!sessions.length) return interaction.editReply(replyErrEdit('Không có phiên nào đang mở.'));
+        if (!sessions.length) return interaction.editReply(replyErrEdit('Không có Bang Chiến nào đang mở.'));
 
         log.info('SESSION_CLOSE_ALL', guild.id,
           '%s yêu cầu đóng tất cả %d phiên', interaction.user.tag, sessions.length);
 
         return interaction.editReply(
           replyConfirm(
-            `Bạn có chắc muốn đóng **tất cả ${sessions.length} phiên** đang mở?\n> Hành động này không thể hoàn tác.`,
+            `Bạn có chắc muốn đóng **tất cả ${sessions.length} Bang Chiến** đang mở?\n> Hành động này không thể hoàn tác.`,
             'session:confirm_close:all',
             'session:cancel_close:all',
           ),
@@ -62,7 +62,7 @@ class SetupSessionCloseHandler extends InteractionHandler {
       }
 
       if (!session) {
-        return interaction.editReply(replyErrEdit('Không tìm thấy phiên yêu cầu.'));
+        return interaction.editReply(replyErrEdit('Không tìm thấy Bang Chiến yêu cầu.'));
       }
 
       log.info('SESSION_CLOSE', guild.id,
@@ -70,7 +70,7 @@ class SetupSessionCloseHandler extends InteractionHandler {
 
       return interaction.editReply(
         replyConfirm(
-          `Bạn có chắc muốn đóng phiên **"${session.session_name}"**?\n> Hành động này không thể hoàn tác.`,
+          `Bạn có chắc muốn đóng Bang Chiến **"${session.session_name}"**?\n> Hành động này không thể hoàn tác.`,
           'session:confirm_close',
           'session:cancel_close',
         ),

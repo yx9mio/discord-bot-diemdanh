@@ -6,7 +6,7 @@
 const { ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const { DateTime } = require('luxon');
-const { getMemberStats, getMemberBadges, getTopMembers, getDistinctPhongBan, getServerStats } = require('../../../services/memberService.js');
+const { getMemberStats, getMemberBadges, getTopMembers, getTopMembersByPeriod, getDistinctPhongBan, getServerStats } = require('../../../services/memberService.js');
 const { getAttendancesByUser } = require('../../../services/attendanceService.js');
 const { getGuildConfig } = require('../../../services/configService.js');
 const log = require('../../../utils/logger.js');
@@ -58,6 +58,62 @@ async function _renderServerStats(interaction, period = 'all') {
   return interaction.editReply(await StatsView.renderServerStats(stats, top, interaction.guild, period, prevStats));
 }
 
+function _readRankPb(interaction) {
+  try {
+    const footer = interaction.message?.embeds?.[0]?.footer?.text ?? '';
+    const m = footer.match(/pb:(.+?)(?:\s*·|$)/);
+    return m ? m[1].trim() : '';
+  } catch { return ''; }
+}
+
+function _readRankPhai(interaction) {
+  try {
+    const footer = interaction.message?.embeds?.[0]?.footer?.text ?? '';
+    const m = footer.match(/phai:(\d+)/);
+    return m ? m[1] : '';
+  } catch { return ''; }
+}
+
+function _readRankPeriod(interaction) {
+  try {
+    const footer = interaction.message?.embeds?.[0]?.footer?.text ?? '';
+    const m = footer.match(/rank_period:(\w+)/);
+    return m ? m[1] : 'all';
+  } catch { return 'all'; }
+}
+
+function _computeRankPeriodRange(period) {
+  const now = DateTime.now();
+  if (period === 'month') return { startDate: now.startOf('month').toISO(), endDate: now.plus({ months: 1 }).startOf('month').toISO() };
+  if (period === 'season') {
+    const seasonMonth = Math.floor((now.month - 1) / 3) * 3 + 1;
+    const seasonStart = DateTime.local(now.year, seasonMonth, 1);
+    const seasonEnd = seasonStart.plus({ months: 3 });
+    return { startDate: seasonStart.toISO(), endDate: seasonEnd.toISO() };
+  }
+  return { startDate: null, endDate: null };
+}
+
+async function _fetchRankData(guildId, period, limit = 10, phongBan = null, phaiRoleId = '') {
+  if (period === 'all') {
+    return getTopMembers(guildId, limit, phongBan || null, phaiRoleId || null);
+  }
+  const { startDate, endDate } = _computeRankPeriodRange(period);
+  let rows = await getTopMembersByPeriod(guildId, startDate, endDate, limit);
+  if (phongBan) rows = rows.filter(r => r.phong_ban === phongBan);
+  if (phaiRoleId) rows = rows.filter(r => r.phai_role_ids?.includes(phaiRoleId));
+  return rows;
+}
+
+async function _renderRankView(interaction, period, selectedPb, filterPhaiRoleId) {
+  const [top, pbList, cfg] = await Promise.all([
+    _fetchRankData(interaction.guild.id, period, 10, selectedPb || null, filterPhaiRoleId),
+    getDistinctPhongBan(interaction.guild.id),
+    getGuildConfig(interaction.guild.id),
+  ]);
+  return interaction.editReply(await StatsView.renderRank(top, interaction.guild, 10, pbList, selectedPb, cfg, filterPhaiRoleId, period));
+}
+
 function _readPeriod(interaction) {
   try {
     const footer = interaction.message?.embeds?.[0]?.footer?.text ?? '';
@@ -97,6 +153,9 @@ class SetupStatsHandler extends InteractionHandler {
       CUSTOM_ID.SERVER_PERIOD_WEEK,
       CUSTOM_ID.SERVER_PERIOD_MONTH,
       CUSTOM_ID.SERVER_PERIOD_ALL,
+      CUSTOM_ID.RANK_PERIOD_ALL,
+      CUSTOM_ID.RANK_PERIOD_MONTH,
+      CUSTOM_ID.RANK_PERIOD_SEASON,
     ]);
     if (handled.has(interaction.customId)) return this.some();
     if (interaction.customId.startsWith(CUSTOM_ID.RANK_PHAI_PREFIX)) return this.some();
@@ -121,7 +180,7 @@ class SetupStatsHandler extends InteractionHandler {
         return _renderServerStats(interaction, 'all');
       } catch (e) {
         log.error('SETUP_STATS', guild.id, 'getServerStats thất bại: %s', e.message);
-        return interaction.editReply({ content: '❌ Không thể tải stats server, thử lại sau.', embeds: [], files: [] });
+        return interaction.editReply({ content: '❌ Không thể tải BXH server, thử lại sau.', embeds: [], files: [] });
       }
     }
 
@@ -136,7 +195,24 @@ class SetupStatsHandler extends InteractionHandler {
         return _renderServerStats(interaction, period);
       } catch (e) {
         log.error('SETUP_STATS', guild.id, 'server period thất bại period=%s: %s', period, e.message);
-        return interaction.editReply({ content: '❌ Không thể lọc server stats, thử lại sau.', embeds: [], files: [] });
+        return interaction.editReply({ content: '❌ Không thể lọc BXH server, thử lại sau.', embeds: [], files: [] });
+      }
+    }
+
+    // ── Rank — period tabs ───────────────────────────────────────────
+    if ([CUSTOM_ID.RANK_PERIOD_ALL, CUSTOM_ID.RANK_PERIOD_MONTH, CUSTOM_ID.RANK_PERIOD_SEASON].includes(customId)) {
+      await interaction.deferUpdate();
+      if (!checkCooldown(interaction.user.id, 'stats_rank', 1000)) return interaction.editReply({ content: '⏳ Vui lòng đợi một chút...' });
+      const period = customId === CUSTOM_ID.RANK_PERIOD_ALL ? 'all'
+                   : customId === CUSTOM_ID.RANK_PERIOD_MONTH ? 'month'
+                   : 'season';
+      try {
+        const selectedPb = _readRankPb(interaction);
+        const filterPhaiRoleId = _readRankPhai(interaction);
+        return _renderRankView(interaction, period, selectedPb, filterPhaiRoleId);
+      } catch (e) {
+        log.error('SETUP_STATS', guild.id, 'rank period thất bại period=%s: %s', period, e.message);
+        return interaction.editReply({ content: '❌ Không thể lọc BXH theo thời gian, thử lại sau.', embeds: [], files: [] });
       }
     }
 
@@ -146,14 +222,9 @@ class SetupStatsHandler extends InteractionHandler {
       if (!checkCooldown(interaction.user.id, 'stats_rank_phai', 1000)) return interaction.editReply({ content: '⏳ Vui lòng đợi một chút...' });
       const filterPhaiRoleId = customId === CUSTOM_ID.RANK_ALL ? '' : customId.slice(CUSTOM_ID.RANK_PHAI_PREFIX.length);
       try {
-        const [top, pbList, cfg] = await Promise.all([
-          filterPhaiRoleId
-            ? getTopMembers(guild.id, 10, null, filterPhaiRoleId)
-            : getTopMembers(guild.id, 10),
-          getDistinctPhongBan(guild.id),
-          getGuildConfig(guild.id),
-        ]);
-        return interaction.editReply(await StatsView.renderRank(top, guild, 10, pbList, '', cfg, filterPhaiRoleId));
+        const period = _readRankPeriod(interaction);
+        const selectedPb = _readRankPb(interaction);
+        return _renderRankView(interaction, period, selectedPb, filterPhaiRoleId);
       } catch (e) {
         log.error('SETUP_STATS', guild.id, 'rank phai filter thất bại: %s', e.message);
         return interaction.editReply({ content: '❌ Không thể lọc xếp hạng, thử lại sau.', embeds: [], files: [] });
@@ -177,7 +248,7 @@ class SetupStatsHandler extends InteractionHandler {
         return interaction.editReply(StatsView.renderToi(stats, member, guild, badges, interaction.user.id, cfg, records));
       } catch (e) {
         log.error('SETUP_STATS', guild.id, 'getMemberStats thất bại: %s', e.message);
-        return interaction.editReply({ content: '❌ Không thể tải stats cá nhân, thử lại sau.', embeds: [], files: [] });
+        return interaction.editReply({ content: '❌ Không thể tải BXH cá nhân, thử lại sau.', embeds: [], files: [] });
       }
     }
 
@@ -186,12 +257,7 @@ class SetupStatsHandler extends InteractionHandler {
       await interaction.deferUpdate();
       if (!checkCooldown(interaction.user.id, 'stats_rank', 1000)) return interaction.editReply({ content: '⏳ Vui lòng đợi một chút...' });
       try {
-        const [top, pbList, cfg] = await Promise.all([
-          getTopMembers(guild.id, 10),
-          getDistinctPhongBan(guild.id),
-          getGuildConfig(guild.id),
-        ]);
-        return interaction.editReply(await StatsView.renderRank(top, guild, 10, pbList, '', cfg, ''));
+        return _renderRankView(interaction, 'all', '', '');
       } catch (e) {
         log.error('SETUP_STATS', guild.id, 'getTopMembers thất bại: %s', e.message);
         return interaction.editReply({ content: '❌ Không thể tải bảng xếp hạng, thử lại sau.', embeds: [], files: [] });
@@ -255,19 +321,10 @@ class SetupStatsHandler extends InteractionHandler {
         }
 
         if (ctx === 'rank') {
-          const footer = interaction.message?.embeds?.[0]?.footer?.text ?? '';
-          const pbMatch = footer.match(/pb:(.+)/);
-          const selectedPb = pbMatch ? pbMatch[1].trim() : '';
-          const phaiMatch = footer.match(/phai:(\d+)/);
-          const filterPhaiRoleId = phaiMatch ? phaiMatch[1] : '';
-          const [top, pbList, cfg] = await Promise.all([
-            filterPhaiRoleId
-              ? getTopMembers(guild.id, 10, selectedPb || null, filterPhaiRoleId)
-              : getTopMembers(guild.id, 10, selectedPb || null),
-            getDistinctPhongBan(guild.id),
-            getGuildConfig(guild.id),
-          ]);
-          return interaction.editReply(await StatsView.renderRank(top, guild, 10, pbList, selectedPb, cfg, filterPhaiRoleId));
+          const selectedPb = _readRankPb(interaction);
+          const filterPhaiRoleId = _readRankPhai(interaction);
+          const period = _readRankPeriod(interaction);
+          return _renderRankView(interaction, period, selectedPb, filterPhaiRoleId);
         }
 
         if (ctx === 'server') {

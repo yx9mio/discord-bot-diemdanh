@@ -25,7 +25,7 @@ function render({ sessions, page = 0, guild }) {
   const slice      = safe.slice(start, start + PAGE_SIZE);
 
   const desc = total === 0
-    ? '*Chưa có phiên nào.*'
+    ? '*Chưa có Bang Chiến nào.*'
     : slice.map((s, i) => {
         const startTs = Math.floor(new Date(s.started_at).getTime() / 1000);
         const dur     = s.ended_at ? durationStr(s.started_at, s.ended_at) : null;
@@ -41,9 +41,9 @@ function render({ sessions, page = 0, guild }) {
   const embed = new EmbedBuilder()
     .setColor(COLORS.NEUTRAL)
     .setAuthor(buildAuthor(guild))
-    .setTitle(`${ICONS.CHART} Nhật ký phiên`)
+    .setTitle(`${ICONS.CHART} Nhật ký Bang Chiến`)
     .setDescription(desc)
-    .setFooter({ text: `${FOOTER_DEFAULT} · Trang ${cPage + 1}/${totalPages} · Tổng ${total} phiên` })
+    .setFooter({ text: `${FOOTER_DEFAULT} · Trang ${cPage + 1}/${totalPages} · Tổng ${total} Bang Chiến` })
     .setTimestamp();
 
   const navRow = new ActionRowBuilder().addComponents(

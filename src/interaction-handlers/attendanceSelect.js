@@ -34,7 +34,7 @@ class AttendanceSelectHandler extends InteractionHandler {
 
     const session = await sessionService.getActiveSession(guild.id);
     if (!session) {
-      return interaction.reply({ content: '🚫 Không có phiên điểm danh nào đang mở.', flags: MessageFlags.Ephemeral });
+      return interaction.reply({ content: '🚫 Không có Bang Chiến nào đang mở.', flags: MessageFlags.Ephemeral });
     }
 
     // [SEC-FIX-2] Validate session thuộc đúng guild
@@ -42,7 +42,7 @@ class AttendanceSelectHandler extends InteractionHandler {
       log.warn('SECURITY', guild.id,
         'attendanceSelect: guild mismatch session.guild_id=%s guild.id=%s user=%s',
         session.guild_id, guild.id, user.id);
-      return interaction.reply({ content: '❌ Phiên không hợp lệ.', flags: MessageFlags.Ephemeral });
+      return interaction.reply({ content: '❌ Bang Chiến không hợp lệ.', flags: MessageFlags.Ephemeral });
     }
 
     // Kiểm tra phái role — nếu chưa có, bắt chọn phái trước

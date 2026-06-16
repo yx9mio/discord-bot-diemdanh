@@ -26,6 +26,9 @@ const CUSTOM_ID = {
   PHONG_BAN_SELECT:    'setup:stats:rank:pb',
   RANK_PHAI_PREFIX:    'setup:stats:rank:phai:',
   RANK_ALL:            'setup:stats:rank:all',
+  RANK_PERIOD_ALL:     'setup:stats:rank:period:all',
+  RANK_PERIOD_MONTH:   'setup:stats:rank:period:month',
+  RANK_PERIOD_SEASON:  'setup:stats:rank:period:season',
   SERVER_PERIOD_WEEK:  'setup:stats:server:period:week',
   SERVER_PERIOD_MONTH: 'setup:stats:server:period:month',
   SERVER_PERIOD_ALL:   'setup:stats:server:period:all',
@@ -67,14 +70,14 @@ function _navRow() {
 function renderStatsMenu() {
   const embed = new EmbedBuilder()
     .setColor(COLORS.PRIMARY)
-    .setTitle(`${ICONS.CHART} Thống kê Điểm danh`)
+    .setTitle(`${ICONS.CHART} BXH Bang Chiến`)
     .setDescription([
-      '> Chọn một mục bên dưới để xem thống kê.',
+      '> Chọn một mục bên dưới để xem BXH.',
       '',
-      `**${ICONS.PERSON} Của tôi** — Số phiên, streak và huy hiệu của bạn`,
+      `**${ICONS.PERSON} Của tôi** — Số Bang Chiến, streak và huy hiệu của bạn`,
       `**${ICONS.TROPHY} Xếp hạng** — Top 10 thành viên tích cực nhất`,
-      `**📋 Lịch sử** — Xem lại các phiên đã điểm danh`,
-      `**🔍 Xem người khác** — Tra cứu thống kê bất kỳ thành viên`,
+      `**📋 Lịch sử** — Xem lại các Bang Chiến đã điểm danh`,
+      `**🔍 Xem người khác** — Tra cứu BXH bất kỳ thành viên`,
       `**${ICONS.CHART} Server** — Tổng quan toàn server`,
     ].join('\n'))
     .setFooter({ text: _footer(CTX.MENU) })
@@ -124,9 +127,9 @@ function renderToi(stats, member, guild, badges, viewerId = null, cfg = null, re
     : '_Chưa có huy hiệu_';
 
   const fields = [
-    { name: `${ICONS.ATTEND_YES} Đã tham gia`, value: `**${joined}** / ${total} phiên`, inline: true },
-    { name: `${ICONS.FIRE} Streak hiện tại`,   value: `**${streak}** phiên liên tiếp`,  inline: true },
-    { name: '🏆 Streak tốt nhất',              value: `**${best}** phiên`,               inline: true },
+    { name: `${ICONS.ATTEND_YES} Đã tham gia`, value: `**${joined}** / ${total} Bang Chiến`, inline: true },
+    { name: `${ICONS.FIRE} Streak hiện tại`,   value: `**${streak}** Bang Chiến liên tiếp`,  inline: true },
+    { name: '🏆 Streak tốt nhất',              value: `**${best}** Bang Chiến`,               inline: true },
   ];
 
   // Dòng breakdown vắng/trễ/có phép nếu có dữ liệu
@@ -163,7 +166,7 @@ function renderToi(stats, member, guild, badges, viewerId = null, cfg = null, re
         default:               return '⚪';
       }
     });
-    timelineStr = `${blocks.join('')} \`${recent.length} phiên gần nhất\``;
+    timelineStr = `${blocks.join('')} \`${recent.length} Bang Chiến gần nhất\``;
   }
 
   const descParts = [
@@ -223,21 +226,25 @@ function renderToi(stats, member, guild, badges, viewerId = null, cfg = null, re
 }
 
 // ─── Bảng xếp hạng ───────────────────────────────────────────────────
-// async để fetch uncached members → tránh hiển thị <@id>
-async function renderRank(rows, guild, topN = 10, phongBanList = [], selectedPhongBan = '', cfg = null, filterPhaiRoleId = '') {
+const PERIOD_LABELS_RANK = {
+  all:    '🏆 Tất cả',
+  month:  '📆 Tháng này',
+  season: '📅 Mùa này',
+};
+
+async function renderRank(rows, guild, topN = 10, phongBanList = [], selectedPhongBan = '', cfg = null, filterPhaiRoleId = '', period = 'all') {
   const medals = ['🥇', '🥈', '🥉'];
 
   if (!rows?.length) {
     return {
-      embeds: [new EmbedBuilder().setColor(COLORS.GOLD).setAuthor(buildAuthor(guild)).setTitle(`${ICONS.TROPHY} Bảng xếp hạng`)
+      embeds: [new EmbedBuilder().setColor(COLORS.GOLD).setAuthor(buildAuthor(guild)).setTitle(`${ICONS.TROPHY} BXH Bang Chiến`)
         .setDescription('> _Chưa có dữ liệu._')
         .setFooter({ text: _footer(CTX.RANK) }).setTimestamp()],
-      components: [_navRow()],
+      components: [_navRankPeriodRow(period), _navRow()],
       files: [],
     };
   }
 
-  // Fetch uncached members trước khi render
   const uncached = rows.filter(r => !guild?.members?.cache?.has(r.user_id)).map(r => r.user_id);
   if (uncached.length && guild) {
     await guild.members.fetch({ user: uncached }).catch(() => null);
@@ -245,35 +252,27 @@ async function renderRank(rows, guild, topN = 10, phongBanList = [], selectedPho
 
   const topRows = rows.slice(0, topN).map(r => {
     const gMember = guild?.members?.cache?.get(r.user_id);
-    return {
-      ...r,
-      displayName: gMember?.displayName ?? `<@${r.user_id}>`,
-    };
+    return { ...r, displayName: gMember?.displayName ?? `<@${r.user_id}>` };
   });
 
-  // Generate rank image
   let rankAttachment = null;
   try {
     const imgBuf = generateRankImage(topRows, guild?.name ?? '', topN);
     rankAttachment = new AttachmentBuilder(imgBuf, { name: 'rank.png' });
-  } catch (e) {
-    // Fallback: no image, just text
-  }
+  } catch { }
 
   const lines = topRows.map((r, i) => {
-    const medal    = medals[i] ?? `\`${String(i + 1).padStart(2)}.\``;
-    const phong    = r.phong_ban ?? '';
-    const joined   = r.total_joined   ?? 0;
-    const streak   = r.current_streak ?? 0;
-    const totalS   = r.total_sessions ?? joined;
-    const pct      = totalS > 0 ? Math.round((joined / totalS) * 100) : 0;
-    const phongStr = phong ? ` · 📌 ${phong}` : '';
-    const phaiStr  = formatPhaiList(r.phai_role_ids, guild, cfg?.phai_role_icons);
-    const phaiLine = phaiStr ? ` · ${phaiStr}` : '';
-    return `${medal} **${r.displayName}**${phongStr}${phaiLine}\n\`${buildRichProgressBar(pct, 8)}\` **${pct}%** · ${joined} phiên · ${ICONS.FIRE}${streak}`;
+    const medal  = medals[i] ?? `\`${String(i + 1).padStart(2)}.\``;
+    const joined = r.total_joined ?? 0;
+    const totalS = r.total_sessions ?? joined;
+    const pct    = totalS > 0 ? Math.round((joined / totalS) * 100) : 0;
+    return `${medal} **${r.displayName}** — **${pct}%** (${joined}/${totalS})`;
   });
 
   const components = [];
+
+  // Period tab row
+  components.push(_buildRankPeriodRow(period));
 
   // Phòng ban filter select menu
   if (phongBanList.length > 0) {
@@ -281,15 +280,8 @@ async function renderRank(rows, guild, topN = 10, phongBanList = [], selectedPho
       .setCustomId(CUSTOM_ID.PHONG_BAN_SELECT)
       .setPlaceholder('Lọc theo phòng ban')
       .addOptions(
-        new StringSelectMenuOptionBuilder()
-          .setLabel('Tất cả')
-          .setValue('__all')
-          .setDefault(selectedPhongBan === ''),
-        ...phongBanList.map(pb => new StringSelectMenuOptionBuilder()
-          .setLabel(pb)
-          .setValue(pb)
-          .setDefault(selectedPhongBan === pb)
-        )
+        new StringSelectMenuOptionBuilder().setLabel('Tất cả').setValue('__all').setDefault(selectedPhongBan === ''),
+        ...phongBanList.map(pb => new StringSelectMenuOptionBuilder().setLabel(pb).setValue(pb).setDefault(selectedPhongBan === pb))
       );
     components.push(new ActionRowBuilder().addComponents(selectMenu));
   }
@@ -299,20 +291,13 @@ async function renderRank(rows, guild, topN = 10, phongBanList = [], selectedPho
   if (phaiIds.length > 0 && phaiIds.length <= 4) {
     const phaiRow = new ActionRowBuilder();
     phaiRow.addComponents(
-      new ButtonBuilder()
-        .setCustomId(CUSTOM_ID.RANK_ALL)
-        .setLabel('Tất cả')
-        .setStyle(filterPhaiRoleId ? ButtonStyle.Secondary : ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId(CUSTOM_ID.RANK_ALL).setLabel('Tất cả').setStyle(filterPhaiRoleId ? ButtonStyle.Secondary : ButtonStyle.Primary),
     );
     for (const rid of phaiIds) {
       const icon = getPhaiIcon(rid, phaiIds, guild, cfg?.phai_role_icons);
       const role = guild?.roles?.cache?.get(rid);
       phaiRow.addComponents(
-        new ButtonBuilder()
-          .setCustomId(`${CUSTOM_ID.RANK_PHAI_PREFIX}${rid}`)
-          .setLabel(role?.name ?? rid)
-          .setEmoji(icon)
-          .setStyle(filterPhaiRoleId === rid ? ButtonStyle.Primary : ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`${CUSTOM_ID.RANK_PHAI_PREFIX}${rid}`).setLabel(role?.name ?? rid).setEmoji(icon).setStyle(filterPhaiRoleId === rid ? ButtonStyle.Primary : ButtonStyle.Secondary),
       );
     }
     components.push(phaiRow);
@@ -323,27 +308,31 @@ async function renderRank(rows, guild, topN = 10, phongBanList = [], selectedPho
   const footerParts = [];
   if (selectedPhongBan) footerParts.push(`pb:${selectedPhongBan}`);
   if (filterPhaiRoleId) footerParts.push(`phai:${filterPhaiRoleId}`);
+  if (period !== 'all') footerParts.push(`rank_period:${period}`);
   const footerExtra = footerParts.join(' · ');
 
+  const periodSuffix = period !== 'all' ? ` (${PERIOD_LABELS_RANK[period]?.split(' ')[1] ?? period})` : '';
   const embed = new EmbedBuilder()
     .setColor(COLORS.GOLD).setAuthor(buildAuthor(guild))
-    .setTitle(`${ICONS.TROPHY} Top ${Math.min(rows.length, topN)} — Bảng xếp hạng`)
+    .setTitle(`${ICONS.TROPHY} Top ${Math.min(rows.length, topN)} — BXH${periodSuffix}`)
     .setFooter({ text: _footer(CTX.RANK, footerExtra) }).setTimestamp();
 
   if (rankAttachment) {
     embed.setImage('attachment://rank.png');
-    embed.setDescription(lines.length > 0
-      ? `> Bang xep hang chi tiet o hinh ben duoi\n> ${lines.length} thanh vien`
-      : '> _Chua co du lieu_');
+    embed.setDescription(lines.length > 0 ? lines.join('\n') : '> _Chưa có dữ liệu_');
   } else {
-    embed.setDescription(lines.join('\n\n'));
+    embed.setDescription(lines.join('\n'));
   }
 
-  return {
-    embeds: [embed],
-    components,
-    files: rankAttachment ? [rankAttachment] : [],
-  };
+  return { embeds: [embed], components, files: rankAttachment ? [rankAttachment] : [] };
+}
+
+function _buildRankPeriodRow(period) {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(CUSTOM_ID.RANK_PERIOD_ALL).setLabel('🏆 Tất cả').setStyle(period === 'all' ? ButtonStyle.Primary : ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(CUSTOM_ID.RANK_PERIOD_MONTH).setLabel('📆 Tháng này').setStyle(period === 'month' ? ButtonStyle.Primary : ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(CUSTOM_ID.RANK_PERIOD_SEASON).setLabel('📅 Mùa này').setStyle(period === 'season' ? ButtonStyle.Primary : ButtonStyle.Secondary),
+  );
 }
 
 // ─── Lịch sử cá nhân ─────────────────────────────────────────────────
@@ -389,7 +378,7 @@ async function renderLichSu(records, userId, guild, page = 0) {
     const time = r.checked_in_at
       ? `<t:${Math.floor(new Date(r.checked_in_at).getTime() / 1000)}:d>`
       : '—';
-    const sessionName = r.sessions?.session_name ?? 'Phiên';
+    const sessionName = r.sessions?.session_name ?? 'Bang Chiến';
     return `\`${String(start + i + 1).padStart(2)}.\` ${s.emoji} **${sessionName}** · ${time}`;
   });
 
@@ -467,7 +456,7 @@ async function renderServerStats(stats, top, guild, period = 'all', prevStats = 
       `\`${buildRichProgressBar(pct)}\``,
     ].join('\n'))
     .addFields(
-      { name: '📅 Tổng phiên',                 value: `**${total}** phiên`,   inline: true },
+      { name: '📅 Bang Chiến',                 value: `**${total}** Bang Chiến`,   inline: true },
       { name: '👥 Thành viên',                  value: `**${members}** người`, inline: true },
       { name: `${ICONS.ATTEND_YES} Điểm danh`, value: `**${attends}** lượt`,  inline: true },
     )
@@ -500,7 +489,7 @@ async function renderServerStats(stats, top, guild, period = 'all', prevStats = 
       const streak = r.current_streak ?? 0;
       const totalS = r.total_sessions ?? joined;
       const pctR   = totalS > 0 ? Math.round((joined / totalS) * 100) : 0;
-      return `${medals[i]} **${nm}** — **${pctR}%** · ${joined} phiên · ${ICONS.FIRE}${streak}`;
+      return `${medals[i]} **${nm}** — **${pctR}%** · ${joined} Bang Chiến · ${ICONS.FIRE}${streak}`;
     });
     embed.addFields({ name: `${ICONS.TROPHY} Top thành viên (mọi thời gian)`, value: lines.join('\n'), inline: false });
   }

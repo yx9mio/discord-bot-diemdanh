@@ -101,7 +101,7 @@ function buildSummaryEmbed(session, attended = [], guild, phai_role_ids = [], em
   const embed = new EmbedBuilder()
     .setColor(color)
     .setAuthor(buildAuthor(guild))
-    .setTitle(`📊 Tổng kết — ${session?.session_name ?? 'Phiên điểm danh'}`)
+    .setTitle(`📊 Tổng kết — ${session?.session_name ?? 'Kỳ điểm danh'}`)
     .setDescription(desc);
 
   const fields = [
@@ -123,7 +123,7 @@ function buildSummaryEmbed(session, attended = [], guild, phai_role_ids = [], em
   if (lines.length) {
     embed.addFields({ name: '📋 Chi tiết', value: lines.join('\n'), inline: false });
   } else {
-    embed.addFields({ name: '📋 Chi tiết', value: '> _Không có ai tham gia phiên này._\n> 💡 Hãy nhắc nhở mọi người điểm danh đúng giờ ở các phiên sau.', inline: false });
+    embed.addFields({ name: '📋 Chi tiết', value: '> _Không có ai tham gia Kỳ này._\n> 💡 Hãy nhắc nhở mọi người điểm danh đúng giờ ở các Kỳ sau.', inline: false });
   }
 
   embed

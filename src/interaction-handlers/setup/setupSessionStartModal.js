@@ -41,7 +41,7 @@ class SetupSessionStartModalHandler extends InteractionHandler {
     try {
       const tenRaw   = interaction.fields.getTextInputValue('ten_phien')?.trim() || '';
       const phutDong = interaction.fields.getTextInputValue('phut_dong')?.trim();
-      const ten      = tenRaw || `Phiên ${new Date().toLocaleDateString('vi-VN')}`;
+      const ten = tenRaw || `Bang Chiến ${new Date().toLocaleDateString('vi-VN')}`;
 
       if (phutDong) {
         const n = parseInt(phutDong, 10);
@@ -73,7 +73,7 @@ class SetupSessionStartModalHandler extends InteractionHandler {
 
           // Ping attendance role
           if (cfg?.attendance_role_id) {
-            await ch.send({ content: `<@&${cfg.attendance_role_id}> Phiên điểm danh **${session.session_name}** đã mở!` }).catch(() => null);
+            await ch.send({ content: `<@&${cfg.attendance_role_id}> Bang Chiến điểm danh **${session.session_name}** đã mở!` }).catch(() => null);
           }
 
           startAutoRefresh(session.id, ch.id, msg.id, interaction.client);
@@ -90,19 +90,19 @@ class SetupSessionStartModalHandler extends InteractionHandler {
       }
 
       const embed = new EmbedBuilder()
-        .setTitle(`✅ Đã mở phiên: ${session.session_name ?? 'Không tên'}`)
+        .setTitle(`✅ Đã mở Bang Chiến: ${session.session_name ?? 'Không tên'}`)
         .setColor(COLORS.SUCCESS)
         .addFields(
           { name: 'Bắt đầu', value: fmtTs(session.started_at ?? new Date().toISOString()), inline: true },
           { name: 'Đóng lúc', value: session.auto_close_at ? fmtTs(session.auto_close_at) : 'Thủ công', inline: true },
         )
-        .setFooter({ text: `${FOOTER_DEFAULT} · Session ID: ${session.id}` });
+        .setFooter({ text: `${FOOTER_DEFAULT} · ID Bang Chiến: ${session.id}` });
 
       auditLog({ guildId: guild.id, actorId: interaction.user.id, action: 'SESSION_CREATE', targetId: session.id, metadata: { session_name: ten, channel_id: notifChannelId, auto_close_at: session.auto_close_at } }).catch(() => {});
       return interaction.editReply({ embeds: [embed], components: [] });
     } catch (e) {
       log.error('SESSION_START_MODAL', guild.id, 'Lỗi tạo phiên: %s', e.message);
-      return interaction.editReply(replyErrEdit(`Không thể tạo phiên: ${e.message}`));
+      return interaction.editReply(replyErrEdit(`Không thể tạo Bang Chiến: ${e.message}`));
     }
   }, 'SetupSessionStartModalHandler')(interaction); }
 }

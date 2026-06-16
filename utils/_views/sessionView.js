@@ -78,11 +78,11 @@ function _buildPendingView(guild, session, phaiRoleIds = [], emojiMap = null) {
   const embed = new EmbedBuilder()
     .setColor(COLORS.NEUTRAL)
     .setAuthor(buildAuthor(guild))
-    .setTitle(`🕐 Chờ mở — ${session.session_name ?? 'Phiên'}`)
+    .setTitle(`🕐 Chờ mở — ${session.session_name ?? 'Kỳ'}`)
     .setDescription([
-      `Phiên sẽ mở <t:${startTs}:R>`,
+      `Kỳ sẽ mở <t:${startTs}:R>`,
       '',
-      `📅 **Thông tin phiên**`,
+      `📅 **Thông tin Kỳ**`,
       ...infoLines,
     ].join('\n'))
     .setFooter({ text: `${FOOTER_DEFAULT} · Chưa mở` })
@@ -132,7 +132,7 @@ function buildSessionEmbed(guild, session, attended = [], phaiRoleIds = [], _isE
 
   const descParts = [
     ...(runningStr ? [runningStr, ''] : []),
-    `📅 **Thông tin phiên**`,
+    `📅 **Thông tin Kỳ**`,
     ...infoLines,
     '',
     `${pctEmoji(pct)} **${pct}%** — ${pctLabel(pct)}`,
@@ -143,7 +143,7 @@ function buildSessionEmbed(guild, session, attended = [], phaiRoleIds = [], _isE
   const embed = new EmbedBuilder()
     .setColor(color)
     .setAuthor(buildAuthor(guild))
-    .setTitle(`📊 Điểm danh — ${session.session_name ?? 'Phiên'}`)
+    .setTitle(`⚔️ Điểm danh Bang Chiến — ${session.session_name ?? 'Kỳ'}`)
     .setDescription(desc)
     .setFooter({ text: `${FOOTER_DEFAULT} · Cập nhật lúc` })
     .setTimestamp();
@@ -244,7 +244,7 @@ function buildClosedSessionEmbed(session, attended = [], _guild, phaiRoleIds = [
   const embed = new EmbedBuilder()
     .setColor(color)
     .setAuthor(buildAuthor(_guild))
-    .setTitle(`${ICONS.SESSION_CLOSED} Đã kết thúc — ${session?.session_name ?? 'Phiên'}`)
+    .setTitle(`${ICONS.SESSION_CLOSED} Đã kết thúc — ${session?.session_name ?? 'Kỳ'}`)
     .setDescription([
       ...infoLines,
       '',

@@ -32,7 +32,7 @@ class SetupSessionExportHandler extends InteractionHandler {
 
     const session = await sessionService.getActiveSession(guild.id);
     if (!session) {
-      return interaction.editReply({ content: '🚫 Không có phiên nào đang mở để xuất.' });
+      return interaction.editReply({ content: '🚫 Không có Bang Chiến nào đang mở để xuất.' });
     }
 
     const [attendances, cfg] = await Promise.all([
@@ -41,7 +41,7 @@ class SetupSessionExportHandler extends InteractionHandler {
     ]);
 
     if (!attendances.length) {
-      return interaction.editReply({ content: '📭 Phiên chưa có dữ liệu điểm danh.' });
+      return interaction.editReply({ content: '📭 Bang Chiến chưa có dữ liệu điểm danh.' });
     }
 
     const headers = ['user_id', 'username', 'status', 'status_label', 'checked_in_at', 'marked_by'];
@@ -58,7 +58,7 @@ class SetupSessionExportHandler extends InteractionHandler {
     const attachment = new AttachmentBuilder(buf, { name: buildCsvFilename(`diemdanh_${session.session_name ?? 'phien'}`) });
 
     return interaction.editReply({
-      content: `✅ Xuất **${attendances.length}** dòng điểm danh từ phiên **${session.session_name ?? 'Phiên'}**.`,
+      content: `✅ Xuất **${attendances.length}** dòng điểm danh từ Bang Chiến **${session.session_name ?? 'Bang Chiến'}**.`,
       files: [attachment],
     });
   }, 'SetupSessionExportHandler')(interaction); }

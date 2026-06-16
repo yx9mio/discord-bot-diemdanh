@@ -46,13 +46,13 @@ class AdminMarkModalHandler extends InteractionHandler {
 
     const session = await getActiveSession(guild.id);
     if (!session) {
-      return interaction.editReply({ content: '🚫 Không có phiên điểm danh nào đang mở.' });
+      return interaction.editReply({ content: '🚫 Không có Bang Chiến nào đang mở.' });
     }
 
     // [BUG-12] Defensive assert — lớp bảo vệ thứ hai bổ sung cho getActiveSession
     if (session.guild_id !== guild.id) {
       log.warn('ADMIN_MARK', guild.id, 'SECURITY: session.guild_id=%s !== guild.id=%s user=%s', session.guild_id, guild.id, user.id);
-      return interaction.editReply({ content: '❌ Phiên không hợp lệ.' });
+      return interaction.editReply({ content: '❌ Bang Chiến không hợp lệ.' });
     }
 
     const userField = interaction.fields.getTextInputValue('user_id').trim();
@@ -151,7 +151,7 @@ class AdminMarkModalHandler extends InteractionHandler {
         `${statusFull(status)}`,
       ].join('\n'))
       .addFields(
-        { name: 'Phiên', value: `**${session.session_name ?? 'Phiên'}**`, inline: true },
+        { name: 'Bang Chiến', value: `**${session.session_name ?? 'Bang Chiến'}**`, inline: true },
         { name: 'Người điểm danh', value: `<@${user.id}>`, inline: true },
       )
       .setTimestamp();

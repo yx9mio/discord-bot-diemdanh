@@ -151,7 +151,7 @@ function render({ members, page = 0, guild, cfg = null, filterPhai = '' }) {
   const footerExtra = filterPhai ? `phai:${filterPhai}` : '';
   const embed = new EmbedBuilder()
     .setColor(COLORS.PRIMARY)
-    .setTitle(`${ICONS.MEMBER} Thành viên — ${guild.name}`)
+    .setTitle(`${ICONS.MEMBER} Thành viên Bang — ${guild.name}`)
     .setDescription(desc)
     .setFooter({ text: `${FOOTER_DEFAULT} · Trang ${cPage + 1}/${totalPages} · Tổng ${total} thành viên${footerExtra ? ` · ${footerExtra}` : ''}` })
     .setTimestamp();

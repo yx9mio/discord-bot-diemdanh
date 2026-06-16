@@ -36,7 +36,7 @@ function buildConfigEmbed(cfg = {}, guild = null) {
     .addFields(
       { name: `${ICONS.BELL} Kênh thông báo`,    value: channel,   inline: true  },
       { name: `${ICONS.CLOCK} Timezone`,          value: `\`${tz}\``, inline: true  },
-      { name: `${ICONS.GEAR} Tự đóng phiên`,      value: autoClose, inline: true  },
+      { name: `${ICONS.GEAR} Tự đóng Kỳ`,      value: autoClose, inline: true  },
       { name: `${ICONS.SHIELD ?? '🛡️'} Phái quản lý`, value: phaiStr, inline: false },
       { name: `${ICONS.PERSON} Thành viên theo dõi`, value: memberStr, inline: true },
     )

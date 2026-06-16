@@ -25,11 +25,11 @@ class SetupSessionStartHandler extends InteractionHandler {
     }
     const modal = new ModalBuilder()
       .setCustomId(MODAL_ID)
-      .setTitle('Mở phiên điểm danh mới');
+      .setTitle('Mở Bang Chiến điểm danh mới');
     modal.addComponents(
       new ActionRowBuilder().addComponents(
         new TextInputBuilder()
-          .setCustomId('ten_phien').setLabel('Tên phiên').setStyle(TextInputStyle.Short)
+          .setCustomId('ten_phien').setLabel('Tên Bang Chiến').setStyle(TextInputStyle.Short)
           .setMaxLength(100).setRequired(false).setPlaceholder('Để trống để đặt tên tự động'),
       ),
       new ActionRowBuilder().addComponents(

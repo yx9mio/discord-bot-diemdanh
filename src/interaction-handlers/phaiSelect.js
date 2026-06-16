@@ -30,7 +30,7 @@ class PhaiSelectHandler extends InteractionHandler {
 
     const session = await sessionService.getActiveSession(guild.id);
     if (!session) {
-      return interaction.editReply({ content: '🚫 Không có phiên điểm danh nào đang mở.' });
+      return interaction.editReply({ content: '🚫 Không có Kỳ điểm danh nào đang mở.' });
     }
 
     // Assign role phái cho user

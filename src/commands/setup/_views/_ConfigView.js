@@ -38,7 +38,7 @@ function render({ cfg, guild }) {
   const embed = new EmbedBuilder()
     .setColor(COLORS.PRIMARY)
     .setAuthor(buildAuthor(guild))
-    .setTitle(`${ICONS.GEAR} Cài đặt chung`)
+    .setTitle(`${ICONS.GEAR} Cài Đặt Bang`)
     .setThumbnail(guild.iconURL({ size: 64 }) ?? null)
     .setFooter({ text: FOOTER_DEFAULT })
     .setTimestamp();
