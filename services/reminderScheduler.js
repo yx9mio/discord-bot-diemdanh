@@ -16,6 +16,7 @@ const configService    = require('./configService.js');
 const scheduledService = require('./scheduledService.js');
 const sessionService   = require('./sessionService.js');
 const log = require('../utils/logger.js');
+const { cleanupAuditLogs } = require('../utils/auditLog.js');
 const { tryAcquireLeadership, startHeartbeat, stopHeartbeat } = require('../utils/schedulerLock.js');
 const { DateTime } = require('luxon');
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
@@ -48,6 +49,13 @@ async function runReminders() {
   try {
     const guilds = _client?.guilds?.cache;
     if (!guilds) return;
+
+    // Daily cleanup: audit logs > 180 days, runs at 03:00 UTC
+    const nowUTC = DateTime.now().setZone('utc');
+    if (nowUTC.hour === 3 && nowUTC.minute === 0) {
+      cleanupAuditLogs().catch(() => {});
+    }
+
     for (const [, guild] of guilds) {
       await processGuildReminders(guild);
     }

@@ -85,4 +85,23 @@ async function getAuditLogCount({ guildId, action = null, actions = null }) {
   }
 }
 
-module.exports = { auditLog, getAuditLogs, getAuditLogCount };
+async function cleanupAuditLogs() {
+  try {
+    const cutoff = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString();
+    const { error } = await getClient()
+      .from('audit_logs')
+      .delete()
+      .lt('created_at', cutoff);
+    if (error) {
+      log.warn('AUDIT_CLEANUP', null, 'Cleanup thất bại: %s', error.message);
+      return 0;
+    }
+    log.info('AUDIT_CLEANUP', null, 'Đã dọn audit_logs cũ hơn 180 ngày');
+    return 1;
+  } catch (e) {
+    log.warn('AUDIT_CLEANUP', null, 'Lỗi cleanup: %s', e.message);
+    return 0;
+  }
+}
+
+module.exports = { auditLog, getAuditLogs, getAuditLogCount, cleanupAuditLogs };
