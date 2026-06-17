@@ -9,6 +9,7 @@ const { buildCsvBuffer, buildCsvFilename } = require('../../../utils/csvHelper.j
 const { statusFull } = require('../../../utils/design-tokens.js');
 const { wrapHandler } = require('../../../utils/error-boundary.js');
 const { checkCooldown } = require('../../../utils/cooldown.js');
+const { requireAdmin } = require('../../../utils/permissions.js');
 
 const PREFIX_EXPORT = 'setup:session:export:';
 
@@ -25,6 +26,8 @@ class SetupSessionExportHandler extends InteractionHandler {
   async run(interaction) {
     return wrapHandler(async (interaction) => {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    const { ok } = await requireAdmin(interaction, { context: 'xuất điểm danh', deferred: true });
+    if (!ok) return;
     if (!checkCooldown(interaction.user.id, 'sch_export', 1000)) return interaction.editReply({ content: '⏳ Vui lòng đợi một chút...' });
 
     const sessionId = interaction.customId.slice(PREFIX_EXPORT.length);
