@@ -38,15 +38,18 @@ async function getBadgeList(guildId) {
 const PRESENT_STATUSES = new Set(['tham_gia', 'tre']);
 
 /**
- * Kết thúc phiên: cập nhật member_stats, reset streak cho người vắng eligible.
+ * Pure computation: given attendance records and existing stats,
+ * compute the patch map and return value map.
+ * No I/O, no side effects except params.
  *
- * Semantic eligible_member_ids:
- *   - null / []  → admin chưa set danh sách → KHÔNG reset streak bất kỳ ai
- *   - [id1, id2] → admin đã set → reset streak người trong list mà vắng
- *
- * @returns {Promise<Map<userId, {total, streak, max}>>}
+ * @param {Array}  attended     - [{user_id, status}, ...]
+ * @param {Array}  allStats     - raw rows from member_stats
+ * @param {Array}  eligibleIds  - session.eligible_member_ids
+ * @param {string} sessionId
+ * @param {string} guildId      - chỉ dùng cho log
+ * @returns {{ statsMap: Map, patches: Array }}
  */
-async function endSession(guild, session, attended) {
+function computeSessionPatches(attended, allStats, eligibleIds, sessionId, guildId) {
   const statsMap = new Map();
   const patchMap = new Map();
 
@@ -55,12 +58,11 @@ async function endSession(guild, session, attended) {
   );
   const attendedIds = new Set(attended.map(r => r.user_id));
 
-  const allStats   = await memberService.getAllMemberStats(guild.id);
   const statsCache = new Map(allStats.map(s => [s.user_id, s]));
 
   function mergePatch(uid, patch) {
     const existing = patchMap.get(uid) ?? {};
-    patchMap.set(uid, { ...existing, ...patch, user_id: uid, last_session_id: session.id });
+    patchMap.set(uid, { ...existing, ...patch, user_id: uid, last_session_id: sessionId });
   }
 
   function getStats(uid) {
@@ -103,7 +105,6 @@ async function endSession(guild, session, attended) {
     }
   }
 
-  const eligibleIds = session.eligible_member_ids ?? [];
   if (eligibleIds.length > 0) {
     for (const uid of eligibleIds.filter(id => !attendedIds.has(id))) {
       const stats = getStats(uid);
@@ -120,11 +121,26 @@ async function endSession(guild, session, attended) {
         total_excused:    stats.total_excused  ?? 0,
         total_sessions:   (stats.total_sessions ?? 0) + 1,
       });
-      log.info('SESSION', guild.id, 'Reset streak: %s (vắng %s)', uid, session.session_name);
+      log.info('SESSION', guildId, 'Reset streak: %s (vắng %s)', uid, 'session');
     }
   }
 
-  const patches = Array.from(patchMap.values());
+  return { statsMap, patches: Array.from(patchMap.values()) };
+}
+
+/**
+ * Kết thúc phiên: cập nhật member_stats, reset streak cho người vắng eligible.
+ *
+ * Semantic eligible_member_ids:
+ *   - null / []  → admin chưa set danh sách → KHÔNG reset streak bất kỳ ai
+ *   - [id1, id2] → admin đã set → reset streak người trong list mà vắng
+ *
+ * @returns {Promise<Map<userId, {total, streak, max}>>}
+ */
+async function endSession(guild, session, attended) {
+  const allStats = await memberService.getAllMemberStats(guild.id);
+  const eligibleIds = session.eligible_member_ids ?? [];
+  const { statsMap, patches } = computeSessionPatches(attended, allStats, eligibleIds, session.id, guild.id);
   if (patches.length) await memberService.batchUpsertMemberStats(guild.id, patches);
   return statsMap;
 }
@@ -217,6 +233,7 @@ const voHieuHoaNutDiemDanh = disableAttendanceUI;
 
 module.exports = {
   endSession, ketThucPhien,
+  computeSessionPatches,
   announceBadges, thongBaoHuyHieu,
   announceStreakMilestone, thongBaoStreakMilestone,
   disableAttendanceUI, voHieuHoaNutDiemDanh,

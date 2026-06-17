@@ -19,4 +19,10 @@ module.exports = defineConfig({
       ],
     },
   },
+  deps: {
+    inline: [
+      /services\/.*\.js$/,
+      /utils\/.*\.js$/,
+    ],
+  },
 });
