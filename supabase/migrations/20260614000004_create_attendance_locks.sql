@@ -1,7 +1,7 @@
 -- Create distributed lock table for attendance (replaces in-memory Map)
 CREATE TABLE IF NOT EXISTS attendance_locks (
-  session_id  bigint NOT NULL,
-  user_id     bigint NOT NULL,
+  session_id  uuid  NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+  user_id     text  NOT NULL,
   created_at  timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (session_id, user_id)
 );
