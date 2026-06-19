@@ -98,9 +98,11 @@ function computeSessionPatches(attended, allStats, eligibleIds, sessionId, guild
         total_sessions: (stats.total_sessions ?? 0) + 1,
       });
     } else if (record.status === 'khong_tham_gia') {
+      const isEligible = eligibleIds.length > 0 && eligibleIds.includes(uid);
       mergePatch(uid, {
         total_absent:   (stats.total_absent ?? 0) + 1,
         total_sessions: (stats.total_sessions ?? 0) + 1,
+        ...(isEligible ? { current_streak: 0 } : {}),
       });
     }
   }

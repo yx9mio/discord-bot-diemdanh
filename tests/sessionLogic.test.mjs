@@ -66,14 +66,14 @@ describe('computeSessionPatches — pure logic', () => {
     expect(p.total_sessions).toBe(1);
   });
 
-  it('eligible member IN attended list (absent) is NOT reset (tracked, not filtered)', () => {
+  it('eligible member IN attended list (absent) gets streak reset', () => {
     const attended = [{ user_id: 'u1', status: 'khong_tham_gia' }];
     const allStats = [makeStats({ user_id: 'u1', total_joined: 5, current_streak: 3, best_streak: 8 })];
 
     const { patches } = computeSessionPatches(attended, allStats, ['u1'], 's1', 'g1');
 
     const p = patchOf(patches, 'u1');
-    expect(p).not.toHaveProperty('current_streak');
+    expect(p.current_streak).toBe(0);
     expect(p.total_absent).toBe(1);
   });
 

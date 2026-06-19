@@ -144,13 +144,14 @@ describe('buildSessionEmbed (active session)', () => {
     expect(components).toHaveLength(0);
   });
 
-  it('has summary fields for each status', () => {
+  it('has list field containing status groups', () => {
     const json = buildSessionEmbed(null, session, attended).embed.toJSON();
-    const fields = json.fields;
-    expect(fields.some(f => f.name.includes('Đúng giờ'))).toBe(true);
-    expect(fields.some(f => f.name.includes('Trễ'))).toBe(true);
-    expect(fields.some(f => f.name.includes('Vắng'))).toBe(true);
-    expect(fields.some(f => f.name.includes('Có phép'))).toBe(true);
+    const listField = json.fields.find(f => f.name.includes('Danh sách'));
+    expect(listField).toBeDefined();
+    expect(listField.value).toContain('Đúng giờ');
+    expect(listField.value).toContain('Trễ');
+    expect(listField.value).toContain('Có phép');
+    expect(listField.value).toContain('Vắng');
   });
 
   it('adds pagination components when >15 attendees', () => {
