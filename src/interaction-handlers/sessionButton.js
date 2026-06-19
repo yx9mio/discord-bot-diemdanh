@@ -289,6 +289,8 @@ class SessionButtonHandler extends InteractionHandler {
       }
 
       const attended = await attendanceService.getAttendances(session.id);
+      await guild.members.fetch().catch(() => {});
+      await guild.roles.fetch().catch(() => {});
       const [settledEndSession] = await Promise.allSettled([
         endSession(guild, session, attended),
         disableAttendanceUI(interaction.client, channel, session, attended),

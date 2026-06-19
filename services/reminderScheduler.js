@@ -245,6 +245,7 @@ async function _sendDmReminders(guild, cfg, sched, msg) {
         return;
       }
     }
+    await guild.roles.fetch().catch(() => {});
     const targetIds = new Set();
 
     // Ưu tiên: allowed_role_id → phai_role_ids → attendance_role_id → tất cả
