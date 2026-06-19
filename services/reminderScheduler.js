@@ -194,16 +194,20 @@ async function autoOpenSession(guild, cfg, sched) {
     }
 
     const session = await sessionService.createSession({
-      guild_id:      guild.id,
-      session_name:  sched.session_name || 'Điểm danh',
-      started_by:    guild.members.me?.id,
-      auto_close_at: autoCloseAt,
-      phai_role_ids: sched.phai_role_ids ?? [],
+      guild_id:        guild.id,
+      session_name:    sched.session_name || 'Điểm danh',
+      started_by:      guild.members.me?.id,
+      auto_close_at:   autoCloseAt,
+      phai_role_ids:   sched.phai_role_ids ?? [],
+      allowed_role_id: cfg?.attendance_role_id ?? null,
     });
 
     session.channel_id = ch.id;
     await sessionService.updateSessionMessage(session.id, { channel_id: ch.id });
 
+    // Nạp đầy đủ cache thành viên & role để _phaiStats chính xác
+    await guild.members.fetch().catch(() => {});
+    await guild.roles.fetch().catch(() => {});
     const { embed: sessionEmbed, components } = buildSessionEmbed(guild, session, [], cfg?.phai_role_ids ?? [], false, 1, cfg?.phai_role_icons ?? null);
     const selectRow = buildAttendanceSelectRow(true);
     const adminRows = buildSessionActionRow(true);

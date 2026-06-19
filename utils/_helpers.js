@@ -30,11 +30,10 @@ function pctEmoji(pct) {
   return '📉';
 }
 
-function buildRichProgressBar(pct, len = 12) {
+function buildRichProgressBar(pct, len = 10) {
   const filled = Math.round(pct / 100 * len);
   const empty  = len - filled;
-  const barFill = pct >= 90 ? '💎' : pct >= 70 ? '🟩' : pct >= 50 ? '🟡' : pct >= 30 ? '🟠' : '🔴';
-  return barFill.repeat(filled) + '⬜'.repeat(empty);
+  return '▰'.repeat(filled) + '▱'.repeat(empty);
 }
 
 const buildProgressBar = buildRichProgressBar;

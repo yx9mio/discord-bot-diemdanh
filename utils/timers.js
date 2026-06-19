@@ -71,6 +71,8 @@ function scheduleCloseTimer(client, guild, session, channelId, ms) {
       }
 
       const attended = await attendanceService.getAttendances(session.id);
+      await guild.members.fetch().catch(() => {});
+      await guild.roles.fetch().catch(() => {});
       const statsMap = await endSession(guild, session, attended);
 
       if (ch) {
@@ -149,6 +151,9 @@ function startAutoRefresh(sessionId, channelId, messageId, client) {
         stopAutoRefresh(sessionId);
         return;
       }
+
+      await guild.members.fetch().catch(() => {});
+      await guild.roles.fetch().catch(() => {});
 
       const cfgT2 = await configService.getGuildConfig(guild.id).catch(() => null);
       const phaiIds5 = session.phai_role_ids?.length

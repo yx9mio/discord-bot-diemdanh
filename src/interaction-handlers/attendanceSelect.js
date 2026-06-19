@@ -107,6 +107,8 @@ class AttendanceSelectHandler extends InteractionHandler {
           const msg = await ch.messages.fetch(session.message_id).catch(() => null);
           if (msg) {
             attended = await attendanceService.getAttendances(session.id);
+            await guild.members.fetch().catch(() => {});
+            await guild.roles.fetch().catch(() => {});
             const cfg7 = await configService.getGuildConfig(guild.id).catch(() => null);
             const phaiIds = session.phai_role_ids?.length
               ? session.phai_role_ids

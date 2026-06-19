@@ -51,11 +51,12 @@ class SetupSessionStartModalHandler extends InteractionHandler {
       const cfg = await configService.getGuildConfig(guild.id);
 
       const session = await sessionService.createSession({
-        guild_id:      guild.id,
-        session_name:  ten,
-        started_by:    interaction.user.id,
-        auto_close_at: phutDong ? new Date(Date.now() + parseInt(phutDong, 10) * 60_000).toISOString() : null,
-        phai_role_ids: cfg?.phai_role_ids ?? [],
+        guild_id:        guild.id,
+        session_name:    ten,
+        started_by:      interaction.user.id,
+        auto_close_at:   phutDong ? new Date(Date.now() + parseInt(phutDong, 10) * 60_000).toISOString() : null,
+        phai_role_ids:   cfg?.phai_role_ids ?? [],
+        allowed_role_id: cfg?.attendance_role_id ?? null,
       });
 
       // Gửi bảng điểm danh lên kênh thông báo
@@ -65,6 +66,9 @@ class SetupSessionStartModalHandler extends InteractionHandler {
         if (ch) {
           session.channel_id = ch.id;
           await sessionService.updateSessionMessage(session.id, { channel_id: ch.id });
+          // Nạp cache thành viên & role để thống kê phái chính xác
+          await guild.members.fetch().catch(() => {});
+          await guild.roles.fetch().catch(() => {});
           const { embed: sessionEmbed, components } = buildSessionEmbed(guild, session, [], cfg?.phai_role_ids ?? [], false, 1, cfg?.phai_role_icons ?? null);
           const selectRow = buildAttendanceSelectRow(true);
           const adminRows = buildSessionActionRow(true);

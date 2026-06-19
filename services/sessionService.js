@@ -11,6 +11,7 @@ async function createSession(payload) {
     description:         payload.description         ?? null,
     eligible_member_ids: payload.eligible_member_ids ?? payload.eligibleMemberIds ?? [],
     phai_role_ids:       payload.phai_role_ids       ?? payload.phaiRoleIds ?? [],
+    allowed_role_id:     payload.allowed_role_id     ?? payload.allowedRoleId ?? null,
     is_active:           payload.is_active           ?? true,
     cancelled:           payload.cancelled           ?? false,
   };
@@ -18,6 +19,7 @@ async function createSession(payload) {
   delete row.sessionName;
   delete row.eligibleMemberIds;
   delete row.phaiRoleIds;
+  delete row.allowedRoleId;
   const { data, error } = await getClient().from('sessions').insert(row).select().single();
   _throwSupabase(error, 'createSession');
   addBreadcrumb('session', 'createSession', { guildId: row.guild_id, sessionName: row.session_name });

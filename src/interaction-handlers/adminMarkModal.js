@@ -125,6 +125,8 @@ class AdminMarkModalHandler extends InteractionHandler {
         const msg = await ch.messages.fetch(session.message_id).catch(() => null);
         if (msg) {
           const attended = await getAttendances(session.id);
+          await guild.members.fetch().catch(() => {});
+          await guild.roles.fetch().catch(() => {});
           const cfgA1 = await configService.getGuildConfig(guild.id).catch(() => null);
           const phaiIds = session.phai_role_ids?.length
             ? session.phai_role_ids

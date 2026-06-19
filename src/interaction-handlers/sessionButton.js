@@ -82,6 +82,8 @@ class SessionButtonHandler extends InteractionHandler {
           : Math.min(totalPages, currentPage + 1);
 
         const { phaiRoleIds: phaiIds1, emojiMap: emojiMap1 } = await _phaiData(session, guild.id);
+        await guild.members.fetch().catch(() => {});
+        await guild.roles.fetch().catch(() => {});
         const { embed, components: pagComponents } =
           buildSessionEmbed(guild, session, attended, phaiIds1, false, page, emojiMap1);
 
@@ -95,6 +97,8 @@ class SessionButtonHandler extends InteractionHandler {
       }
 
       const { phaiRoleIds: phaiIds2, emojiMap: emojiMap2 } = await _phaiData(session, guild.id);
+      await guild.members.fetch().catch(() => {});
+      await guild.roles.fetch().catch(() => {});
       const { embed, components } =
         buildSessionEmbed(guild, session, attended, phaiIds2, false, 1, emojiMap2);
       return interaction.reply({ embeds: [embed], components, flags: MessageFlags.Ephemeral });
@@ -111,6 +115,7 @@ class SessionButtonHandler extends InteractionHandler {
         if (!session) return interaction.followUp({ ...replyErr('Không có Kỳ điểm danh đang mở.'), flags: MessageFlags.Ephemeral });
         const attended = await attendanceService.getAttendances(session.id);
         await interaction.guild.members.fetch().catch(() => {});
+        await interaction.guild.roles.fetch().catch(() => {});
         const { phaiRoleIds: phaiIds3, emojiMap: emojiMap3 } = await _phaiData(session, interaction.guild.id);
         const { embed, components: pagComponents } =
           buildSessionEmbed(interaction.guild, session, attended, phaiIds3, false, 1, emojiMap3);
