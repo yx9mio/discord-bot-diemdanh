@@ -68,13 +68,11 @@ function _phaiStatsAnsi(phaiRoleIds, guild, attended, eligibleSet, attendanceRol
         return m?.roles?.cache?.has(attendanceRoleId);
       });
     }
-    const rTotal = roleMembers.length;
     const rPresent = attended.filter(a =>
       roleMembers.includes(a.user_id) && ['tham_gia', 'tre'].includes(a.status)
     ).length;
-    const rPct = rTotal > 0 ? Math.round(rPresent / rTotal * 100) : 0;
     const name = role.name.length > 10 ? role.name.slice(0, 9) + '…' : role.name;
-    items.push({ name, rPresent, rTotal, rPct });
+    items.push({ name, rPresent });
   }
   if (!items.length) return null;
 
@@ -82,15 +80,15 @@ function _phaiStatsAnsi(phaiRoleIds, guild, attended, eligibleSet, attendanceRol
   for (let i = 0; i < items.length; i += 2) {
     const left = items[i];
     const right = items[i + 1];
-    const lName = _pad(left.name, 10);
-    const lNum  = `${String(left.rPresent).padStart(2)}/${left.rTotal}`;
-    const lBar  = _ansiBar(left.rPct, 6);
-    let line = `${lName}: [${lNum}] ${lBar}`;
+    const lName  = _pad(left.name, 10);
+    const lColor = left.rPresent > 0 ? ANSI.GREEN : ANSI.GREY;
+    const lNum   = `${lColor}${left.rPresent}${ANSI.RESET}`;
+    let line = `${lName}: ${lNum}`;
     if (right) {
-      const rName = _pad(right.name, 10);
-      const rNum  = `${String(right.rPresent).padStart(2)}/${right.rTotal}`;
-      const rBar  = _ansiBar(right.rPct, 6);
-      line += `  |  ${rName}: [${rNum}] ${rBar}`;
+      const rName  = _pad(right.name, 10);
+      const rColor = right.rPresent > 0 ? ANSI.GREEN : ANSI.GREY;
+      const rNum   = `${rColor}${right.rPresent}${ANSI.RESET}`;
+      line += `  |  ${rName}: ${rNum}`;
     }
     lines.push(line);
   }

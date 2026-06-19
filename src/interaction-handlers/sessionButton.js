@@ -85,7 +85,7 @@ class SessionButtonHandler extends InteractionHandler {
         await guild.members.fetch().catch(() => {});
         await guild.roles.fetch().catch(() => {});
         const { embed, components: pagComponents } =
-          buildSessionEmbed(guild, session, attended, phaiIds1, false, page, emojiMap1);
+          buildSessionEmbed(guild, session, attended, phaiIds1, false, page, emojiMap1, true);
 
         // [FIX-SELECT] Giữ select menu sau pagination
         const selectRow = buildAttendanceSelectRow(true);
@@ -100,7 +100,7 @@ class SessionButtonHandler extends InteractionHandler {
       await guild.members.fetch().catch(() => {});
       await guild.roles.fetch().catch(() => {});
       const { embed, components } =
-        buildSessionEmbed(guild, session, attended, phaiIds2, false, 1, emojiMap2);
+        buildSessionEmbed(guild, session, attended, phaiIds2, false, 1, emojiMap2, true);
       return interaction.reply({ embeds: [embed], components, flags: MessageFlags.Ephemeral });
     }
 

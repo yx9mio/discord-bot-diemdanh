@@ -135,13 +135,34 @@ describe('buildSessionEmbed (active session)', () => {
     { user_id: 'u4', status: 'co_phep', checked_in_at: new Date(now).toISOString() },
   ];
 
-  it('returns embed with session title and stats', () => {
+  it('returns embed with session title and stats without phai stats by default', () => {
     const { embed, components, totalPages } = buildSessionEmbed(null, session, attended);
     const json = embed.toJSON();
     expect(json.title).toMatch(/Điểm danh Bang Chiến/);
     expect(json.description).toContain('50%');
+    expect(json.fields?.some(f => f.name.includes('Phái'))).toBe(false);
     expect(totalPages).toBe(1);
     expect(components).toHaveLength(0);
+  });
+
+  it('includes phai stats when showPhaiStats is true', () => {
+    const guildMock = {
+      id: 'g1',
+      roles: {
+        cache: new Map([
+          ['p1', { id: 'p1', name: 'Phái 1', members: new Map([['u1', {}], ['u2', {}]]) }]
+        ])
+      },
+      members: {
+        cache: new Map([
+          ['u1', { id: 'u1', roles: { cache: new Map([['p1', {}]]) } }],
+          ['u2', { id: 'u2', roles: { cache: new Map([['p1', {}]]) } }]
+        ])
+      }
+    };
+    const { embed } = buildSessionEmbed(guildMock, session, attended, ['p1'], false, 1, null, true);
+    const json = embed.toJSON();
+    expect(json.fields?.some(f => f.name.includes('Phái'))).toBe(true);
   });
 
   it('has list field containing status groups', () => {

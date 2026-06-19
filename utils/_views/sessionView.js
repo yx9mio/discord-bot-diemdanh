@@ -119,13 +119,11 @@ function _phaiStatsAnsi(phaiRoleIds, guild, attended, eligibleSet, attendanceRol
         return m?.roles?.cache?.has(attendanceRoleId);
       });
     }
-    const rTotal = roleMembers.length;
     const rPresent = attended.filter(a =>
       roleMembers.includes(a.user_id) && ['tham_gia', 'tre'].includes(a.status)
     ).length;
-    const rPct = rTotal > 0 ? Math.round(rPresent / rTotal * 100) : 0;
     const name = role.name.length > 10 ? role.name.slice(0, 9) + '…' : role.name;
-    items.push({ name, rPresent, rTotal, rPct });
+    items.push({ name, rPresent });
   }
   if (!items.length) return null;
 
@@ -134,15 +132,15 @@ function _phaiStatsAnsi(phaiRoleIds, guild, attended, eligibleSet, attendanceRol
   for (let i = 0; i < items.length; i += 2) {
     const left = items[i];
     const right = items[i + 1];
-    const lName = _pad(left.name, 10);
-    const lNum  = `${String(left.rPresent).padStart(2)}/${left.rTotal}`;
-    const lBar  = _ansiBar(left.rPct, 6);
-    let line = `${lName}: [${lNum}] ${lBar}`;
+    const lName  = _pad(left.name, 10);
+    const lColor = left.rPresent > 0 ? ANSI.GREEN : ANSI.GREY;
+    const lNum   = `${lColor}${left.rPresent}${ANSI.RESET}`;
+    let line = `${lName}: ${lNum}`;
     if (right) {
-      const rName = _pad(right.name, 10);
-      const rNum  = `${String(right.rPresent).padStart(2)}/${right.rTotal}`;
-      const rBar  = _ansiBar(right.rPct, 6);
-      line += `  |  ${rName}: [${rNum}] ${rBar}`;
+      const rName  = _pad(right.name, 10);
+      const rColor = right.rPresent > 0 ? ANSI.GREEN : ANSI.GREY;
+      const rNum   = `${rColor}${right.rPresent}${ANSI.RESET}`;
+      line += `  |  ${rName}: ${rNum}`;
     }
     lines.push(line);
   }
@@ -163,14 +161,11 @@ function _phaiStats(phaiRoleIds, guild, attended, eligibleSet, emojiMap, attenda
         return m?.roles?.cache?.has(attendanceRoleId);
       });
     }
-    const rTotal = roleMembers.length;
     const rPresent = attended.filter(a =>
       roleMembers.includes(a.user_id) && ['tham_gia', 'tre'].includes(a.status)
     ).length;
-    const rPct = rTotal > 0 ? Math.round(rPresent / rTotal * 100) : 0;
     const icon = getPhaiIcon(roleId, phaiRoleIds, guild, emojiMap);
-    const bar = _progressBar(rPct, 6);
-    lines.push(`${icon} **${role.name}**: ${rPresent}/${rTotal} (${rPct}%) \`${bar}\``);
+    lines.push(`${icon} **${role.name}**: ${rPresent}`);
   }
   return lines;
 }
@@ -203,7 +198,7 @@ function _buildPendingView(guild, session, phaiRoleIds = [], emojiMap = null) {
 }
 
 // ─── MAIN: buildSessionEmbed ─────────────────────────────────────────────────
-function buildSessionEmbed(guild, session, attended = [], phaiRoleIds = [], _isEditing = false, page = 1, emojiMap = null) {
+function buildSessionEmbed(guild, session, attended = [], phaiRoleIds = [], _isEditing = false, page = 1, emojiMap = null, showPhaiStats = false) {
   if (!session.is_active) {
     return _buildPendingView(guild, session, phaiRoleIds, emojiMap);
   }
@@ -285,12 +280,14 @@ function buildSessionEmbed(guild, session, attended = [], phaiRoleIds = [], _isE
   }
 
   // ── Phái stats field (ANSI 2-column) ─────────────────────────────────────
-  const safeEligible = session.eligible_member_ids ?? [];
-  const eligibleSet = new Set(safeEligible.map ? safeEligible.map(m => m.id ?? m) : []);
-  const attendanceRoleId = session.allowed_role_id ?? null;
-  const phaiBlock = _phaiStatsAnsi(phaiRoleIds, guild, sortedAttended, eligibleSet, attendanceRoleId);
-  if (phaiBlock) {
-    embed.addFields({ name: '⚔️ Phân bố Phái', value: phaiBlock, inline: false });
+  if (showPhaiStats) {
+    const safeEligible = session.eligible_member_ids ?? [];
+    const eligibleSet = new Set(safeEligible.map ? safeEligible.map(m => m.id ?? m) : []);
+    const attendanceRoleId = session.allowed_role_id ?? null;
+    const phaiBlock = _phaiStatsAnsi(phaiRoleIds, guild, sortedAttended, eligibleSet, attendanceRoleId);
+    if (phaiBlock) {
+      embed.addFields({ name: '⚔️ Phân bố Phái', value: phaiBlock, inline: false });
+    }
   }
 
   // ── Auto-close countdown ─────────────────────────────────────────────────
