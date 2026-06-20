@@ -96,12 +96,19 @@ class SessionButtonHandler extends InteractionHandler {
         });
       }
 
+      // [BUG-UX-4] Fix: attend_view ephemeral reply bao gồm selectRow + adminRows
       const { phaiRoleIds: phaiIds2, emojiMap: emojiMap2 } = await _phaiData(session, guild.id);
       await guild.members.fetch().catch(() => {});
       await guild.roles.fetch().catch(() => {});
-      const { embed, components } =
+      const { embed, components: pagComponents2 } =
         buildSessionEmbed(guild, session, attended, phaiIds2, false, 1, emojiMap2, true);
-      return interaction.reply({ embeds: [embed], components, flags: MessageFlags.Ephemeral });
+      const selectRow2 = buildAttendanceSelectRow(true);
+      const adminRows2 = buildSessionActionRow(true);
+      return interaction.reply({
+        embeds: [embed],
+        components: [selectRow2, ...adminRows2, ...pagComponents2].slice(0, 5),
+        flags: MessageFlags.Ephemeral,
+      });
     }
 
     // ── attend_refresh ────────────────────────────────────────────────────────────
@@ -357,7 +364,10 @@ class SessionButtonHandler extends InteractionHandler {
 
     // ── session:cancel_close:all (batch) ─────────────────────────────────────────
     if (customId === 'session:cancel_close:all') {
-      if (!checkCooldown(interaction.user.id, 'session_cancel_close_all', 1000)) return;
+      // [BUG-UX-2] Fix: trả về reply thay vì silent return khi cooldown
+      if (!checkCooldown(interaction.user.id, 'session_cancel_close_all', 1000)) {
+        return interaction.reply({ content: '⏳ Vui lòng đợi một chút...', flags: MessageFlags.Ephemeral });
+      }
       return interaction.reply({ content: '↩️ Đã hủy. Các Kỳ vẫn đang mở.', flags: MessageFlags.Ephemeral });
     }
   }, 'SessionButtonHandler')(interaction); }

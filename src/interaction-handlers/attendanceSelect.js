@@ -129,7 +129,10 @@ class AttendanceSelectHandler extends InteractionHandler {
       }
 
       const sTotal = attended?.length ?? 0;
-      const sJoined = sTotal > 0 ? attended.filter(a => a.status === 'tham_gia' || a.status === 'tre').length : 0;
+      // [BUG-UX-1] Fix: đếm đủ co_phep vào sJoined (không chỉ tham_gia + tre)
+      const sJoined = sTotal > 0
+        ? attended.filter(a => ['tham_gia', 'tre', 'co_phep'].includes(a.status)).length
+        : 0;
 
       log.info('ATTEND', guild.id, '%s điểm danh: %s', user.tag, status);
       return interaction.editReply(buildAttendConfirmEmbed(memberData, status, session.session_name, 0, sTotal, sJoined));
