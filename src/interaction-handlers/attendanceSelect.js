@@ -8,6 +8,7 @@ const { MessageFlags } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const sessionService    = require('../../services/sessionService.js');
 const attendanceService = require('../../services/attendanceService.js');
+const memberService     = require('../../services/memberService.js');
 const configService     = require('../../services/configService.js');
 const log               = require('../../utils/logger.js');
 const { getSessionChannel } = require('../../utils/channel.js');
@@ -134,8 +135,12 @@ class AttendanceSelectHandler extends InteractionHandler {
         ? attended.filter(a => ['tham_gia', 'tre', 'co_phep'].includes(a.status)).length
         : 0;
 
-      log.info('ATTEND', guild.id, '%s điểm danh: %s', user.tag, status);
-      return interaction.editReply(buildAttendConfirmEmbed(memberData, status, session.session_name, 0, sTotal, sJoined));
+      // [BUG-UX-3] Fix: query streak thực từ member_stats thay vì hardcode 0
+      const statsRow = await memberService.getMemberStats(guild.id, user.id).catch(() => null);
+      const currentStreak = statsRow?.current_streak ?? 0;
+
+      log.info('ATTEND', guild.id, '%s điểm danh: %s (streak=%d)', user.tag, status, currentStreak);
+      return interaction.editReply(buildAttendConfirmEmbed(memberData, status, session.session_name, currentStreak, sTotal, sJoined));
     } catch (e) {
       log.error('ATTEND', guild.id, 'Lỗi upsertAttendance: %s', e.message);
       return interaction.editReply(replyErr('❌ Không thể ghi nhận điểm danh, thử lại sau.'));
