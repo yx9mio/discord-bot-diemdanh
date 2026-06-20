@@ -28,9 +28,9 @@ function _releaseL1(sessionId, userId) {
 // DB-backed distributed lock (L2).
 // Trả về true nếu acquire thành công, false nếu đã bị lock (instance khác).
 async function _tryAcquireL2(sessionId, userId) {
-  await getClient()
-    .rpc('cleanup_stale_locks')
-    .catch(() => {}); // cleanup best-effort
+  try {
+    await getClient().rpc('cleanup_stale_locks');
+  } catch {} // cleanup best-effort
 
   const { error: lockErr } = await getClient()
     .from('attendance_locks')

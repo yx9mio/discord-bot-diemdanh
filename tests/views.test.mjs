@@ -148,6 +148,8 @@ describe('buildSessionEmbed (active session)', () => {
   it('includes phai stats when showPhaiStats is true', () => {
     const guildMock = {
       id: 'g1',
+      name: 'Test Guild',
+      iconURL: () => 'https://example.com/icon.png',
       roles: {
         cache: new Map([
           ['p1', { id: 'p1', name: 'Phái 1', members: new Map([['u1', {}], ['u2', {}]]) }]
@@ -201,11 +203,12 @@ describe('buildClosedSessionEmbed', () => {
     checked_in_at: new Date(now - 600000).toISOString(),
   }));
 
-  it('shows closed title and summary', () => {
+  it('shows closed title and ansi stats summary', () => {
     const embed = buildClosedSessionEmbed(session, attended, null);
     const json = embed.toJSON();
     expect(json.title).toMatch(/Đã kết thúc/);
-    expect(json.description).toContain('Tổng số');
+    expect(json.description).toMatch(/```ansi/);
+    expect(json.description).toContain('Tổng:');
   });
 
   it('shows top 5 with "và N người khác" for >5 attendees', () => {
