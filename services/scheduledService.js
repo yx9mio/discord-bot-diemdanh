@@ -50,57 +50,7 @@ async function skipScheduledSession(id, skipUntil) {
   return !!data;
 }
 
-// Vietnamese aliases
-const getLichCoDinh     = getScheduledSessions;
-const getLichCoDinhById = getScheduledSessionById;
-const createLichCoDinh  = createScheduledSession;
-const updateLichCoDinh  = updateScheduledSession;
-const deleteLichCoDinh  = deleteScheduledSession;
-
-// [FIX-DB] Không có cột pre_close_minutes — dùng close_hour/close_minute + reminder_1_min/reminder_2_min
-function themLichCoDinh(guildId, { dayOfWeek, hour, minute, sessionName, closeDayOfWeek, closeHour, closeMinute, phaiRoleIds, channelId, allowedRoleId, reminder1Min, reminder2Min }) {
-  return createScheduledSession({
-    guild_id:          guildId,
-    day_of_week:       dayOfWeek,
-    hour,
-    minute,
-    session_name:      sessionName ?? 'Điểm danh',
-    close_day_of_week: closeDayOfWeek ?? null,
-    close_hour:        closeHour ?? null,
-    close_minute:      closeMinute ?? null,
-    phai_role_ids:     phaiRoleIds ?? [],
-    allowed_role_id:   allowedRoleId ?? null,
-    channel_id:        channelId,
-    is_active:         true,
-    reminder_enabled:  true,
-    reminder_1_min:    reminder1Min ?? 30,
-    reminder_2_min:    reminder2Min ?? 10,
-  });
-}
-
-function suaLichCoDinh(guildId, id, { dayOfWeek, hour, minute, sessionName, closeDayOfWeek, closeHour, closeMinute, channelId, allowedRoleId, reminder1Min, reminder2Min }) {
-  return updateScheduledSession(guildId, id, {
-    day_of_week:       dayOfWeek,
-    hour,
-    minute,
-    session_name:      sessionName,
-    close_day_of_week: closeDayOfWeek ?? null,
-    close_hour:        closeHour ?? null,
-    close_minute:      closeMinute ?? null,
-    channel_id:        channelId,
-    allowed_role_id:   allowedRoleId ?? null,
-    reminder_1_min:    reminder1Min ?? undefined,
-    reminder_2_min:    reminder2Min ?? undefined,
-  });
-}
-
-function xoaLichCoDinh(guildId, id) {
-  return deleteScheduledSession(guildId, id);
-}
-
 // Wrappers to match caller expectations
-
-const getActiveSchedules = getScheduledSessions;
 
 async function getDueReminders(now) {
   const { data, error } = await getClient()
@@ -115,7 +65,7 @@ async function markReminderSent(id) {
   _throwSupabase(error, 'markReminderSent');
 }
 
-function addRecurringSession(guildId, { thu, gio_bat_dau, close_day_of_week, close_hour, close_minute, ten, timezone, pre_close_minutes, channel_id }) {
+function addRecurringSession(guildId, { thu, gio_bat_dau, close_day_of_week, close_hour, close_minute, ten, _timezone, pre_close_minutes, channel_id }) {
   const [hour, minute] = gio_bat_dau.split(':').map(Number);
   return createScheduledSession({
     guild_id:          guildId,
@@ -137,7 +87,7 @@ function addRecurringSession(guildId, { thu, gio_bat_dau, close_day_of_week, clo
   });
 }
 
-function addOnetimeSession(guildId, { ngay, gio_bat_dau, gio_ket_thuc, ten, timezone, pre_close_minutes }) {
+function addOnetimeSession(guildId, { ngay, gio_bat_dau, gio_ket_thuc, ten, _timezone, pre_close_minutes }) {
   const [hour, minute] = gio_bat_dau.split(':').map(Number);
   let closeHour = null, closeMinute = null;
   if (gio_ket_thuc) {
@@ -168,9 +118,6 @@ function addOnetimeSession(guildId, { ngay, gio_bat_dau, gio_ket_thuc, ten, time
 module.exports = {
   getScheduledSessions, getScheduledSessionById,
   createScheduledSession, updateScheduledSession, deleteScheduledSession, skipScheduledSession,
-  getLichCoDinh, getLichCoDinhById,
-  createLichCoDinh, updateLichCoDinh, deleteLichCoDinh,
-  themLichCoDinh, suaLichCoDinh, xoaLichCoDinh,
-  getActiveSchedules, getDueReminders, markReminderSent,
+  getDueReminders, markReminderSent,
   addRecurringSession, addOnetimeSession,
 };

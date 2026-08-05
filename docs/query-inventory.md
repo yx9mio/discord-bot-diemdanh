@@ -13,7 +13,6 @@
 | | | | phaiSelect (USER) | — | — | 2s | Low |
 | | | | adminMarkModal (ADMIN) | requireAdmin | ADMIN_MARK | 5s | Med |
 | | | | adminEditModal (ADMIN) | requireAdmin | ADMIN_EDIT | 5s | Med |
-| `upsertAttendanceNoTime` | attendances | INSERT/UPDATE | — (dead code) | — | — | — | None |
 | `getAttendances` | attendances | SELECT | sessionButton (USER) | — | — | 1s | Low |
 | | | | attendanceSelect (USER) | — | — | 2s | Low |
 | | | | phaiSelect (USER) | — | — | 2s | Low |
@@ -26,8 +25,6 @@
 | `getAttendancesByUser` | attendances | SELECT | setupStats (USER) | — | — | 1s | Low |
 | | | | setupStatsLichsu (USER) | — | — | 1s | Low |
 | | | | setupStatsModal (USER) | — | — | 1s | Low |
-| `getAttendanceStats` | attendances | SELECT | — (dead code) | — | — | — | None |
-| `getAllAttendances` | attendances | SELECT | — (dead code) | — | — | — | None |
 | `bulkInsertAbsent` | attendances | INSERT | sessionButton (ADMIN) | requireAdmin | — | 5s | Med |
 | `tryAcquireAttendanceLock` | attendance_locks | INSERT | attendanceSelect (USER) | — | — | — | Low |
 | | | | phaiSelect (USER) | — | — | — | Low |
@@ -53,9 +50,6 @@
 | `cancelSession` | sessions | UPDATE | sessionButton (ADMIN) | requireAdmin | — | 5s | High |
 | `updateSessionMessage` | sessions | UPDATE | setupSessionStartModal (ADMIN) | requireAdmin | — | — | Low |
 | | | | reminderScheduler (SCHEDULER) | internal | — | — | Low |
-| `updateSessionName` | sessions | UPDATE | — (dead code) | — | — | — | None |
-| `updateSessionEligible` | sessions | UPDATE | — (dead code) | — | — | — | None |
-| `getRecentSessions` | sessions | SELECT | — (dead code) | — | — | — | None |
 | `getAllSessions` | sessions | SELECT | setupHistory (USER) | — | — | 1s | Low |
 
 ---
@@ -78,9 +72,7 @@
 | | | | setupMemEditModal (ADMIN) | requireAdmin | — | 5s | Med |
 | `getMemberStats` | members+member_stats+attendances | SELECT | setupStats (USER) | — | — | 1s | Low |
 | | | | setupStatsModal (USER) | — | — | 1s | Low |
-| `getMemberStatsMulti` | member_stats | SELECT | badgeService (internal) | — | — | — | Low |
 | `getAllMemberStats` | member_stats+members | SELECT | session.js (SYSTEM) | — | — | — | Low |
-| `upsertMemberStats` | member_stats | UPSERT | — (dead code) | — | — | — | None |
 | `batchUpsertMemberStats` | member_stats | UPSERT | session.js (SYSTEM) | — | — | — | Low |
 | `resetStreak` | member_stats | UPDATE | setupResetStreak (ADMIN) | requireAdmin | RESET_STREAK | 5s | High |
 | `batchResetStreak` | member_stats | UPDATE | setupResetStreak (ADMIN) | requireAdmin | RESET_STREAK | 5s | High |
@@ -90,16 +82,12 @@
 | | | | setupStatsPhongBan (USER) | — | — | 1s | Low |
 | `getServerStats` | sessions+members+attendances | SELECT | setupStats (USER) | — | — | 1s | Low |
 | `getBadgeDefinitions` / `getBadges` | badges | SELECT | session.js (SYSTEM) | — | — | — | Low |
-| | | | badgeService (internal) | — | — | — | Low |
 | `getUserBadges` | member_badges+badges | SELECT | — (internal via getMemberBadges) | — | — | — | Low |
 | `upsertUserBadge` | member_badges | UPSERT | — (internal via upsertMemberBadge) | — | — | — | Low |
 | `getMemberBadges` | member_badges+badges | SELECT | setupStats (USER) | — | — | 1s | Low |
 | | | | setupStatsModal (USER) | — | — | 1s | Low |
 | `upsertMemberBadge` | member_badges | UPSERT | session.js (SYSTEM) | — | — | — | Low |
-| | | | badgeService (internal) | — | — | — | Low |
 | `getMemberBadgesMulti` | member_badges+badges | SELECT | session.js (SYSTEM) | — | — | — | Low |
-| | | | badgeService (internal) | — | — | — | Low |
-| `batchUpsertUserBadges` | member_badges | UPSERT | — (dead code) | — | — | — | None |
 
 ---
 
@@ -109,7 +97,6 @@
 |---|---|---|---|---|---|---|---|
 | `getGuildConfig` | guild_configs | SELECT | 25+ callers (all categories) | mixed | — | varies | Low |
 | `upsertGuildConfig` | guild_configs | UPSERT | — (internal via setConfigField) | — | — | — | — |
-| `setGuildConfig` | guild_configs | UPSERT | — (dead code) | — | — | — | None |
 | `ensureGuildConfig` | guild_configs | UPSERT | guildCreate (SYSTEM) | — | — | — | Low |
 | `setConfigField` | guild_configs | UPSERT | setupConfigEditSelect (ADMIN) | requireAdmin | — | 5s | High |
 | | | | setupConfigEditModal (ADMIN) | requireAdmin | CONFIG_UPDATE | 5s | High |
@@ -133,7 +120,6 @@
 | `addRecurringSession` | scheduled_sessions | INSERT | setupSchedule (ADMIN) | requireAdmin | — | 5s | Med |
 | | | | setupScheduleAddDetailModal (ADMIN) | requireAdmin | — | 5s | Med |
 | `addOnetimeSession` | scheduled_sessions | INSERT | setupScheduleAddDetailModal (ADMIN) | requireAdmin | — | 5s | Med |
-| `themLichCoDinh` / `suaLichCoDinh` / `xoaLichCoDinh` | scheduled_sessions | mixed | — (dead code — legacy aliases) | — | — | — | None |
 
 ---
 
@@ -188,7 +174,6 @@
 | High | 10 | UPDATE/DELETE on critical tables (sessions, member_stats, configs, scheduled_sessions, members) |
 | Med | 8 | INSERT/UPSERT with admin bypass potential |
 | Low | ~40 | SELECT only or INSERT with guild-scoped constraints |
-| None | ~8 | Dead code, never called externally |
 
 ---
 
@@ -221,17 +206,19 @@ All 12 previously missing audit log paths have been wired (`2026-06-14`):
 
 **None found.** All user write paths have cooldown.
 
-### Dead Code
+### Dead Code — RESOLVED (2026-08-05)
 
-| Service | Function | Reason |
+All items below were removed in the dead-code cleanup. `getUserBadges`/`upsertUserBadge` were kept (still used internally by `getMemberBadges`/`upsertMemberBadge`).
+
+| Service | Function | Status |
 |---|---|---|
-| `badgeService.js` | all 4 exports | Never imported outside `services/` |
-| `attendanceService` | `upsertAttendanceNoTime`, `getAttendanceStats`, `getAllAttendances` | No external callers |
-| `sessionService` | `updateSessionName`, `updateSessionEligible`, `getRecentSessions` | No external callers |
-| `memberService` | `upsertMemberStats`, `batchUpsertUserBadges` | No external callers |
-| `configService` | `setGuildConfig` | No external callers (replaced by `setConfigField`) |
-| `scheduledService` | legacy aliases (`themLichCoDinh`, etc.) | Replaced by modern API |
-| `memberService` | `getMemberStatsMulti`, `upsertUserBadge`, `getUserBadges` | Only called internally, never from handlers |
+| `badgeService.js` | all 4 exports | 🗑️ File removed |
+| `attendanceService` | `upsertAttendanceNoTime`, `getAttendanceStats`, `getAllAttendances` | 🗑️ Removed |
+| `sessionService` | `updateSessionName`, `updateSessionEligible`, `getRecentSessions`, `getSessionHistory` | 🗑️ Removed |
+| `memberService` | `upsertMemberStats`, `batchUpsertUserBadges`, `getMemberStatsMulti` | 🗑️ Removed |
+| `configService` | `setGuildConfig` | 🗑️ Removed |
+| `scheduledService` | legacy aliases (`themLichCoDinh`, `getLichCoDinh`, `getActiveSchedules`, etc.) | 🗑️ Removed |
+| `memberService` | `getUserBadges`, `upsertUserBadge` | ✅ Kept (internal callers) |
 
 ### Missing `MessageFlags` import in `helpPage.js`
 

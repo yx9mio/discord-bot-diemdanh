@@ -51,6 +51,16 @@ Bot Discord quản lý điểm danh cho server/cộng đồng, xây dựng với
 
 ---
 
+## 📚 Tài liệu kỹ thuật
+
+| Tài liệu | Nội dung |
+|---|---|
+| [Wiki](docs/wiki/index.md) | Architecture, services, database, testing, deploy |
+| [Query Inventory](docs/query-inventory.md) | Toàn bộ truy vấn Supabase + audit/cooldown coverage |
+| [Recovery Runbook](docs/recovery.md) | Xử lý sự cố vận hành |
+
+---
+
 ## 🚀 Cài đặt & Chạy local
 
 ### Yêu cầu
@@ -114,6 +124,12 @@ Schema được quản lý qua Supabase migrations tại `supabase/migrations/`.
 | `badges` | Định nghĩa badge và ngưỡng |
 | `member_badges` | Badge đã cấp cho thành viên |
 | `scheduled_sessions` | Lịch mở phiên tự động |
+| `attendance_locks` | Distributed lock điểm danh (composite PK) |
+| `scheduler_locks` | Leadership lock scheduler multi-instance |
+| `audit_logs` | Log thao tác admin |
+| `guild_emojis` | Cache custom emoji per guild |
+
+Schema được kiểm tra đối chiếu với code tự động qua `tests/schemaDrift.test.mjs`.
 
 ### Lệnh database
 
@@ -136,7 +152,6 @@ discord-bot-diemdanh/
 │   ├── memberService.js      # Quản lý thành viên + stats
 │   ├── scheduledService.js   # CRUD lịch tự động
 │   ├── reminderScheduler.js  # Scheduler nhắc nhở + auto-open
-│   ├── badgeService.js       # Cấp badge tự động theo threshold
 │   ├── configService.js      # Cấu hình guild
 │   └── guildEmojiService.js  # Custom emoji per guild
 ├── src/
@@ -191,11 +206,14 @@ discord-bot-diemdanh/
 ## 🧪 Chạy tests
 
 ```bash
-npm test            # chạy một lần (CI)
-npm run test:watch  # chế độ watch
+npm run lint       # eslint (phải exit 0)
+npm test           # vitest run
+npm run test:ci    # bộ suites ổn định cho CI (68 tests)
+npm run test:watch # chế độ watch
 ```
 
-Tests nằm ở `tests/` — bao gồm unit tests cho `csvHelper`, `design-tokens`, và `_helpers`.
+Tests nằm ở `tests/` — gồm unit tests (cooldown, views, csv, design tokens, session logic)
+và schema-drift test đối chiếu code ↔ migrations. Chi tiết: [docs/wiki/testing.md](docs/wiki/testing.md).
 
 ---
 

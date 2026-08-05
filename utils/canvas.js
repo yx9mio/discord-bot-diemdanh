@@ -1,10 +1,19 @@
 'use strict';
 const { createCanvas, GlobalFonts } = require('@napi-rs/canvas');
+const path = require('path');
+
+const FONT_DIR = path.join(__dirname, '..', 'assets', 'fonts');
+// Ưu tiên font bundle trong repo (nhất quán trên mọi OS), fallback đường dẫn hệ thống.
 try {
-  GlobalFonts.registerFromPath('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', 'DejaVuSans');
-  GlobalFonts.registerFromPath('/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf', 'DejaVuSans Bold');
-} catch (e) {
-  // Font registration failed — canvas will use built-in fallback font
+  GlobalFonts.registerFromPath(path.join(FONT_DIR, 'DejaVuSans.ttf'), 'DejaVuSans');
+  GlobalFonts.registerFromPath(path.join(FONT_DIR, 'DejaVuSans-Bold.ttf'), 'DejaVuSans Bold');
+} catch (_e) {
+  try {
+    GlobalFonts.registerFromPath('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', 'DejaVuSans');
+    GlobalFonts.registerFromPath('/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf', 'DejaVuSans Bold');
+  } catch (_e2) {
+    // Không có font — canvas dùng font dựng sẵn
+  }
 }
 
 const FONT  = 'DejaVuSans';

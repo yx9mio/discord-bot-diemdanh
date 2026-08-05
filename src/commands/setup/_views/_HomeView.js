@@ -68,8 +68,8 @@ function render({ guild, cfg, schedules, members, session, sessions }) {
 
   // Schedule summary
   if (schedules?.length) {
-    const top = schedules.slice(0, 2).map((s, i) => `　${i + 1}. ${_fmtSchedule(s)}`).join('\n');
-    const more = schedules.length > 2 ? `　_+${schedules.length - 2} lịch khác_` : '';
+    const top = schedules.slice(0, 2).map((s, i) => `　${i + 1}. ${_fmtSchedule(s)}`).join('\n'); // eslint-disable-line no-irregular-whitespace
+    const more = schedules.length > 2 ? `　_+${schedules.length - 2} lịch khác_` : ''; // eslint-disable-line no-irregular-whitespace
     desc += `\n📅 **Lịch (${schedules.length})**\n${top}${more}`;
   }
 

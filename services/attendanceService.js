@@ -27,6 +27,7 @@ function _releaseL1(sessionId, userId) {
 
 // DB-backed distributed lock (L2).
 // Trả về true nếu acquire thành công, false nếu đã bị lock (instance khác).
+// Lỗi DB ≠ unique → fail-closed: trả false, chặn thao tác thay vì bypass lock.
 async function _tryAcquireL2(sessionId, userId) {
   try {
     await getClient().rpc('cleanup_stale_locks');
@@ -39,12 +40,13 @@ async function _tryAcquireL2(sessionId, userId) {
     .maybeSingle();
 
   if (lockErr) {
-    // Nếu lỗi unique violation => lock đã tồn tại
+    // Lỗi unique violation => lock đã tồn tại (instance khác)
     if (lockErr.code === '23505') return false;
-    // Lỗi khác (table chưa tồn tại, v.v.) → fallback cho phép proceed
+    // Lỗi khác → fail-closed: KHÔNG bypass lock, chặn thao tác.
+    // Tránh race condition multi-instance khi lock infra lỗi.
     const log = require('../utils/logger.js');
-    log.warn('LOCK', null, 'tryAcquireL2 thất bại: %s', lockErr.message);
-    return true;
+    log.error('LOCK', null, 'tryAcquireL2 thất bại (fail-closed): %s', lockErr.message);
+    return false;
   }
   return true;
 }
@@ -88,17 +90,6 @@ async function upsertAttendance(payload) {
   return data;
 }
 
-async function upsertAttendanceNoTime(sessionId, guildId, userId, username, status, markedBy) {
-  const { data, error } = await getClient()
-    .from('attendances')
-    .upsert(
-      { session_id: sessionId, guild_id: guildId, user_id: userId, username, status, marked_by: markedBy },
-      { onConflict: 'session_id,user_id', ignoreDuplicates: false }
-    ).select().single();
-  _throwSupabase(error, 'upsertAttendanceNoTime');
-  return data;
-}
-
 async function getAttendances(sessionId) {
   const { data, error } = await getClient()
     .from('attendances')
@@ -118,24 +109,6 @@ async function getAttendancesByUser(guildId, userId, limit = 200) {
   return data ?? [];
 }
 
-async function getAttendanceStats(guildId, userId) {
-  const { data, error } = await getClient()
-    .from('attendances')
-    .select('status, sessions!inner(cancelled)')
-    .eq('guild_id', guildId).eq('user_id', userId).eq('sessions.cancelled', false);
-  _throwSupabase(error, 'getAttendanceStats');
-  return data ?? [];
-}
-
-async function getAllAttendances(guildId, limit = 5000) {
-  const { data, error } = await getClient()
-    .from('attendances')
-    .select('user_id, username, status, session_id, checked_in_at, marked_by, sessions!inner(session_name, started_at, cancelled)')
-    .eq('guild_id', guildId).order('checked_in_at', { ascending: false }).limit(limit);
-  _throwSupabase(error, 'getAllAttendances');
-  return _validateAttendances(data ?? [], 'getAllAttendances');
-}
-
 async function bulkInsertAbsent(sessionId, guildId, rows) {
   if (!rows.length) return;
   const payload = rows.map(r => ({
@@ -153,8 +126,8 @@ async function bulkInsertAbsent(sessionId, guildId, rows) {
 }
 
 module.exports = {
-  upsertAttendance, upsertAttendanceNoTime,
-  getAttendances, getAttendancesByUser, getAttendanceStats, getAllAttendances,
+  upsertAttendance,
+  getAttendances, getAttendancesByUser,
   bulkInsertAbsent,
   tryAcquireAttendanceLock, releaseAttendanceLock,
 };

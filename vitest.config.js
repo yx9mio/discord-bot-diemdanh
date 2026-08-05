@@ -11,18 +11,4 @@ module.exports = defineConfig({
       include: ['services/**', 'utils/**'],
     },
   },
-  server: {
-    deps: {
-      inline: [
-        /services\/.*\.js$/,
-        /utils\/.*\.js$/,
-      ],
-    },
-  },
-  deps: {
-    inline: [
-      /services\/.*\.js$/,
-      /utils\/.*\.js$/,
-    ],
-  },
 });

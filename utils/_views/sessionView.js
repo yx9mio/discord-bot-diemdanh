@@ -46,7 +46,7 @@ function _pctColor(pct) {
 /** Đệm chuỗi bên phải */
 function _pad(str, len) {
   // Tính kí tự hiển thị (bỏ escape ANSI)
-  const visible = str.replace(/\x1b\[[0-9;]*m/g, '');
+  const visible = str.replace(/\x1b\[[0-9;]*m/g, ''); // eslint-disable-line no-control-regex
   const diff = len - visible.length;
   return diff > 0 ? str + ' '.repeat(diff) : str;
 }

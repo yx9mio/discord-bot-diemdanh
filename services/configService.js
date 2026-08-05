@@ -15,10 +15,6 @@ async function upsertGuildConfig(config) {
   return data;
 }
 
-function setGuildConfig(guildId, patch) {
-  return upsertGuildConfig({ ...patch, guild_id: guildId });
-}
-
 async function ensureGuildConfig(guildId) {
   const { data, error } = await getClient()
     .from('guild_configs')
@@ -30,8 +26,8 @@ async function ensureGuildConfig(guildId) {
 
 const getConfig = getGuildConfig;
 
-async function setConfigField(guildId, field, value) {
+function setConfigField(guildId, field, value) {
   return upsertGuildConfig({ guild_id: guildId, [field]: value });
 }
 
-module.exports = { getGuildConfig, upsertGuildConfig, setGuildConfig, ensureGuildConfig, getConfig, setConfigField };
+module.exports = { getGuildConfig, upsertGuildConfig, ensureGuildConfig, getConfig, setConfigField };

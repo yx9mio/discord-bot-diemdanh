@@ -90,8 +90,8 @@ function renderSummary({ session, guild, cfg, members, attendances }) {
 
     let desc = `${emoji} **${pct}%** tham gia\n${bar}\n\n`;
     desc += `👥 **Quân số**\n`;
-    desc += `${ICONS.ATTEND_YES} ${attended}　${ICONS.ATTEND_LATE} ${late}\n`;
-    desc += `${ICONS.ATTEND_NO} ${absent}　${ICONS.ATTEND_EXCUSE} ${excused}`;
+    desc += `${ICONS.ATTEND_YES} ${attended}　${ICONS.ATTEND_LATE} ${late}\n`; // eslint-disable-line no-irregular-whitespace
+    desc += `${ICONS.ATTEND_NO} ${absent}　${ICONS.ATTEND_EXCUSE} ${excused}`; // eslint-disable-line no-irregular-whitespace
 
     const phai = _computePhai(session, guild, members, attendances, cfg);
     if (phai.length) {

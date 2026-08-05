@@ -34,7 +34,7 @@ function _pctColor(pct) {
 }
 
 function _pad(str, len) {
-  const visible = str.replace(/\x1b\[[0-9;]*m/g, '');
+  const visible = str.replace(/\x1b\[[0-9;]*m/g, ''); // eslint-disable-line no-control-regex
   const diff = len - visible.length;
   return diff > 0 ? str + ' '.repeat(diff) : str;
 }

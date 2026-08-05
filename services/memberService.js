@@ -69,16 +69,6 @@ async function getMemberStats(guildId, userId) {
   return { ...base, phong_ban: memberRes.data?.phong_ban ?? null, phai_role_ids: memberRes.data?.phai_role_ids ?? null, total_late, total_absent, total_excused };
 }
 
-async function getMemberStatsMulti(guildId, userIds) {
-  if (!userIds?.length) return [];
-  const { data, error } = await getClient()
-    .from('member_stats')
-    .select('user_id, current_streak, best_streak, total_joined, total_sessions, updated_at')
-    .eq('guild_id', guildId).in('user_id', userIds);
-  _throwSupabase(error, 'getMemberStatsMulti');
-  return data ?? [];
-}
-
 async function getAllMemberStats(guildId) {
   const [statsRes, membersRes] = await Promise.all([
     getClient()
@@ -90,13 +80,6 @@ async function getAllMemberStats(guildId) {
   _throwSupabase(statsRes.error, 'getAllMemberStats');
   const phongMap = new Map((membersRes.data ?? []).map(m => [m.user_id, m.phong_ban]));
   return (statsRes.data ?? []).map(r => ({ ...r, phong_ban: phongMap.get(r.user_id) ?? null }));
-}
-
-async function upsertMemberStats(payload) {
-  const { data, error } = await getClient()
-    .from('member_stats').upsert(payload, { onConflict: 'guild_id,user_id' }).select().single();
-  _throwSupabase(error, 'upsertMemberStats');
-  return data;
 }
 
 async function batchUpsertMemberStats(guildId, patches) {
@@ -343,19 +326,11 @@ async function getMemberBadgesMulti(guildId, userIds) {
   return result;
 }
 
-async function batchUpsertUserBadges(guildId, badges) {
-  if (!badges?.length) return;
-  const rows = badges.map(b => ({ guild_id: guildId, user_id: b.user_id, threshold: b.threshold }));
-  const { error } = await getClient()
-    .from('member_badges').upsert(rows, { onConflict: 'guild_id,user_id,threshold' });
-  _throwSupabase(error, 'batchUpsertUserBadges');
-}
-
 module.exports = {
   getMembers, getMember, addMember, deleteMember, upsertMember,
-  getMemberStats, getMemberStatsMulti, getAllMemberStats,
-  upsertMemberStats, batchUpsertMemberStats, resetStreak, batchResetStreak,
+  getMemberStats, getAllMemberStats,
+  batchUpsertMemberStats, resetStreak, batchResetStreak,
   getTopMembers, getTopMembersByPeriod, getDistinctPhongBan, getServerStats,
   getBadgeDefinitions, getBadges, getUserBadges, upsertUserBadge,
-  getMemberBadges, upsertMemberBadge, getMemberBadgesMulti, batchUpsertUserBadges,
+  getMemberBadges, upsertMemberBadge, getMemberBadgesMulti,
 };

@@ -10,6 +10,7 @@
     "lint": "eslint . --ext .js",
     "lint:fix": "eslint . --ext .js --fix",
     "test": "vitest run",
+    "test:ci": "vitest run tests/cooldown.test.mjs tests/views.test.mjs tests/csvHelper.test.mjs tests/designTokens.test.mjs tests/sessionLogic.test.mjs tests/schemaDrift.test.mjs",
     "test:watch": "vitest",
     "reload": "node -e \"process.exit(0)\"",
     "supabase:start": "supabase start",

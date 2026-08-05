@@ -106,31 +106,6 @@ async function updateSessionMessage(sessionId, msgOrId) {
   _throwSupabase(error, 'updateSessionMessage');
 }
 
-async function updateSessionName(sessionId, newName) {
-  const { data, error } = await getClient()
-    .from('sessions').update({ session_name: newName }).eq('id', sessionId).select().maybeSingle();
-  _throwSupabase(error, 'updateSessionName');
-  return _validateSession(data, 'updateSessionName');
-}
-
-async function updateSessionEligible(sessionId, memberIds) {
-  const { data, error } = await getClient()
-    .from('sessions').update({ eligible_member_ids: memberIds }).eq('id', sessionId).select().maybeSingle();
-  _throwSupabase(error, 'updateSessionEligible');
-  return _validateSession(data, 'updateSessionEligible');
-}
-
-async function getRecentSessions(guildId, limit = 10) {
-  const { data, error } = await getClient()
-    .from('sessions').select('*')
-    .eq('guild_id', guildId).eq('cancelled', false)
-    .order(SESSION_TIME_COLUMN, { ascending: false }).limit(limit);
-  _throwSupabase(error, 'getRecentSessions');
-  if (!data) return [];
-  data.forEach(row => _validateSession(row, 'getRecentSessions'));
-  return data;
-}
-
 async function getAllSessions(guildId) {
   const { data, error } = await getClient()
     .from('sessions').select('*')
@@ -142,11 +117,9 @@ async function getAllSessions(guildId) {
   return data;
 }
 
-const getSessionHistory = getRecentSessions;
-
 module.exports = {
   createSession, getActiveSession, getActiveSessions, getSessionById, getSessionByMessageId, getSessionByIdRaw,
   closeSession, cancelSession,
-  updateSessionMessage, updateSessionName, updateSessionEligible,
-  getRecentSessions, getAllSessions, getSessionHistory,
+  updateSessionMessage,
+  getAllSessions,
 };
