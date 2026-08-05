@@ -1,37 +1,33 @@
-# ─── Stage 1: deps ──────────────────────────────────────────────
-FROM node:22-alpine AS deps
+# ─── Stage 1: deps (chỉ production packages) ────────────────────
+# bookworm-slim = glibc, khớp với Ubuntu ARM64 VPS.
+# @napi-rs/canvas tự tải binary linux-arm64-gnu qua optionalDependencies.
+FROM node:22-bookworm-slim AS deps
 WORKDIR /app
 
-# Copy cả package-lock.json để npm ci có thể dùng lockfile
-# Layer này chỉ rebuild khi package*.json thay đổi
 COPY package*.json ./
 RUN npm ci --omit=dev --ignore-scripts
 
-# ─── Stage 2: runtime ───────────────────────────────────────────────
-FROM node:22-alpine AS runtime
+# ─── Stage 2: runtime ─────────────────────────────────────────────
+FROM node:22-bookworm-slim AS runtime
 WORKDIR /app
 
-# Chạy với user non-root — best practice bảo mật container
-RUN addgroup -S botgroup && adduser -S botuser -G botgroup
+# Non-root user — bảo mật container
+RUN groupadd -r botgroup && useradd -r -g botgroup -d /app botuser
 
-# Copy chỉ node_modules đã build từ stage deps
+# Chỉ copy node_modules đã build + source cần thiết
 COPY --from=deps /app/node_modules ./node_modules
-
-# Copy source (bỏ qua những gì trong .dockerignore)
 COPY . .
 
-# Railway chạy UTC — dùng TZ env để logs hiển giờ VN
-ENV TZ=Asia/Ho_Chi_Minh \
-    NODE_ENV=production \
+ENV NODE_ENV=production \
+    TZ=Asia/Ho_Chi_Minh \
     NODE_OPTIONS="--max-old-space-size=256"
 
-# Expose port cho Railway health check (giá trị mặc định, Railway sẽ override bằng $PORT)
 EXPOSE 8080
 
 USER botuser
 
-# Health check: gọi /health endpoint, cho 30s grace period khởi động bot
+# Health check dùng Node global fetch (không cần cài wget/curl)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-  CMD wget -qO- http://localhost:${PORT:-8080}/health || exit 1
+  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||8080)+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
 CMD ["node", "index.js"]
