@@ -7,6 +7,9 @@ require('@sapphire/plugin-subcommands/register');
 const { GatewayIntentBits, Partials } = require('discord.js');
 const log = require('./utils/logger.js');
 const { startHealthServer } = require('./events/healthServer.js');
+const { initSentry, captureError } = require('./utils/sentry.js');
+
+initSentry();
 
 if (!process.env.DISCORD_TOKEN) {
   log.error('SYSTEM', null, 'Thiếu DISCORD_TOKEN trong .env!');
@@ -48,9 +51,11 @@ client.once('clientReady', () => {
 
 process.on('unhandledRejection', (reason) => {
   log.error('SYSTEM', null, 'unhandledRejection: %s', reason?.stack ?? reason);
+  captureError(reason, 'unhandledRejection');
 });
 process.on('uncaughtException', (err) => {
   log.error('SYSTEM', null, 'uncaughtException: %s', err.stack);
+  captureError(err, 'uncaughtException');
 });
 
 client.login(process.env.DISCORD_TOKEN);
