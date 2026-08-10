@@ -104,12 +104,12 @@ class ReadyListener extends Listener {
     }
     if (restored) log.info('READY', null, 'Đã restore %d auto-refresh timer(s).', restored);
 
-    if (!process.env.GUILD_ID) {
-      try {
-        await registerGuildCommands(client);
-      } catch (e) {
-        log.error('READY', null, 'Guild command registration fail: %s', e.message);
-      }
+    // Luôn register trên các guild bot thực sự đang ở (kể cả khi GUILD_ID env bị
+    // stale/thiếu) — tránh lỗi 50001 "Missing Access" khi GUILD_ID trỏ vào guild cũ.
+    try {
+      await registerGuildCommands(client);
+    } catch (e) {
+      log.error('READY', null, 'Guild command registration fail: %s', e.message);
     }
 
     startReminderScheduler(client);
@@ -117,7 +117,7 @@ class ReadyListener extends Listener {
 }
 
 async function registerGuildCommands(client) {
-  log.info('CMD_REG', null, 'GUILD_ID not set — registering commands on all guilds...');
+  log.info('CMD_REG', null, 'Registering commands on %d guild(s)...', client.guilds.cache.size);
 
   // Build command data từ Sapphire command store
   const commandStore = client.stores.get('commands');

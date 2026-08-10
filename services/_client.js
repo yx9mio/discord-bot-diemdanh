@@ -6,6 +6,19 @@ const { createClient } = require('@supabase/supabase-js');
 const log = require('../utils/logger.js');
 const { SessionSchema, AttendanceSchema, safeParse } = require('../utils/validate.js');
 
+// Node < 22 không có native WebSocket; supabase-js vẫn khởi tạo RealtimeClient ngay
+// trong constructor. Bot chỉ dùng REST (.from/.select/.rpc) nhưng cần transport để
+// createClient không throw. Dùng `ws` package nếu có (Node < 22), native nếu có.
+function _realtimeOptions() {
+  if (typeof WebSocket !== 'undefined') return {};
+  try {
+    const ws = require('ws');
+    return { realtime: { transport: ws } };
+  } catch {
+    return {};
+  }
+}
+
 // Lazy-init: tránh crash trong môi trường test (Node 20 không có native WebSocket)
 let _supabase = null;
 function getClient() {
@@ -13,7 +26,7 @@ function getClient() {
     if (!process.env.SUPABASE_URL || !process.env.SUPABASE_KEY) {
       throw new Error('[DB] SUPABASE_URL hoặc SUPABASE_KEY chưa được cấu hình. Kiểm tra file .env');
     }
-    _supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
+    _supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY, _realtimeOptions());
   }
   return _supabase;
 }
