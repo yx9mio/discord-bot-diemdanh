@@ -1,4 +1,4 @@
-create table audit_logs (
+create table if not exists audit_logs (
   id bigint generated always as identity primary key,
   guild_id text,
   actor_id text not null,
@@ -8,13 +8,14 @@ create table audit_logs (
   created_at timestamptz not null default now()
 );
 
-create index audit_logs_guild_idx  on audit_logs(guild_id, created_at desc);
-create index audit_logs_actor_idx  on audit_logs(actor_id, created_at desc);
-create index audit_logs_action_idx on audit_logs(action, created_at desc);
+create index if not exists audit_logs_guild_idx  on audit_logs(guild_id, created_at desc);
+create index if not exists audit_logs_actor_idx  on audit_logs(actor_id, created_at desc);
+create index if not exists audit_logs_action_idx on audit_logs(action, created_at desc);
 
 -- Service role access
 alter table audit_logs enable row level security;
 
+drop policy if exists "service_role_all" on audit_logs;
 create policy "service_role_all"
   on audit_logs
   for all

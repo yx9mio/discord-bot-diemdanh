@@ -16,6 +16,7 @@ CREATE POLICY "service_role_all" ON scheduler_locks
 --   p_job_name     — logical lock name (e.g. 'scheduler_leader')
 --   p_instance_id  — unique instance identifier (hostname+pid)
 --   p_ttl_seconds  — lock duration in seconds (e.g. 70)
+DROP FUNCTION IF EXISTS try_acquire_scheduler_lock(text, text, int);
 CREATE OR REPLACE FUNCTION try_acquire_scheduler_lock(
   p_job_name text,
   p_instance_id text,
@@ -66,6 +67,7 @@ END;
 $$;
 
 -- Release lock (graceful shutdown)
+DROP FUNCTION IF EXISTS release_scheduler_lock(text, text);
 CREATE OR REPLACE FUNCTION release_scheduler_lock(
   p_job_name text,
   p_instance_id text
