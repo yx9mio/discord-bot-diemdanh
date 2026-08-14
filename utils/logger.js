@@ -1,9 +1,18 @@
 'use strict';
 const pino = require('pino');
 
+// pino-pretty là devDependency — chỉ dùng khi nó thực sự được cài
+// (local/dev). Trong production image (npm ci --omit=dev) hoặc khi
+// không resolve được, fallback về JSON stdout qua pino/file.
+let _hasPretty = false;
+try {
+  require.resolve('pino-pretty');
+  _hasPretty = true;
+} catch { /* không có — fallback JSON */ }
+
 const IS_DEV = process.env.NODE_ENV !== 'production';
 
-const transport = IS_DEV
+const transport = _hasPretty && IS_DEV
   ? { target: 'pino-pretty', options: { colorize: true, translateTime: 'SYS:HH:MM:ss', ignore: 'pid,hostname' } }
   : { target: 'pino/file', options: { destination: 1 }, level: process.env.LOG_LEVEL ?? 'info' };
 
