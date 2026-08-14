@@ -1,0 +1,16 @@
+# docker-compose.yml — chạy bot trên VPS
+# Dùng:
+#   docker compose up -d --build   # build + start
+#   docker compose pull && docker compose up -d --build  # update
+#   docker compose logs -f         # xem log
+services:
+  discord-bot-diemdanh:
+    build: .
+    image: discord-bot-diemdanh
+    container_name: discord-bot-diemdanh
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "8080:8080"
+    # healthcheck đã định nghĩa trong Dockerfile — compose sẽ dùng nó
