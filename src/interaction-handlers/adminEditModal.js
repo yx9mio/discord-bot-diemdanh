@@ -6,14 +6,11 @@ const {
   InteractionHandler, InteractionHandlerTypes,
 } = require('@sapphire/framework');
 const { getActiveSession } = require('../../services/sessionService.js');
-const { getAttendances, upsertAttendance } = require('../../services/attendanceService.js');
-const configService = require('../../services/configService.js');
+const { upsertAttendance } = require('../../services/attendanceService.js');
 const log = require('../../utils/logger.js');
 const { requireAdmin } = require('../../utils/permissions.js');
 const { auditLog } = require('../../utils/auditLog.js');
 const { addBreadcrumb } = require('../../utils/sentry.js');
-const { getSessionChannel } = require('../../utils/channel.js');
-const { buildSessionEmbed, buildAttendanceSelectRow, buildSessionActionRow } = require('../../utils/embeds.js');
 const { statusFull } = require('../../utils/design-tokens.js');
 const { wrapHandler } = require('../../utils/error-boundary.js');
 const { checkCooldown } = require('../../utils/cooldown.js');
@@ -108,33 +105,6 @@ class AdminEditModalHandler extends InteractionHandler {
 
     log.info('ADMIN_EDIT', guild.id, '%s sửa điểm danh %s → %s', user.tag, targetUserId, statusField);
     auditLog({ guildId: guild.id, actorId: user.id, action: 'ADMIN_EDIT', targetId: targetUserId, metadata: { status: resolvedStatus, sessionId: session.id } }).catch(() => {});
-
-    try {
-      const ch = await getSessionChannel(guild, session);
-      if (ch && session.message_id) {
-        const msg = await ch.messages.fetch(session.message_id).catch(() => null);
-        if (msg) {
-          const attended = await getAttendances(session.id);
-          await guild.members.fetch().catch(() => {});
-          await guild.roles.fetch().catch(() => {});
-          const cfgA2 = await configService.getGuildConfig(guild.id).catch(() => null);
-          const phaiIds = session.phai_role_ids?.length
-            ? session.phai_role_ids
-            : cfgA2?.phai_role_ids ?? [];
-          const { embed, components: pagComponents } = buildSessionEmbed(
-            guild, session, attended, phaiIds, false, 1, cfgA2?.phai_role_icons ?? null
-          );
-          const selectRow = buildAttendanceSelectRow(true);
-          const adminRows = buildSessionActionRow(true);
-          await msg.edit({
-            embeds: [embed],
-            components: [selectRow, ...adminRows, ...pagComponents].slice(0, 5),
-          }).catch(() => null);
-        }
-      }
-    } catch (e) {
-      log.error('ADMIN_EDIT', guild.id, 'Lỗi update embed: %s', e.message);
-    }
 
     const editEmbed = new EmbedBuilder()
       .setColor(0xf0a500)

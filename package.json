@@ -30,6 +30,7 @@
     "@sapphire/plugin-logger": "^4.0.2",
     "@sapphire/plugin-subcommands": "^7.0.1",
     "@sentry/node": "^10.70.0",
+    "@sentry/profiling-node": "^10.70.0",
     "@supabase/supabase-js": "^2.49.4",
     "discord.js": "^14.18.0",
     "dotenv": "^16.5.0",

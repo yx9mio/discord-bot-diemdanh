@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildConfirmRow, buildAttendanceSelectRow, buildSessionActionRow, buildHistoryNavRow } from '../utils/_views/rows.js';
+import { buildConfirmRow, buildAttendanceSelectRow, buildSessionActionRow, buildBoardRow, buildAdminActionRow, buildHistoryNavRow } from '../utils/_views/rows.js';
 import { buildRankEmbed } from '../utils/_views/rankView.js';
 import { buildSessionEmbed, buildClosedSessionEmbed } from '../utils/_views/sessionView.js';
 
@@ -39,9 +39,9 @@ describe('buildSessionActionRow', () => {
     expect(rows.length).toBeLessThanOrEqual(5);
   });
 
-  it('has 4 buttons in first row and 2 in second', () => {
+  it('has 3 buttons in first row and 2 in second', () => {
     const rows = buildSessionActionRow(true);
-    expect(rows[0].toJSON().components).toHaveLength(4);
+    expect(rows[0].toJSON().components).toHaveLength(3);
     expect(rows[1].toJSON().components).toHaveLength(2);
   });
 
@@ -61,14 +61,48 @@ describe('buildSessionActionRow', () => {
     }
   });
 
-  it('contains expected button customIds', () => {
+  it('contains expected button customIds (no attend_view)', () => {
     const ids = buildSessionActionRow(true).flatMap(r => r.toJSON().components.map(c => c.custom_id));
-    expect(ids).toContain('attend_view');
+    expect(ids).not.toContain('attend_view');
+    expect(ids).not.toContain('attend_list');
     expect(ids).toContain('attend_refresh');
     expect(ids).toContain('admin:mark');
     expect(ids).toContain('admin:edit');
     expect(ids).toContain('session:cancel');
     expect(ids).toContain('attend_close');
+  });
+});
+
+describe('buildBoardRow', () => {
+  it('returns 1 ActionRow with 2 buttons (attend_view + attend_list)', () => {
+    const row = buildBoardRow(true);
+    const json = row.toJSON();
+    expect(json.type).toBe(1);
+    expect(json.components).toHaveLength(2);
+    expect(json.components.map(c => c.custom_id)).toEqual(['attend_view', 'attend_list']);
+  });
+
+  it('buttons enabled when isOpen=true and disabled when false', () => {
+    expect(buildBoardRow(true).toJSON().components.every(c => !c.disabled)).toBe(true);
+    expect(buildBoardRow(false).toJSON().components.every(c => c.disabled)).toBe(true);
+  });
+});
+
+describe('buildAdminActionRow', () => {
+  it('returns 2 ActionRows with admin buttons', () => {
+    const rows = buildAdminActionRow(true);
+    expect(rows).toHaveLength(2);
+    expect(rows[0].toJSON().components.map(c => c.custom_id)).toEqual(['admin:mark', 'admin:edit']);
+    expect(rows[1].toJSON().components.map(c => c.custom_id)).toEqual(['session:cancel', 'attend_close']);
+  });
+
+  it('buttons disabled when isOpen=false', () => {
+    const rows = buildAdminActionRow(false);
+    for (const row of rows) {
+      for (const btn of row.toJSON().components) {
+        expect(btn.disabled).toBe(true);
+      }
+    }
   });
 });
 
@@ -185,6 +219,39 @@ describe('buildSessionEmbed (active session)', () => {
     const { components, totalPages } = buildSessionEmbed(null, session, many);
     expect(totalPages).toBe(2);
     expect(components.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('omits the member list field and pagination when showList=false', () => {
+    const many = Array.from({ length: 20 }, (_, i) => ({
+      user_id: `u${i}`, status: i < 10 ? 'tham_gia' : 'tre',
+      checked_in_at: new Date(now).toISOString(),
+    }));
+    const { embed, components, totalPages } = buildSessionEmbed(null, session, many, [], false, 1, null, false, { showList: false });
+    const json = embed.toJSON();
+    expect((json.fields ?? []).some(f => f.name.includes('Danh sách'))).toBe(false);
+    expect(components).toHaveLength(0);
+    expect(totalPages).toBe(1);
+  });
+
+  it('hides page suffix in list title when showPageSuffix=false', () => {
+    const many = Array.from({ length: 20 }, (_, i) => ({
+      user_id: `u${i}`, status: i < 10 ? 'tham_gia' : 'tre',
+      checked_in_at: new Date(now).toISOString(),
+    }));
+    const { embed } = buildSessionEmbed(null, session, many, [], false, 1, null, false, { showPageSuffix: false });
+    const listField = embed.toJSON().fields.find(f => f.name.includes('Danh sách'));
+    expect(listField.name).not.toContain('trang');
+  });
+
+  it('uses custom pagination prefix from opts', () => {
+    const many = Array.from({ length: 20 }, (_, i) => ({
+      user_id: `u${i}`, status: i < 10 ? 'tham_gia' : 'tre',
+      checked_in_at: new Date(now).toISOString(),
+    }));
+    const { components } = buildSessionEmbed(null, session, many, [], false, 1, null, false, { paginationPrefix: 'attend_list' });
+    const ids = components.flatMap(r => r.toJSON().components.map(c => c.custom_id));
+    expect(ids.some(id => id.startsWith('attend_list:prev:'))).toBe(true);
+    expect(ids.some(id => id.startsWith('attend_view:prev:'))).toBe(false);
   });
 });
 

@@ -1,6 +1,5 @@
 'use strict';
 const pino = require('pino');
-const { captureError, captureMessage } = require('./sentry.js');
 
 const IS_DEV = process.env.NODE_ENV !== 'production';
 
@@ -14,18 +13,14 @@ function child(module, guildId) {
   return _root.child({ module, guildId: guildId ?? undefined });
 }
 
-// Forward pino error → Sentry (không log PII: chỉ module + message)
-// Trừ các lỗi crash toàn cục — index.js đã capture riêng bằng captureError (có stack).
-function _forwardError(module, guildId, args) {
-  const msg = typeof args[0] === 'string' ? args[0] : String(args[0] ?? '');
-  if (module === 'SYSTEM' && /^(unhandledRejection|uncaughtException)/.test(msg)) return;
-  captureMessage(msg, module, 'error');
-}
+// Pino logs được Sentry bắt qua pinoIntegration (breadcrumbs/SDK logs).
+// Error events (captureException) đến từ captureError tại các call site —
+// tránh trùng lặp event so với cách cũ (captureMessage từng logger.error).
 
 const _compat = {
   info:  (mod, gId, ...a) => child(mod, gId).info(...a),
   warn:  (mod, gId, ...a) => child(mod, gId).warn(...a),
-  error: (mod, gId, ...a) => { child(mod, gId).error(...a); _forwardError(mod, gId, a); },
+  error: (mod, gId, ...a) => child(mod, gId).error(...a),
   debug: (mod, gId, ...a) => child(mod, gId).debug(...a),
 };
 

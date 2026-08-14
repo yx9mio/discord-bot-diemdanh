@@ -11,7 +11,7 @@ const { buildSummaryEmbed }                          = require('./_views/summary
 const { buildAttendConfirmEmbed, buildAdminOverrideSuccessEmbed } = require('./_views/attendView');
 const { buildRankEmbed }                             = require('./_views/rankView');
 const { buildConfigEmbed }                           = require('./_views/configView');
-const { buildConfirmRow, buildAttendanceSelectRow, buildSessionActionRow, buildHistoryNavRow } = require('./_views/rows');
+const { buildConfirmRow, buildAttendanceSelectRow, buildSessionActionRow, buildBoardRow, buildAdminActionRow, buildHistoryNavRow } = require('./_views/rows');
 
 module.exports = {
   // Constants
@@ -30,5 +30,7 @@ module.exports = {
   buildConfirmRow,
   buildAttendanceSelectRow,
   buildSessionActionRow,
+  buildBoardRow,
+  buildAdminActionRow,
   buildHistoryNavRow,
 };

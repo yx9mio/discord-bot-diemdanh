@@ -8,15 +8,12 @@ const {
   InteractionHandler, InteractionHandlerTypes,
 } = require('@sapphire/framework');
 const { getActiveSession } = require('../../services/sessionService.js');
-const { getAttendances, upsertAttendance } = require('../../services/attendanceService.js');
-const configService = require('../../services/configService.js');
+const { upsertAttendance } = require('../../services/attendanceService.js');
 const log = require('../../utils/logger.js');
 const metrics = require('../../utils/metrics.js');
 const { requireAdmin } = require('../../utils/permissions.js');
 const { auditLog } = require('../../utils/auditLog.js');
 const { addBreadcrumb } = require('../../utils/sentry.js');
-const { getSessionChannel } = require('../../utils/channel.js');
-const { buildSessionEmbed, buildAttendanceSelectRow, buildSessionActionRow } = require('../../utils/embeds.js');
 const { statusFull } = require('../../utils/design-tokens.js');
 const { wrapHandler } = require('../../utils/error-boundary.js');
 const { checkCooldown } = require('../../utils/cooldown.js');
@@ -117,34 +114,6 @@ class AdminMarkModalHandler extends InteractionHandler {
     metrics.attendanceMarked(guild.id, status, { markedBy: 'admin' });
     log.info('ADMIN_MARK', guild.id, '%s điểm danh thay cho %s: %s', user.tag, targetUserId, status);
     auditLog({ guildId: guild.id, actorId: user.id, action: 'ADMIN_MARK', targetId: targetUserId, metadata: { status, sessionId: session.id } }).catch(() => {});
-
-    // Update embed trong kênh
-    try {
-      const ch = await getSessionChannel(guild, session);
-      if (ch && session.message_id) {
-        const msg = await ch.messages.fetch(session.message_id).catch(() => null);
-        if (msg) {
-          const attended = await getAttendances(session.id);
-          await guild.members.fetch().catch(() => {});
-          await guild.roles.fetch().catch(() => {});
-          const cfgA1 = await configService.getGuildConfig(guild.id).catch(() => null);
-          const phaiIds = session.phai_role_ids?.length
-            ? session.phai_role_ids
-            : cfgA1?.phai_role_ids ?? [];
-          const { embed, components: pagComponents } = buildSessionEmbed(
-            guild, session, attended, phaiIds, false, 1, cfgA1?.phai_role_icons ?? null
-          );
-          const selectRow = buildAttendanceSelectRow(true);
-          const adminRows = buildSessionActionRow(true);
-          await msg.edit({
-            embeds: [embed],
-            components: [selectRow, ...adminRows, ...pagComponents].slice(0, 5),
-          }).catch(() => null);
-        }
-      }
-    } catch (e) {
-      log.error('ADMIN_MARK', guild.id, 'Lỗi update embed: %s', e.message);
-    }
 
     const confirmEmbed = new EmbedBuilder()
       .setColor(0x57f287)

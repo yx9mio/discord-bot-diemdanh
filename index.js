@@ -7,7 +7,7 @@ require('@sapphire/plugin-subcommands/register');
 const { GatewayIntentBits, Partials } = require('discord.js');
 const log = require('./utils/logger.js');
 const { startHealthServer } = require('./events/healthServer.js');
-const { initSentry, captureError } = require('./utils/sentry.js');
+const { initSentry, captureError, closeSentry, addBreadcrumb } = require('./utils/sentry.js');
 
 initSentry();
 
@@ -57,5 +57,16 @@ process.on('uncaughtException', (err) => {
   log.error('SYSTEM', null, 'uncaughtException: %s', err.stack);
   captureError(err, 'uncaughtException');
 });
+
+// Graceful shutdown: flush Sentry trước khi exit
+function _shutdown(signal) {
+  log.info('SYSTEM', null, 'Nhận %s — đang tắt bot...', signal);
+  addBreadcrumb('shutdown', `Process exiting via ${signal}`);
+  closeSentry(2000)
+    .catch(() => {})
+    .finally(() => process.exit(0));
+}
+process.on('SIGTERM', () => _shutdown('SIGTERM'));
+process.on('SIGINT', () => _shutdown('SIGINT'));
 
 client.login(process.env.DISCORD_TOKEN);

@@ -6,7 +6,8 @@
 //         — xảy ra khi bot restart và Discord replay interaction cũ.
 //         Bỏ qua hoàn toàn, không cần reply vì Discord-side đã timeout.
 const { Listener, Events } = require('@sapphire/framework');
-const { replyErr, replyErrEdit } = require('../../utils/embeds.js');
+const { replyErr } = require('../../utils/embeds.js');
+const { captureError } = require('../../utils/sentry.js');
 
 // Error codes từ Discord API mà ta muốn bỏ qua im lặng
 const STALE_CODES = new Set([10062, 40060]);
@@ -26,6 +27,14 @@ class InteractionHandlerErrorListener extends Listener {
     }
 
     this.container.logger.error('[InteractionHandlerError]', error);
+
+    // [SENTRY] Capture lỗi handler (không qua wrapHandler — safety net)
+    captureError(error, 'interactionHandler', {
+      guildId: interaction?.guild?.id ?? interaction?.guildId,
+      userId:  interaction?.user?.id ?? interaction?.member?.id,
+      handler: interaction?.customId,
+    });
+
     const msg = error instanceof Error ? error.message : 'Có lỗi xảy ra.';
     if (!interaction.isRepliable()) return;
     try {

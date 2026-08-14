@@ -198,7 +198,18 @@ function _buildPendingView(guild, session, phaiRoleIds = [], emojiMap = null) {
 }
 
 // ─── MAIN: buildSessionEmbed ─────────────────────────────────────────────────
-function buildSessionEmbed(guild, session, attended = [], phaiRoleIds = [], _isEditing = false, page = 1, emojiMap = null, showPhaiStats = false) {
+/**
+ * @param {object} guild
+ * @param {object} session
+ * @param {Array}  attended
+ * @param {string[]} phaiRoleIds
+ * @param {boolean} _isEditing
+ * @param {number} page
+ * @param {object|null} emojiMap
+ * @param {boolean} showPhaiStats
+ * @param {object} [opts]  - showList (default true), showPageSuffix (default true), paginationPrefix (default 'attend_view')
+ */
+function buildSessionEmbed(guild, session, attended = [], phaiRoleIds = [], _isEditing = false, page = 1, emojiMap = null, showPhaiStats = false, opts = {}) {
   if (!session.is_active) {
     return _buildPendingView(guild, session, phaiRoleIds, emojiMap);
   }
@@ -303,32 +314,36 @@ function buildSessionEmbed(guild, session, attended = [], phaiRoleIds = [], _isE
   }
 
   // ── Member list field (normal Discord text — keep emoji/mention) ──────────
-  const listTitle = total > 0
-    ? `📋 Danh sách (${total}${totalPages > 1 ? ` · trang ${clampedPage}/${totalPages}` : ''})`
-    : '📋 Danh sách';
-  const listValue = lines.length
-    ? lines.join('\n')
-    : `_Chưa có ai điểm danh — Hãy chọn trạng thái từ menu bên dưới để tham gia._`;
-  embed.addFields({ name: listTitle, value: listValue, inline: false });
+  const showList = opts.showList !== false;
+  if (showList) {
+    const listTitle = total > 0
+      ? `📋 Danh sách (${total}${totalPages > 1 && opts.showPageSuffix !== false ? ` · trang ${clampedPage}/${totalPages}` : ''})`
+      : '📋 Danh sách';
+    const listValue = lines.length
+      ? lines.join('\n')
+      : `_Chưa có ai điểm danh — Hãy chọn trạng thái từ menu bên dưới để tham gia._`;
+    embed.addFields({ name: listTitle, value: listValue, inline: false });
+  }
 
   // ── Pagination buttons ────────────────────────────────────────────────────
+  const paginationPrefix = opts.paginationPrefix ?? 'attend_view';
   const components = [];
-  if (totalPages > 1) {
+  if (showList && totalPages > 1) {
     components.push(
       new ActionRowBuilder().addComponents(
         new ButtonBuilder()
-          .setCustomId(`attend_view:prev:${clampedPage}`)
+          .setCustomId(`${paginationPrefix}:prev:${clampedPage}`)
           .setLabel('◀ Trước').setStyle(ButtonStyle.Secondary)
           .setDisabled(clampedPage <= 1),
         new ButtonBuilder()
-          .setCustomId(`attend_view:next:${clampedPage}`)
+          .setCustomId(`${paginationPrefix}:next:${clampedPage}`)
           .setLabel('Sau ▶').setStyle(ButtonStyle.Secondary)
           .setDisabled(clampedPage >= totalPages),
       )
     );
   }
 
-  return { embed, components, totalPages };
+  return { embed, components, totalPages: showList ? totalPages : 1 };
 }
 
 // ─── Closed session embed ────────────────────────────────────────────────────

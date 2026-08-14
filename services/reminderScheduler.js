@@ -21,15 +21,20 @@ const { tryAcquireLeadership, startHeartbeat, stopHeartbeat } = require('../util
 const { DateTime } = require('luxon');
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { buildSessionEmbed } = require('../utils/_views/sessionView.js');
-const { buildAttendanceSelectRow, buildSessionActionRow } = require('../utils/_views/rows.js');
+const { buildBoardRow, buildAdminActionRow } = require('../utils/_views/rows.js');
 const { startAutoRefresh, scheduleCloseTimer } = require('../utils/timers.js');
+const { withCronMonitor, captureError } = require('../utils/sentry.js');
 
 let _client = null;
 let _running = false;
 
 function startReminderScheduler(client) {
   _client = client;
-  setInterval(runReminders, 60_000);
+  // Sentry Cron Monitoring cho vòng quét 1 phút — phát hiện tick miss/kẹt.
+  setInterval(
+    () => withCronMonitor('reminder-scheduler', { schedule: { type: 'crontab', value: '* * * * *' }, timezone: 'Etc/UTC' }, runReminders),
+    60_000,
+  );
   log.info('REMINDER', null, 'Reminder scheduler started');
 }
 
@@ -61,6 +66,7 @@ async function runReminders() {
     }
   } catch (e) {
     log.error('REMINDER', null, 'runReminders error: %s', e.message);
+    captureError(e, 'reminderScheduler', { handler: 'runReminders' });
   } finally {
     stopHeartbeat();
     _running = false;
@@ -208,12 +214,12 @@ async function autoOpenSession(guild, cfg, sched) {
     // Nạp đầy đủ cache thành viên & role để _phaiStats chính xác
     await guild.members.fetch().catch(() => {});
     await guild.roles.fetch().catch(() => {});
-    const { embed: sessionEmbed, components } = buildSessionEmbed(guild, session, [], cfg?.phai_role_ids ?? [], false, 1, cfg?.phai_role_icons ?? null);
-    const selectRow = buildAttendanceSelectRow(true);
-    const adminRows = buildSessionActionRow(true);
+    const { embed: sessionEmbed } = buildSessionEmbed(guild, session, [], cfg?.phai_role_ids ?? [], false, 1, cfg?.phai_role_icons ?? null, false, { showList: false });
+    const boardRows = buildBoardRow(true);
+    const adminRows = buildAdminActionRow(true);
     const msg = await ch.send({
       embeds: [sessionEmbed],
-      components: [selectRow, ...adminRows, ...components].slice(0, 5),
+      components: [boardRows, ...adminRows].slice(0, 5),
     });
     await sessionService.updateSessionMessage(session.id, { message_id: msg.id });
 
@@ -233,6 +239,7 @@ async function autoOpenSession(guild, cfg, sched) {
     log.info('AUTO_OPEN', guild.id, 'Đã auto-open phiên: %s', session.session_name);
   } catch (e) {
     log.error('AUTO_OPEN', guild.id, 'autoOpenSession thất bại: %s', e.message);
+    captureError(e, 'reminderScheduler', { guildId: guild?.id, handler: 'autoOpenSession' });
   }
 }
 

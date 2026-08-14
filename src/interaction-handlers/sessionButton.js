@@ -26,8 +26,9 @@ const { checkCooldown } = require('../../utils/cooldown.js');
 
 // [BUG-FIX] Đồng bộ với tất cả customId được dùng trong file này
 const SESSION_BUTTON_IDS = new Set([
-  'attend_view', 'attend_close', 'attend_refresh', 'admin:mark', 'admin:edit',
+  'attend_view', 'attend_list', 'attend_close', 'attend_refresh', 'admin:mark', 'admin:edit',
   'attend_view:prev', 'attend_view:next',
+  'attend_list:prev', 'attend_list:next',
   'session:cancel', 'session:confirm_cancel', 'session:cancel_cancel',
   'session:confirm_close', 'session:cancel_close',
   'session:confirm_close:all', 'session:cancel_close:all',
@@ -48,6 +49,7 @@ class SessionButtonHandler extends InteractionHandler {
     // Prefix match cho attend_view:prev / attend_view:next
     if (SESSION_BUTTON_IDS.has(interaction.customId)) return this.some();
     if (interaction.customId.startsWith('attend_view:')) return this.some();
+    if (interaction.customId.startsWith('attend_list:')) return this.some();
     return this.none();
   }
 
@@ -107,6 +109,55 @@ class SessionButtonHandler extends InteractionHandler {
       return interaction.reply({
         embeds: [embed],
         components: [selectRow2, ...adminRows2, ...pagComponents2].slice(0, 5),
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+
+    // ── attend_list / attend_list:prev / attend_list:next ─────────────────────────
+    if (customId === 'attend_list' || customId.startsWith('attend_list:')) {
+      const session = await sessionService.getActiveSession(guild.id);
+      if (!session) {
+        if (customId.startsWith('attend_list:')) {
+          await interaction.deferUpdate();
+          return interaction.editReply({ content: '🚫 Kỳ đã kết thúc.', embeds: [], components: [] });
+        }
+        return interaction.reply({ content: '🚫 Không có Kỳ điểm danh nào đang mở.', flags: MessageFlags.Ephemeral });
+      }
+      const attended = await attendanceService.getAttendances(session.id);
+
+      if (customId.startsWith('attend_list:')) {
+        if (!checkCooldown(interaction.user.id, 'session_view', 1000)) {
+          return interaction.reply({ content: '⏳ Vui lòng đợi một chút...', flags: MessageFlags.Ephemeral });
+        }
+        await interaction.deferUpdate();
+        const parts = customId.split(':');
+        const action = parts[1];
+        const currentPage = parseInt(parts[2], 10) || 1;
+        const totalPages = Math.max(1, Math.ceil(attended.length / 15));
+        const page = action === 'prev'
+          ? Math.max(1, currentPage - 1)
+          : Math.min(totalPages, currentPage + 1);
+
+        const { phaiRoleIds: phaiIdsL2, emojiMap: emojiMapL2 } = await _phaiData(session, guild.id);
+        await guild.members.fetch().catch(() => {});
+        await guild.roles.fetch().catch(() => {});
+        const { embed, components: pagComponents } =
+          buildSessionEmbed(guild, session, attended, phaiIdsL2, false, page, emojiMapL2, true, { paginationPrefix: 'attend_list' });
+        return interaction.editReply({
+          embeds: [embed],
+          components: pagComponents,
+        });
+      }
+
+      // Mở view danh sách đầy đủ (ephemeral per-user)
+      const { phaiRoleIds: phaiIdsL, emojiMap: emojiMapL } = await _phaiData(session, guild.id);
+      await guild.members.fetch().catch(() => {});
+      await guild.roles.fetch().catch(() => {});
+      const { embed, components: pagComponents } =
+        buildSessionEmbed(guild, session, attended, phaiIdsL, false, 1, emojiMapL, true, { paginationPrefix: 'attend_list' });
+      return interaction.reply({
+        embeds: [embed],
+        components: pagComponents,
         flags: MessageFlags.Ephemeral,
       });
     }

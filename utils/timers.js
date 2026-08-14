@@ -7,7 +7,7 @@ const log = require('./logger.js');
 const { endSession, announceBadges, disableAttendanceUI } = require('./session.js');
 const {
   COLORS, buildSummaryEmbed, FOOTER_DEFAULT, buildSessionEmbed,
-  buildSessionActionRow, buildAttendanceSelectRow,
+  buildBoardRow, buildAdminActionRow,
 } = require('./embeds.js');
 
 // timers: Map<sessionId, { remind15, remind5, autoClose, guildId }>
@@ -159,10 +159,10 @@ function startAutoRefresh(sessionId, channelId, messageId, client) {
       const phaiIds5 = session.phai_role_ids?.length
         ? session.phai_role_ids
         : cfgT2?.phai_role_ids ?? [];
-      const { embed, components: pagComponents } = buildSessionEmbed(guild, session, attended, phaiIds5, false, 1, cfgT2?.phai_role_icons ?? null);
-      const selectRow = buildAttendanceSelectRow(true);
-      const adminRows = buildSessionActionRow(true);
-      const components = [selectRow, ...adminRows, ...pagComponents].slice(0, 5);
+      const { embed } = buildSessionEmbed(guild, session, attended, phaiIds5, false, 1, cfgT2?.phai_role_icons ?? null, false, { showList: false });
+      const boardRows = buildBoardRow(true);
+      const adminRows = buildAdminActionRow(true);
+      const components = [boardRows, ...adminRows].slice(0, 5);
 
       const ch = await guild.channels.fetch(channelId).catch(() => null);
       if (!ch) { stopAutoRefresh(sessionId); return; }

@@ -3,10 +3,8 @@ const { MessageFlags } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const sessionService    = require('../../services/sessionService.js');
 const attendanceService = require('../../services/attendanceService.js');
-const configService     = require('../../services/configService.js');
 const log               = require('../../utils/logger.js');
-const { getSessionChannel } = require('../../utils/channel.js');
-const { replyErr, buildSessionEmbed, buildAttendanceSelectRow, buildSessionActionRow, buildAttendConfirmEmbed } = require('../../utils/embeds.js');
+const { replyErr, buildAttendConfirmEmbed } = require('../../utils/embeds.js');
 const { checkCooldown } = require('../../utils/cooldown.js');
 const { wrapHandler } = require('../../utils/error-boundary.js');
 
@@ -70,33 +68,12 @@ class PhaiSelectHandler extends InteractionHandler {
         checked_in_at: new Date().toISOString(),
       });
 
-      // Cập nhật embed phiên
       let attended;
       try {
-        const ch = await getSessionChannel(guild, session);
-        if (ch && session.message_id) {
-          const msg = await ch.messages.fetch(session.message_id).catch(() => null);
-          if (msg) {
-            attended = await attendanceService.getAttendances(session.id);
-            await guild.members.fetch().catch(() => {});
-            await guild.roles.fetch().catch(() => {});
-            const cfg8 = await configService.getGuildConfig(guild.id).catch(() => null);
-            const phaiIds = session.phai_role_ids?.length
-              ? session.phai_role_ids
-              : cfg8?.phai_role_ids ?? [];
-            const { embed, components: pagComponents } = buildSessionEmbed(
-              guild, session, attended, phaiIds, false, 1, cfg8?.phai_role_icons ?? null
-            );
-            const selectRow = buildAttendanceSelectRow(true);
-            const adminRows = buildSessionActionRow(true);
-            await msg.edit({
-              embeds: [embed],
-              components: [selectRow, ...adminRows, ...pagComponents].slice(0, 5),
-            }).catch(() => null);
-          }
-        }
+        attended = await attendanceService.getAttendances(session.id);
       } catch (e) {
-        log.error('PHAI_SELECT', guild.id, 'Update embed fail: %s', e.message);
+        log.error('PHAI_SELECT', guild.id, 'Lỗi query attendances: %s', e.message);
+        attended = [];
       }
 
       const sTotal = attended?.length ?? 0;

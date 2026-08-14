@@ -13,8 +13,8 @@ const {
   COLORS,
   FOOTER_DEFAULT,
   buildClosedSessionEmbed,
-  buildSessionActionRow,
-  buildAttendanceSelectRow,
+  buildBoardRow,
+  buildAdminActionRow,
 } = require('./embeds.js');
 
 const DEFAULT_BADGES = [
@@ -222,9 +222,9 @@ async function disableAttendanceUI(client, channel, session, attended = []) {
     const msg = await channel.messages.fetch(session.message_id);
     if (!msg) return;
     const closedEmbed  = buildClosedSessionEmbed(session, attended, channel.guild ?? null, session.phai_role_ids ?? null);
-    const selectRow    = buildAttendanceSelectRow(false);
-    const adminRows    = buildSessionActionRow(false);
-    const disabledComponents = [selectRow, ...adminRows].slice(0, 5);
+    const boardRows    = buildBoardRow(false);
+    const adminRows    = buildAdminActionRow(false);
+    const disabledComponents = [boardRows, ...adminRows].slice(0, 5);
     await msg.edit({ embeds: [closedEmbed], components: disabledComponents });
   } catch (e) {
     log.warn('SESSION', session.guild_id, 'Could not disable UI: %s', e.message);

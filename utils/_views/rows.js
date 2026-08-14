@@ -41,7 +41,7 @@ function buildAttendanceSelectRow(isOpen = true) {
 }
 
 /**
- * Action row cho embed phiên điểm danh đang mở/đã đóng
+ * Action row cho embed phiên điểm danh đang mở/đã đóng (panel ephemeral per-user)
  * @param {boolean} isOpen – true = phiên đang mở, false = phiên đã đóng (disable nút)
  * @returns {ActionRowBuilder[]}
  */
@@ -50,15 +50,66 @@ function buildSessionActionRow(isOpen = true) {
   return [
     new ActionRowBuilder().addComponents(
       new ButtonBuilder()
-        .setCustomId('attend_view')
-        .setLabel('👁️ Xem danh sách')
-        .setStyle(ButtonStyle.Secondary)
-        .setDisabled(disabled),
-      new ButtonBuilder()
         .setCustomId('attend_refresh')
         .setLabel('🔄 Làm mới')
         .setStyle(ButtonStyle.Secondary)
         .setDisabled(disabled),
+      new ButtonBuilder()
+        .setCustomId('admin:mark')
+        .setLabel('📝 Điểm danh thay')
+        .setStyle(ButtonStyle.Primary)
+        .setDisabled(disabled),
+      new ButtonBuilder()
+        .setCustomId('admin:edit')
+        .setLabel('✏️ Sửa điểm danh')
+        .setStyle(ButtonStyle.Primary)
+        .setDisabled(disabled),
+    ),
+    new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId('session:cancel')
+        .setLabel('🗑️ Hủy Kỳ')
+        .setStyle(ButtonStyle.Danger)
+        .setDisabled(disabled),
+      new ButtonBuilder()
+        .setCustomId('attend_close')
+        .setLabel('🔒 Đóng Kỳ')
+        .setStyle(ButtonStyle.Danger)
+        .setDisabled(disabled),
+    ),
+  ];
+}
+
+/**
+ * Action row cho board shared (read-only) — 2 nút ngang hàng: mở phiếu điểm danh + xem danh sách đầy đủ
+ * @param {boolean} isOpen
+ * @returns {ActionRowBuilder}
+ */
+function buildBoardRow(isOpen = true) {
+  const disabled = !isOpen;
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId('attend_view')
+      .setLabel('🎫 Điểm danh')
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(disabled),
+    new ButtonBuilder()
+      .setCustomId('attend_list')
+      .setLabel('👁️ Xem danh sách')
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(disabled),
+  );
+}
+
+/**
+ * Action row admin cho board shared (read-only)
+ * @param {boolean} isOpen
+ * @returns {ActionRowBuilder[]}
+ */
+function buildAdminActionRow(isOpen = true) {
+  const disabled = !isOpen;
+  return [
+    new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId('admin:mark')
         .setLabel('📝 Điểm danh thay')
@@ -107,4 +158,4 @@ function buildHistoryNavRow(page = 0, maxPage = 0, prefix = 'hist') {
   );
 }
 
-module.exports = { buildConfirmRow, buildAttendanceSelectRow, buildSessionActionRow, buildHistoryNavRow };
+module.exports = { buildConfirmRow, buildAttendanceSelectRow, buildSessionActionRow, buildBoardRow, buildAdminActionRow, buildHistoryNavRow };
