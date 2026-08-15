@@ -9,6 +9,14 @@ const { buildPublicUrl } = require('../phaiIcons.js');
 
 const PAGE_SIZE = 15;
 
+/** Nhãn hiển thị cho filter trạng thái trong view danh sách */
+const FILTER_LABELS = {
+  tham_gia:       '✅ Đúng giờ',
+  tre:            '⏰ Trễ',
+  khong_tham_gia: '❌ Vắng',
+  co_phep:        '📋 Có phép',
+};
+
 // ─── ANSI helpers ────────────────────────────────────────────────────────────
 const ANSI = {
   RESET:   '\x1b[0m',
@@ -207,15 +215,22 @@ function _buildPendingView(guild, session, phaiRoleIds = [], emojiMap = null) {
  * @param {number} page
  * @param {object|null} emojiMap
  * @param {boolean} showPhaiStats
- * @param {object} [opts]  - showList (default true), showPageSuffix (default true), paginationPrefix (default 'attend_view')
+ * @param {object} [opts]  - showList (default true), showPageSuffix (default true),
+ *                            paginationPrefix (default 'attend_view'), filter ('all'|status),
+ *                            allowClosed (default false — render kể cả khi phiên đã đóng)
  */
 function buildSessionEmbed(guild, session, attended = [], phaiRoleIds = [], _isEditing = false, page = 1, emojiMap = null, showPhaiStats = false, opts = {}) {
-  if (!session.is_active) {
+  if (!session.is_active && !opts.allowClosed) {
     return _buildPendingView(guild, session, phaiRoleIds, emojiMap);
   }
 
   // Sắp xếp mới nhất lên đầu
   const sortedAttended = _sortAttended(attended);
+
+  const filter = opts.filter ?? 'all';
+  const filtered = filter === 'all'
+    ? sortedAttended
+    : sortedAttended.filter(a => a.status === filter);
 
   const total   = sortedAttended.length;
   const joined  = sortedAttended.filter(a => a.status === 'tham_gia' || a.status === 'tre').length;
@@ -225,9 +240,9 @@ function buildSessionEmbed(guild, session, attended = [], phaiRoleIds = [], _isE
   const onTime  = joined - late;
   const pct     = total > 0 ? Math.round(joined / total * 100) : 0;
 
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const clampedPage = Math.max(1, Math.min(page, totalPages));
-  const slice = sortedAttended.slice((clampedPage - 1) * PAGE_SIZE, clampedPage * PAGE_SIZE);
+  const slice = filtered.slice((clampedPage - 1) * PAGE_SIZE, clampedPage * PAGE_SIZE);
 
   const groups = _buildGroups(slice, guild, phaiRoleIds, emojiMap);
   const lines = _groupedList(groups);
@@ -244,7 +259,7 @@ function buildSessionEmbed(guild, session, attended = [], phaiRoleIds = [], _isE
   const ansiLines = [
     `${ANSI.CYAN}⚔️ ${session.session_name ?? 'Kỳ'}${ANSI.RESET}`,
   ];
-  if (runningDur) {
+  if (session.is_active && runningDur) {
     ansiLines.push(`${ANSI.GREY}⏱️ Đang diễn ra: ${runningDur}${ANSI.RESET}`);
   }
   ansiLines.push('');
@@ -316,27 +331,31 @@ function buildSessionEmbed(guild, session, attended = [], phaiRoleIds = [], _isE
   // ── Member list field (normal Discord text — keep emoji/mention) ──────────
   const showList = opts.showList !== false;
   if (showList) {
-    const listTitle = total > 0
-      ? `📋 Danh sách (${total}${totalPages > 1 && opts.showPageSuffix !== false ? ` · trang ${clampedPage}/${totalPages}` : ''})`
-      : '📋 Danh sách';
+    const filterLabel = filter !== 'all' ? ` · ${FILTER_LABELS[filter] ?? filter}` : '';
+    const listTitle = filtered.length > 0
+      ? `📋 Danh sách (${filtered.length}${filterLabel}${totalPages > 1 && opts.showPageSuffix !== false ? ` · trang ${clampedPage}/${totalPages}` : ''})`
+      : `📋 Danh sách${filterLabel}`;
     const listValue = lines.length
       ? lines.join('\n')
-      : `_Chưa có ai điểm danh — Hãy chọn trạng thái từ menu bên dưới để tham gia._`;
+      : filter !== 'all'
+        ? `_Không có ai trong nhóm ${FILTER_LABELS[filter] ?? filter}._`
+        : `_Chưa có ai điểm danh — Hãy chọn trạng thái từ menu bên dưới để tham gia._`;
     embed.addFields({ name: listTitle, value: listValue, inline: false });
   }
 
   // ── Pagination buttons ────────────────────────────────────────────────────
   const paginationPrefix = opts.paginationPrefix ?? 'attend_view';
+  const filterSuffix = filter !== 'all' ? `:${filter}` : '';
   const components = [];
   if (showList && totalPages > 1) {
     components.push(
       new ActionRowBuilder().addComponents(
         new ButtonBuilder()
-          .setCustomId(`${paginationPrefix}:prev:${clampedPage}`)
+          .setCustomId(`${paginationPrefix}:prev:${clampedPage}${filterSuffix}`)
           .setLabel('◀ Trước').setStyle(ButtonStyle.Secondary)
           .setDisabled(clampedPage <= 1),
         new ButtonBuilder()
-          .setCustomId(`${paginationPrefix}:next:${clampedPage}`)
+          .setCustomId(`${paginationPrefix}:next:${clampedPage}${filterSuffix}`)
           .setLabel('Sau ▶').setStyle(ButtonStyle.Secondary)
           .setDisabled(clampedPage >= totalPages),
       )
@@ -391,12 +410,6 @@ function buildClosedSessionEmbed(session, attended = [], _guild, phaiRoleIds = [
   const attendanceRoleId = session?.allowed_role_id ?? null;
   const phaiBlock = _phaiStatsAnsi(phaiRoleIds, _guild, sortedAttended, eligibleSet, attendanceRoleId);
 
-  // First 5 attendees
-  const top = sortedAttended.slice(0, 5);
-  const groups = _buildGroups(top, _guild, phaiRoleIds, emojiMap);
-  const memberLines = _groupedList(groups);
-  if (sortedAttended.length > 5) memberLines.push(`_... và ${sortedAttended.length - 5} người khác_`);
-
   const embed = new EmbedBuilder()
     .setColor(color)
     .setAuthor(buildAuthor(_guild))
@@ -409,10 +422,6 @@ function buildClosedSessionEmbed(session, attended = [], _guild, phaiRoleIds = [
 
   if (phaiBlock) {
     embed.addFields({ name: '⚔️ Phân bố Phái', value: phaiBlock, inline: false });
-  }
-
-  if (memberLines.length) {
-    embed.addFields({ name: '📋 Thành viên', value: memberLines.join('\n'), inline: false });
   }
 
   embed

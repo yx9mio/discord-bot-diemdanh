@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildConfirmRow, buildAttendanceSelectRow, buildSessionActionRow, buildBoardRow, buildAdminActionRow, buildHistoryNavRow } from '../utils/_views/rows.js';
+import { buildConfirmRow, buildAttendanceSelectRow, buildSessionActionRow, buildBoardRow, buildAdminActionRow, buildAttendanceFilterRow, buildHistoryNavRow } from '../utils/_views/rows.js';
 import { buildRankEmbed } from '../utils/_views/rankView.js';
 import { buildSessionEmbed, buildClosedSessionEmbed } from '../utils/_views/sessionView.js';
 
@@ -82,9 +82,38 @@ describe('buildBoardRow', () => {
     expect(json.components.map(c => c.custom_id)).toEqual(['attend_view', 'attend_list']);
   });
 
-  it('buttons enabled when isOpen=true and disabled when false', () => {
+  it('buttons enabled when isOpen=true', () => {
     expect(buildBoardRow(true).toJSON().components.every(c => !c.disabled)).toBe(true);
-    expect(buildBoardRow(false).toJSON().components.every(c => c.disabled)).toBe(true);
+  });
+
+  it('when closed: attend_view disabled but attend_list stays enabled', () => {
+    const json = buildBoardRow(false).toJSON();
+    const byId = Object.fromEntries(json.components.map(c => [c.custom_id, c.disabled]));
+    expect(byId.attend_view).toBe(true);
+    expect(byId.attend_list).toBeUndefined(); // toJSON bỏ qua disabled:false
+  });
+});
+
+describe('buildAttendanceFilterRow', () => {
+  it('returns 5 filter buttons (all/tham_gia/tre/khong_tham_gia/co_phep)', () => {
+    const json = buildAttendanceFilterRow('all').toJSON();
+    expect(json.type).toBe(1);
+    expect(json.components).toHaveLength(5);
+    expect(json.components.map(c => c.custom_id)).toEqual([
+      'attend_list:filter:all',
+      'attend_list:filter:tham_gia',
+      'attend_list:filter:tre',
+      'attend_list:filter:khong_tham_gia',
+      'attend_list:filter:co_phep',
+    ]);
+  });
+
+  it('active filter button has Primary style', () => {
+    const json = buildAttendanceFilterRow('tre').toJSON();
+    const active = json.components.find(c => c.custom_id === 'attend_list:filter:tre');
+    expect(active.style).toBe(1); // Primary
+    const inactive = json.components.find(c => c.custom_id === 'attend_list:filter:all');
+    expect(inactive.style).toBe(2); // Secondary
   });
 });
 
@@ -253,6 +282,41 @@ describe('buildSessionEmbed (active session)', () => {
     expect(ids.some(id => id.startsWith('attend_list:prev:'))).toBe(true);
     expect(ids.some(id => id.startsWith('attend_view:prev:'))).toBe(false);
   });
+
+  it('filters list by status when opts.filter set', () => {
+    const mixed = Array.from({ length: 20 }, (_, i) => ({
+      user_id: `u${i}`,
+      status: i < 10 ? 'tham_gia' : i < 15 ? 'tre' : 'khong_tham_gia',
+      checked_in_at: new Date(now).toISOString(),
+    }));
+    const { embed, components, totalPages } = buildSessionEmbed(null, session, mixed, [], false, 1, null, false, { filter: 'tre' });
+    const json = embed.toJSON();
+    const listField = json.fields.find(f => f.name.includes('Danh sách'));
+    expect(listField.name).toContain('5');
+    expect(listField.name).toContain('Trễ');
+    expect(listField.value).not.toContain('Đúng giờ:');
+    expect(listField.value).toContain('Trễ:');
+    expect(totalPages).toBe(1);
+    expect(components).toHaveLength(0);
+  });
+
+  it('pagination customIds carry filter suffix', () => {
+    const many = Array.from({ length: 30 }, (_, i) => ({
+      user_id: `u${i}`,
+      status: i < 10 ? 'tham_gia' : 'tre',
+      checked_in_at: new Date(now).toISOString(),
+    }));
+    const { components } = buildSessionEmbed(null, session, many, [], false, 1, null, false, { paginationPrefix: 'attend_list', filter: 'tre' });
+    const ids = components.flatMap(r => r.toJSON().components.map(c => c.custom_id));
+    expect(ids.some(id => id.startsWith('attend_list:prev:1:tre'))).toBe(true);
+    expect(ids.some(id => id.startsWith('attend_list:next:1:tre'))).toBe(true);
+  });
+
+  it('renders closed session when opts.allowClosed=true', () => {
+    const closedSession = { ...session, is_active: false };
+    const { embed } = buildSessionEmbed(null, closedSession, [], [], false, 1, null, false, { allowClosed: true });
+    expect(embed.toJSON().title).toContain('Điểm danh Bang Chiến');
+  });
 });
 
 describe('buildClosedSessionEmbed', () => {
@@ -278,11 +342,10 @@ describe('buildClosedSessionEmbed', () => {
     expect(json.description).toContain('Tổng:');
   });
 
-  it('shows top 5 with "và N người khác" for >5 attendees', () => {
+  it('keeps board tinh gọn — no member list field after close', () => {
     const embed = buildClosedSessionEmbed(session, attended, null);
     const json = embed.toJSON();
-    const listField = json.fields.find(f => f.name.includes('Thành viên'));
-    expect(listField).toBeDefined();
-    expect(listField.value).toMatch(/và .+ người khác/);
+    const listField = json.fields?.find(f => f.name.includes('Thành viên'));
+    expect(listField).toBeUndefined();
   });
 });

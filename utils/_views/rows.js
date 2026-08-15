@@ -82,22 +82,21 @@ function buildSessionActionRow(isOpen = true) {
 
 /**
  * Action row cho board shared (read-only) — 2 nút ngang hàng: mở phiếu điểm danh + xem danh sách đầy đủ
+ * attend_view chỉ dùng khi phiên mở; attend_list luôn hoạt động (kể cả sau khi đóng).
  * @param {boolean} isOpen
  * @returns {ActionRowBuilder}
  */
 function buildBoardRow(isOpen = true) {
-  const disabled = !isOpen;
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId('attend_view')
       .setLabel('🎫 Điểm danh')
       .setStyle(ButtonStyle.Secondary)
-      .setDisabled(disabled),
+      .setDisabled(!isOpen),
     new ButtonBuilder()
       .setCustomId('attend_list')
       .setLabel('👁️ Xem danh sách')
-      .setStyle(ButtonStyle.Secondary)
-      .setDisabled(disabled),
+      .setStyle(ButtonStyle.Secondary),
   );
 }
 
@@ -137,6 +136,27 @@ function buildAdminActionRow(isOpen = true) {
 }
 
 /**
+ * Row lọc trạng thái cho view danh sách (attend_list) — nút active dạng Primary
+ * @param {string} active – 'all' | 'tham_gia' | 'tre' | 'khong_tham_gia' | 'co_phep'
+ * @returns {ActionRowBuilder}
+ */
+function buildAttendanceFilterRow(active = 'all') {
+  const options = [
+    { id: 'all',            label: '📊 Tất cả' },
+    { id: 'tham_gia',       label: '✅ Đúng giờ' },
+    { id: 'tre',            label: '⏰ Trễ' },
+    { id: 'khong_tham_gia', label: '❌ Vắng' },
+    { id: 'co_phep',        label: '📋 Có phép' },
+  ];
+  return new ActionRowBuilder().addComponents(
+    options.map(o => new ButtonBuilder()
+      .setCustomId(`attend_list:filter:${o.id}`)
+      .setLabel(o.label)
+      .setStyle(o.id === active ? ButtonStyle.Primary : ButtonStyle.Secondary)),
+  );
+}
+
+/**
  * Nav row cho lịch sử điểm danh
  * @param {number} page     – trang hiện tại (0-indexed)
  * @param {number} maxPage  – trang cuối (0-indexed)
@@ -158,4 +178,4 @@ function buildHistoryNavRow(page = 0, maxPage = 0, prefix = 'hist') {
   );
 }
 
-module.exports = { buildConfirmRow, buildAttendanceSelectRow, buildSessionActionRow, buildBoardRow, buildAdminActionRow, buildHistoryNavRow };
+module.exports = { buildConfirmRow, buildAttendanceSelectRow, buildSessionActionRow, buildBoardRow, buildAdminActionRow, buildAttendanceFilterRow, buildHistoryNavRow };

@@ -7,11 +7,10 @@ const helpers = require('./_helpers');
 
 // ─── Views ────────────────────────────────────────────────────────────────────
 const { buildSessionEmbed, buildClosedSessionEmbed } = require('./_views/sessionView');
-const { buildSummaryEmbed }                          = require('./_views/summaryView');
 const { buildAttendConfirmEmbed, buildAdminOverrideSuccessEmbed } = require('./_views/attendView');
 const { buildRankEmbed }                             = require('./_views/rankView');
 const { buildConfigEmbed }                           = require('./_views/configView');
-const { buildConfirmRow, buildAttendanceSelectRow, buildSessionActionRow, buildBoardRow, buildAdminActionRow, buildHistoryNavRow } = require('./_views/rows');
+const { buildConfirmRow, buildAttendanceSelectRow, buildSessionActionRow, buildBoardRow, buildAdminActionRow, buildAttendanceFilterRow, buildHistoryNavRow } = require('./_views/rows');
 
 module.exports = {
   // Constants
@@ -20,7 +19,6 @@ module.exports = {
   // Views
   buildSessionEmbed,
   buildClosedSessionEmbed,
-  buildSummaryEmbed,
   buildAttendConfirmEmbed,
   buildAdminOverrideSuccessEmbed,
   buildRankEmbed,
@@ -32,5 +30,6 @@ module.exports = {
   buildSessionActionRow,
   buildBoardRow,
   buildAdminActionRow,
+  buildAttendanceFilterRow,
   buildHistoryNavRow,
 };

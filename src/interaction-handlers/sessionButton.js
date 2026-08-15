@@ -3,7 +3,7 @@
 // [FIX-SELECT] attend_view pagination + attend_refresh: thêm buildAttendanceSelectRow(true)
 //   để select menu không bị mất sau khi paginate hoặc refresh
 'use strict';
-const { MessageFlags } = require('discord.js');
+const { MessageFlags, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const sessionService = require('../../services/sessionService.js');
 const attendanceService = require('../../services/attendanceService.js');
@@ -11,9 +11,10 @@ const log = require('../../utils/logger.js');
 const metrics = require('../../utils/metrics.js');
 const { requireAdmin } = require('../../utils/permissions.js');
 const configService = require('../../services/configService.js');
+const { buildAttendanceExcel } = require('../../utils/attendanceExcel.js');
 const {
-  buildSessionEmbed, buildSummaryEmbed,
-  buildSessionActionRow, buildAttendanceSelectRow,
+  buildSessionEmbed,
+  buildSessionActionRow, buildAttendanceSelectRow, buildAttendanceFilterRow,
   replyErr, replyErrEdit, replyOkEdit, replyConfirm,
 } = require('../../utils/embeds.js');
 const { endSession, announceBadges, disableAttendanceUI } = require('../../utils/session.js');
@@ -113,9 +114,45 @@ class SessionButtonHandler extends InteractionHandler {
       });
     }
 
-    // ── attend_list / attend_list:prev / attend_list:next ─────────────────────────
+    // ── attend_list / attend_list:prev / attend_list:next / attend_list:filter / attend_list:excel ──
     if (customId === 'attend_list' || customId.startsWith('attend_list:')) {
-      const session = await sessionService.getActiveSession(guild.id);
+      const parts = customId.split(':');
+      const action = parts[1];
+
+      // ── attend_list:excel — xuất file Excel (admin only) ────────────────────
+      if (action === 'excel') {
+        if (!checkCooldown(interaction.user.id, 'session_excel', 5000)) {
+          return interaction.reply({ content: '⏳ Vui lòng đợi một chút...', flags: MessageFlags.Ephemeral });
+        }
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        const { ok } = await requireAdmin(interaction, { context: 'xuất file Excel', deferred: true });
+        if (!ok) return;
+        let session = await sessionService.getActiveSession(guild.id);
+        if (!session) {
+          const msgId = interaction.message?.id;
+          if (msgId) session = await sessionService.getSessionByMessageId(msgId).catch(() => null);
+        }
+        if (!session) return interaction.editReply(replyErrEdit('Không tìm thấy Kỳ điểm danh.'));
+        try {
+          const attended = await attendanceService.getAttendances(session.id);
+          const buffer = await buildAttendanceExcel(session, attended, guild);
+          const fileName = `diem-danh_${(session.session_name ?? 'ky').replace(/[^\w\d\-_.]+/g, '_')}.xlsx`;
+          return interaction.editReply({
+            content: `📥 File Excel Kỳ **"${session.session_name}"** — ${attended.length} người.`,
+            files: [{ attachment: buffer, name: fileName }],
+          });
+        } catch (e) {
+          log.error('EXCEL', guild.id, 'Xuất Excel thất bại: %s', e.message);
+          return interaction.editReply(replyErrEdit('Không thể xuất file Excel, thử lại sau.'));
+        }
+      }
+
+      // Resolve session: phiên đang mở, hoặc phiên đã đóng theo message_id (nút trên board cũ)
+      let session = await sessionService.getActiveSession(guild.id);
+      if (!session) {
+        const msgId = interaction.message?.id;
+        if (msgId) session = await sessionService.getSessionByMessageId(msgId).catch(() => null);
+      }
       if (!session) {
         if (customId.startsWith('attend_list:')) {
           await interaction.deferUpdate();
@@ -125,39 +162,60 @@ class SessionButtonHandler extends InteractionHandler {
       }
       const attended = await attendanceService.getAttendances(session.id);
 
+      const VALID_FILTERS = ['all', 'tham_gia', 'tre', 'khong_tham_gia', 'co_phep'];
+      const filter = VALID_FILTERS.includes(parts[3]) ? parts[3] : 'all';
+
+      const { phaiRoleIds: phaiIdsL, emojiMap: emojiMapL } = await _phaiData(session, guild.id);
+      await guild.members.fetch().catch(() => {});
+      await guild.roles.fetch().catch(() => {});
+      const buildList = (page, f) => buildSessionEmbed(
+        guild, session, attended, phaiIdsL, false, page, emojiMapL, true,
+        { paginationPrefix: 'attend_list', filter: f, allowClosed: true },
+      );
+      const excelRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId('attend_list:excel')
+          .setLabel('📥 Xuất Excel')
+          .setStyle(ButtonStyle.Success),
+      );
+
       if (customId.startsWith('attend_list:')) {
         if (!checkCooldown(interaction.user.id, 'session_view', 1000)) {
           return interaction.reply({ content: '⏳ Vui lòng đợi một chút...', flags: MessageFlags.Ephemeral });
         }
         await interaction.deferUpdate();
-        const parts = customId.split(':');
-        const action = parts[1];
+
+        // ── Filter button → chuyển filter, về trang 1 ──
+        if (action === 'filter') {
+          const newFilter = VALID_FILTERS.includes(parts[2]) ? parts[2] : 'all';
+          const { embed, components } = buildList(1, newFilter);
+          return interaction.editReply({
+            embeds: [embed],
+            components: [buildAttendanceFilterRow(newFilter), ...components, excelRow],
+          });
+        }
+
+        // ── prev / next (giữ nguyên filter) ──
         const currentPage = parseInt(parts[2], 10) || 1;
-        const totalPages = Math.max(1, Math.ceil(attended.length / 15));
+        const filteredCount = filter === 'all'
+          ? attended.length
+          : attended.filter(a => a.status === filter).length;
+        const totalPages = Math.max(1, Math.ceil(filteredCount / 15));
         const page = action === 'prev'
           ? Math.max(1, currentPage - 1)
           : Math.min(totalPages, currentPage + 1);
-
-        const { phaiRoleIds: phaiIdsL2, emojiMap: emojiMapL2 } = await _phaiData(session, guild.id);
-        await guild.members.fetch().catch(() => {});
-        await guild.roles.fetch().catch(() => {});
-        const { embed, components: pagComponents } =
-          buildSessionEmbed(guild, session, attended, phaiIdsL2, false, page, emojiMapL2, true, { paginationPrefix: 'attend_list' });
+        const { embed, components } = buildList(page, filter);
         return interaction.editReply({
           embeds: [embed],
-          components: pagComponents,
+          components: [buildAttendanceFilterRow(filter), ...components, excelRow],
         });
       }
 
-      // Mở view danh sách đầy đủ (ephemeral per-user)
-      const { phaiRoleIds: phaiIdsL, emojiMap: emojiMapL } = await _phaiData(session, guild.id);
-      await guild.members.fetch().catch(() => {});
-      await guild.roles.fetch().catch(() => {});
-      const { embed, components: pagComponents } =
-        buildSessionEmbed(guild, session, attended, phaiIdsL, false, 1, emojiMapL, true, { paginationPrefix: 'attend_list' });
+      // Mở view danh sách đầy đủ (ephemeral per-user) — mặc định filter 'all'
+      const { embed, components } = buildList(1, 'all');
       return interaction.reply({
         embeds: [embed],
-        components: pagComponents,
+        components: [buildAttendanceFilterRow('all'), ...components, excelRow],
         flags: MessageFlags.Ephemeral,
       });
     }
@@ -358,8 +416,6 @@ class SessionButtonHandler extends InteractionHandler {
       metrics.sessionClosed(guild.id, { cancelled: false });
       metrics.sessionMemberCount(guild.id, attended.length);
 
-      const { phaiRoleIds: phaiIds4, emojiMap: emojiMap4 } = await _phaiData(session, guild.id);
-      await channel.send({ embeds: [await buildSummaryEmbed(session, attended, guild, phaiIds4, emojiMap4)] }).catch(() => null);
       await announceBadges(guild, channel, guild.id, session.id, attended, statsMap).catch(() => null);
       return interaction.editReply(replyOkEdit('✅ Kỳ điểm danh đã được đóng thành công.'));
     }

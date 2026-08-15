@@ -6,7 +6,7 @@ const configService     = require('../services/configService.js');
 const log = require('./logger.js');
 const { endSession, announceBadges, disableAttendanceUI } = require('./session.js');
 const {
-  COLORS, buildSummaryEmbed, FOOTER_DEFAULT, buildSessionEmbed,
+  COLORS, FOOTER_DEFAULT, buildSessionEmbed,
   buildBoardRow, buildAdminActionRow,
 } = require('./embeds.js');
 
@@ -81,12 +81,7 @@ function scheduleCloseTimer(client, guild, session, channelId, ms) {
           .setColor(COLORS.GREY)
           .setDescription('🔒 Phiên điểm danh đã tự động kết thúc.')
           .setFooter({ text: FOOTER_DEFAULT });
-        const cfgT1 = await configService.getGuildConfig(guild.id).catch(() => null);
-        const phaiIds4 = session.phai_role_ids?.length
-          ? session.phai_role_ids
-          : cfgT1?.phai_role_ids ?? [];
-        const summaryEmbed = await buildSummaryEmbed(session, attended, guild, phaiIds4, cfgT1?.phai_role_icons ?? null);
-        await ch.send({ embeds: [msg, summaryEmbed] });
+        await ch.send({ embeds: [msg] });
         await announceBadges(guild, ch, guild.id, session.id, attended, statsMap);
       } else {
         log.warn('TIMER', guild.id, 'autoClose: channel %s không tồn tại, bỏ qua gửi embed', channelId);
