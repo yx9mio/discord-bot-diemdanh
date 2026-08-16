@@ -1,43 +1,39 @@
-// utils/_views/rows.js
-// [FIX] buildSessionActionRow(isOpen) — đúng signature với callers trong sessionButton.js
-//   Callers: buildSessionActionRow(false) → row các nút quản lý phiên
-//   Không dùng sessionId làm param — customId là cố định theo SESSION_BUTTON_IDS
-// [FIX-SELECT] buildAttendanceSelectRow(isOpen) — select menu điểm danh
-//   Tách ra khỏi setupSessionStartModal để tái dùng trong attendanceHandler khi update embed
 'use strict';
-const { ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, StringSelectMenuOptionBuilder } = require('discord.js');
+const { ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder } = require('discord.js');
+const { statusFull } = require('../design-tokens');
 
 /**
- * Row confirm/cancel cho các hành động destructive
- * @param {string} customIdConfirm
- * @param {string} customIdCancel
+ * Row xác nhận Yes / No dùng chung
+ * @param {string} confirmId – customId cho nút Confirm
+ * @param {string} cancelId  – customId cho nút Cancel
+ * @param {string} [confirmLabel='Xác nhận']
+ * @param {string} [cancelLabel='Hủy']
  * @returns {ActionRowBuilder}
  */
-function buildConfirmRow(customIdConfirm = 'confirm', customIdCancel = 'cancel') {
+function buildConfirmRow(confirmId, cancelId, confirmLabel = 'Xác nhận', cancelLabel = 'Hủy') {
   return new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId(customIdConfirm).setLabel('✅ Xác nhận').setStyle(ButtonStyle.Success),
-    new ButtonBuilder().setCustomId(customIdCancel).setLabel('↩️ Hủy').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(confirmId).setLabel(confirmLabel).setStyle(ButtonStyle.Danger),
+    new ButtonBuilder().setCustomId(cancelId).setLabel(cancelLabel).setStyle(ButtonStyle.Secondary),
   );
 }
 
 /**
- * Select menu để thành viên tự điểm danh
- * @param {boolean} isOpen – true = phiên đang mở, false = disabled
+ * Select menu điểm danh cho user
+ * @param {boolean} isOpen – true = phiên đang mở, false = phiên đã đóng (disable menu)
  * @returns {ActionRowBuilder}
  */
 function buildAttendanceSelectRow(isOpen = true) {
-  return new ActionRowBuilder().addComponents(
-    new StringSelectMenuBuilder()
-      .setCustomId('attendance:select')
-      .setPlaceholder('👆 Chọn trạng thái điểm danh...')
-      .setDisabled(!isOpen)
-      .addOptions(
-        new StringSelectMenuOptionBuilder().setLabel('✅ Tham gia').setDescription('Điểm danh đúng giờ').setValue('tham_gia'),
-        new StringSelectMenuOptionBuilder().setLabel('⏰ Trễ').setDescription('Điểm danh muộn').setValue('tre'),
-        new StringSelectMenuOptionBuilder().setLabel('📋 Có phép').setDescription('Vắng mặt có lý do').setValue('co_phep'),
-        new StringSelectMenuOptionBuilder().setLabel('❌ Vắng').setDescription('Báo vắng mặt').setValue('khong_tham_gia'),
-      ),
-  );
+  const select = new StringSelectMenuBuilder()
+    .setCustomId('attend_status_select')
+    .setPlaceholder('Chọn trạng thái điểm danh...')
+    .setDisabled(!isOpen)
+    .addOptions([
+      { label: 'Tham gia',     value: 'tham_gia',       emoji: statusFull.tham_gia.emoji },
+      { label: 'Trễ',          value: 'tre',            emoji: statusFull.tre.emoji },
+      { label: 'Không tham gia', value: 'khong_tham_gia', emoji: statusFull.khong_tham_gia.emoji },
+      { label: 'Có phép',      value: 'co_phep',        emoji: statusFull.co_phep.emoji },
+    ]);
+  return new ActionRowBuilder().addComponents(select);
 }
 
 /**
@@ -138,9 +134,11 @@ function buildAdminActionRow(isOpen = true) {
 /**
  * Row lọc trạng thái cho view danh sách (attend_list) — nút active dạng Primary
  * @param {string} active – 'all' | 'tham_gia' | 'tre' | 'khong_tham_gia' | 'co_phep'
+ * @param {string} [sessionId] – UUID phiên để giữ state khi thao tác trên ephemeral view
  * @returns {ActionRowBuilder}
  */
-function buildAttendanceFilterRow(active = 'all') {
+function buildAttendanceFilterRow(active = 'all', sessionId = '') {
+  const sid = sessionId ? `:${sessionId}` : '';
   const options = [
     { id: 'all',            label: '📊 Tất cả' },
     { id: 'tham_gia',       label: '✅ Đúng giờ' },
@@ -150,7 +148,7 @@ function buildAttendanceFilterRow(active = 'all') {
   ];
   return new ActionRowBuilder().addComponents(
     options.map(o => new ButtonBuilder()
-      .setCustomId(`attend_list:filter:${o.id}`)
+      .setCustomId(`attend_list:filter:${o.id}${sid}`)
       .setLabel(o.label)
       .setStyle(o.id === active ? ButtonStyle.Primary : ButtonStyle.Secondary)),
   );
@@ -159,19 +157,19 @@ function buildAttendanceFilterRow(active = 'all') {
 /**
  * Nav row cho lịch sử điểm danh
  * @param {number} page     – trang hiện tại (0-indexed)
- * @param {number} maxPage  – trang cuối (0-indexed)
- * @param {string} prefix   – prefix customId
+ * @param {number} maxPage  – tổng số trang (0-indexed)
+ * @param {string} [prefix='hist'] – prefix cho customId
  * @returns {ActionRowBuilder}
  */
 function buildHistoryNavRow(page = 0, maxPage = 0, prefix = 'hist') {
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
-      .setCustomId(`${prefix}_prev_${page}`)
+      .setCustomId(`${prefix}:prev`)
       .setLabel('◀ Trước')
       .setStyle(ButtonStyle.Secondary)
       .setDisabled(page <= 0),
     new ButtonBuilder()
-      .setCustomId(`${prefix}_next_${page}`)
+      .setCustomId(`${prefix}:next`)
       .setLabel('Sau ▶')
       .setStyle(ButtonStyle.Secondary)
       .setDisabled(page >= maxPage),

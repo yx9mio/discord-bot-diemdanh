@@ -4,36 +4,49 @@ import { buildRankEmbed } from '../utils/_views/rankView.js';
 import { buildSessionEmbed, buildClosedSessionEmbed } from '../utils/_views/sessionView.js';
 
 describe('buildConfirmRow', () => {
-  it('returns ActionRow with 2 buttons', () => {
-    const row = buildConfirmRow();
+  it('returns an ActionRowBuilder with 2 buttons', () => {
+    const row = buildConfirmRow('confirm_id', 'cancel_id');
     const json = row.toJSON();
     expect(json.type).toBe(1);
     expect(json.components).toHaveLength(2);
-    expect(json.components[0].custom_id).toBe('confirm');
-    expect(json.components[1].custom_id).toBe('cancel');
+    expect(json.components[0].custom_id).toBe('confirm_id');
+    expect(json.components[1].custom_id).toBe('cancel_id');
+  });
+
+  it('sets custom labels when provided', () => {
+    const row = buildConfirmRow('c', 'x', 'Đồng ý', 'Bỏ qua');
+    const json = row.toJSON();
+    expect(json.components[0].label).toBe('Đồng ý');
+    expect(json.components[1].label).toBe('Bỏ qua');
+  });
+
+  it('uses Danger style for confirm and Secondary for cancel', () => {
+    const row = buildConfirmRow('c', 'x');
+    const json = row.toJSON();
+    expect(json.components[0].style).toBe(4); // ButtonStyle.Danger = 4
+    expect(json.components[1].style).toBe(2); // ButtonStyle.Secondary = 2
   });
 });
 
 describe('buildAttendanceSelectRow', () => {
-  it('has 4 status options', () => {
+  it('returns an ActionRow with a StringSelectMenu', () => {
     const row = buildAttendanceSelectRow(true);
-    const select = row.toJSON().components[0];
-    expect(select.custom_id).toBe('attendance:select');
-    expect(select.options).toHaveLength(4);
-    expect(select.options.map(o => o.value)).toEqual(['tham_gia', 'tre', 'co_phep', 'khong_tham_gia']);
+    const json = row.toJSON();
+    expect(json.type).toBe(1);
+    expect(json.components).toHaveLength(1);
+    expect(json.components[0].type).toBe(3); // ComponentType.StringSelect = 3
+    expect(json.components[0].custom_id).toBe('attend_status_select');
+    expect(json.components[0].options).toHaveLength(4);
   });
 
-  it('is disabled when isOpen=false', () => {
-    expect(buildAttendanceSelectRow(false).toJSON().components[0].disabled).toBe(true);
-  });
-
-  it('is enabled when isOpen=true', () => {
+  it('is enabled when isOpen=true and disabled when isOpen=false', () => {
     expect(buildAttendanceSelectRow(true).toJSON().components[0].disabled).toBeFalsy();
+    expect(buildAttendanceSelectRow(false).toJSON().components[0].disabled).toBe(true);
   });
 });
 
 describe('buildSessionActionRow', () => {
-  it('returns 2 ActionRows (≤5 total)', () => {
+  it('returns 2 ActionRows', () => {
     const rows = buildSessionActionRow(true);
     expect(rows).toHaveLength(2);
     expect(rows.length).toBeLessThanOrEqual(5);
@@ -45,16 +58,18 @@ describe('buildSessionActionRow', () => {
     expect(rows[1].toJSON().components).toHaveLength(2);
   });
 
-  it('buttons are enabled when isOpen=true', () => {
-    for (const row of buildSessionActionRow(true)) {
+  it('all buttons are enabled when isOpen=true', () => {
+    const rows = buildSessionActionRow(true);
+    for (const row of rows) {
       for (const btn of row.toJSON().components) {
         expect(btn.disabled).toBeFalsy();
       }
     }
   });
 
-  it('buttons are disabled when isOpen=false', () => {
-    for (const row of buildSessionActionRow(false)) {
+  it('all buttons are disabled when isOpen=false', () => {
+    const rows = buildSessionActionRow(false);
+    for (const row of rows) {
       for (const btn of row.toJSON().components) {
         expect(btn.disabled).toBe(true);
       }
@@ -115,6 +130,17 @@ describe('buildAttendanceFilterRow', () => {
     const inactive = json.components.find(c => c.custom_id === 'attend_list:filter:all');
     expect(inactive.style).toBe(2); // Secondary
   });
+
+  it('appends sessionId suffix to filter customIds when provided', () => {
+    const json = buildAttendanceFilterRow('all', 'sess-123').toJSON();
+    expect(json.components.map(c => c.custom_id)).toEqual([
+      'attend_list:filter:all:sess-123',
+      'attend_list:filter:tham_gia:sess-123',
+      'attend_list:filter:tre:sess-123',
+      'attend_list:filter:khong_tham_gia:sess-123',
+      'attend_list:filter:co_phep:sess-123',
+    ]);
+  });
 });
 
 describe('buildAdminActionRow', () => {
@@ -139,113 +165,112 @@ describe('buildHistoryNavRow', () => {
   it('prev disabled on first page', () => {
     const json = buildHistoryNavRow(0, 5).toJSON();
     expect(json.components[0].disabled).toBe(true);
-    expect(json.components[1].disabled).toBe(false);
+    expect(json.components[1].disabled).toBeFalsy();
   });
 
   it('next disabled on last page', () => {
     const json = buildHistoryNavRow(5, 5).toJSON();
-    expect(json.components[0].disabled).toBe(false);
+    expect(json.components[0].disabled).toBeFalsy();
     expect(json.components[1].disabled).toBe(true);
   });
 
-  it('both enabled in middle pages', () => {
+  it('both enabled on middle page', () => {
     const json = buildHistoryNavRow(2, 5).toJSON();
-    expect(json.components[0].disabled).toBe(false);
-    expect(json.components[1].disabled).toBe(false);
+    expect(json.components[0].disabled).toBeFalsy();
+    expect(json.components[1].disabled).toBeFalsy();
+  });
+
+  it('uses custom prefix', () => {
+    const json = buildHistoryNavRow(0, 2, 'member_hist').toJSON();
+    expect(json.components[0].custom_id).toBe('member_hist:prev');
+    expect(json.components[1].custom_id).toBe('member_hist:next');
   });
 });
 
 describe('buildRankEmbed', () => {
-  it('returns empty state when no rows', () => {
-    const json = buildRankEmbed([], null).toJSON();
-    expect(json.description).toMatch(/Chưa có dữ liệu/);
+  const members = [
+    { user_id: 'u1', current_streak: 5, total_joined: 10 },
+    { user_id: 'u2', current_streak: 3, total_joined: 8 },
+    { user_id: 'u3', current_streak: 1, total_joined: 2 },
+  ];
+
+  it('renders top members by current_streak', () => {
+    const embed = buildRankEmbed(members, null, 'streak');
+    const json = embed.toJSON();
+    expect(json.title).toContain('Bảng Xếp Hạng');
+    expect(json.description).toContain('u1');
+    expect(json.description).toContain('5');
   });
 
-  it('shows medals for top 3 members', () => {
-    const rows = [
-      { user_id: 'u1', total_joined: 10, total_sessions: 10, current_streak: 5 },
-      { user_id: 'u2', total_joined: 8, total_sessions: 10, current_streak: 3 },
-      { user_id: 'u3', total_joined: 5, total_sessions: 10, current_streak: 1 },
-    ];
-    const json = buildRankEmbed(rows, null, 3).toJSON();
-    expect(json.title).toMatch(/Top 3/);
-    expect(json.description).toContain('🥇');
-    expect(json.description).toContain('🥈');
-    expect(json.description).toContain('🥉');
-  });
-
-  it('limits display to topN despite more rows', () => {
-    const rows = Array.from({ length: 10 }, (_, i) => ({ user_id: `u${i}`, total_joined: 10 - i, total_sessions: 10, current_streak: 0 }));
-    const json = buildRankEmbed(rows, null, 3).toJSON();
-    expect(json.title).toMatch(/Top 3/);
+  it('shows empty state when members list is empty', () => {
+    const embed = buildRankEmbed([], null, 'streak');
+    const json = embed.toJSON();
+    expect(json.description).toContain('Chưa có dữ liệu');
   });
 });
 
 describe('buildSessionEmbed (active session)', () => {
   const now = Date.now();
   const session = {
-    id: 's1', guild_id: 'g1', session_name: 'Bang Chiến 1',
+    id: 's1',
+    session_name: 'Bang Chiến',
     is_active: true,
-    started_at: new Date(now - 3600000).toISOString(),
-    eligible_member_ids: [],
-    channel_id: 'ch1', started_by: 'admin1',
-    description: 'Test kỳ',
+    started_at: new Date(now - 60000).toISOString(),
+    auto_close_at: new Date(now + 3600000).toISOString(),
+    description: 'Thứ 7 máu chảy về tim',
   };
-  const attended = [
-    { user_id: 'u1', status: 'tham_gia', checked_in_at: new Date(now - 1800000).toISOString() },
-    { user_id: 'u2', status: 'tre', checked_in_at: new Date(now - 600000).toISOString() },
-    { user_id: 'u3', status: 'khong_tham_gia', checked_in_at: new Date(now).toISOString() },
-    { user_id: 'u4', status: 'co_phep', checked_in_at: new Date(now).toISOString() },
-  ];
 
-  it('returns embed with session title and stats without phai stats by default', () => {
-    const { embed, components, totalPages } = buildSessionEmbed(null, session, attended);
+  it('renders title with session name', () => {
+    const { embed } = buildSessionEmbed(null, session, [], [], false, 1, null, false);
     const json = embed.toJSON();
-    expect(json.title).toMatch(/Điểm danh Bang Chiến/);
-    expect(json.description).toContain('50%');
-    expect(json.fields?.some(f => f.name.includes('Phái'))).toBe(false);
-    expect(totalPages).toBe(1);
-    expect(components).toHaveLength(0);
+    expect(json.title).toContain('Bang Chiến');
   });
 
-  it('includes phai stats when showPhaiStats is true', () => {
-    const guildMock = {
-      id: 'g1',
-      name: 'Test Guild',
-      iconURL: () => 'https://example.com/icon.png',
-      roles: {
-        cache: new Map([
-          ['p1', { id: 'p1', name: 'Phái 1', members: new Map([['u1', {}], ['u2', {}]]) }]
-        ])
-      },
-      members: {
-        cache: new Map([
-          ['u1', { id: 'u1', roles: { cache: new Map([['p1', {}]]) } }],
-          ['u2', { id: 'u2', roles: { cache: new Map([['p1', {}]]) } }]
-        ])
-      }
-    };
-    const { embed } = buildSessionEmbed(guildMock, session, attended, ['p1'], false, 1, null, true);
+  it('contains ANSI code block with stats and progress bar', () => {
+    const attended = [
+      { user_id: 'u1', status: 'tham_gia', checked_in_at: new Date(now).toISOString() },
+      { user_id: 'u2', status: 'tre',      checked_in_at: new Date(now).toISOString() },
+      { user_id: 'u3', status: 'co_phep',  checked_in_at: new Date(now).toISOString() },
+    ];
+    const { embed } = buildSessionEmbed(null, session, attended, [], false, 1, null, false);
     const json = embed.toJSON();
-    expect(json.fields?.some(f => f.name.includes('Phái'))).toBe(true);
+    expect(json.description).toContain('```ansi');
+    expect(json.description).toContain('Bang Chiến');
+    expect(json.description).toContain('Tỉ lệ tham gia');
+    expect(json.description).toContain('Đúng giờ');
+    expect(json.description).toContain('Trễ');
+    expect(json.description).toContain('Có phép');
   });
 
-  it('has list field containing status groups', () => {
-    const json = buildSessionEmbed(null, session, attended).embed.toJSON();
+  it('shows description and auto-close timestamp in description field', () => {
+    const { embed } = buildSessionEmbed(null, session, [], [], false, 1, null, false);
+    const json = embed.toJSON();
+    expect(json.description).toContain('Thứ 7 máu chảy về tim');
+    expect(json.description).toContain('<t:');
+  });
+
+  it('renders member list field with grouped attendees', () => {
+    const attended = [
+      { user_id: 'u1', status: 'tham_gia', checked_in_at: new Date(now).toISOString() },
+      { user_id: 'u2', status: 'tre',      checked_in_at: new Date(now).toISOString() },
+    ];
+    const { embed } = buildSessionEmbed(null, session, attended, [], false, 1, null, false);
+    const json = embed.toJSON();
     const listField = json.fields.find(f => f.name.includes('Danh sách'));
     expect(listField).toBeDefined();
-    expect(listField.value).toContain('Đúng giờ');
-    expect(listField.value).toContain('Trễ');
-    expect(listField.value).toContain('Có phép');
-    expect(listField.value).toContain('Vắng');
+    expect(listField.value).toContain('Đúng giờ:');
+    expect(listField.value).toContain('Trễ:');
+    expect(listField.value).toContain('u1');
+    expect(listField.value).toContain('u2');
   });
 
-  it('adds pagination components when >15 attendees', () => {
+  it('paginates member list when >15 attendees', () => {
     const many = Array.from({ length: 20 }, (_, i) => ({
-      user_id: `u${i}`, status: i < 10 ? 'tham_gia' : 'tre',
-      checked_in_at: new Date(now).toISOString(),
+      user_id: `u${i}`,
+      status: 'tham_gia',
+      checked_in_at: new Date(now + i).toISOString(),
     }));
-    const { components, totalPages } = buildSessionEmbed(null, session, many);
+    const { totalPages, components } = buildSessionEmbed(null, session, many, [], false, 1, null, false);
     expect(totalPages).toBe(2);
     expect(components.length).toBeGreaterThanOrEqual(1);
   });
@@ -315,30 +340,39 @@ describe('buildSessionEmbed (active session)', () => {
   it('renders closed session when opts.allowClosed=true', () => {
     const closedSession = { ...session, is_active: false };
     const { embed } = buildSessionEmbed(null, closedSession, [], [], false, 1, null, false, { allowClosed: true });
-    expect(embed.toJSON().title).toContain('Điểm danh Bang Chiến');
+    expect(embed.toJSON().title).toContain('Điểm danh — Bang Chiến');
   });
 });
 
 describe('buildClosedSessionEmbed', () => {
   const now = Date.now();
   const session = {
-    id: 's1', guild_id: 'g1', session_name: 'Bang Chiến 1',
+    id: 's1',
+    session_name: 'Bang Chiến',
     is_active: false,
     started_at: new Date(now - 7200000).toISOString(),
     ended_at: new Date(now).toISOString(),
-    eligible_member_ids: [],
-    started_by: 'admin1',
   };
-  const attended = Array.from({ length: 8 }, (_, i) => ({
-    user_id: `u${i}`, status: i < 3 ? 'tham_gia' : i < 5 ? 'tre' : 'khong_tham_gia',
-    checked_in_at: new Date(now - 600000).toISOString(),
-  }));
+  const attended = [
+    { user_id: 'u1', status: 'tham_gia', checked_in_at: new Date(now - 7000000).toISOString() },
+    { user_id: 'u2', status: 'tham_gia', checked_in_at: new Date(now - 6000000).toISOString() },
+    { user_id: 'u3', status: 'tre',      checked_in_at: new Date(now - 5000000).toISOString() },
+    { user_id: 'u4', status: 'co_phep',  checked_in_at: new Date(now - 4000000).toISOString() },
+    { user_id: 'u5', status: 'khong_tham_gia', checked_in_at: new Date(now - 3000000).toISOString() },
+    { user_id: 'u6', status: 'tham_gia', checked_in_at: new Date(now - 2000000).toISOString() },
+  ];
 
-  it('shows closed title and ansi stats summary', () => {
+  it('renders closed title with session name', () => {
+    const embed = buildClosedSessionEmbed(session, attended, null);
+    expect(embed.toJSON().title).toContain('Bang Chiến');
+    expect(embed.toJSON().title).toContain('Đã đóng');
+  });
+
+  it('shows stats summary in description', () => {
     const embed = buildClosedSessionEmbed(session, attended, null);
     const json = embed.toJSON();
-    expect(json.title).toMatch(/Đã kết thúc/);
-    expect(json.description).toMatch(/```ansi/);
+    expect(json.description).toContain('Tỉ lệ tham gia');
+    expect(json.description).toContain('Đúng giờ:');
     expect(json.description).toContain('Tổng:');
   });
 

@@ -1,5 +1,4 @@
-// interaction-handlers/sessionButton.js
-// Handles: nút trên embed phiên (điểm danh/làm mới/đóng/confirm/cancel)
+// [FIX-OPTS] Phân trang trang 2+ cho phép phiên đóng / admin edit / xem danh sách
 // [FIX-SELECT] attend_view pagination + attend_refresh: thêm buildAttendanceSelectRow(true)
 //   để select menu không bị mất sau khi paginate hoặc refresh
 'use strict';
@@ -18,11 +17,9 @@ const {
   replyErr, replyErrEdit, replyOkEdit, replyConfirm,
 } = require('../../utils/embeds.js');
 const { endSession, announceBadges, disableAttendanceUI } = require('../../utils/session.js');
-const { cancelTimers, stopAutoRefresh } = require('../../utils/timers.js');
-const { buildAdminMarkModal } = require('../../utils/adminMarkModal.js');
-const { buildAdminEditModal } = require('../../utils/adminEditModal.js');
-const { wrapHandler } = require('../../utils/error-boundary.js');
+const { stopAutoRefresh } = require('../../utils/timers.js');
 const { auditLog } = require('../../utils/auditLog.js');
+const { wrapHandler } = require('../../utils/error-boundary.js');
 const { checkCooldown } = require('../../utils/cooldown.js');
 
 // [BUG-FIX] Đồng bộ với tất cả customId được dùng trong file này
@@ -33,17 +30,24 @@ const SESSION_BUTTON_IDS = new Set([
   'session:cancel', 'session:confirm_cancel', 'session:cancel_cancel',
   'session:confirm_close', 'session:cancel_close',
   'session:confirm_close:all', 'session:cancel_close:all',
+  'session:confirm_close:single',
 ]);
 
 async function _phaiData(session, guildId) {
   const cfg = await configService.getGuildConfig(guildId).catch(() => null);
-  const phaiRoleIds = session.phai_role_ids?.length ? session.phai_role_ids : cfg?.phai_role_ids ?? [];
-  return { phaiRoleIds, emojiMap: cfg?.phai_role_icons ?? null };
+  const phaiRoleIds = session.phai_role_ids?.length
+    ? session.phai_role_ids
+    : cfg?.phai_role_ids ?? [];
+  const emojiMap = cfg?.phai_role_icons ?? null;
+  return { phaiRoleIds, emojiMap };
 }
 
 class SessionButtonHandler extends InteractionHandler {
-  constructor(ctx, options) {
-    super(ctx, { ...options, interactionHandlerType: InteractionHandlerTypes.Button });
+  constructor(context, options) {
+    super(context, {
+      ...options,
+      interactionHandlerType: InteractionHandlerTypes.Button,
+    });
   }
 
   parse(interaction) {
@@ -55,11 +59,19 @@ class SessionButtonHandler extends InteractionHandler {
   }
 
   async run(interaction) {
-    return wrapHandler(async (interaction) => {
-    const { customId, guild } = interaction;
+    return wrapHandler(this._handle.bind(this), 'SessionButton')(interaction);
+  }
 
-    // ── attend_view / attend_view:prev / attend_view:next ────────────────────────
+  async _handle(interaction) {
+    const { customId, guild } = interaction;
+    if (!guild) return;
+
+    // ── attend_view (Mở phiếu điểm danh cá nhân — ephemeral per-user) ────────
     if (customId === 'attend_view' || customId.startsWith('attend_view:')) {
+      if (!checkCooldown(interaction.user.id, 'session_view', 1000)) {
+        return interaction.reply({ content: '⏳ Vui lòng đợi một chút...', flags: MessageFlags.Ephemeral });
+      }
+
       const session = await sessionService.getActiveSession(guild.id);
       if (!session) {
         if (customId.startsWith('attend_view:')) {
@@ -68,72 +80,88 @@ class SessionButtonHandler extends InteractionHandler {
         }
         return interaction.reply({ content: '🚫 Không có Kỳ điểm danh nào đang mở.', flags: MessageFlags.Ephemeral });
       }
-      const attended = await attendanceService.getAttendances(session.id);
 
+      const attended = await attendanceService.getAttendances(session.id);
+      const { phaiRoleIds: phaiIdsV, emojiMap: emojiMapV } = await _phaiData(session, guild.id);
+
+      // Phân trang trong phiếu điểm danh cá nhân
       if (customId.startsWith('attend_view:')) {
-        if (!checkCooldown(interaction.user.id, 'session_view', 1000)) {
-          return interaction.reply({ content: '⏳ Vui lòng đợi một chút...', flags: MessageFlags.Ephemeral });
-        }
         await interaction.deferUpdate();
         const parts = customId.split(':');
         const action = parts[1];
         const currentPage = parseInt(parts[2], 10) || 1;
-
         const totalPages = Math.max(1, Math.ceil(attended.length / 15));
         const page = action === 'prev'
           ? Math.max(1, currentPage - 1)
           : Math.min(totalPages, currentPage + 1);
 
-        const { phaiRoleIds: phaiIds1, emojiMap: emojiMap1 } = await _phaiData(session, guild.id);
         await guild.members.fetch().catch(() => {});
         await guild.roles.fetch().catch(() => {});
         const { embed, components: pagComponents } =
-          buildSessionEmbed(guild, session, attended, phaiIds1, false, page, emojiMap1, true);
-
-        // [FIX-SELECT] Giữ select menu sau pagination
-        const selectRow = buildAttendanceSelectRow(true);
-        const adminRows = buildSessionActionRow(true);
+          buildSessionEmbed(guild, session, attended, phaiIdsV, false, page, emojiMapV, true, { showList: false });
         return interaction.editReply({
           embeds: [embed],
-          components: [selectRow, ...adminRows, ...pagComponents].slice(0, 5),
+          components: [buildAttendanceSelectRow(true), ...pagComponents],
         });
       }
 
-      // [BUG-UX-4] Fix: attend_view ephemeral reply bao gồm selectRow + adminRows
-      const { phaiRoleIds: phaiIds2, emojiMap: emojiMap2 } = await _phaiData(session, guild.id);
+      // Mở mới phiếu điểm danh cá nhân
       await guild.members.fetch().catch(() => {});
       await guild.roles.fetch().catch(() => {});
-      const { embed, components: pagComponents2 } =
-        buildSessionEmbed(guild, session, attended, phaiIds2, false, 1, emojiMap2, true);
-      const selectRow2 = buildAttendanceSelectRow(true);
-      const adminRows2 = buildSessionActionRow(true);
+      const { embed, components: pagComponents } =
+        buildSessionEmbed(guild, session, attended, phaiIdsV, false, 1, emojiMapV, true, { showList: false });
       return interaction.reply({
         embeds: [embed],
-        components: [selectRow2, ...adminRows2, ...pagComponents2].slice(0, 5),
+        components: [buildAttendanceSelectRow(true), ...pagComponents],
         flags: MessageFlags.Ephemeral,
       });
     }
 
     // ── attend_list / attend_list:prev / attend_list:next / attend_list:filter / attend_list:excel ──
     if (customId === 'attend_list' || customId.startsWith('attend_list:')) {
+      if (!checkCooldown(interaction.user.id, 'session_view', 1000)) {
+        return interaction.reply({ content: '⏳ Vui lòng đợi một chút...', flags: MessageFlags.Ephemeral });
+      }
+
       const parts = customId.split(':');
       const action = parts[1];
 
+      // Tìm target sessionId từ customId (nếu có nhúng ở cuối)
+      let targetSessionId = null;
+      if (action === 'excel' && parts[2]) {
+        targetSessionId = parts[2];
+      } else if (action === 'filter' && parts[3]) {
+        targetSessionId = parts[3];
+      } else if ((action === 'prev' || action === 'next') && parts[4]) {
+        targetSessionId = parts[4];
+      }
+
+      // Resolve session: thử theo targetSessionId -> phiên active -> session theo message_id
+      let session = null;
+      if (targetSessionId) {
+        session = await sessionService.getSessionById(targetSessionId).catch(() => null);
+      }
+      if (!session) {
+        session = await sessionService.getActiveSession(guild.id);
+      }
+      if (!session) {
+        const msgId = interaction.message?.id;
+        if (msgId) session = await sessionService.getSessionByMessageId(msgId).catch(() => null);
+      }
+
       // ── attend_list:excel — xuất file Excel (admin only) ────────────────────
       if (action === 'excel') {
-        if (!checkCooldown(interaction.user.id, 'session_excel', 5000)) {
-          return interaction.reply({ content: '⏳ Vui lòng đợi một chút...', flags: MessageFlags.Ephemeral });
-        }
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         const { ok } = await requireAdmin(interaction, { context: 'xuất file Excel', deferred: true });
         if (!ok) return;
-        let session = await sessionService.getActiveSession(guild.id);
-        if (!session) {
-          const msgId = interaction.message?.id;
-          if (msgId) session = await sessionService.getSessionByMessageId(msgId).catch(() => null);
-        }
+
         if (!session) return interaction.editReply(replyErrEdit('Không tìm thấy Kỳ điểm danh.'));
         try {
+          // Nạp cache thành viên & role trước khi xuất Excel
+          await Promise.all([
+            guild.members.fetch().catch(() => {}),
+            guild.roles.fetch().catch(() => {}),
+          ]);
           const attended = await attendanceService.getAttendances(session.id);
           const buffer = await buildAttendanceExcel(session, attended, guild);
           const fileName = `diem-danh_${(session.session_name ?? 'ky').replace(/[^\w\d\-_.]+/g, '_')}.xlsx`;
@@ -147,42 +175,37 @@ class SessionButtonHandler extends InteractionHandler {
         }
       }
 
-      // Resolve session: phiên đang mở, hoặc phiên đã đóng theo message_id (nút trên board cũ)
-      let session = await sessionService.getActiveSession(guild.id);
-      if (!session) {
-        const msgId = interaction.message?.id;
-        if (msgId) session = await sessionService.getSessionByMessageId(msgId).catch(() => null);
-      }
       if (!session) {
         if (customId.startsWith('attend_list:')) {
           await interaction.deferUpdate();
-          return interaction.editReply({ content: '🚫 Kỳ đã kết thúc.', embeds: [], components: [] });
+          return interaction.editReply({ content: '🚫 Kỳ đã kết thúc hoặc không tìm thấy dữ liệu.', embeds: [], components: [] });
         }
         return interaction.reply({ content: '🚫 Không có Kỳ điểm danh nào đang mở.', flags: MessageFlags.Ephemeral });
       }
+
       const attended = await attendanceService.getAttendances(session.id);
 
       const VALID_FILTERS = ['all', 'tham_gia', 'tre', 'khong_tham_gia', 'co_phep'];
       const filter = VALID_FILTERS.includes(parts[3]) ? parts[3] : 'all';
 
       const { phaiRoleIds: phaiIdsL, emojiMap: emojiMapL } = await _phaiData(session, guild.id);
-      await guild.members.fetch().catch(() => {});
-      await guild.roles.fetch().catch(() => {});
+      await Promise.all([
+        guild.members.fetch().catch(() => {}),
+        guild.roles.fetch().catch(() => {}),
+      ]);
+
       const buildList = (page, f) => buildSessionEmbed(
         guild, session, attended, phaiIdsL, false, page, emojiMapL, true,
-        { paginationPrefix: 'attend_list', filter: f, allowClosed: true },
+        { paginationPrefix: 'attend_list', filter: f, allowClosed: true, sessionId: session.id },
       );
       const excelRow = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
-          .setCustomId('attend_list:excel')
+          .setCustomId(`attend_list:excel:${session.id}`)
           .setLabel('📥 Xuất Excel')
           .setStyle(ButtonStyle.Success),
       );
 
       if (customId.startsWith('attend_list:')) {
-        if (!checkCooldown(interaction.user.id, 'session_view', 1000)) {
-          return interaction.reply({ content: '⏳ Vui lòng đợi một chút...', flags: MessageFlags.Ephemeral });
-        }
         await interaction.deferUpdate();
 
         // ── Filter button → chuyển filter, về trang 1 ──
@@ -191,23 +214,24 @@ class SessionButtonHandler extends InteractionHandler {
           const { embed, components } = buildList(1, newFilter);
           return interaction.editReply({
             embeds: [embed],
-            components: [buildAttendanceFilterRow(newFilter), ...components, excelRow],
+            components: [buildAttendanceFilterRow(newFilter, session.id), ...components, excelRow],
           });
         }
 
         // ── prev / next (giữ nguyên filter) ──
         const currentPage = parseInt(parts[2], 10) || 1;
-        const filteredCount = filter === 'all'
+        const activeFilter = VALID_FILTERS.includes(parts[3]) ? parts[3] : 'all';
+        const filteredCount = activeFilter === 'all'
           ? attended.length
-          : attended.filter(a => a.status === filter).length;
+          : attended.filter(a => a.status === activeFilter).length;
         const totalPages = Math.max(1, Math.ceil(filteredCount / 15));
         const page = action === 'prev'
           ? Math.max(1, currentPage - 1)
           : Math.min(totalPages, currentPage + 1);
-        const { embed, components } = buildList(page, filter);
+        const { embed, components } = buildList(page, activeFilter);
         return interaction.editReply({
           embeds: [embed],
-          components: [buildAttendanceFilterRow(filter), ...components, excelRow],
+          components: [buildAttendanceFilterRow(activeFilter, session.id), ...components, excelRow],
         });
       }
 
@@ -215,7 +239,7 @@ class SessionButtonHandler extends InteractionHandler {
       const { embed, components } = buildList(1, 'all');
       return interaction.reply({
         embeds: [embed],
-        components: [buildAttendanceFilterRow('all'), ...components, excelRow],
+        components: [buildAttendanceFilterRow('all', session.id), ...components, excelRow],
         flags: MessageFlags.Ephemeral,
       });
     }
@@ -226,258 +250,204 @@ class SessionButtonHandler extends InteractionHandler {
         return interaction.reply({ content: '⏳ Vui lòng đợi một chút...', flags: MessageFlags.Ephemeral });
       }
       await interaction.deferUpdate();
-      try {
-        const session = await sessionService.getActiveSession(interaction.guildId);
-        if (!session) return interaction.followUp({ ...replyErr('Không có Kỳ điểm danh đang mở.'), flags: MessageFlags.Ephemeral });
-        const attended = await attendanceService.getAttendances(session.id);
-        await interaction.guild.members.fetch().catch(() => {});
-        await interaction.guild.roles.fetch().catch(() => {});
-        const { phaiRoleIds: phaiIds3, emojiMap: emojiMap3 } = await _phaiData(session, interaction.guild.id);
-        const { embed, components: pagComponents } =
-          buildSessionEmbed(interaction.guild, session, attended, phaiIds3, false, 1, emojiMap3);
-        // [FIX-SELECT] Giữ select menu sau refresh
-        const selectRow = buildAttendanceSelectRow(true);
-        const adminRows = buildSessionActionRow(true);
-        await interaction.editReply({
-          embeds: [embed],
-          components: [selectRow, ...adminRows, ...pagComponents].slice(0, 5),
-        });
-        log.info('REFRESH', interaction.guildId, '%s làm mới embed điểm danh', interaction.user.tag);
-      } catch (e) {
-        log.error('REFRESH', interaction.guildId, 'Lỗi handleRefresh: %s', e.message);
-        await interaction.followUp({ ...replyErr('Không thể làm mới, thử lại sau.'), flags: MessageFlags.Ephemeral });
+      const session = await sessionService.getActiveSession(guild.id);
+      if (!session) {
+        return interaction.editReply({ content: '🚫 Kỳ đã kết thúc.', embeds: [], components: [] });
       }
-      return;
+      const attended = await attendanceService.getAttendances(session.id);
+      const { phaiRoleIds: phaiIdsR, emojiMap: emojiMapR } = await _phaiData(session, guild.id);
+      await Promise.all([
+        guild.members.fetch().catch(() => {}),
+        guild.roles.fetch().catch(() => {}),
+      ]);
+      const { embed, components: pagComponents } =
+        buildSessionEmbed(guild, session, attended, phaiIdsR, false, 1, emojiMapR, true, { showList: false });
+      return interaction.editReply({
+        embeds: [embed],
+        components: [buildAttendanceSelectRow(true), ...pagComponents],
+      });
     }
 
-    // ── admin:mark ─────────────────────────────────────────────────────────────────
+    // ── admin:mark (Điểm danh thay — mở Modal) ────────────────────────────────────
     if (customId === 'admin:mark') {
       const { ok } = await requireAdmin(interaction, { context: 'điểm danh thay' });
       if (!ok) return;
-      if (!checkCooldown(interaction.user.id, 'admin_mark', 5000)) {
-        return interaction.reply({ content: '⏳ Vui lòng đợi trước khi thực hiện lại thao tác này.', flags: MessageFlags.Ephemeral });
-      }
-      return interaction.showModal(buildAdminMarkModal());
+      const { showAdminMarkModal } = require('../../utils/adminMarkModal.js');
+      return showAdminMarkModal(interaction);
     }
 
-    // ── admin:edit ─────────────────────────────────────────────────────────────────
+    // ── admin:edit (Sửa điểm danh — mở Modal) ─────────────────────────────────────
     if (customId === 'admin:edit') {
       const { ok } = await requireAdmin(interaction, { context: 'sửa điểm danh' });
       if (!ok) return;
-      if (!checkCooldown(interaction.user.id, 'admin_edit', 5000)) {
-        return interaction.reply({ content: '⏳ Vui lòng đợi trước khi thực hiện lại thao tác này.', flags: MessageFlags.Ephemeral });
-      }
-      return interaction.showModal(buildAdminEditModal());
+      const { showAdminEditModal } = require('../../utils/adminEditModal.js');
+      return showAdminEditModal(interaction);
     }
 
-    // ── session:cancel ──────────────────────────────────────────────────────────
+    // ── session:cancel (Hủy phiên — xác nhận) ────────────────────────────────────
     if (customId === 'session:cancel') {
-      if (!checkCooldown(interaction.user.id, 'session_cancel', 5000)) {
-        return interaction.reply({ content: '⏳ Vui lòng đợi một chút...', flags: MessageFlags.Ephemeral });
-      }
-      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-      const { ok } = await requireAdmin(interaction, { context: 'hủy phiên', deferred: true });
+      const { ok } = await requireAdmin(interaction, { context: 'hủy phiên điểm danh' });
       if (!ok) return;
-      const session = await sessionService.getActiveSession(guild.id);
-      if (!session) return interaction.editReply(replyErrEdit('Không có Kỳ nào đang mở.'));
-      return interaction.editReply(
+      return interaction.reply(
         replyConfirm(
-          `Bạn có chắc muốn **HỦY** Kỳ **"${session.session_name}"**?\n> Hành động này sẽ hủy Kỳ và giữ nguyên tất cả điểm danh đã ghi.`,
+          '🗑️ Bạn có chắc muốn **HỦY** Kỳ điểm danh này không?\n\n' +
+          '> ⚠️ Toàn bộ dữ liệu điểm danh của phiên này sẽ bị hủy và **không được tính vào thống kê**.',
           'session:confirm_cancel',
           'session:cancel_cancel',
-        ),
+        )
       );
     }
 
-    // ── session:confirm_cancel ───────────────────────────────────────────────────
+    // ── session:cancel_cancel ─────────────────────────────────────────────────────
+    if (customId === 'session:cancel_cancel') {
+      return interaction.update({ content: 'Đã hủy thao tác.', embeds: [], components: [] });
+    }
+
+    // ── session:confirm_cancel (Hủy phiên — thực hiện) ───────────────────────────
     if (customId === 'session:confirm_cancel') {
-      const { channel } = interaction;
-      if (!checkCooldown(interaction.user.id, 'session_confirm_cancel', 5000)) {
-        return interaction.reply({ content: '⏳ Vui lòng đợi một chút...', flags: MessageFlags.Ephemeral });
-      }
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-      // [SEC-FIX-1] Re-validate admin
-      const { ok: okCancel } = await requireAdmin(interaction, { context: 'xác nhận hủy phiên', deferred: true });
-      if (!okCancel) return;
-      const session = await sessionService.getActiveSession(guild.id);
-      if (!session) return interaction.editReply(replyErrEdit('Kỳ đã được đóng hoặc hủy trước đó.'));
+      const { ok } = await requireAdmin(interaction, { context: 'hủy phiên điểm danh', deferred: true });
+      if (!ok) return;
 
-      try {
-        stopAutoRefresh(session.id);
-        await sessionService.cancelSession(session.id, guild.id);
-        cancelTimers(guild.id);
-        auditLog({ guildId: guild.id, actorId: interaction.user.id, action: 'SESSION_CANCEL', targetId: session.id, metadata: { session_name: session.session_name } }).catch(() => {});
-      } catch (e) {
-        log.error('CANCEL', guild.id, 'cancelSession thất bại %s: %s', session.id, e.message);
-        const stillActive = await sessionService.getActiveSession(guild.id).catch(() => null);
-        if (!stillActive) {
-          return interaction.editReply(replyOkEdit('✅ Kỳ đã được hủy bởi người khác.'));
-        }
-        return interaction.editReply(replyErrEdit('Không thể hủy Kỳ do lỗi DB, thử lại sau.'));
+      const session = await sessionService.getActiveSession(guild.id);
+      if (!session) {
+        return interaction.editReply(replyErrEdit('Không có Kỳ điểm danh nào đang mở.'));
       }
 
+      await sessionService.cancelSession(session.id, guild.id);
+      auditLog({ guildId: guild.id, actorId: interaction.user.id, action: 'SESSION_CANCEL', metadata: { sessionId: session.id } }).catch(() => {});
+      stopAutoRefresh(session.id);
+
+      const channel = interaction.channel;
+      await disableAttendanceUI(interaction.client, channel, session, []).catch(() => null);
+
+      log.info('SESSION_CANCEL', guild.id, 'Admin %s đã hủy phiên %s', interaction.user.tag, session.session_name);
       metrics.sessionClosed(guild.id, { cancelled: true });
 
-      const attended = await attendanceService.getAttendances(session.id);
-      await Promise.allSettled([
-        interaction.editReply(replyOkEdit('✅ Kỳ điểm danh đã được hủy thành công.')),
-        disableAttendanceUI(interaction.client, channel, session, attended),
-      ]);
+      return interaction.editReply(replyOkEdit('🗑️ Kỳ điểm danh đã được hủy thành công.'));
     }
 
-    // ── session:cancel_cancel ───────────────────────────────────────────────────
-    if (customId === 'session:cancel_cancel') {
-      if (!checkCooldown(interaction.user.id, 'session_cancel_cancel', 1000)) {
-        return interaction.reply({ content: '⏳ Vui lòng đợi một chút...', flags: MessageFlags.Ephemeral });
-      }
-      return interaction.reply({ content: '↩️ Đã hủy. Kỳ vẫn đang mở.', flags: MessageFlags.Ephemeral });
-    }
-
-    // ── attend_close ─────────────────────────────────────────────────────────────
+    // ── attend_close (Đóng phiên — xác nhận) ─────────────────────────────────────
     if (customId === 'attend_close') {
-      if (!checkCooldown(interaction.user.id, 'session_close', 5000)) {
-        return interaction.reply({ content: '⏳ Vui lòng đợi một chút...', flags: MessageFlags.Ephemeral });
-      }
-      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-      const { ok } = await requireAdmin(interaction, { context: 'đóng phiên', deferred: true });
+      const { ok } = await requireAdmin(interaction, { context: 'đóng phiên điểm danh' });
       if (!ok) return;
-      const session = await sessionService.getActiveSession(guild.id);
-      if (!session) return interaction.editReply(replyErrEdit('Không có Kỳ nào đang mở.'));
-      return interaction.editReply(
-        replyConfirm(
-          `Bạn có chắc muốn đóng Kỳ **"${session.session_name}"**?\n> Hành động này không thể hoàn tác.`,
-          'session:confirm_close',
-          'session:cancel_close',
+
+      const sessions = await sessionService.getActiveSessions(guild.id);
+      if (!sessions || sessions.length === 0) {
+        return interaction.reply(replyErr('Không có Kỳ điểm danh nào đang mở.'));
+      }
+
+      if (sessions.length === 1) {
+        const s = sessions[0];
+        return interaction.reply(
+          replyConfirm(
+            `🔒 Bạn có chắc muốn đóng Kỳ **"${s.session_name}"** không?\n\n` +
+            '> Sau khi đóng, thành viên không thể điểm danh thêm. Kết quả sẽ được tổng kết và cập nhật vào hệ thống.',
+            'session:confirm_close',
+            'session:cancel_close',
+          )
+        );
+      }
+
+      const rows = [
+        new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setCustomId('session:confirm_close:single')
+            .setLabel(`Đóng phiên này: "${sessions[0].session_name}"`)
+            .setStyle(ButtonStyle.Danger),
+          new ButtonBuilder()
+            .setCustomId('session:confirm_close:all')
+            .setLabel(`Đóng TẤT CẢ (${sessions.length} phiên)`)
+            .setStyle(ButtonStyle.Danger),
         ),
-      );
+        new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setCustomId('session:cancel_close:all')
+            .setLabel('Hủy')
+            .setStyle(ButtonStyle.Secondary),
+        ),
+      ];
+
+      return interaction.reply({
+        content: `⚠️ Có **${sessions.length} phiên** đang mở đồng thời. Bạn muốn đóng phiên nào?`,
+        components: rows,
+        flags: MessageFlags.Ephemeral,
+      });
     }
 
-    // ── session:confirm_close ───────────────────────────────────────────────────
-    if (customId === 'session:confirm_close') {
-      const { channel } = interaction;
-      if (!checkCooldown(interaction.user.id, 'session_confirm_close', 5000)) {
-        return interaction.reply({ content: '⏳ Vui lòng đợi một chút...', flags: MessageFlags.Ephemeral });
-      }
+    // ── session:cancel_close / cancel_close:all ───────────────────────────────────
+    if (customId === 'session:cancel_close' || customId === 'session:cancel_close:all') {
+      return interaction.update({ content: 'Đã hủy thao tác đóng phiên.', embeds: [], components: [] });
+    }
+
+    // ── session:confirm_close:all (Đóng tất cả các phiên đang mở) ────────────────
+    if (customId === 'session:confirm_close:all') {
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-      // [SEC-FIX-1] Re-validate admin
-      const { ok: okClose } = await requireAdmin(interaction, { context: 'xác nhận đóng phiên', deferred: true });
-      if (!okClose) return;
-      const session = await sessionService.getActiveSession(guild.id);
-      if (!session) return interaction.editReply(replyErrEdit('Kỳ đã được đóng trước đó.'));
+      const { ok } = await requireAdmin(interaction, { context: 'đóng tất cả phiên điểm danh', deferred: true });
+      if (!ok) return;
 
-      try {
-        stopAutoRefresh(session.id);
-        await sessionService.closeSession(session.id, guild.id);
-        cancelTimers(guild.id);
-        auditLog({ guildId: guild.id, actorId: interaction.user.id, action: 'SESSION_CLOSE', targetId: session.id, metadata: { session_name: session.session_name, eligible_count: session.eligible_member_ids?.length } }).catch(() => {});
-      } catch (e) {
-        log.error('CLOSE', guild.id, 'closeSession thất bại %s: %s', session.id, e.message);
-        const stillActive = await sessionService.getActiveSession(guild.id).catch(() => null);
-        if (!stillActive) {
-          return interaction.editReply(replyOkEdit('✅ Kỳ đã được đóng bởi người khác.'));
-        }
-        return interaction.editReply(replyErrEdit('Không thể đóng Kỳ do lỗi DB, thử lại sau.'));
+      const sessions = await sessionService.getActiveSessions(guild.id);
+      if (!sessions || sessions.length === 0) {
+        return interaction.editReply(replyErrEdit('Không có Kỳ điểm danh nào đang mở.'));
       }
 
-      // Auto-mark khong_tham_gia cho eligible members chưa điểm danh
-      const eligibleIds = session.eligible_member_ids ?? [];
-      if (eligibleIds.length > 0) {
+      let closedCount = 0;
+      for (const s of sessions) {
         try {
-          const existingRecords = await attendanceService.getAttendances(session.id);
-          const existingUserIds = new Set(existingRecords.map(r => r.user_id));
-          const absentIds = eligibleIds.filter(uid => !existingUserIds.has(uid));
-          if (absentIds.length > 0) {
-            await guild.members.fetch().catch(() => {});
-            const absentRows = absentIds.map(uid => {
-              const member = guild.members.cache.get(uid);
-              return {
-                user_id:  uid,
-                username: member?.user?.username ?? member?.displayName ?? uid,
-              };
-            });
-            await attendanceService.bulkInsertAbsent(session.id, guild.id, absentRows);
-            log.info('CLOSE', guild.id, 'Auto-mark khong_tham_gia: %d thành viên (%s)',
-              absentIds.length, absentIds.join(', '));
+          stopAutoRefresh(s.id);
+          await sessionService.closeSession(s.id, guild.id);
+          const attended = await attendanceService.getAttendances(s.id);
+          const statsMap = await endSession(guild, s, attended);
+          const ch = s.channel_id ? await guild.channels.fetch(s.channel_id).catch(() => null) : interaction.channel;
+          if (ch) {
+            await disableAttendanceUI(interaction.client, ch, s, attended).catch(() => null);
+            await announceBadges(guild, ch, guild.id, s.id, attended, statsMap).catch(() => null);
           }
+          closedCount++;
         } catch (e) {
-          log.warn('CLOSE', guild.id, 'bulkInsertAbsent thất bại (non-fatal): %s', e.message);
+          log.error('CLOSE_ALL', guild.id, 'Lỗi đóng phiên %s: %s', s.id, e.message);
         }
       }
 
-      const attended = await attendanceService.getAttendances(session.id);
-      await guild.members.fetch().catch(() => {});
-      await guild.roles.fetch().catch(() => {});
-      const [settledEndSession] = await Promise.allSettled([
-        endSession(guild, session, attended),
-        disableAttendanceUI(interaction.client, channel, session, attended),
-      ]);
-      const statsMap = settledEndSession.status === 'fulfilled' ? settledEndSession.value : null;
+      auditLog({ guildId: guild.id, actorId: interaction.user.id, action: 'SESSION_CLOSE_ALL', metadata: { count: closedCount } }).catch(() => {});
+      log.info('CLOSE_ALL', guild.id, 'Admin %s đã đóng %d phiên', interaction.user.tag, closedCount);
+      return interaction.editReply(replyOkEdit(`✅ Đã đóng thành công **${closedCount}/${sessions.length}** Kỳ điểm danh.`));
+    }
 
+    // ── session:confirm_close / session:confirm_close:single (Đóng phiên hiện tại) ──
+    if (customId === 'session:confirm_close' || customId === 'session:confirm_close:single') {
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+      const { ok } = await requireAdmin(interaction, { context: 'đóng phiên điểm danh', deferred: true });
+      if (!ok) return;
+
+      const session = await sessionService.getActiveSession(guild.id);
+      if (!session) {
+        return interaction.editReply(replyErrEdit('Không có Kỳ điểm danh nào đang mở.'));
+      }
+
+      // 1. Tắt auto-refresh
+      stopAutoRefresh(session.id);
+
+      // 2. Cập nhật DB: đóng session
+      await sessionService.closeSession(session.id, guild.id);
+      auditLog({ guildId: guild.id, actorId: interaction.user.id, action: 'SESSION_CLOSE', metadata: { sessionId: session.id } }).catch(() => {});
+
+      // 3. Lấy danh sách điểm danh và tính stats
+      const attended = await attendanceService.getAttendances(session.id);
+      const statsMap = await endSession(guild, session, attended);
+
+      // 4. Cập nhật embed trong channel: disable UI
+      const channel = interaction.channel;
+      await disableAttendanceUI(interaction.client, channel, session, attended).catch(() => null);
+
+      log.info('SESSION_CLOSE', guild.id, 'Admin %s đã đóng phiên %s (%d người)', interaction.user.tag, session.session_name, attended.length);
       metrics.sessionClosed(guild.id, { cancelled: false });
       metrics.sessionMemberCount(guild.id, attended.length);
 
       await announceBadges(guild, channel, guild.id, session.id, attended, statsMap).catch(() => null);
       return interaction.editReply(replyOkEdit('✅ Kỳ điểm danh đã được đóng thành công.'));
     }
-
-    // ── session:cancel_close ────────────────────────────────────────────────────
-    if (customId === 'session:cancel_close') {
-      if (!checkCooldown(interaction.user.id, 'session_cancel_close', 1000)) {
-        return interaction.reply({ content: '⏳ Vui lòng đợi một chút...', flags: MessageFlags.Ephemeral });
-      }
-      return interaction.reply({ content: '↩️ Đã hủy. Kỳ vẫn đang mở.', flags: MessageFlags.Ephemeral });
-    }
-
-    // ── session:confirm_close:all (batch) ───────────────────────────────────────
-    if (customId === 'session:confirm_close:all') {
-      if (!checkCooldown(interaction.user.id, 'session_confirm_close_all', 5000)) {
-        return interaction.reply({ content: '⏳ Vui lòng đợi một chút...', flags: MessageFlags.Ephemeral });
-      }
-      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-      const { ok: okBatch } = await requireAdmin(interaction, { context: 'đóng tất cả phiên', deferred: true });
-      if (!okBatch) return;
-
-      const sessions = await sessionService.getActiveSessions(guild.id);
-      if (!sessions.length) return interaction.editReply(replyErrEdit('Không có Kỳ nào để đóng.'));
-
-      for (const s of sessions) stopAutoRefresh(s.id);
-      cancelTimers(guild.id);
-
-      let closed = 0;
-      let failed = 0;
-      for (const s of sessions) {
-        try {
-          await sessionService.closeSession(s.id, guild.id);
-          auditLog({ guildId: guild.id, actorId: interaction.user.id, action: 'SESSION_CLOSE', targetId: s.id, metadata: { session_name: s.session_name, batch: true } }).catch(() => {});
-          closed++;
-          if (s.channel_id && s.message_id) {
-            const ch = await guild.channels.fetch(s.channel_id).catch(() => null);
-            if (ch) {
-              const attended = await attendanceService.getAttendances(s.id);
-              await disableAttendanceUI(interaction.client, ch, s, attended).catch(() => null);
-            }
-          }
-        } catch (e) {
-          log.warn('CLOSE_ALL', guild.id, 'Đóng phiên %s thất bại: %s', s.id, e.message);
-          failed++;
-        }
-      }
-
-      log.info('CLOSE_ALL', guild.id, 'Đã đóng %d/%d phiên (%d lỗi)', closed, sessions.length, failed);
-      let reply = `Đã đóng **${closed}/${sessions.length}** Kỳ đang mở.`;
-      if (failed > 0) reply += `\n⚠️ ${failed} Kỳ gặp lỗi (xem log).`;
-      return interaction.editReply(replyOkEdit(reply));
-    }
-
-    // ── session:cancel_close:all (batch) ─────────────────────────────────────────
-    if (customId === 'session:cancel_close:all') {
-      // [BUG-UX-2] Fix: trả về reply thay vì silent return khi cooldown
-      if (!checkCooldown(interaction.user.id, 'session_cancel_close_all', 1000)) {
-        return interaction.reply({ content: '⏳ Vui lòng đợi một chút...', flags: MessageFlags.Ephemeral });
-      }
-      return interaction.reply({ content: '↩️ Đã hủy. Các Kỳ vẫn đang mở.', flags: MessageFlags.Ephemeral });
-    }
-  }, 'SessionButtonHandler')(interaction); }
+  }
 }
 
 module.exports = { SessionButtonHandler };
