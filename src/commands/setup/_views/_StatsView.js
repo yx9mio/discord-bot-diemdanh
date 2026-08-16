@@ -13,6 +13,7 @@ const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelect
 const { COLORS, ICONS, getPhaiIcon, formatPhaiList } = require('../../../../utils/theme.js');
 const { FOOTER_DEFAULT, buildRichProgressBar, pctEmoji, pctLabel, buildAuthor } = require('../../../../utils/embeds.js');
 const { STATUS_CONFIG } = require('../../../../utils/design-tokens.js');
+const { setupNavRow } = require('../../../../utils/setupUi.js');
 
 const CUSTOM_ID = {
   TOI:       'setup:stats:toi',
@@ -59,17 +60,14 @@ function _footer(ctx, extra = '') {
 
 // ─── Nav row dùng chung ───────────────────────────────────────────────
 function _navRow() {
-  return new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId(CUSTOM_ID.REFRESH).setLabel('Làm mới').setEmoji(ICONS.REFRESH).setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId(CUSTOM_ID.BACK_HOME).setLabel('← Dashboard').setEmoji(ICONS.HOME).setStyle(ButtonStyle.Secondary),
-  );
+  return setupNavRow(CUSTOM_ID.REFRESH);
 }
 
 // ─── Menu chính ───────────────────────────────────────────────────────
 function renderStatsMenu() {
   const embed = new EmbedBuilder()
     .setColor(COLORS.PRIMARY)
-    .setTitle(`${ICONS.CHART} BXH Bang Chiến`)
+    .setTitle(`${ICONS.TROPHY} BXH`)
     .setDescription([
       '> Chọn một mục bên dưới để xem BXH.',
       '',
@@ -346,7 +344,7 @@ async function renderLichSu(records, userId, guild, page = 0) {
     new ButtonBuilder().setCustomId('setup:stats:lichsu:prev').setLabel('◀ Trước').setStyle(ButtonStyle.Secondary).setDisabled(cPage === 0),
     new ButtonBuilder().setCustomId('setup:stats:lichsu:next').setLabel('Sau ▶').setStyle(ButtonStyle.Secondary).setDisabled(cPage >= totalPages - 1),
     new ButtonBuilder().setCustomId(CUSTOM_ID.REFRESH).setLabel('Làm mới').setEmoji(ICONS.REFRESH).setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId(CUSTOM_ID.BACK_HOME).setLabel('← Dashboard').setEmoji(ICONS.HOME).setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(CUSTOM_ID.BACK_HOME).setLabel('Cài Đặt Bot').setEmoji(ICONS.HOME).setStyle(ButtonStyle.Secondary),
   );
 
   // [FIX] Footer encode ctx:lichsu + uid + trang để REFRESH & pagination đọc đúng người và view

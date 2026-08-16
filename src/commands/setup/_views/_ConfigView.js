@@ -2,6 +2,7 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { COLORS, ICONS, getPhaiIcon } = require('../../../../utils/theme.js');
 const { FOOTER_DEFAULT, buildAuthor } = require('../../../../utils/embeds.js');
+const { setupNavRow } = require('../../../../utils/setupUi.js');
 
 // Lưu messageId của ConfigView để các edit handler có thể fetch và update
 const _configMsgIds = new Map(); // guildId → messageId
@@ -38,7 +39,7 @@ function render({ cfg, guild }) {
   const embed = new EmbedBuilder()
     .setColor(COLORS.PRIMARY)
     .setAuthor(buildAuthor(guild))
-    .setTitle(`${ICONS.GEAR} Cài Đặt Bang`)
+    .setTitle(`${ICONS.GEAR} Cấu Hình Bang`)
     .setThumbnail(guild.iconURL({ size: 64 }) ?? null)
     .setFooter({ text: FOOTER_DEFAULT })
     .setTimestamp();
@@ -64,10 +65,7 @@ function render({ cfg, guild }) {
     new ButtonBuilder().setCustomId(CUSTOM_ID.EDIT_EMOJI_NAME).setLabel('Tên emoji').setEmoji('⭐').setStyle(ButtonStyle.Secondary).setDisabled(!phaiIds.length),
   );
 
-  const navRow = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId(CUSTOM_ID.REFRESH).setLabel('Làm mới').setEmoji(ICONS.REFRESH).setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId(CUSTOM_ID.BACK_HOME).setLabel('← Dashboard').setEmoji(ICONS.HOME).setStyle(ButtonStyle.Secondary),
-  );
+  const navRow = setupNavRow(CUSTOM_ID.REFRESH);
 
   return { embeds: [embed], components: [roleRow, phaiRow, navRow] };
 }

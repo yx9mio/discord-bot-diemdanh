@@ -7,7 +7,7 @@ const {
   ModalBuilder, TextInputBuilder, TextInputStyle,
 } = require('discord.js');
 const { COLORS, ICONS, getPhaiIcon, formatPhaiList } = require('../../../../utils/theme.js');
-const { FOOTER_DEFAULT } = require('../../../../utils/embeds.js');
+const { FOOTER_DEFAULT, buildAuthor } = require('../../../../utils/embeds.js');
 
 const CUSTOM_ID = {
   ADD:                'setup:mem:add',
@@ -151,9 +151,10 @@ function render({ members, page = 0, guild, cfg = null, filterPhai = '' }) {
   const footerExtra = filterPhai ? `phai:${filterPhai}` : '';
   const embed = new EmbedBuilder()
     .setColor(COLORS.PRIMARY)
-    .setTitle(`${ICONS.MEMBER} Thành viên Bang — ${guild.name}`)
+    .setAuthor(buildAuthor(guild))
+    .setTitle(`${ICONS.MEMBER} Quân Số`)
     .setDescription(desc)
-    .setFooter({ text: `${FOOTER_DEFAULT} · Trang ${cPage + 1}/${totalPages} · Tổng ${total} thành viên${footerExtra ? ` · ${footerExtra}` : ''}` })
+    .setFooter({ text: `${FOOTER_DEFAULT} · Trang ${cPage + 1}/${totalPages} · ${total} người${footerExtra ? ` · ${footerExtra}` : ''}` })
     .setTimestamp();
 
   const components = [];
@@ -219,7 +220,7 @@ function render({ members, page = 0, guild, cfg = null, filterPhai = '' }) {
     new ButtonBuilder().setCustomId(CUSTOM_ID.RESET_ALL).setLabel('↻ Reset').setEmoji(ICONS.WARN).setStyle(ButtonStyle.Danger),
     new ButtonBuilder().setCustomId(CUSTOM_ID.PAGE_PREV).setLabel('◀').setStyle(ButtonStyle.Secondary).setDisabled(cPage === 0),
     new ButtonBuilder().setCustomId(CUSTOM_ID.PAGE_NEXT).setLabel('▶').setStyle(ButtonStyle.Secondary).setDisabled(cPage >= totalPages - 1),
-    new ButtonBuilder().setCustomId(CUSTOM_ID.BACK_HOME).setLabel('←').setEmoji(ICONS.HOME).setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(CUSTOM_ID.BACK_HOME).setLabel('Cài Đặt Bot').setEmoji(ICONS.HOME).setStyle(ButtonStyle.Secondary),
   );
 
   components.push(bottomRow);

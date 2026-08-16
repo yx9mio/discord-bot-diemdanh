@@ -1,7 +1,7 @@
 'use strict';
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { COLORS, ICONS, getPhaiIcon } = require('../../../../utils/theme.js');
-const { FOOTER_DEFAULT, buildAuthor } = require('../../../../utils/embeds.js');
+const { FOOTER_DEFAULT, buildAuthor, buildRichProgressBar } = require('../../../../utils/embeds.js');
 const { DAY_NAMES: DAY_VI } = require('../../../../utils/format.js');
 
 const CUSTOM_ID = {
@@ -26,6 +26,10 @@ const REQUIRED_CONFIG = [
   { key: 'attendance_role_id', label: 'Thêm role đối tượng điểm danh' },
 ];
 
+// [REDESIGN] "Thêm thành viên" là mục phụ (tuỳ chọn) — không nằm trong checklist bắt buộc
+const CHECKLIST_ITEMS = [...REQUIRED_CONFIG.map(c => c.label), 'Cấu hình phái'];
+const CHECKLIST_TOTAL = CHECKLIST_ITEMS.length;
+
 function _computeState(cfg, members, schedules, sessions) {
   if ((sessions?.length ?? 0) > 0) return { state: 'active', missing: [] };
   const missing = [];
@@ -33,7 +37,6 @@ function _computeState(cfg, members, schedules, sessions) {
     if (!cfg?.[key]) missing.push(label);
   }
   if (!(cfg?.phai_role_ids?.length)) missing.push('Cấu hình phái');
-  if ((members?.length ?? 0) === 0) missing.push('Thêm thành viên');
   if (missing.length) return { state: 'incomplete', missing };
   if ((schedules?.length ?? 0) === 0) return { state: 'empty', missing };
   return { state: 'ready', missing };
@@ -122,17 +125,19 @@ function render({ guild, cfg, schedules, members, sessions, attendances }) {
   if (state === 'active') {
     desc.push('> 🟢 **Hệ thống sẵn sàng** — đang có Bang Chiến hoạt động.');
   } else if (state === 'incomplete') {
+    const doneCount = CHECKLIST_TOTAL - missing.length;
     desc.push('> ⚠️ **Server chưa sẵn sàng**');
-    for (const m of missing) desc.push(`⬜ ${m}`);
+    desc.push(`> 📋 **${doneCount}/${CHECKLIST_TOTAL} mục đã hoàn tất**`);
+    desc.push(`> \`${buildRichProgressBar((doneCount / CHECKLIST_TOTAL) * 100, 8)}\``);
+    for (const label of CHECKLIST_ITEMS) {
+      desc.push(`${missing.includes(label) ? '⬜' : '✅'} ${label}`);
+    }
     desc.push('> _Hãy hoàn tất các mục trên trước khi mở Bang Chiến._');
   } else if (state === 'empty') {
     desc.push('> 💤 **Chưa có dữ liệu** — cấu hình đã đủ, hãy thêm lịch và bắt đầu.');
   } else {
     desc.push('> 🟢 **Hệ thống sẵn sàng** — bấm **➕ Mở Bang Chiến** bên dưới.');
   }
-
-  desc.push(`📡 ${hasChannel ? `<#${cfg.notification_channel_id}>` : '🔴 Chưa cài'} · 🌐 \`${tz}\``);
-  desc.push(`${ICONS.MEMBER} **${members?.length ?? 0}** quân`);
 
   if (cnt > 0) {
     const s = activeSessions[0];
@@ -185,12 +190,20 @@ function render({ guild, cfg, schedules, members, sessions, attendances }) {
     : state === 'empty' ? COLORS.NEUTRAL
     : COLORS.SUCCESS;
 
+  // [REDESIGN] Cấu hình tách thành fields inline — không còn lẫn vào desc
+  const configFields = [
+    { name: '📡 Kênh thông báo', value: hasChannel ? `<#${cfg.notification_channel_id}>` : '🔴 Chưa cài', inline: true },
+    { name: '🌐 Múi giờ', value: `\`${tz}\``, inline: true },
+    { name: `${ICONS.MEMBER} Quân số`, value: `**${members?.length ?? 0}**`, inline: true },
+  ];
+
   const embed = new EmbedBuilder()
     .setColor(color)
     .setAuthor(buildAuthor(guild))
-    .setTitle('⚔️ Trung Tâm Chỉ Huy — Quản Gia')
+    .setTitle('⚙️ Cài Đặt Bot')
     .setThumbnail(guild.iconURL({ size: 64 }) ?? null)
     .setDescription(desc.join('\n'))
+    .addFields(...configFields)
     .setFooter({ text: FOOTER_DEFAULT })
     .setTimestamp();
 
@@ -199,7 +212,7 @@ function render({ guild, cfg, schedules, members, sessions, attendances }) {
     new ButtonBuilder().setCustomId(CUSTOM_ID.STATS).setLabel('BXH').setEmoji(ICONS.TROPHY).setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId(CUSTOM_ID.AUDIT).setLabel('Nhật ký').setEmoji('📜').setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId(CUSTOM_ID.CFG).setLabel('Cài Đặt').setEmoji(ICONS.GEAR).setStyle(hasChannel ? ButtonStyle.Secondary : ButtonStyle.Primary),
-    new ButtonBuilder().setCustomId(CUSTOM_ID.MEM).setLabel('Quân Số').setEmoji(ICONS.MEMBER).setStyle((members?.length ?? 0) > 0 ? ButtonStyle.Secondary : ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId(CUSTOM_ID.MEM).setLabel('Quân Số').setEmoji(ICONS.MEMBER).setStyle(ButtonStyle.Secondary),
   );
 
   const actionRow = new ActionRowBuilder().addComponents(
@@ -223,7 +236,7 @@ function renderError({ guild, reason }) {
 
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId(CUSTOM_ID.REFRESH).setLabel('Thử lại').setEmoji(ICONS.REFRESH).setStyle(ButtonStyle.Primary),
-    new ButtonBuilder().setCustomId(CUSTOM_ID.HOME).setLabel('← Dashboard').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(CUSTOM_ID.HOME).setLabel('Cài Đặt Bot').setStyle(ButtonStyle.Secondary),
   );
 
   return { embeds: [embed], components: [row] };

@@ -6,6 +6,7 @@ const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('
 const { COLORS, ICONS } = require('../../../../utils/theme.js');
 const { FOOTER_DEFAULT, buildAuthor } = require('../../../../utils/embeds.js');
 const { DAY_NAMES: DAY_VI } = require('../../../../utils/format.js');
+const { setupNavRow } = require('../../../../utils/setupUi.js');
 
 const CUSTOM_ID = {
   ADD_R:         'setup:sch:add:r',
@@ -61,7 +62,7 @@ function render({ schedules, page = 0, guild }) {
     .setAuthor(buildAuthor(guild))
     .setTitle(`${ICONS.CALENDAR} Lịch Bang Chiến`)
     .setDescription(desc)
-    .setFooter({ text: `${FOOTER_DEFAULT} · Trang ${cPage + 1}/${totalPages} · Tổng ${total} lịch` })
+    .setFooter({ text: `${FOOTER_DEFAULT} · Trang ${cPage + 1}/${totalPages} · ${total} lịch` })
     .setTimestamp();
 
   const components = [];
@@ -91,10 +92,7 @@ function render({ schedules, page = 0, guild }) {
     new ButtonBuilder().setCustomId(CUSTOM_ID.PAGE_NEXT).setLabel('Sau ▶').setStyle(ButtonStyle.Secondary).setDisabled(cPage >= totalPages - 1),
   );
 
-  const navRow = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId(CUSTOM_ID.REFRESH).setLabel('Làm mới').setEmoji(ICONS.REFRESH).setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId(CUSTOM_ID.BACK_HOME).setLabel('← Dashboard').setEmoji(ICONS.HOME).setStyle(ButtonStyle.Secondary),
-  );
+  const navRow = setupNavRow(CUSTOM_ID.REFRESH);
 
   components.push(ctrlRow, navRow);
   return { embeds: [embed], components, _page: cPage, _totalPages: totalPages };

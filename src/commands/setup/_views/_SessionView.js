@@ -175,7 +175,7 @@ function renderSummary({ session, guild, cfg, members, attendances, sessionCount
 
   components.push(
     new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId('setup:home').setLabel('← Dashboard').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId('setup:home').setLabel('Cài Đặt Bot').setEmoji(ICONS.HOME).setStyle(ButtonStyle.Secondary),
     ),
   );
 
@@ -233,7 +233,7 @@ function renderRoster({ session, guild, attendances, page }) {
   components.push(
     new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId(CUSTOM_ID.REFRESH).setLabel('Làm mới').setEmoji('🔄').setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId('setup:home').setLabel('← Dashboard').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId('setup:home').setLabel('Cài Đặt Bot').setEmoji(ICONS.HOME).setStyle(ButtonStyle.Secondary),
     ),
   );
 
@@ -282,7 +282,7 @@ function renderDetails({ session, guild, members, attendances, cfg }) {
     ),
     new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId(CUSTOM_ID.REFRESH).setLabel('Làm mới').setEmoji('🔄').setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId('setup:home').setLabel('← Dashboard').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId('setup:home').setLabel('Cài Đặt Bot').setEmoji(ICONS.HOME).setStyle(ButtonStyle.Secondary),
     ),
   ];
 

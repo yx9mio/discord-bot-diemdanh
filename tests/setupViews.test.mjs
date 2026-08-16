@@ -1,6 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { HomeView } from '../src/commands/setup/_views/_HomeView.js';
 import { SessionView } from '../src/commands/setup/_views/_SessionView.js';
+import { MemberView } from '../src/commands/setup/_views/_MemberView.js';
+import { ConfigView } from '../src/commands/setup/_views/_ConfigView.js';
+import { ScheduleView } from '../src/commands/setup/_views/_ScheduleView.js';
+import { AuditView } from '../src/commands/setup/_views/_AuditView.js';
+import { StatsView } from '../src/commands/setup/_views/_StatsView.js';
 
 function makeCache(arr) {
   return {
@@ -69,10 +74,10 @@ describe('HomeView._computeState', () => {
     expect(res.missing).toContain('Cấu hình phái');
   });
 
-  it('incomplete khi chưa có thành viên', () => {
+  it('empty khi cấu hình đủ — kể cả khi chưa có thành viên (quân số không bắt buộc)', () => {
     const res = HomeView._computeState(cfgFull, [], [], []);
-    expect(res.state).toBe('incomplete');
-    expect(res.missing).toEqual(['Thêm thành viên']);
+    expect(res.state).toBe('empty');
+    expect(res.missing).toEqual([]);
   });
 
   it('empty khi chưa có lịch nhưng cấu hình đủ', () => {
@@ -88,20 +93,46 @@ describe('HomeView.render — trạng thái', () => {
   it('ready: trạng thái xanh, không checklist', () => {
     const view = HomeView.render({ guild, cfg: cfgFull, schedules: [{ id: 'sch1' }], members, sessions: [] });
     const desc = view.embeds[0].data.description;
-    expect(view.embeds[0].data.title).toBe('⚔️ Trung Tâm Chỉ Huy — Quản Gia');
+    expect(view.embeds[0].data.title).toBe('⚙️ Cài Đặt Bot');
     expect(desc).toContain('🟢 **Hệ thống sẵn sàng**');
     expect(desc).not.toContain('⬜');
     expect(view.embeds[0].data.color).toBe(0x437a22);
   });
 
-  it('incomplete: ⚠️ + checklist + màu warning', () => {
+  it('incomplete: ⚠️ + progress + checklist 4 mục + màu warning', () => {
     const view = HomeView.render({ guild, cfg: { timezone: 'Asia/Ho_Chi_Minh' }, schedules: [], members: [], sessions: [] });
     const desc = view.embeds[0].data.description;
+    expect(view.embeds[0].data.title).toBe('⚙️ Cài Đặt Bot');
     expect(desc).toContain('⚠️ **Server chưa sẵn sàng**');
+    expect(desc).toContain('0/4 mục đã hoàn tất');
+    expect(desc).toContain('▱▱▱▱▱▱▱▱');
     expect(desc).toContain('⬜ Chọn kênh thông báo');
     expect(desc).toContain('⬜ Cấu hình role quản trị');
+    expect(desc).toContain('⬜ Thêm role đối tượng điểm danh');
     expect(desc).toContain('⬜ Cấu hình phái');
+    expect(desc).not.toContain('Thêm thành viên');
     expect(view.embeds[0].data.color).toBe(0x964219);
+  });
+
+  it('incomplete một phần: cột hoàn tất + mục đã xong đánh ✅', () => {
+    const view = HomeView.render({
+      guild, cfg: { timezone: 'Asia/Ho_Chi_Minh', notification_channel_id: 'c1' },
+      schedules: [], members: [], sessions: [],
+    });
+    const desc = view.embeds[0].data.description;
+    expect(desc).toContain('1/4 mục đã hoàn tất');
+    expect(desc).toContain('✅ Chọn kênh thông báo');
+    expect(desc).toContain('▰▰▱▱▱▱▱▱');
+  });
+
+  it('cấu hình hiển thị dưới dạng fields inline (Kênh / Múi giờ / Quân số) ở mọi state', () => {
+    const view = HomeView.render({ guild, cfg: cfgFull, schedules: [{ id: 'sch1' }], members, sessions: [] });
+    const fields = view.embeds[0].data.fields;
+    expect(fields.map(f => f.name)).toEqual(['📡 Kênh thông báo', '🌐 Múi giờ', '👥 Quân số']);
+    expect(fields[0].value).toContain('<#c1>');
+    expect(fields[1].value).toContain('Asia/Ho_Chi_Minh');
+    expect(fields[2].value).toContain('**4**');
+    expect(view.embeds[0].data.description).not.toContain('📡 <#c1>');
   });
 
   it('empty: 💤 + màu xám', () => {
@@ -174,6 +205,14 @@ describe('HomeView.render — điều hướng', () => {
     const [main] = rowsOf(view);
     expect(main.components[3].style).toBe(1);
   });
+
+  it('nút Quân Số luôn Secondary kể cả khi chưa có quân', () => {
+    const view = HomeView.render({ guild, cfg: {}, schedules: [], members: [], sessions: [] });
+    const [main] = rowsOf(view);
+    expect(main.components[4].style).toBe(2);
+    const view2 = HomeView.render({ guild, cfg: cfgFull, schedules: [], members, sessions: [] });
+    expect(rowsOf(view2)[0].components[4].style).toBe(2);
+  });
 });
 
 describe('HomeView.renderError', () => {
@@ -184,7 +223,7 @@ describe('HomeView.renderError', () => {
     expect(view.embeds[0].data.color).toBe(0xa12c7b);
     const [row] = rowsOf(view);
     expect(row.components.map(c => c.custom_id)).toEqual(['setup:home:refresh', 'setup:home']);
-    expect(row.components.map(c => c.label)).toEqual(['Thử lại', '← Dashboard']);
+    expect(row.components.map(c => c.label)).toEqual(['Thử lại', 'Cài Đặt Bot']);
   });
 });
 
@@ -358,5 +397,65 @@ describe('SessionView — roster/details encode state', () => {
     const ctx = SessionView.parseFooter(view.embeds[0].data.footer);
     expect(ctx.ctx).toBe('details');
     expect(ctx.sessionId).toBe('s1');
+  });
+});
+
+describe('Redesign — các view khác của /setup', () => {
+  it('MemberView: author + title 👥 Quân Số + footer N người + nav Cài Đặt Bot', () => {
+    const view = MemberView.render({ members, guild, cfg: cfgFull });
+    const embed = view.embeds[0].data;
+    expect(embed.author.name).toBe('Bang Test');
+    expect(embed.author).toBeDefined();
+    expect(embed.title).toBe('👥 Quân Số');
+    expect(embed.footer.text).toContain('4 người');
+    expect(embed.footer.text).not.toContain('Tổng');
+    const ids = view.components.map(r => r.toJSON()).flatMap(r => r.components.map(c => c.custom_id));
+    const back = view.components.map(r => r.toJSON()).flatMap(r => r.components).find(c => c.custom_id === 'setup:home');
+    expect(ids).toContain('setup:home');
+    expect(back.label).toBe('Cài Đặt Bot');
+  });
+
+  it('ConfigView: title ⚙️ Cấu Hình Bang + nav chung (Làm mới + Cài Đặt Bot)', () => {
+    const view = ConfigView.render({ cfg: cfgFull, guild });
+    expect(view.embeds[0].data.title).toBe('⚙️ Cấu Hình Bang');
+    const rows = view.components.map(r => r.toJSON());
+    const nav = rows[rows.length - 1];
+    expect(nav.components.map(c => c.label)).toEqual(['Làm mới', 'Cài Đặt Bot']);
+  });
+
+  it('ScheduleView: footer N lịch + nav chung', () => {
+    const view = ScheduleView.render({ schedules: [{ id: 'sch1', day_of_week: 6, hour: 21, minute: 0 }], guild });
+    const embed = view.embeds[0].data;
+    expect(embed.footer.text).toContain('1 lịch');
+    expect(embed.footer.text).not.toContain('Tổng');
+    const rows = view.components.map(r => r.toJSON());
+    const nav = rows[rows.length - 1];
+    expect(nav.components.map(c => c.label)).toEqual(['Làm mới', 'Cài Đặt Bot']);
+  });
+
+  it('AuditView: back Cài Đặt Bot (không còn "← Trung tâm")', () => {
+    const view = AuditView.render({ entries: [], guild });
+    const rows = view.components.map(r => r.toJSON());
+    const nav = rows[rows.length - 1];
+    const back = nav.components.find(c => c.custom_id === 'setup:home');
+    expect(back.label).toBe('Cài Đặt Bot');
+  });
+
+  it('StatsView: menu title 🏆 BXH + nav chung', () => {
+    const view = StatsView.renderStatsMenu({ guild });
+    expect(view.embeds[0].data.title).toBe('🏆 BXH');
+    const rows = view.components.map(r => r.toJSON());
+    const nav = rows[rows.length - 1];
+    expect(nav.components.map(c => c.label)).toEqual(['Làm mới', 'Cài Đặt Bot']);
+  });
+
+  it('SessionView: back Cài Đặt Bot', () => {
+    const view = SessionView.renderSummary({
+      session, guild, cfg: cfgFull, members,
+      attendances, sessionCount: 1, sessions: [session],
+    });
+    const rows = view.components.map(r => r.toJSON());
+    const back = rows.flatMap(r => r.components).find(c => c.custom_id === 'setup:home');
+    expect(back.label).toBe('Cài Đặt Bot');
   });
 });

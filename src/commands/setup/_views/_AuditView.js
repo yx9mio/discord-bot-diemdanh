@@ -106,7 +106,7 @@ function render({ rows, page = 0, actionFilter = 'all', guild, totalCount }) {
     new ButtonBuilder().setCustomId(CUSTOM_ID.PREV).setLabel('◀ Trước').setStyle(ButtonStyle.Secondary).setDisabled(cPage === 0),
     new ButtonBuilder().setCustomId(CUSTOM_ID.NEXT).setLabel('Sau ▶').setStyle(ButtonStyle.Secondary).setDisabled(cPage >= totalPages - 1),
     new ButtonBuilder().setCustomId(CUSTOM_ID.REFRESH).setLabel('Làm mới').setEmoji('🔄').setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId(CUSTOM_ID.BACK_HOME).setLabel('← Trung tâm').setEmoji('🏠').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(CUSTOM_ID.BACK_HOME).setLabel('Cài Đặt Bot').setEmoji('🏠').setStyle(ButtonStyle.Secondary),
   );
 
   const filterSelect = new ActionRowBuilder().addComponents(
