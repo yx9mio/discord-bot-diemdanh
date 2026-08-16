@@ -295,7 +295,7 @@ function buildSessionEmbed(guild, session, attended = [], phaiRoleIds = [], _isE
     `${ANSI.MAGENTA}📋 Có phép: ${String(excused).padEnd(4)}${ANSI.RESET}  ` +
     `${ANSI.CYAN}📊 Tổng: ${String(total).padEnd(4)}${ANSI.RESET}`
   );
-  const ansiBlock = '```ansi\n' + ansiLines.join('\n') + '\n```';
+  const ansiBlock = '```ansi\n' + ansiLines.join('\\n') + '\n```';
 
   // ── Info parts ────────────────────────────────────────────────────────────
   const infoParts = [];
@@ -408,7 +408,7 @@ function buildClosedSessionEmbed(session, attended = [], _guild, phaiRoleIds = [
   }
 
   embed
-    .setFooter({ text: `${FOOTER_DEFAULT} · Đã đóng` })\
+    .setFooter({ text: `${FOOTER_DEFAULT} · Đã đóng` })
     .setTimestamp();
 
   const thumbUrl = _topPhaiThumbnail(phaiRoleIds, _guild, sortedAttended, emojiMap);

@@ -164,7 +164,7 @@ class SessionButtonHandler extends InteractionHandler {
           ]);
           const attended = await attendanceService.getAttendances(session.id);
           const buffer = await buildAttendanceExcel(session, attended, guild);
-          const fileName = `diem-danh_${(session.session_name ?? 'ky').replace(/[^\w\d\-_.]+/g, '_')}.xlsx`;
+          const fileName = `diem-danh_${(session.session_name ?? 'ky').replace(/[^\w.-]+/g, '_')}.xlsx`;
           return interaction.editReply({
             content: `📥 File Excel Kỳ **"${session.session_name}"** — ${attended.length} người.`,
             files: [{ attachment: buffer, name: fileName }],
@@ -341,8 +341,7 @@ class SessionButtonHandler extends InteractionHandler {
         const s = sessions[0];
         return interaction.reply(
           replyConfirm(
-            `🔒 Bạn có chắc muốn đóng Kỳ **"${s.session_name}"** không?\n\n` +
-            '> Sau khi đóng, thành viên không thể điểm danh thêm. Kết quả sẽ được tổng kết và cập nhật vào hệ thống.',
+            `🔒 Bạn có chắc muốn đóng Kỳ **"${s.session_name}"** không?\\n\\n` +\n            '> Sau khi đóng, thành viên không thể điểm danh thêm. Kết quả sẽ được tổng kết và cập nhật vào hệ thống.',
             'session:confirm_close',
             'session:cancel_close',
           )
