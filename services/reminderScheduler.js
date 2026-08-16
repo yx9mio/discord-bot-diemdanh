@@ -122,6 +122,7 @@ async function processOneReminder(guild, cfg, sched, now, tz) {
 
     // Gửi vào kênh thông báo
     const ch = await guild.channels.fetch(cfg.notification_channel_id).catch(() => null);
+    let channelOk = false;
     if (ch) {
       const embed = new EmbedBuilder()
         .setColor(0x5865f2)
@@ -139,14 +140,24 @@ async function processOneReminder(guild, cfg, sched, now, tz) {
           .setEmoji('✅')
           .setStyle(ButtonStyle.Success),
       );
-      await ch.send({ embeds: [embed], components: [confirmRow] }).catch(() => {});
+      channelOk = await ch.send({ embeds: [embed], components: [confirmRow] })
+        .then(() => true)
+        .catch(e => {
+          // [BUG-FIX] Ghi nhận lỗi gửi thật thay vì nuốt rồi log "Sent"
+          log.warn('REMINDER', guild.id, 'Gửi nhắc %dmin vào kênh thất bại: %s', minsToOpen, e.message);
+          return false;
+        });
     }
 
     // Gửi DM cho thành viên đủ điều kiện
     const dmMsg = `⏰ **Nhắc lịch:** Kỳ **${sched.session_name}** sẽ mở sau **${minsToOpen} phút**.`;
     await _sendDmReminders(guild, cfg, sched, dmMsg);
 
-    log.info('REMINDER', guild.id, 'Sent %dmin reminder for %s', minsToOpen, sched.session_name);
+    if (channelOk) {
+      log.info('REMINDER', guild.id, 'Sent %dmin reminder for %s', minsToOpen, sched.session_name);
+    } else {
+      log.warn('REMINDER', guild.id, 'Nhắc %dmin cho %s: kênh gửi thất bại (DM đã xử lý riêng)', minsToOpen, sched.session_name);
+    }
   } catch (e) {
     log.error('REMINDER', guild.id, 'processOneReminder: %s', e.message);
   }

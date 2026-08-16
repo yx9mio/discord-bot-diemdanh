@@ -17,7 +17,7 @@ class SetupSessionCancelHandler extends InteractionHandler {
 
   parse(interaction) {
     const id = interaction.customId;
-    if (id === 'setup:session:cancel' || id.startsWith(PREFIX)) return this.some();
+    if (id.startsWith(PREFIX)) return this.some();
     return this.none();
   }
 
@@ -34,9 +34,7 @@ class SetupSessionCancelHandler extends InteractionHandler {
     const guild = interaction.guild;
 
     try {
-      const sessionId = id === 'setup:session:cancel'
-        ? (await sessionService.getActiveSession(guild.id))?.id
-        : id.slice(PREFIX.length);
+      const sessionId = id.slice(PREFIX.length);
 
       const session = sessionId
         ? await sessionService.getSessionByIdRaw(sessionId, guild.id)

@@ -42,11 +42,6 @@ class SetupSessionStartHandler extends InteractionHandler {
           .setCustomId('phut_dong').setLabel('Tự động đóng sau (phút) — 0 = không tự đóng')
           .setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder('15 / 30 / 60 / 90 / 120 (mặc định 0)'),
       ),
-      new ActionRowBuilder().addComponents(
-        new TextInputBuilder()
-          .setCustomId('phai_role').setLabel('Role ID giới hạn (tuỳ chọn)')
-          .setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder('VD: 123456789012345678'),
-      ),
     );
     return interaction.showModal(modal);
   }, 'SetupSessionStartHandler')(interaction); }

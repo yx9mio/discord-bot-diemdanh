@@ -111,7 +111,12 @@ function computeSessionPatches(attended, allStats, eligibleIds, sessionId, guild
     for (const uid of eligibleIds.filter(id => !attendedIds.has(id))) {
       const stats = getStats(uid);
       if (stats.current_streak === 0) {
-        mergePatch(uid, { total_sessions: (stats.total_sessions ?? 0) + 1 });
+        // [BUG-FIX] Vắng vẫn tính total_absent — giữ bất biến
+        // total_sessions = joined + late + absent + excused
+        mergePatch(uid, {
+          total_sessions: (stats.total_sessions ?? 0) + 1,
+          total_absent:   (stats.total_absent  ?? 0) + 1,
+        });
         continue;
       }
       mergePatch(uid, {

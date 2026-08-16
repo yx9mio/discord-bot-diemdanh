@@ -44,6 +44,28 @@ class ReadyListener extends Listener {
         }
       }
 
+      // ── Catch-up recurring: bot offline lỡ giờ mở trong vòng 90 phút ──────
+      if (cfg?.notification_channel_id) {
+        const tz = cfg.timezone ?? 'Asia/Ho_Chi_Minh';
+        const now = DateTime.now().setZone(tz);
+        const schedules = await scheduledService.getScheduledSessions(guild.id);
+        for (const sched of schedules) {
+          if (sched.type !== 'recurring_weekly' || sched.hour == null) continue;
+          if (sched.day_of_week != null && (now.weekday % 7) !== sched.day_of_week) continue;
+          if (sched.skip_until) {
+            const skipUntil = DateTime.fromISO(sched.skip_until, { zone: tz });
+            if (now < skipUntil) continue;
+          }
+          const openAt = now.set({ hour: sched.hour, minute: sched.minute ?? 0, second: 0, millisecond: 0 });
+          const minsPassed = -Math.round(openAt.diff(now, 'minutes').minutes);
+          if (minsPassed < 0 || minsPassed > 90) continue; // chưa tới giờ / quá trễ
+          const alreadyActive = await getActiveSession(guild.id).catch(() => null);
+          if (alreadyActive) continue;
+          log.info('READY', guild.id, 'Catch-up recurring %s (lỡ %d phút)', sched.session_name, minsPassed);
+          await autoOpenSession(guild, cfg, sched);
+        }
+      }
+
       // ── Restore active sessions ────────────────────────────────────────────
       const sessions = await getActiveSessions(guild.id);
       if (!sessions.length) continue;

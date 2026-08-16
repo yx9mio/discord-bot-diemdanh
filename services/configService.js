@@ -16,10 +16,12 @@ async function upsertGuildConfig(config) {
 }
 
 async function ensureGuildConfig(guildId) {
+  // [BUG-FIX] maybeSingle thay single — ignoreDuplicates upsert không trả row
+  // khi row đã tồn tại → PGRST116 bị log như lỗi mỗi lần guild re-join
   const { data, error } = await getClient()
     .from('guild_configs')
     .upsert({ guild_id: guildId }, { onConflict: 'guild_id', ignoreDuplicates: true })
-    .select().single();
+    .select().maybeSingle();
   _throwSupabase(error, 'ensureGuildConfig');
   return data;
 }

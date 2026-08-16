@@ -55,6 +55,7 @@ async function getMemberStats(guildId, userId) {
       .eq('guild_id', guildId)
       .eq('user_id', userId)
   ]);
+  _throwSupabase(memberRes.error, 'getMemberStats.members');
   _throwSupabase(statsRes.error, 'getMemberStats');
   _throwSupabase(attRes.error, 'getMemberStats.attendance');
 

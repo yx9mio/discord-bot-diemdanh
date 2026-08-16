@@ -30,8 +30,9 @@ class SetupScheduleEditOneTimeModalSubmitHandler extends InteractionHandler {
   }
 
   parse(interaction) {
+    // [BUG-FIX] Bỏ prefix recurring (không còn được generate — recurring dùng
+    // select flow); chỉ parse onetime modal
     if (interaction.customId.startsWith(EDIT_ONETIME_PREFIX)) return this.some();
-    if (interaction.customId.startsWith(EDIT_RECURRING_PREFIX)) return this.some();
     return this.none();
   }
 

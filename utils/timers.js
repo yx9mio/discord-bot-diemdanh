@@ -91,7 +91,12 @@ function scheduleCloseTimer(client, guild, session, channelId, ms) {
 
       stopAutoRefresh(session.id);
       cancelSessionTimer(session.id);
-    } catch (e) { log.error('TIMER', guild.id, 'Tự đóng lỗi: %s', e.message); }
+    } catch (e) {
+      log.error('TIMER', guild.id, 'Tự đóng lỗi: %s', e.message);
+      // [BUG-FIX] Dọn timer ngay cả khi xử lý lỗi giữa chừng
+      stopAutoRefresh(session.id);
+      cancelSessionTimer(session.id);
+    }
   }, ms);
 
   timers.set(session.id, t);

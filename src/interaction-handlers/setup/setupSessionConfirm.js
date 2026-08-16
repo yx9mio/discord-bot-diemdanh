@@ -6,7 +6,7 @@ const { replyOkEdit, replyErrEdit } = require('../../../utils/embeds.js');
 const sessionService = require('../../../services/sessionService.js');
 const attendanceService = require('../../../services/attendanceService.js');
 const { endSession, announceBadges, disableAttendanceUI } = require('../../../utils/session.js');
-const { stopAutoRefresh } = require('../../../utils/timers.js');
+const { stopAutoRefresh, cancelSessionTimer } = require('../../../utils/timers.js');
 const { auditLog } = require('../../../utils/auditLog.js');
 const metrics = require('../../../utils/metrics.js');
 const log = require('../../../utils/logger.js');
@@ -56,6 +56,7 @@ class SetupSessionConfirmHandler extends InteractionHandler {
         for (const s of sessions) {
           try {
             stopAutoRefresh(s.id);
+            cancelSessionTimer(s.id);
             await sessionService.closeSession(s.id, guild.id);
             const attended = await attendanceService.getAttendances(s.id);
             const statsMap = await endSession(guild, s, attended);
@@ -84,6 +85,7 @@ class SetupSessionConfirmHandler extends InteractionHandler {
         }
 
         stopAutoRefresh(session.id);
+        cancelSessionTimer(session.id);
         await sessionService.cancelSession(session.id, guild.id);
         auditLog({ guildId: guild.id, actorId: interaction.user.id, action: 'SESSION_CANCEL', metadata: { sessionId: session.id } }).catch(() => {});
 
@@ -107,6 +109,7 @@ class SetupSessionConfirmHandler extends InteractionHandler {
 
         // 1. Tắt auto-refresh
         stopAutoRefresh(session.id);
+        cancelSessionTimer(session.id);
 
         // 2. Cập nhật DB: đóng session
         await sessionService.closeSession(session.id, guild.id);

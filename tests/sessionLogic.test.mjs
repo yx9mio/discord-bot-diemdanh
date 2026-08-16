@@ -77,7 +77,7 @@ describe('computeSessionPatches — pure logic', () => {
     expect(p.total_absent).toBe(1);
   });
 
-  it('eligible absent member with streak 0 only increments sessions', () => {
+  it('eligible absent member with streak 0 increments sessions + absent (invariant)', () => {
     const allStats = [makeStats({ user_id: 'u1', total_joined: 0, current_streak: 0, best_streak: 0 })];
 
     const { patches } = computeSessionPatches([], allStats, ['u1'], 's1', 'g1');
@@ -85,7 +85,7 @@ describe('computeSessionPatches — pure logic', () => {
     const p = patchOf(patches, 'u1');
     expect(p.current_streak).toBeUndefined();
     expect(p.total_sessions).toBe(1);
-    expect(p.total_absent).toBeUndefined();
+    expect(p.total_absent).toBe(1);
   });
 
   it('eligible member NOT in attended list gets streak reset', () => {

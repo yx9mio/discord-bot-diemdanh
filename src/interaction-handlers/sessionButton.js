@@ -20,8 +20,6 @@ const { checkCooldown } = require('../../utils/cooldown.js');
 // [BUG-FIX] Đồng bộ với tất cả customId được dùng trong file này
 const SESSION_BUTTON_IDS = new Set([
   'attend_view', 'attend_list', 'admin:mark', 'admin:edit',
-  'attend_view:prev', 'attend_view:next',
-  'attend_list:prev', 'attend_list:next',
 ]);
 
 async function _phaiData(session, guildId) {
@@ -42,9 +40,7 @@ class SessionButtonHandler extends InteractionHandler {
   }
 
   parse(interaction) {
-    // Prefix match cho attend_view:prev / attend_view:next
     if (SESSION_BUTTON_IDS.has(interaction.customId)) return this.some();
-    if (interaction.customId.startsWith('attend_view:')) return this.some();
     if (interaction.customId.startsWith('attend_list:')) return this.some();
     return this.none();
   }
@@ -58,41 +54,14 @@ class SessionButtonHandler extends InteractionHandler {
     if (!guild) return;
 
     // ── attend_view (Mở phiếu điểm danh cá nhân — ephemeral per-user) ────────
-    if (customId === 'attend_view' || customId.startsWith('attend_view:')) {
+    if (customId === 'attend_view') {
       if (!checkCooldown(interaction.user.id, 'session_view', 1000)) {
         return interaction.reply({ content: '⏳ Vui lòng đợi một chút...', flags: MessageFlags.Ephemeral });
       }
 
       const session = await sessionService.getActiveSession(guild.id);
       if (!session) {
-        if (customId.startsWith('attend_view:')) {
-          await interaction.deferUpdate();
-          return interaction.editReply({ content: '🚫 Kỳ đã kết thúc.', embeds: [], components: [] });
-        }
         return interaction.reply({ content: '🚫 Không có Kỳ điểm danh nào đang mở.', flags: MessageFlags.Ephemeral });
-      }
-
-      // Phân trang trong phiếu điểm danh cá nhân
-      if (customId.startsWith('attend_view:')) {
-        await interaction.deferUpdate();
-        const parts = customId.split(':');
-        const action = parts[1];
-        const currentPage = parseInt(parts[2], 10) || 1;
-        const sid = parts.length >= 5 ? parts[4] : null;
-        let targetSession = session;
-        if (sid && session.id !== sid) {
-          const byId = await sessionService.getSessionById(sid).catch(() => null);
-          if (byId && byId.guild_id === guild.id) targetSession = byId;
-        }
-        if (!targetSession.is_active) {
-          return interaction.editReply({ content: '🚫 Kỳ đã kết thúc.', embeds: [], components: [] });
-        }
-
-        await guild.members.fetch().catch(() => {});
-        await guild.roles.fetch().catch(() => {});
-        const next = action === 'prev' ? Math.max(1, currentPage - 1) : currentPage + 1;
-        const { embed, components } = await renderAttendancePanel(guild, targetSession, { page: next, userId: interaction.user.id });
-        return interaction.editReply({ embeds: [embed], components });
       }
 
       // Mở mới phiếu điểm danh cá nhân

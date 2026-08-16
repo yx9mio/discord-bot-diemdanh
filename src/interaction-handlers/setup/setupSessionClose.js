@@ -20,7 +20,6 @@ class SetupSessionCloseHandler extends InteractionHandler {
   parse(interaction) {
     const id = interaction.customId;
     if (id === CLOSE_ALL)         return this.some();
-    if (id === 'setup:session:close') return this.some();
     if (id.startsWith(PREFIX) && id !== CLOSE_ALL) return this.some();
     return this.none();
   }

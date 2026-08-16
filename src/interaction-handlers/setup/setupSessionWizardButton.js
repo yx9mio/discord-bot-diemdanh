@@ -139,8 +139,8 @@ class SetupSessionWizardButtonHandler extends InteractionHandler {
           .setTitle(`✅ Đã mở Bang Chiến: ${session.session_name ?? 'Không tên'}`)
           .setColor(COLORS.SUCCESS)
           .addFields(
-            { name: 'Bắt đầu', value: fmtTs(session.started_at ?? new Date().toISOString()), inline: true },
-            { name: 'Đóng lúc', value: session.auto_close_at ? fmtTs(session.auto_close_at) : 'Thủ công', inline: true },
+            { name: 'Bắt đầu', value: fmtTs(session.started_at ?? new Date().toISOString(), cfg?.timezone), inline: true },
+            { name: 'Đóng lúc', value: session.auto_close_at ? fmtTs(session.auto_close_at, cfg?.timezone) : 'Thủ công', inline: true },
           )
           .setFooter({ text: `${FOOTER_DEFAULT} · ID Bang Chiến: ${session.id}` });
 
