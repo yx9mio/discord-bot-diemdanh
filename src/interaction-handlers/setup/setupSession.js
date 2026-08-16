@@ -53,11 +53,11 @@ class SetupSessionHandler extends InteractionHandler {
         if (ctx.ctx === 'details') {
           return interaction.editReply(SessionView.renderDetails({ session, guild, members, attendances, cfg }));
         }
-        return interaction.editReply(SessionView.renderSummary({ session, guild, cfg, members, attendances }));
+        return interaction.editReply(SessionView.renderSummary({ session, guild, cfg, members, attendances, sessionCount: allSessions.length }));
       }
 
       if (customId === 'setup:session:back') {
-        return interaction.editReply(SessionView.renderSummary({ session, guild, cfg, members, attendances }));
+        return interaction.editReply(SessionView.renderSummary({ session, guild, cfg, members, attendances, sessionCount: allSessions.length }));
       }
 
       if (customId === 'setup:session:roster') {
@@ -74,7 +74,7 @@ class SetupSessionHandler extends InteractionHandler {
         return interaction.editReply(SessionView.renderRoster({ session, guild, attendances, page }));
       }
 
-      return interaction.editReply(SessionView.renderSummary({ session, guild, cfg, members, attendances }));
+      return interaction.editReply(SessionView.renderSummary({ session, guild, cfg, members, attendances, sessionCount: allSessions.length }));
     } catch (e) {
       log.error('SETUP_SESSION', guild.id, 'Session load thất bại: %s', e.message);
       return interaction.editReply({ content: '❌ Không thể tải dữ liệu Bang Chiến, thử lại sau.' });

@@ -1,36 +1,27 @@
-// [FIX-OPTS] Phân trang trang 2+ cho phép phiên đóng / admin edit / xem danh sách
-// [FIX-SELECT] attend_view pagination + attend_refresh: thêm buildAttendanceSelectRow(true)
-//   để select menu không bị mất sau khi paginate hoặc refresh
+// [UX-W1] Board không còn hàng admin: xóa attend_refresh / attend_close /
+// session:cancel / confirm-close, cancel — chuyển toàn bộ sang /setup SessionView
 'use strict';
 const { MessageFlags, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const sessionService = require('../../services/sessionService.js');
 const attendanceService = require('../../services/attendanceService.js');
 const log = require('../../utils/logger.js');
-const metrics = require('../../utils/metrics.js');
 const { requireAdmin, isAdmin } = require('../../utils/permissions.js');
 const configService = require('../../services/configService.js');
 const { buildAttendanceExcel } = require('../../utils/attendanceExcel.js');
 const {
   buildSessionEmbed,
-  buildAttendanceSelectRow, buildAttendanceFilterRow, renderAttendancePanel,
-  replyErr, replyErrEdit, replyOkEdit, replyConfirm,
+  buildAttendanceFilterRow, renderAttendancePanel,
+  replyErrEdit,
 } = require('../../utils/embeds.js');
-const { endSession, announceBadges, disableAttendanceUI } = require('../../utils/session.js');
-const { stopAutoRefresh } = require('../../utils/timers.js');
-const { auditLog } = require('../../utils/auditLog.js');
 const { wrapHandler } = require('../../utils/error-boundary.js');
 const { checkCooldown } = require('../../utils/cooldown.js');
 
 // [BUG-FIX] Đồng bộ với tất cả customId được dùng trong file này
 const SESSION_BUTTON_IDS = new Set([
-  'attend_view', 'attend_list', 'attend_close', 'attend_refresh', 'admin:mark', 'admin:edit',
+  'attend_view', 'attend_list', 'admin:mark', 'admin:edit',
   'attend_view:prev', 'attend_view:next',
   'attend_list:prev', 'attend_list:next',
-  'session:cancel', 'session:confirm_cancel', 'session:cancel_cancel',
-  'session:confirm_close', 'session:cancel_close',
-  'session:confirm_close:all', 'session:cancel_close:all',
-  'session:confirm_close:single',
 ]);
 
 async function _phaiData(session, guildId) {
@@ -243,31 +234,8 @@ class SessionButtonHandler extends InteractionHandler {
       });
     }
 
-    // ── attend_refresh ────────────────────────────────────────────────────────────
-    if (customId === 'attend_refresh') {
-      if (!checkCooldown(interaction.user.id, 'session_refresh', 1000)) {
-        return interaction.reply({ content: '⏳ Vui lòng đợi một chút...', flags: MessageFlags.Ephemeral });
-      }
-      await interaction.deferUpdate();
-      const session = await sessionService.getActiveSession(guild.id);
-      if (!session) {
-        return interaction.editReply({ content: '🚫 Kỳ đã kết thúc.', embeds: [], components: [] });
-      }
-      const attended = await attendanceService.getAttendances(session.id);
-      const { phaiRoleIds: phaiIdsR, emojiMap: emojiMapR } = await _phaiData(session, guild.id);
-      await Promise.all([
-        guild.members.fetch().catch(() => {}),
-        guild.roles.fetch().catch(() => {}),
-      ]);
-      const { embed, components: pagComponents } =
-        buildSessionEmbed(guild, session, attended, phaiIdsR, false, 1, emojiMapR, true, { showList: false });
-      return interaction.editReply({
-        embeds: [embed],
-        components: [buildAttendanceSelectRow(true), ...pagComponents],
-      });
-    }
-
     // ── admin:mark (Điểm danh thay — mở Modal) ────────────────────────────────────
+    // [UX-W1] Giờ chỉ xuất hiện trên /setup SessionView (Admin Control Center)
     if (customId === 'admin:mark') {
       const { ok } = await requireAdmin(interaction, { context: 'điểm danh thay' });
       if (!ok) return;
@@ -281,170 +249,6 @@ class SessionButtonHandler extends InteractionHandler {
       if (!ok) return;
       const { showAdminEditModal } = require('../../utils/adminEditModal.js');
       return showAdminEditModal(interaction);
-    }
-
-    // ── session:cancel (Hủy phiên — xác nhận) ────────────────────────────────────
-    if (customId === 'session:cancel') {
-      const { ok } = await requireAdmin(interaction, { context: 'hủy phiên điểm danh' });
-      if (!ok) return;
-      return interaction.reply(
-        replyConfirm(
-          '🗑️ Bạn có chắc muốn **HỦY** Kỳ điểm danh này không?\n\n' +
-          '> ⚠️ Toàn bộ dữ liệu điểm danh của phiên này sẽ bị hủy và **không được tính vào thống kê**.',
-          'session:confirm_cancel',
-          'session:cancel_cancel',
-        )
-      );
-    }
-
-    // ── session:cancel_cancel ─────────────────────────────────────────────────────
-    if (customId === 'session:cancel_cancel') {
-      return interaction.update({ content: 'Đã hủy thao tác.', embeds: [], components: [] });
-    }
-
-    // ── session:confirm_cancel (Hủy phiên — thực hiện) ───────────────────────────
-    if (customId === 'session:confirm_cancel') {
-      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-      const { ok } = await requireAdmin(interaction, { context: 'hủy phiên điểm danh', deferred: true });
-      if (!ok) return;
-
-      const session = await sessionService.getActiveSession(guild.id);
-      if (!session) {
-        return interaction.editReply(replyErrEdit('Không có Kỳ điểm danh nào đang mở.'));
-      }
-
-      await sessionService.cancelSession(session.id, guild.id);
-      auditLog({ guildId: guild.id, actorId: interaction.user.id, action: 'SESSION_CANCEL', metadata: { sessionId: session.id } }).catch(() => {});
-      stopAutoRefresh(session.id);
-
-      const channel = interaction.channel;
-      await disableAttendanceUI(interaction.client, channel, session, []).catch(() => null);
-
-      log.info('SESSION_CANCEL', guild.id, 'Admin %s đã hủy phiên %s', interaction.user.tag, session.session_name);
-      metrics.sessionClosed(guild.id, { cancelled: true });
-
-      return interaction.editReply(replyOkEdit('🗑️ Kỳ điểm danh đã được hủy thành công.'));
-    }
-
-    // ── attend_close (Đóng phiên — xác nhận) ─────────────────────────────────────
-    if (customId === 'attend_close') {
-      const { ok } = await requireAdmin(interaction, { context: 'đóng phiên điểm danh' });
-      if (!ok) return;
-
-      const sessions = await sessionService.getActiveSessions(guild.id);
-      if (!sessions || sessions.length === 0) {
-        return interaction.reply(replyErr('Không có Kỳ điểm danh nào đang mở.'));
-      }
-
-      if (sessions.length === 1) {
-        const s = sessions[0];
-        return interaction.reply(
-          replyConfirm(
-            `🔒 Bạn có chắc muốn đóng Kỳ **"${s.session_name}"** không?\n\n` +
-            '> Sau khi đóng, thành viên không thể điểm danh thêm. Kết quả sẽ được tổng kết và cập nhật vào hệ thống.',
-            'session:confirm_close',
-            'session:cancel_close',
-          )
-        );
-      }
-
-      const rows = [
-        new ActionRowBuilder().addComponents(
-          new ButtonBuilder()
-            .setCustomId('session:confirm_close:single')
-            .setLabel(`Đóng phiên này: "${sessions[0].session_name}"`)
-            .setStyle(ButtonStyle.Danger),
-          new ButtonBuilder()
-            .setCustomId('session:confirm_close:all')
-            .setLabel(`Đóng TẤT CẢ (${sessions.length} phiên)`)
-            .setStyle(ButtonStyle.Danger),
-        ),
-        new ActionRowBuilder().addComponents(
-          new ButtonBuilder()
-            .setCustomId('session:cancel_close:all')
-            .setLabel('Hủy')
-            .setStyle(ButtonStyle.Secondary),
-        ),
-      ];
-
-      return interaction.reply({
-        content: `⚠️ Có **${sessions.length} phiên** đang mở đồng thời. Bạn muốn đóng phiên nào?`,
-        components: rows,
-        flags: MessageFlags.Ephemeral,
-      });
-    }
-
-    // ── session:cancel_close / cancel_close:all ───────────────────────────────────
-    if (customId === 'session:cancel_close' || customId === 'session:cancel_close:all') {
-      return interaction.update({ content: 'Đã hủy thao tác đóng phiên.', embeds: [], components: [] });
-    }
-
-    // ── session:confirm_close:all (Đóng tất cả các phiên đang mở) ────────────────
-    if (customId === 'session:confirm_close:all') {
-      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-      const { ok } = await requireAdmin(interaction, { context: 'đóng tất cả phiên điểm danh', deferred: true });
-      if (!ok) return;
-
-      const sessions = await sessionService.getActiveSessions(guild.id);
-      if (!sessions || sessions.length === 0) {
-        return interaction.editReply(replyErrEdit('Không có Kỳ điểm danh nào đang mở.'));
-      }
-
-      let closedCount = 0;
-      for (const s of sessions) {
-        try {
-          stopAutoRefresh(s.id);
-          await sessionService.closeSession(s.id, guild.id);
-          const attended = await attendanceService.getAttendances(s.id);
-          const statsMap = await endSession(guild, s, attended);
-          const ch = s.channel_id ? await guild.channels.fetch(s.channel_id).catch(() => null) : interaction.channel;
-          if (ch) {
-            await disableAttendanceUI(interaction.client, ch, s, attended).catch(() => null);
-            await announceBadges(guild, ch, guild.id, s.id, attended, statsMap).catch(() => null);
-          }
-          closedCount++;
-        } catch (e) {
-          log.error('CLOSE_ALL', guild.id, 'Lỗi đóng phiên %s: %s', s.id, e.message);
-        }
-      }
-
-      auditLog({ guildId: guild.id, actorId: interaction.user.id, action: 'SESSION_CLOSE_ALL', metadata: { count: closedCount } }).catch(() => {});
-      log.info('CLOSE_ALL', guild.id, 'Admin %s đã đóng %d phiên', interaction.user.tag, closedCount);
-      return interaction.editReply(replyOkEdit(`✅ Đã đóng thành công **${closedCount}/${sessions.length}** Kỳ điểm danh.`));
-    }
-
-    // ── session:confirm_close / session:confirm_close:single (Đóng phiên hiện tại) ──
-    if (customId === 'session:confirm_close' || customId === 'session:confirm_close:single') {
-      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-      const { ok } = await requireAdmin(interaction, { context: 'đóng phiên điểm danh', deferred: true });
-      if (!ok) return;
-
-      const session = await sessionService.getActiveSession(guild.id);
-      if (!session) {
-        return interaction.editReply(replyErrEdit('Không có Kỳ điểm danh nào đang mở.'));
-      }
-
-      // 1. Tắt auto-refresh
-      stopAutoRefresh(session.id);
-
-      // 2. Cập nhật DB: đóng session
-      await sessionService.closeSession(session.id, guild.id);
-      auditLog({ guildId: guild.id, actorId: interaction.user.id, action: 'SESSION_CLOSE', metadata: { sessionId: session.id } }).catch(() => {});
-
-      // 3. Lấy danh sách điểm danh và tính stats
-      const attended = await attendanceService.getAttendances(session.id);
-      const statsMap = await endSession(guild, session, attended);
-
-      // 4. Cập nhật embed trong channel: disable UI
-      const channel = interaction.channel;
-      await disableAttendanceUI(interaction.client, channel, session, attended).catch(() => null);
-
-      log.info('SESSION_CLOSE', guild.id, 'Admin %s đã đóng phiên %s (%d người)', interaction.user.tag, session.session_name, attended.length);
-      metrics.sessionClosed(guild.id, { cancelled: false });
-      metrics.sessionMemberCount(guild.id, attended.length);
-
-      await announceBadges(guild, channel, guild.id, session.id, attended, statsMap).catch(() => null);
-      return interaction.editReply(replyOkEdit('✅ Kỳ điểm danh đã được đóng thành công.'));
     }
   }
 }

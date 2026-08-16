@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildConfirmRow, buildAttendanceSelectRow, buildAttendanceConfirmRow, buildSessionActionRow, buildBoardRow, buildAdminActionRow, buildAttendanceFilterRow, buildHistoryNavRow } from '../utils/_views/rows.js';
+import { buildConfirmRow, buildAttendanceSelectRow, buildAttendanceConfirmRow, buildBoardRow, buildAttendanceFilterRow, buildHistoryNavRow } from '../utils/_views/rows.js';
 import { buildRankEmbed } from '../utils/_views/rankView.js';
 import { buildSessionEmbed, buildClosedSessionEmbed, sessionEmbedColor } from '../utils/_views/sessionView.js';
 import { buildAttendanceConfirmPrompt } from '../utils/_views/attendView.js';
@@ -43,49 +43,6 @@ describe('buildAttendanceSelectRow', () => {
   it('is enabled when isOpen=true and disabled when isOpen=false', () => {
     expect(buildAttendanceSelectRow(true).toJSON().components[0].disabled).toBeFalsy();
     expect(buildAttendanceSelectRow(false).toJSON().components[0].disabled).toBe(true);
-  });
-});
-
-describe('buildSessionActionRow', () => {
-  it('returns 2 ActionRows', () => {
-    const rows = buildSessionActionRow(true);
-    expect(rows).toHaveLength(2);
-    expect(rows.length).toBeLessThanOrEqual(5);
-  });
-
-  it('has 3 buttons in first row and 2 in second', () => {
-    const rows = buildSessionActionRow(true);
-    expect(rows[0].toJSON().components).toHaveLength(3);
-    expect(rows[1].toJSON().components).toHaveLength(2);
-  });
-
-  it('all buttons are enabled when isOpen=true', () => {
-    const rows = buildSessionActionRow(true);
-    for (const row of rows) {
-      for (const btn of row.toJSON().components) {
-        expect(btn.disabled).toBeFalsy();
-      }
-    }
-  });
-
-  it('all buttons are disabled when isOpen=false', () => {
-    const rows = buildSessionActionRow(false);
-    for (const row of rows) {
-      for (const btn of row.toJSON().components) {
-        expect(btn.disabled).toBe(true);
-      }
-    }
-  });
-
-  it('contains expected button customIds (no attend_view)', () => {
-    const ids = buildSessionActionRow(true).flatMap(r => r.toJSON().components.map(c => c.custom_id));
-    expect(ids).not.toContain('attend_view');
-    expect(ids).not.toContain('attend_list');
-    expect(ids).toContain('attend_refresh');
-    expect(ids).toContain('admin:mark');
-    expect(ids).toContain('admin:edit');
-    expect(ids).toContain('session:cancel');
-    expect(ids).toContain('attend_close');
   });
 });
 
@@ -171,24 +128,6 @@ describe('buildAttendanceConfirmPrompt — [UX-P2] prompt xác nhận', () => {
   it('falls back for unknown status', () => {
     const { embeds } = buildAttendanceConfirmPrompt('bogus', 'Kỳ');
     expect(embeds[0].toJSON().description).toContain('❓ bogus');
-  });
-});
-
-describe('buildAdminActionRow', () => {
-  it('returns 2 ActionRows with admin buttons', () => {
-    const rows = buildAdminActionRow(true);
-    expect(rows).toHaveLength(2);
-    expect(rows[0].toJSON().components.map(c => c.custom_id)).toEqual(['admin:mark', 'admin:edit']);
-    expect(rows[1].toJSON().components.map(c => c.custom_id)).toEqual(['session:cancel', 'attend_close']);
-  });
-
-  it('buttons disabled when isOpen=false', () => {
-    const rows = buildAdminActionRow(false);
-    for (const row of rows) {
-      for (const btn of row.toJSON().components) {
-        expect(btn.disabled).toBe(true);
-      }
-    }
   });
 });
 

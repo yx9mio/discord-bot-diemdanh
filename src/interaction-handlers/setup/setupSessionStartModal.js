@@ -11,7 +11,7 @@ const {
 const { fmtTs }          = require('../../../utils/format.js');
 const { startAutoRefresh, scheduleCloseTimer } = require('../../../utils/timers.js');
 const { buildSessionEmbed } = require('../../../utils/_views/sessionView.js');
-const { buildBoardRow, buildAdminActionRow } = require('../../../utils/_views/rows.js');
+const { buildBoardRow } = require('../../../utils/_views/rows.js');
 const { wrapHandler } = require('../../../utils/error-boundary.js');
 const { auditLog } = require('../../../utils/auditLog.js');
 const { checkCooldown } = require('../../../utils/cooldown.js');
@@ -71,8 +71,7 @@ class SetupSessionStartModalHandler extends InteractionHandler {
           await guild.roles.fetch().catch(() => {});
           const { embed: sessionEmbed } = buildSessionEmbed(guild, session, [], cfg?.phai_role_ids ?? [], false, 1, cfg?.phai_role_icons ?? null, true, { showList: false });
           const boardRows = buildBoardRow(true);
-          const adminRows = buildAdminActionRow(true);
-          const msg = await ch.send({ embeds: [sessionEmbed], components: [boardRows, ...adminRows].slice(0, 5) });
+          const msg = await ch.send({ embeds: [sessionEmbed], components: [boardRows] });
           await sessionService.updateSessionMessage(session.id, { message_id: msg.id });
 
           // Ping attendance role

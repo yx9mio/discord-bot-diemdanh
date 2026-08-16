@@ -66,7 +66,7 @@ function _resolveName(guild, userId, fallback) {
   return m ? (m.displayName || m.user.username) : (fallback ?? userId);
 }
 
-function renderSummary({ session, guild, cfg, members, attendances }) {
+function renderSummary({ session, guild, cfg, members, attendances, sessionCount = 1 }) {
   const active = !!session;
   const eligible = session?.eligible_member_ids?.length ?? 0;
   const attended = attendances.filter(a => a.status === 'tham_gia').length;
@@ -119,15 +119,24 @@ function renderSummary({ session, guild, cfg, members, attendances }) {
         new ButtonBuilder().setCustomId(CUSTOM_ID.DETAILS).setLabel('📊 Chi tiết').setStyle(ButtonStyle.Secondary),
       ),
     );
+
+    // [UX-W1] Admin Control Center — hàng riêng, tách khỏi nút thành viên
+    const adminRow = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId('admin:mark').setLabel('📝 Điểm danh thay').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId('admin:edit').setLabel('✏️ Sửa điểm danh').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId(`setup:session:cancel:${session.id}`).setLabel('🗑️ Hủy Kỳ').setStyle(ButtonStyle.Danger),
+      new ButtonBuilder().setCustomId(`${'setup:session:close:'}${session.id}`).setLabel('✖ Đóng Kỳ').setStyle(ButtonStyle.Danger),
+    );
+    components.push(adminRow);
   }
 
   const actionRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId(CUSTOM_ID.REFRESH).setLabel('Làm mới').setEmoji('🔄').setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId(CUSTOM_ID.START).setLabel('➕ Mở Kỳ mới').setStyle(ButtonStyle.Success),
   );
-  if (active) {
+  if (active && (sessionCount ?? 1) > 1) {
     actionRow.addComponents(
-      new ButtonBuilder().setCustomId(`${'setup:session:close:'}${session.id}`).setLabel('✖ Đóng Kỳ').setStyle(ButtonStyle.Danger),
+      new ButtonBuilder().setCustomId('setup:session:close:all').setLabel(`Đóng TẤT CẢ (${sessionCount})`).setStyle(ButtonStyle.Danger),
     );
   }
   components.push(actionRow);

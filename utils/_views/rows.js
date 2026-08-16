@@ -37,40 +37,11 @@ function buildAttendanceConfirmRow(sid, status) {
   );
 }
 
-function buildSessionActionRow(isOpen = true) {
-  const disabled = !isOpen;
-  return [
-    new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId('attend_refresh').setLabel('🔄 Làm mới').setStyle(ButtonStyle.Secondary).setDisabled(disabled),
-      new ButtonBuilder().setCustomId('admin:mark').setLabel('📝 Điểm danh thay').setStyle(ButtonStyle.Primary).setDisabled(disabled),
-      new ButtonBuilder().setCustomId('admin:edit').setLabel('✏️ Sửa điểm danh').setStyle(ButtonStyle.Primary).setDisabled(disabled),
-    ),
-    new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId('session:cancel').setLabel('🗑️ Hủy Kỳ').setStyle(ButtonStyle.Danger).setDisabled(disabled),
-      new ButtonBuilder().setCustomId('attend_close').setLabel('🔒 Đóng Kỳ').setStyle(ButtonStyle.Danger).setDisabled(disabled),
-    ),
-  ];
-}
-
 function buildBoardRow(isOpen = true) {
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId('attend_view').setLabel('🎫 Điểm danh').setStyle(ButtonStyle.Secondary).setDisabled(!isOpen),
     new ButtonBuilder().setCustomId('attend_list').setLabel('👁️ Xem danh sách').setStyle(ButtonStyle.Secondary),
   );
-}
-
-function buildAdminActionRow(isOpen = true) {
-  const disabled = !isOpen;
-  return [
-    new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId('admin:mark').setLabel('📝 Điểm danh thay').setStyle(ButtonStyle.Primary).setDisabled(disabled),
-      new ButtonBuilder().setCustomId('admin:edit').setLabel('✏️ Sửa điểm danh').setStyle(ButtonStyle.Primary).setDisabled(disabled),
-    ),
-    new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId('session:cancel').setLabel('🗑️ Hủy Kỳ').setStyle(ButtonStyle.Danger).setDisabled(disabled),
-      new ButtonBuilder().setCustomId('attend_close').setLabel('🔒 Đóng Kỳ').setStyle(ButtonStyle.Danger).setDisabled(disabled),
-    ),
-  ];
 }
 
 function buildAttendanceFilterRow(active = 'all', sessionId = '') {
@@ -97,4 +68,4 @@ function buildHistoryNavRow(page = 0, maxPage = 0, prefix = 'hist') {
   );
 }
 
-module.exports = { buildConfirmRow, buildAttendanceSelectRow, buildAttendanceConfirmRow, buildSessionActionRow, buildBoardRow, buildAdminActionRow, buildAttendanceFilterRow, buildHistoryNavRow };
+module.exports = { buildConfirmRow, buildAttendanceSelectRow, buildAttendanceConfirmRow, buildBoardRow, buildAttendanceFilterRow, buildHistoryNavRow };

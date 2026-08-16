@@ -4,6 +4,7 @@ const { MessageFlags } = require('discord.js');
 const { requireAdmin } = require('../../../utils/permissions.js');
 const { replyConfirm, replyErrEdit } = require('../../../utils/embeds.js');
 const sessionService = require('../../../services/sessionService.js');
+const attendanceService = require('../../../services/attendanceService.js');
 const log = require('../../../utils/logger.js');
 const { wrapHandler } = require('../../../utils/error-boundary.js');
 const { checkCooldown } = require('../../../utils/cooldown.js');
@@ -46,9 +47,11 @@ class SetupSessionCloseHandler extends InteractionHandler {
 
         return interaction.editReply(
           replyConfirm(
-            `Bạn có chắc muốn đóng **tất cả ${sessions.length} Bang Chiến** đang mở?\n> Hành động này không thể hoàn tác.`,
-            'session:confirm_close:all',
-            'session:cancel_close:all',
+            `🔒 Bạn có chắc muốn đóng **tất cả ${sessions.length} Bang Chiến** đang mở?\n\n` +
+            '> Sau khi đóng, thành viên không thể điểm danh thêm ở mọi Kỳ.\n' +
+            '> Dữ liệu tất cả các Kỳ sẽ được tính vào thống kê.',
+            'setup:session:confirm:close:all',
+            'setup:session:cancel_close:all',
           ),
         );
       }
@@ -65,14 +68,22 @@ class SetupSessionCloseHandler extends InteractionHandler {
         return interaction.editReply(replyErrEdit('Không tìm thấy Bang Chiến yêu cầu.'));
       }
 
+      // [UX-W1] Confirm dày: thêm số liệu hiện tại
+      const attended = await attendanceService.getAttendances(session.id).catch(() => []);
+      const eligible = session.eligible_member_ids?.length ?? 0;
+      const doneLabel = eligible > 0 ? `${attended.length}/${eligible}` : `${attended.length}`;
+
       log.info('SESSION_CLOSE', guild.id,
         '%s yêu cầu đóng phiên "%s"', interaction.user.tag, session.session_name);
 
       return interaction.editReply(
         replyConfirm(
-          `Bạn có chắc muốn đóng Bang Chiến **"${session.session_name}"**?\n> Hành động này không thể hoàn tác.`,
-          'session:confirm_close',
-          'session:cancel_close',
+          `🔒 Bạn có chắc muốn đóng Bang Chiến **"${session.session_name}"**?\n\n` +
+          `> 📊 Đã điểm danh: **${doneLabel}**\n` +
+          '> Sau khi đóng, thành viên không thể điểm danh thêm.\n' +
+          '> Dữ liệu sẽ được tính vào thống kê.',
+          `setup:session:confirm:close:${session.id}`,
+          'setup:session:cancel_close',
         ),
       );
     } catch (e) {

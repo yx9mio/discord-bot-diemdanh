@@ -21,7 +21,7 @@ const { tryAcquireLeadership, startHeartbeat, stopHeartbeat } = require('../util
 const { DateTime } = require('luxon');
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { buildSessionEmbed } = require('../utils/_views/sessionView.js');
-const { buildBoardRow, buildAdminActionRow } = require('../utils/_views/rows.js');
+const { buildBoardRow } = require('../utils/_views/rows.js');
 const { startAutoRefresh, scheduleCloseTimer } = require('../utils/timers.js');
 const { withCronMonitor, captureError } = require('../utils/sentry.js');
 
@@ -216,10 +216,9 @@ async function autoOpenSession(guild, cfg, sched) {
     await guild.roles.fetch().catch(() => {});
     const { embed: sessionEmbed } = buildSessionEmbed(guild, session, [], cfg?.phai_role_ids ?? [], false, 1, cfg?.phai_role_icons ?? null, true, { showList: false });
     const boardRows = buildBoardRow(true);
-    const adminRows = buildAdminActionRow(true);
     const msg = await ch.send({
       embeds: [sessionEmbed],
-      components: [boardRows, ...adminRows].slice(0, 5),
+      components: [boardRows],
     });
     await sessionService.updateSessionMessage(session.id, { message_id: msg.id });
 

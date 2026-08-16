@@ -10,7 +10,7 @@ const { buildSessionEmbed, buildClosedSessionEmbed } = require('./_views/session
 const { buildAttendConfirmEmbed, buildAdminOverrideSuccessEmbed, buildAttendanceConfirmPrompt, renderAttendancePanel } = require('./_views/attendView');
 const { buildRankEmbed }                             = require('./_views/rankView');
 const { buildConfigEmbed }                           = require('./_views/configView');
-const { buildConfirmRow, buildAttendanceSelectRow, buildAttendanceConfirmRow, buildSessionActionRow, buildBoardRow, buildAdminActionRow, buildAttendanceFilterRow, buildHistoryNavRow } = require('./_views/rows');
+const { buildConfirmRow, buildAttendanceSelectRow, buildAttendanceConfirmRow, buildBoardRow, buildAttendanceFilterRow, buildHistoryNavRow } = require('./_views/rows');
 
 module.exports = {
   // Constants
@@ -30,9 +30,7 @@ module.exports = {
   buildConfirmRow,
   buildAttendanceSelectRow,
   buildAttendanceConfirmRow,
-  buildSessionActionRow,
   buildBoardRow,
-  buildAdminActionRow,
   buildAttendanceFilterRow,
   buildHistoryNavRow,
 };

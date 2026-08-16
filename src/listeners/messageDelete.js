@@ -3,7 +3,7 @@ const { Listener, Events } = require('@sapphire/framework');
 const sessionService    = require('../../services/sessionService.js');
 const attendanceService = require('../../services/attendanceService.js');
 const configService     = require('../../services/configService.js');
-const { buildSessionEmbed, buildBoardRow, buildAdminActionRow } = require('../../utils/embeds.js');
+const { buildSessionEmbed, buildBoardRow } = require('../../utils/embeds.js');
 const { startAutoRefresh } = require('../../utils/timers.js');
 const log = require('../../utils/logger.js');
 
@@ -43,8 +43,7 @@ class MessageDeleteListener extends Listener {
         : cfg?.phai_role_ids ?? [];
       const { embed } = buildSessionEmbed(guild, session, attended, phaiIds, false, 1, cfg?.phai_role_icons ?? null, true, { showList: false });
       const boardRows = buildBoardRow(true);
-      const adminRows = buildAdminActionRow(true);
-      const msg = await ch.send({ embeds: [embed], components: [boardRows, ...adminRows].slice(0, 5) });
+      const msg = await ch.send({ embeds: [embed], components: [boardRows] });
       await sessionService.updateSessionMessage(session.id, { message_id: msg.id });
       startAutoRefresh(session.id, ch.id, msg.id, message.client);
 
