@@ -14,7 +14,6 @@ const {
   FOOTER_DEFAULT,
   buildClosedSessionEmbed,
   buildBoardRow,
-  buildAdminActionRow,
 } = require('./embeds.js');
 
 const DEFAULT_BADGES = [
@@ -212,9 +211,8 @@ const thongBaoHuyHieu = announceBadges;
 
 /**
  * Vô hiệu hoá nút điểm danh, cập nhật embed → đã đóng.
- * [FIX] buildSessionActionRow(false) — false = isOpen=false → tất cả nút disabled
- * [FIX-SELECT] buildAttendanceSelectRow(false) — disable select menu khi đóng phiên
- *   Thứ tự rows: selectRow(disabled) → adminRows(disabled) — tối đa 5 rows
+ * [UX-P1] Board khi đóng chỉ còn boardRow (attend_view disabled + attend_list enabled) —
+ *   bỏ hẳn hàng admin để không còn nút chết trên board.
  */
 async function disableAttendanceUI(client, channel, session, attended = []) {
   if (!session.message_id) return;
@@ -223,9 +221,7 @@ async function disableAttendanceUI(client, channel, session, attended = []) {
     if (!msg) return;
     const closedEmbed  = buildClosedSessionEmbed(session, attended, channel.guild ?? null, session.phai_role_ids ?? null);
     const boardRows    = buildBoardRow(false);
-    const adminRows    = buildAdminActionRow(false);
-    const disabledComponents = [boardRows, ...adminRows].slice(0, 5);
-    await msg.edit({ embeds: [closedEmbed], components: disabledComponents });
+    await msg.edit({ embeds: [closedEmbed], components: [boardRows] });
   } catch (e) {
     log.warn('SESSION', session.guild_id, 'Could not disable UI: %s', e.message);
   }

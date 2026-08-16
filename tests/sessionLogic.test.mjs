@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeSessionPatches } from '../utils/session.js';
+import { computeSessionPatches, disableAttendanceUI } from '../utils/session.js';
 
 function makeStats(overrides = {}) {
   return {
@@ -202,5 +202,41 @@ describe('computeSessionPatches — pure logic', () => {
     expect(statsMap.get('u2')).toEqual({ total: 4, streak: 3, max: 4 });
     expect(statsMap.get('u3')).toEqual({ total: 1, streak: 1, max: 1 });
     expect(patches).toHaveLength(3);
+  });
+});
+
+describe('disableAttendanceUI — [UX-P1] board khi đóng', () => {
+  it('chỉ còn boardRow, không còn hàng admin (hết nút chết)', async () => {
+    let edited = null;
+    const channel = {
+      guild: null,
+      messages: { fetch: async () => ({ edit: async (p) => { edited = p; } }) },
+    };
+    const session = { message_id: 'm1', phai_role_ids: null, guild_id: 'g1' };
+
+    await disableAttendanceUI({}, channel, session, []);
+
+    expect(edited).not.toBeNull();
+    const rows = edited.components;
+    expect(rows).toHaveLength(1);
+    const ids = rows[0].toJSON().components.map(c => c.custom_id);
+    expect(ids).toEqual(['attend_view', 'attend_list']);
+
+    const byId = Object.fromEntries(rows[0].toJSON().components.map(c => [c.custom_id, c]));
+    expect(byId.attend_view.disabled).toBe(true);
+    expect(byId.attend_list.disabled).toBeUndefined();
+
+    const allIds = rows.flatMap(r => r.toJSON().components.map(c => c.custom_id));
+    expect(allIds).not.toContain('admin:mark');
+    expect(allIds).not.toContain('admin:edit');
+    expect(allIds).not.toContain('session:cancel');
+    expect(allIds).not.toContain('attend_close');
+  });
+
+  it('không gọi edit khi phiên không có message_id', async () => {
+    let edited = false;
+    const channel = { guild: null, messages: { fetch: async () => ({ edit: async () => { edited = true; } }) } };
+    await disableAttendanceUI({}, channel, { phai_role_ids: null, guild_id: 'g1' }, []);
+    expect(edited).toBe(false);
   });
 });

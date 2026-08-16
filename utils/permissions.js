@@ -8,6 +8,35 @@ const log = require('./logger.js');
 const { auditLog } = require('./auditLog.js');
 
 /**
+ * Kiểm tra quyền admin — thuần, KHÔNG reply lỗi.
+ * Dùng để render UI theo quyền (ẩn/hiện nút admin theo user).
+ * @param {import('discord.js').Interaction} interaction
+ * @returns {Promise<boolean>}
+ */
+async function isAdmin(interaction) {
+  // Bot owner bypass (nếu có)
+  const ownerId = process.env.BOT_OWNER_ID;
+  if (ownerId && interaction.user.id === ownerId) return true;
+
+  const member = interaction.member;
+  if (!member) return false;
+
+  // Admin / ManageGuild luôn được quyền
+  const hasPermission =
+    member.permissions?.has(PermissionFlagsBits.Administrator) ||
+    member.permissions?.has(PermissionFlagsBits.ManageGuild);
+  if (hasPermission) return true;
+
+  // Kiểm tra admin_role_id từ config
+  try {
+    const cfg = await getGuildConfig(interaction.guildId);
+    if (cfg?.admin_role_id && member.roles.cache.has(cfg.admin_role_id)) return true;
+  } catch (_) { /* fallthrough */ }
+
+  return false;
+}
+
+/**
  * Kiểm tra quyền admin cho interaction.
  * @param {import('discord.js').Interaction} interaction
  * @param {{ context?: string, deferred?: boolean }} opts
@@ -33,17 +62,7 @@ async function requireAdmin(interaction, opts = {}) {
     return { ok: false };
   }
 
-  // Admin / ManageGuild luôn được quyền
-  const hasPermission =
-    member.permissions?.has(PermissionFlagsBits.Administrator) ||
-    member.permissions?.has(PermissionFlagsBits.ManageGuild);
-  if (hasPermission) return { ok: true };
-
-  // Kiểm tra admin_role_id từ config
-  try {
-    const cfg = await getGuildConfig(interaction.guildId);
-    if (cfg?.admin_role_id && member.roles.cache.has(cfg.admin_role_id)) return { ok: true };
-  } catch (_) { /* fallthrough */ }
+  if (await isAdmin(interaction)) return { ok: true };
 
   const msg = `🔒 Bạn cần quyền **Administrator**, **Manage Server** hoặc role quản lý để ${context}.`;
   if (deferred) await interaction.editReply(replyErrEdit(msg));
@@ -51,4 +70,4 @@ async function requireAdmin(interaction, opts = {}) {
   return { ok: false };
 }
 
-module.exports = { requireAdmin };
+module.exports = { requireAdmin, isAdmin };

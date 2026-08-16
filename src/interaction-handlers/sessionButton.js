@@ -8,7 +8,7 @@ const sessionService = require('../../services/sessionService.js');
 const attendanceService = require('../../services/attendanceService.js');
 const log = require('../../utils/logger.js');
 const metrics = require('../../utils/metrics.js');
-const { requireAdmin } = require('../../utils/permissions.js');
+const { requireAdmin, isAdmin } = require('../../utils/permissions.js');
 const configService = require('../../services/configService.js');
 const { buildAttendanceExcel } = require('../../utils/attendanceExcel.js');
 const {
@@ -90,6 +90,17 @@ class SessionButtonHandler extends InteractionHandler {
         const parts = customId.split(':');
         const action = parts[1];
         const currentPage = parseInt(parts[2], 10) || 1;
+        const sid = parts.length >= 5 ? parts[4] : null;
+        let targetSession = session;
+        if (sid && session.id !== sid) {
+          const byId = await sessionService.getSessionById(sid).catch(() => null);
+          if (byId && byId.guild_id === guild.id) targetSession = byId;
+        }
+        if (!targetSession.is_active) {
+          return interaction.editReply({ content: '🚫 Kỳ đã kết thúc.', embeds: [], components: [] });
+        }
+        const attended = await attendanceService.getAttendances(targetSession.id);
+        const { phaiRoleIds: phaiIdsV, emojiMap: emojiMapV } = await _phaiData(targetSession, guild.id);
         const totalPages = Math.max(1, Math.ceil(attended.length / 15));
         const page = action === 'prev'
           ? Math.max(1, currentPage - 1)
@@ -98,7 +109,7 @@ class SessionButtonHandler extends InteractionHandler {
         await guild.members.fetch().catch(() => {});
         await guild.roles.fetch().catch(() => {});
         const { embed, components: pagComponents } =
-          buildSessionEmbed(guild, session, attended, phaiIdsV, false, page, emojiMapV, true, { showList: false });
+          buildSessionEmbed(guild, targetSession, attended, phaiIdsV, false, page, emojiMapV, true, { showList: false, sessionId: targetSession.id });
         return interaction.editReply({
           embeds: [embed],
           components: [buildAttendanceSelectRow(true), ...pagComponents],
@@ -109,7 +120,7 @@ class SessionButtonHandler extends InteractionHandler {
       await guild.members.fetch().catch(() => {});
       await guild.roles.fetch().catch(() => {});
       const { embed, components: pagComponents } =
-        buildSessionEmbed(guild, session, attended, phaiIdsV, false, 1, emojiMapV, true, { showList: false });
+        buildSessionEmbed(guild, session, attended, phaiIdsV, false, 1, emojiMapV, true, { showList: false, sessionId: session.id });
       return interaction.reply({
         embeds: [embed],
         components: [buildAttendanceSelectRow(true), ...pagComponents],
@@ -198,12 +209,13 @@ class SessionButtonHandler extends InteractionHandler {
         guild, session, attended, phaiIdsL, false, page, emojiMapL, true,
         { paginationPrefix: 'attend_list', filter: f, allowClosed: true, sessionId: session.id },
       );
-      const excelRow = new ActionRowBuilder().addComponents(
+      const adminUser = await isAdmin(interaction);
+      const excelRow = adminUser ? new ActionRowBuilder().addComponents(
         new ButtonBuilder()
           .setCustomId(`attend_list:excel:${session.id}`)
           .setLabel('📥 Xuất Excel')
           .setStyle(ButtonStyle.Success),
-      );
+      ) : null;
 
       if (customId.startsWith('attend_list:')) {
         await interaction.deferUpdate();
@@ -214,7 +226,7 @@ class SessionButtonHandler extends InteractionHandler {
           const { embed, components } = buildList(1, newFilter);
           return interaction.editReply({
             embeds: [embed],
-            components: [buildAttendanceFilterRow(newFilter, session.id), ...components, excelRow],
+            components: [buildAttendanceFilterRow(newFilter, session.id), ...components, ...(excelRow ? [excelRow] : [])],
           });
         }
 
@@ -231,7 +243,7 @@ class SessionButtonHandler extends InteractionHandler {
         const { embed, components } = buildList(page, activeFilter);
         return interaction.editReply({
           embeds: [embed],
-          components: [buildAttendanceFilterRow(activeFilter, session.id), ...components, excelRow],
+          components: [buildAttendanceFilterRow(activeFilter, session.id), ...components, ...(excelRow ? [excelRow] : [])],
         });
       }
 
@@ -239,7 +251,7 @@ class SessionButtonHandler extends InteractionHandler {
       const { embed, components } = buildList(1, 'all');
       return interaction.reply({
         embeds: [embed],
-        components: [buildAttendanceFilterRow('all', session.id), ...components, excelRow],
+        components: [buildAttendanceFilterRow('all', session.id), ...components, ...(excelRow ? [excelRow] : [])],
         flags: MessageFlags.Ephemeral,
       });
     }
