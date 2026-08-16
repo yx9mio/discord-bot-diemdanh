@@ -148,8 +148,8 @@ function renderSummary({ session, guild, cfg, members, attendances, sessionCount
 
     // [UX-W1] Admin Control Center — hàng riêng, tách khỏi nút thành viên
     const adminRow = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId('admin:mark').setLabel('📝 Điểm danh thay').setStyle(ButtonStyle.Primary),
-      new ButtonBuilder().setCustomId('admin:edit').setLabel('✏️ Sửa điểm danh').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId(`admin:mark:${session.id}`).setLabel('📝 Điểm danh thay').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId(`admin:edit:${session.id}`).setLabel('✏️ Sửa điểm danh').setStyle(ButtonStyle.Primary),
       new ButtonBuilder().setCustomId(`setup:session:cancel:${session.id}`).setLabel('🗑️ Hủy Kỳ').setStyle(ButtonStyle.Danger),
       new ButtonBuilder().setCustomId(`${'setup:session:close:'}${session.id}`).setLabel('✖ Đóng Kỳ').setStyle(ButtonStyle.Danger),
     );

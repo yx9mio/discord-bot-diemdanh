@@ -1,11 +1,12 @@
 // utils/adminMarkModal.js
 // [C1] Modal builder dùng chung cho admin điểm danh thay
+// [FIX] Nhúng sessionId vào customId modal để submit đúng Kỳ khi multi-session
 'use strict';
 const { ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } = require('discord.js');
 
-function buildAdminMarkModal() {
+function buildAdminMarkModal(sessionId) {
   return new ModalBuilder()
-    .setCustomId('admin:mark:modal')
+    .setCustomId(sessionId ? `admin:mark:modal:${sessionId}` : 'admin:mark:modal')
     .setTitle('Điểm danh thay')
     .addComponents(
       new ActionRowBuilder().addComponents(
@@ -27,4 +28,8 @@ function buildAdminMarkModal() {
     );
 }
 
-module.exports = { buildAdminMarkModal };
+async function showAdminMarkModal(interaction, sessionId = null) {
+  return interaction.showModal(buildAdminMarkModal(sessionId));
+}
+
+module.exports = { buildAdminMarkModal, showAdminMarkModal };

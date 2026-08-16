@@ -1,13 +1,14 @@
 // utils/adminEditModal.js
 // Modal builder cho admin sửa điểm danh (giống admin:mark nhưng label khác)
+// [FIX] Nhúng sessionId vào customId modal để submit đúng Kỳ khi multi-session
 'use strict';
 const { ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } = require('discord.js');
 
 const STATUS_PLACEHOLDER = 'tham_gia / tre / khong_tham_gia / co_phep';
 
-function buildAdminEditModal(currentStatus) {
+function buildAdminEditModal(currentStatus, sessionId) {
   return new ModalBuilder()
-    .setCustomId('admin:edit:modal')
+    .setCustomId(sessionId ? `admin:edit:modal:${sessionId}` : 'admin:edit:modal')
     .setTitle('Sửa điểm danh')
     .addComponents(
       new ActionRowBuilder().addComponents(
@@ -30,4 +31,8 @@ function buildAdminEditModal(currentStatus) {
     );
 }
 
-module.exports = { buildAdminEditModal };
+async function showAdminEditModal(interaction, sessionId = null) {
+  return interaction.showModal(buildAdminEditModal(undefined, sessionId));
+}
+
+module.exports = { buildAdminEditModal, showAdminEditModal };

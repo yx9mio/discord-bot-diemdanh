@@ -5,7 +5,7 @@ const { MessageFlags, EmbedBuilder } = require('discord.js');
 const {
   InteractionHandler, InteractionHandlerTypes,
 } = require('@sapphire/framework');
-const { getActiveSession } = require('../../services/sessionService.js');
+const { getActiveSession, getSessionById } = require('../../services/sessionService.js');
 const { upsertAttendance } = require('../../services/attendanceService.js');
 const log = require('../../utils/logger.js');
 const { requireAdmin } = require('../../utils/permissions.js');
@@ -21,7 +21,7 @@ class AdminEditModalHandler extends InteractionHandler {
   }
 
   parse(interaction) {
-    if (interaction.customId === 'admin:edit:modal') return this.some();
+    if (interaction.customId === 'admin:edit:modal' || interaction.customId.startsWith('admin:edit:modal:')) return this.some();
     return this.none();
   }
 
@@ -40,13 +40,30 @@ class AdminEditModalHandler extends InteractionHandler {
     const { ok } = await requireAdmin(interaction, { context: 'sửa điểm danh', deferred: true });
     if (!ok) return;
 
-    const session = await getActiveSession(guild.id);
-    if (!session) {
-      return interaction.editReply({ content: '🚫 Không có Bang Chiến nào đang mở.' });
-    }
-    if (session.guild_id !== guild.id) {
-      log.warn('ADMIN_EDIT', guild.id, 'SECURITY: guild mismatch user=%s', user.id);
-      return interaction.editReply({ content: '❌ Bang Chiến không hợp lệ.' });
+    // [FIX] Đọc sessionId từ customId modal (admin:edit:modal:<sid>); legacy không sid → fallback Kỳ đang mở
+    const sessionId = interaction.customId.startsWith('admin:edit:modal:')
+      ? interaction.customId.slice('admin:edit:modal:'.length)
+      : null;
+
+    let session = null;
+    if (sessionId) {
+      session = await getSessionById(sessionId).catch(() => null);
+      if (!session || session.guild_id !== guild.id) {
+        log.warn('ADMIN_EDIT', guild.id, 'SESSION_ID invalid sid=%s user=%s', sessionId, user.id);
+        return interaction.editReply({ content: '❌ Bang Chiến không hợp lệ hoặc đã bị xóa.' });
+      }
+      if (session.is_active !== true) {
+        return interaction.editReply({ content: '⏳ Bang Chiến đã đóng, không thể sửa điểm danh.' });
+      }
+    } else {
+      session = await getActiveSession(guild.id);
+      if (!session) {
+        return interaction.editReply({ content: '🚫 Không có Bang Chiến nào đang mở.' });
+      }
+      if (session.guild_id !== guild.id) {
+        log.warn('ADMIN_EDIT', guild.id, 'SECURITY: guild mismatch user=%s', user.id);
+        return interaction.editReply({ content: '❌ Bang Chiến không hợp lệ.' });
+      }
     }
 
     const userField = interaction.fields.getTextInputValue('user_id')?.trim();

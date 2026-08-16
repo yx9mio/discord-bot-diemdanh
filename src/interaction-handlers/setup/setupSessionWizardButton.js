@@ -99,6 +99,13 @@ class SetupSessionWizardButtonHandler extends InteractionHandler {
       try {
         const cfg = await configService.getGuildConfig(guild.id);
 
+        // [FIX] Kiểm tra kênh TRƯỚC khi tạo phiên để tránh session "mồ côi"
+        const ch = await guild.channels.fetch(fresh.channelId).catch(() => null);
+        if (!ch) {
+          log.warn('SESSION_START_WIZARD', guild.id, 'Không tìm thấy kênh %s', fresh.channelId);
+          return interaction.editReply({ content: '❌ Không tìm thấy kênh đăng bảng, vui lòng bấm **Quay lại** và chọn kênh khác.', embeds: [], components: [] });
+        }
+
         const session = await sessionService.createSession({
           guild_id:        guild.id,
           session_name:    fresh.ten,
@@ -110,29 +117,31 @@ class SetupSessionWizardButtonHandler extends InteractionHandler {
         });
 
         // Đăng bảng điểm danh lên kênh đã chọn (B2)
-        const ch = await guild.channels.fetch(fresh.channelId).catch(() => null);
-        if (ch) {
-          session.channel_id = ch.id;
-          await sessionService.updateSessionMessage(session.id, { channel_id: ch.id });
-          await guild.members.fetch().catch(() => {});
-          await guild.roles.fetch().catch(() => {});
-          const { embed: sessionEmbed } = buildSessionEmbed(guild, session, [], cfg?.phai_role_ids ?? [], false, 1, cfg?.phai_role_icons ?? null, true, { showList: false });
-          const boardRows = buildBoardRow(true);
-          const msg = await ch.send({ embeds: [sessionEmbed], components: [boardRows] });
-          await sessionService.updateSessionMessage(session.id, { message_id: msg.id });
+        session.channel_id = ch.id;
+        await sessionService.updateSessionMessage(session.id, { channel_id: ch.id });
+        await guild.members.fetch().catch(() => {});
+        await guild.roles.fetch().catch(() => {});
+        const { embed: sessionEmbed } = buildSessionEmbed(guild, session, [], cfg?.phai_role_ids ?? [], false, 1, cfg?.phai_role_icons ?? null, true, { showList: false });
+        const boardRows = buildBoardRow(true);
+        const msg = await ch.send({ embeds: [sessionEmbed], components: [boardRows] }).catch((e) => {
+          log.error('SESSION_START_WIZARD', guild.id, 'Gửi board thất bại kênh=%s: %s', ch.id, e.message);
+          return null;
+        });
+        if (!msg) {
+          wizardDraft.clear(interaction.user.id);
+          return interaction.editReply({ content: `❌ Đã tạo Bang Chiến nhưng không đăng được bảng điểm danh lên <#${ch.id}> (thiếu quyền hoặc kênh không hợp lệ). Vui lòng xóa Kỳ vừa tạo trong /setup nếu không dùng.`, embeds: [], components: [] });
+        }
+        await sessionService.updateSessionMessage(session.id, { message_id: msg.id });
 
-          if (fresh.roleId) {
-            await ch.send({ content: `<@&${fresh.roleId}> Bang Chiến điểm danh **${session.session_name}** đã mở!` }).catch(() => null);
-          }
+        if (fresh.roleId) {
+          await ch.send({ content: `<@&${fresh.roleId}> Bang Chiến điểm danh **${session.session_name}** đã mở!` }).catch(() => null);
+        }
 
-          startAutoRefresh(session.id, ch.id, msg.id, interaction.client);
+        startAutoRefresh(session.id, ch.id, msg.id, interaction.client);
 
-          if (session.auto_close_at) {
-            const msLeft = new Date(session.auto_close_at).getTime() - Date.now();
-            if (msLeft > 0) scheduleCloseTimer(interaction.client, guild, session, ch.id, msLeft);
-          }
-        } else {
-          log.warn('SESSION_START_WIZARD', guild.id, 'Không tìm thấy kênh %s', fresh.channelId);
+        if (session.auto_close_at) {
+          const msLeft = new Date(session.auto_close_at).getTime() - Date.now();
+          if (msLeft > 0) scheduleCloseTimer(interaction.client, guild, session, ch.id, msLeft);
         }
 
         const embed = new EmbedBuilder()

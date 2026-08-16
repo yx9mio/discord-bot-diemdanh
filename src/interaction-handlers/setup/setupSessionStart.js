@@ -5,6 +5,7 @@ const { ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } = req
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const { wrapHandler } = require('../../../utils/error-boundary.js');
 const { checkCooldown } = require('../../../utils/cooldown.js');
+const wizardDraft = require('../../../utils/wizardDraft.js');
 
 const MODAL_ID = 'setup:session:start:modal';
 
@@ -23,6 +24,8 @@ class SetupSessionStartHandler extends InteractionHandler {
     if (!checkCooldown(interaction.user.id, 'setup_session_start', 5000)) {
       return interaction.reply({ content: '⏳ Vui lòng đợi một chút trước khi thực hiện hành động này.', flags: require('discord.js').MessageFlags.Ephemeral });
     }
+    // [FIX] Xoá draft cũ để Kỳ mới không kế thừa channel/role của lần tạo bỏ dở
+    wizardDraft.clear(interaction.user.id);
     const modal = new ModalBuilder()
       .setCustomId(MODAL_ID)
       .setTitle('Mở Bang Chiến điểm danh mới');

@@ -127,6 +127,9 @@ class SetupScheduleHandler extends InteractionHandler {
 
       const gioBatDau = `${String(state.hour).padStart(2, '0')}:${String(state.minute).padStart(2, '0')}`;
       try {
+        // [FIX] Dùng cfg.timezone thay vì hardcode Asia/Ho_Chi_Minh
+        const cfg = await configService.getGuildConfig(guild.id).catch(() => null);
+        const timezone = cfg?.timezone ?? 'Asia/Ho_Chi_Minh';
         await scheduledService.addRecurringSession(guild.id, {
           thu: state.day,
           gio_bat_dau: gioBatDau,
@@ -134,7 +137,7 @@ class SetupScheduleHandler extends InteractionHandler {
           close_hour: closeHour,
           close_minute: closeMinute,
           ten: 'Điểm danh',
-          timezone: 'Asia/Ho_Chi_Minh',
+          timezone,
           pre_close_minutes: 30,
           channel_id: state.channel,
         });

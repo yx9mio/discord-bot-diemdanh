@@ -18,9 +18,13 @@ const { wrapHandler } = require('../../utils/error-boundary.js');
 const { checkCooldown } = require('../../utils/cooldown.js');
 
 // [BUG-FIX] Đồng bộ với tất cả customId được dùng trong file này
+// [FIX] admin:mark / admin:edit nhúng sessionId: admin:mark:<sid> (legacy: 'admin:mark')
 const SESSION_BUTTON_IDS = new Set([
   'attend_view', 'attend_list', 'admin:mark', 'admin:edit',
 ]);
+
+const ADMIN_MARK_PREFIX = 'admin:mark:';
+const ADMIN_EDIT_PREFIX = 'admin:edit:';
 
 async function _phaiData(session, guildId) {
   const cfg = await configService.getGuildConfig(guildId).catch(() => null);
@@ -42,6 +46,8 @@ class SessionButtonHandler extends InteractionHandler {
   parse(interaction) {
     if (SESSION_BUTTON_IDS.has(interaction.customId)) return this.some();
     if (interaction.customId.startsWith('attend_list:')) return this.some();
+    if (interaction.customId.startsWith(ADMIN_MARK_PREFIX)) return this.some();
+    if (interaction.customId.startsWith(ADMIN_EDIT_PREFIX)) return this.some();
     return this.none();
   }
 
@@ -204,19 +210,22 @@ class SessionButtonHandler extends InteractionHandler {
 
     // ── admin:mark (Điểm danh thay — mở Modal) ────────────────────────────────────
     // [UX-W1] Giờ chỉ xuất hiện trên /setup SessionView (Admin Control Center)
-    if (customId === 'admin:mark') {
+    // [FIX] Nhúng sessionId để thao tác đúng Kỳ đang xem khi có nhiều Kỳ
+    if (customId === 'admin:mark' || customId.startsWith(ADMIN_MARK_PREFIX)) {
       const { ok } = await requireAdmin(interaction, { context: 'điểm danh thay' });
       if (!ok) return;
       const { showAdminMarkModal } = require('../../utils/adminMarkModal.js');
-      return showAdminMarkModal(interaction);
+      const sessionId = customId.startsWith(ADMIN_MARK_PREFIX) ? customId.slice(ADMIN_MARK_PREFIX.length) : null;
+      return showAdminMarkModal(interaction, sessionId);
     }
 
     // ── admin:edit (Sửa điểm danh — mở Modal) ─────────────────────────────────────
-    if (customId === 'admin:edit') {
+    if (customId === 'admin:edit' || customId.startsWith(ADMIN_EDIT_PREFIX)) {
       const { ok } = await requireAdmin(interaction, { context: 'sửa điểm danh' });
       if (!ok) return;
       const { showAdminEditModal } = require('../../utils/adminEditModal.js');
-      return showAdminEditModal(interaction);
+      const sessionId = customId.startsWith(ADMIN_EDIT_PREFIX) ? customId.slice(ADMIN_EDIT_PREFIX.length) : null;
+      return showAdminEditModal(interaction, sessionId);
     }
   }
 }

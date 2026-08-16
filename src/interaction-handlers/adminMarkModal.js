@@ -7,7 +7,7 @@ const { MessageFlags, EmbedBuilder } = require('discord.js');
 const {
   InteractionHandler, InteractionHandlerTypes,
 } = require('@sapphire/framework');
-const { getActiveSession } = require('../../services/sessionService.js');
+const { getActiveSession, getSessionById } = require('../../services/sessionService.js');
 const { upsertAttendance } = require('../../services/attendanceService.js');
 const log = require('../../utils/logger.js');
 const metrics = require('../../utils/metrics.js');
@@ -24,7 +24,7 @@ class AdminMarkModalHandler extends InteractionHandler {
   }
 
   parse(interaction) {
-    if (interaction.customId === 'admin:mark:modal') return this.some();
+    if (interaction.customId === 'admin:mark:modal' || interaction.customId.startsWith('admin:mark:modal:')) return this.some();
     return this.none();
   }
 
@@ -43,15 +43,32 @@ class AdminMarkModalHandler extends InteractionHandler {
     const { ok } = await requireAdmin(interaction, { context: 'điểm danh thay', deferred: true });
     if (!ok) return;
 
-    const session = await getActiveSession(guild.id);
-    if (!session) {
-      return interaction.editReply({ content: '🚫 Không có Bang Chiến nào đang mở.' });
-    }
+    // [FIX] Đọc sessionId từ customId modal (admin:mark:modal:<sid>); legacy không sid → fallback Kỳ đang mở
+    const sessionId = interaction.customId.startsWith('admin:mark:modal:')
+      ? interaction.customId.slice('admin:mark:modal:'.length)
+      : null;
 
-    // [BUG-12] Defensive assert — lớp bảo vệ thứ hai bổ sung cho getActiveSession
-    if (session.guild_id !== guild.id) {
-      log.warn('ADMIN_MARK', guild.id, 'SECURITY: session.guild_id=%s !== guild.id=%s user=%s', session.guild_id, guild.id, user.id);
-      return interaction.editReply({ content: '❌ Bang Chiến không hợp lệ.' });
+    let session = null;
+    if (sessionId) {
+      session = await getSessionById(sessionId).catch(() => null);
+      if (!session || session.guild_id !== guild.id) {
+        log.warn('ADMIN_MARK', guild.id, 'SESSION_ID invalid sid=%s user=%s', sessionId, user.id);
+        return interaction.editReply({ content: '❌ Bang Chiến không hợp lệ hoặc đã bị xóa.' });
+      }
+      if (session.is_active !== true) {
+        return interaction.editReply({ content: '⏳ Bang Chiến đã đóng, không thể điểm danh thay.' });
+      }
+    } else {
+      session = await getActiveSession(guild.id);
+      if (!session) {
+        return interaction.editReply({ content: '🚫 Không có Bang Chiến nào đang mở.' });
+      }
+
+      // [BUG-12] Defensive assert — lớp bảo vệ thứ hai bổ sung cho getActiveSession
+      if (session.guild_id !== guild.id) {
+        log.warn('ADMIN_MARK', guild.id, 'SECURITY: session.guild_id=%s !== guild.id=%s user=%s', session.guild_id, guild.id, user.id);
+        return interaction.editReply({ content: '❌ Bang Chiến không hợp lệ.' });
+      }
     }
 
     const userField = interaction.fields.getTextInputValue('user_id')?.trim();

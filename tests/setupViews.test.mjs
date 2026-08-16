@@ -251,8 +251,10 @@ describe('SessionView — một Kỳ', () => {
 
   it('admin row nhúng đúng sessionId vào customId', () => {
     const { rows } = sessionViewRows([session], session);
-    const admin = rows.find(r => r.components.some(c => c.custom_id === 'admin:mark'));
+    const admin = rows.find(r => r.components.some(c => c.custom_id?.startsWith('admin:mark:')));
     const ids = admin.components.map(c => c.custom_id);
+    expect(ids).toContain('admin:mark:s1');
+    expect(ids).toContain('admin:edit:s1');
     expect(ids).toContain('setup:session:cancel:s1');
     expect(ids).toContain('setup:session:close:s1');
   });
@@ -295,7 +297,7 @@ describe('SessionView — nhiều Kỳ', () => {
 
   it('admin row theo Kỳ đã chọn (s2)', () => {
     const { rows } = sessionViewRows([session, session2], session2);
-    const admin = rows.find(r => r.components.some(c => c.custom_id === 'admin:mark'));
+    const admin = rows.find(r => r.components.some(c => c.custom_id?.startsWith('admin:mark:')));
     const ids = admin.components.map(c => c.custom_id);
     expect(ids).toContain('setup:session:cancel:s2');
     expect(ids).toContain('setup:session:close:s2');
