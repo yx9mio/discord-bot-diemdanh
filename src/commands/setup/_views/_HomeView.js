@@ -2,7 +2,7 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { COLORS, ICONS, getPhaiIcon } = require('../../../../utils/theme.js');
 const { FOOTER_DEFAULT, buildAuthor } = require('../../../../utils/embeds.js');
-const { DAY_NAMES: DAY_VI, DAY_INDEX } = require('../../../../utils/format.js');
+const { DAY_NAMES: DAY_VI } = require('../../../../utils/format.js');
 
 const CUSTOM_ID = {
   HOME:      'setup:home',
@@ -63,7 +63,7 @@ function _tzNow(tz, nowMs) {
   return {
     year: +map.year, month: +map.month, day: +map.day,
     hour: +map.hour, minute: +map.minute,
-    dow: DAY_INDEX[map.weekday] ?? new Date(nowMs).getDay(),
+    dow: new Date(Date.UTC(+map.year, +map.month - 1, +map.day)).getUTCDay(),
   };
 }
 
