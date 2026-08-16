@@ -1,6 +1,5 @@
 # ─── Stage 1: deps (chỉ production packages) ────────────────────
 # bookworm-slim = glibc, khớp với Ubuntu ARM64 VPS.
-# @napi-rs/canvas tự tải binary linux-arm64-gnu qua optionalDependencies.
 FROM node:22-bookworm-slim AS deps
 WORKDIR /app
 

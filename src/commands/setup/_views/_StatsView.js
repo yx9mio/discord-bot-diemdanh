@@ -9,11 +9,10 @@
 // [UPG] renderToi: total_absent, total_late từ getMemberStats (đã có trả về)
 // [UPG] renderLichSu: limit 200, summary 4 trạng thái, REFRESH button trong navRow
 'use strict';
-const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, AttachmentBuilder } = require('discord.js');
+const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, StringSelectMenuOptionBuilder } = require('discord.js');
 const { COLORS, ICONS, getPhaiIcon, formatPhaiList } = require('../../../../utils/theme.js');
 const { FOOTER_DEFAULT, buildRichProgressBar, pctEmoji, pctLabel, buildAuthor } = require('../../../../utils/embeds.js');
 const { STATUS_CONFIG } = require('../../../../utils/design-tokens.js');
-const { generateRankImage, generatePieChart } = require('../../../../utils/canvas.js');
 
 const CUSTOM_ID = {
   TOI:       'setup:stats:toi',
@@ -189,39 +188,10 @@ function renderToi(stats, member, guild, badges, viewerId = null, cfg = null, re
     .setFooter({ text: _footer(CTX.TOI, footerExtra) })
     .setTimestamp();
 
-  if (typeof member?.displayAvatarURL === 'function') {
-    const url = member.displayAvatarURL({ dynamic: true, size: 64 });
-    if (url) embed.setThumbnail(url);
-  }
-
-  // Pie chart
-  const chartValues = [joined - (late ?? 0), late ?? 0, absent ?? 0, excused ?? 0].filter(v => v !== null);
-  let chartAttachment = null;
-  if (total > 0 && chartValues.some(v => v > 0)) {
-    try {
-      const pieColors = [
-        `#${STATUS_CONFIG.tham_gia.color.toString(16).padStart(6, '0')}`,
-        `#${STATUS_CONFIG.tre.color.toString(16).padStart(6, '0')}`,
-        `#${STATUS_CONFIG.khong_tham_gia.color.toString(16).padStart(6, '0')}`,
-        `#${STATUS_CONFIG.co_phep.color.toString(16).padStart(6, '0')}`,
-      ];
-      const chartBuf = generatePieChart(
-        ['Tham gia', 'Tre', 'Vang', 'Co phep'],
-        [joined - (late ?? 0), late ?? 0, absent ?? 0, excused ?? 0],
-        pieColors,
-        'Thong ke ca nhan'
-      );
-      chartAttachment = new AttachmentBuilder(chartBuf, { name: 'chart.png' });
-      embed.setImage('attachment://chart.png');
-    } catch (e) {
-      // Fallback: no chart
-    }
-  }
-
   return {
     embeds: [embed],
     components: [_navRow()],
-    files: chartAttachment ? [chartAttachment] : [],
+    files: [],
   };
 }
 
@@ -254,12 +224,6 @@ async function renderRank(rows, guild, topN = 10, phongBanList = [], selectedPho
     const gMember = guild?.members?.cache?.get(r.user_id);
     return { ...r, displayName: gMember?.displayName ?? `<@${r.user_id}>` };
   });
-
-  let rankAttachment = null;
-  try {
-    const imgBuf = generateRankImage(topRows, guild?.name ?? '', topN);
-    rankAttachment = new AttachmentBuilder(imgBuf, { name: 'rank.png' });
-  } catch { }
 
   const lines = topRows.map((r, i) => {
     const medal  = medals[i] ?? `\`${String(i + 1).padStart(2)}.\``;
@@ -317,14 +281,9 @@ async function renderRank(rows, guild, topN = 10, phongBanList = [], selectedPho
     .setTitle(`${ICONS.TROPHY} Top ${Math.min(rows.length, topN)} — BXH${periodSuffix}`)
     .setFooter({ text: _footer(CTX.RANK, footerExtra) }).setTimestamp();
 
-  if (rankAttachment) {
-    embed.setImage('attachment://rank.png');
-    embed.setDescription(lines.length > 0 ? lines.join('\n') : '> _Chưa có dữ liệu_');
-  } else {
-    embed.setDescription(lines.join('\n'));
-  }
+  embed.setDescription(lines.join('\n'));
 
-  return { embeds: [embed], components, files: rankAttachment ? [rankAttachment] : [] };
+  return { embeds: [embed], components, files: [] };
 }
 
 function _buildRankPeriodRow(period) {
