@@ -2,9 +2,8 @@
 const { MessageFlags } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const sessionService    = require('../../services/sessionService.js');
-const attendanceService = require('../../services/attendanceService.js');
 const log               = require('../../utils/logger.js');
-const { replyErr, buildAttendConfirmEmbed } = require('../../utils/embeds.js');
+const { buildAttendanceConfirmPrompt, buildAttendanceConfirmRow } = require('../../utils/embeds.js');
 const { checkCooldown } = require('../../utils/cooldown.js');
 const { wrapHandler } = require('../../utils/error-boundary.js');
 
@@ -50,43 +49,12 @@ class PhaiSelectHandler extends InteractionHandler {
       return interaction.editReply({ content: '⏳ Bạn đang thao tác quá nhanh, vui lòng chậm lại...' });
     }
 
-    // Ghi nhận điểm danh với trạng thái đã chọn từ đầu
-    const acquired = await attendanceService.tryAcquireAttendanceLock(session.id, user.id);
-    if (!acquired) {
-      return interaction.editReply({ content: '⏳ Đang xử lý điểm danh của bạn, vui lòng chờ...' });
-    }
-
-    try {
-      const memberData = await guild.members.fetch(user.id).catch(() => null);
-      await attendanceService.upsertAttendance({
-        session_id:    session.id,
-        user_id:       user.id,
-        guild_id:      guild.id,
-        status,
-        username:      memberData?.nickname ?? user.displayName ?? user.username,
-        marked_by:     user.id,
-        checked_in_at: new Date().toISOString(),
-      });
-
-      let attended;
-      try {
-        attended = await attendanceService.getAttendances(session.id);
-      } catch (e) {
-        log.error('PHAI_SELECT', guild.id, 'Lỗi query attendances: %s', e.message);
-        attended = [];
-      }
-
-      const sTotal = attended?.length ?? 0;
-      const sJoined = sTotal > 0 ? attended.filter(a => a.status === 'tham_gia' || a.status === 'tre').length : 0;
-
-      log.info('PHAI_SELECT', guild.id, '%s điểm danh: %s (phái %s)', user.tag, status, roleId);
-      return interaction.editReply(buildAttendConfirmEmbed(memberData, status, session.session_name, 0, sTotal, sJoined));
-    } catch (e) {
-      log.error('PHAI_SELECT', guild.id, 'Lỗi upsertAttendance: %s', e.message);
-      return interaction.editReply(replyErr('❌ Không thể ghi nhận điểm danh, thử lại sau.'));
-    } finally {
-      await attendanceService.releaseAttendanceLock(session.id, user.id).catch(() => {});
-    }
+    // [UX-P2] Sau khi gán phái → nhảy vào xác nhận riêng (chưa ghi DB)
+    log.info('PHAI_SELECT', guild.id, '%s chọn phái %s, chờ xác nhận: %s', user.tag, roleId, status);
+    return interaction.editReply({
+      ...buildAttendanceConfirmPrompt(status, session.session_name),
+      components: [buildAttendanceConfirmRow(session.id, status)],
+    });
   }, 'PhaiSelectHandler')(interaction); }
 }
 

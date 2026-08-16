@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { buildConfirmRow, buildAttendanceSelectRow, buildSessionActionRow, buildBoardRow, buildAdminActionRow, buildAttendanceFilterRow, buildHistoryNavRow } from '../utils/_views/rows.js';
+import { buildConfirmRow, buildAttendanceSelectRow, buildAttendanceConfirmRow, buildSessionActionRow, buildBoardRow, buildAdminActionRow, buildAttendanceFilterRow, buildHistoryNavRow } from '../utils/_views/rows.js';
 import { buildRankEmbed } from '../utils/_views/rankView.js';
 import { buildSessionEmbed, buildClosedSessionEmbed } from '../utils/_views/sessionView.js';
+import { buildAttendanceConfirmPrompt } from '../utils/_views/attendView.js';
 
 describe('buildConfirmRow', () => {
   it('returns an ActionRowBuilder with 2 buttons', () => {
@@ -140,6 +141,36 @@ describe('buildAttendanceFilterRow', () => {
       'attend_list:filter:khong_tham_gia:sess-123',
       'attend_list:filter:co_phep:sess-123',
     ]);
+  });
+});
+
+describe('buildAttendanceConfirmRow — [UX-P2] xác nhận riêng', () => {
+  it('returns confirm + change buttons with sessionId embedded', () => {
+    const json = buildAttendanceConfirmRow('sess-1', 'tham_gia').toJSON();
+    expect(json.type).toBe(1);
+    expect(json.components).toHaveLength(2);
+    expect(json.components[0].custom_id).toBe('attendance:confirm:sess-1:tham_gia');
+    expect(json.components[0].label).toBe('✅ Xác nhận');
+    expect(json.components[0].style).toBe(3); // Success
+    expect(json.components[1].custom_id).toBe('attendance:change');
+    expect(json.components[1].label).toBe('↩️ Đổi trạng thái');
+    expect(json.components[1].style).toBe(2); // Secondary
+  });
+});
+
+describe('buildAttendanceConfirmPrompt — [UX-P2] prompt xác nhận', () => {
+  it('shows chosen status label and session name', () => {
+    const { embeds } = buildAttendanceConfirmPrompt('tre', 'Bang Chiến Thứ 7');
+    expect(embeds).toHaveLength(1);
+    const json = embeds[0].toJSON();
+    expect(json.title).toBe('❓ Xác nhận điểm danh');
+    expect(json.description).toContain('⏰ Trễ');
+    expect(json.description).toContain('Bang Chiến Thứ 7');
+  });
+
+  it('falls back for unknown status', () => {
+    const { embeds } = buildAttendanceConfirmPrompt('bogus', 'Kỳ');
+    expect(embeds[0].toJSON().description).toContain('❓ bogus');
   });
 });
 
@@ -337,6 +368,12 @@ describe('buildSessionEmbed (active session)', () => {
     const closedSession = { ...session, is_active: false };
     const { embed } = buildSessionEmbed(null, closedSession, [], [], false, 1, null, false, { allowClosed: true });
     expect(embed.toJSON().title).toContain('Điểm danh — Bang Chiến');
+  });
+
+  it('prepends userLine to description — [UX-P2] trạng thái bản thân', () => {
+    const { embed } = buildSessionEmbed(null, session, [], [], false, 1, null, false, { userLine: '👤 Hiện tại: ✅ Đúng giờ · ⚔️' });
+    const desc = embed.toJSON().description;
+    expect(desc.startsWith('👤 Hiện tại: ✅ Đúng giờ · ⚔️')).toBe(true);
   });
 });
 

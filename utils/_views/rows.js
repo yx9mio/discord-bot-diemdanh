@@ -23,6 +23,20 @@ function buildAttendanceSelectRow(isOpen = true) {
   return new ActionRowBuilder().addComponents(select);
 }
 
+/** [UX-P2] Xác nhận riêng sau khi chọn trạng thái — ✅ ghi nhận / ↩️ đổi trạng thái */
+function buildAttendanceConfirmRow(sid, status) {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`attendance:confirm:${sid}:${status}`)
+      .setLabel('✅ Xác nhận')
+      .setStyle(ButtonStyle.Success),
+    new ButtonBuilder()
+      .setCustomId('attendance:change')
+      .setLabel('↩️ Đổi trạng thái')
+      .setStyle(ButtonStyle.Secondary),
+  );
+}
+
 function buildSessionActionRow(isOpen = true) {
   const disabled = !isOpen;
   return [
@@ -83,4 +97,4 @@ function buildHistoryNavRow(page = 0, maxPage = 0, prefix = 'hist') {
   );
 }
 
-module.exports = { buildConfirmRow, buildAttendanceSelectRow, buildSessionActionRow, buildBoardRow, buildAdminActionRow, buildAttendanceFilterRow, buildHistoryNavRow };
+module.exports = { buildConfirmRow, buildAttendanceSelectRow, buildAttendanceConfirmRow, buildSessionActionRow, buildBoardRow, buildAdminActionRow, buildAttendanceFilterRow, buildHistoryNavRow };

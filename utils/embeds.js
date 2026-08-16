@@ -7,10 +7,10 @@ const helpers = require('./_helpers');
 
 // ─── Views ────────────────────────────────────────────────────────────────────
 const { buildSessionEmbed, buildClosedSessionEmbed } = require('./_views/sessionView');
-const { buildAttendConfirmEmbed, buildAdminOverrideSuccessEmbed } = require('./_views/attendView');
+const { buildAttendConfirmEmbed, buildAdminOverrideSuccessEmbed, buildAttendanceConfirmPrompt, renderAttendancePanel } = require('./_views/attendView');
 const { buildRankEmbed }                             = require('./_views/rankView');
 const { buildConfigEmbed }                           = require('./_views/configView');
-const { buildConfirmRow, buildAttendanceSelectRow, buildSessionActionRow, buildBoardRow, buildAdminActionRow, buildAttendanceFilterRow, buildHistoryNavRow } = require('./_views/rows');
+const { buildConfirmRow, buildAttendanceSelectRow, buildAttendanceConfirmRow, buildSessionActionRow, buildBoardRow, buildAdminActionRow, buildAttendanceFilterRow, buildHistoryNavRow } = require('./_views/rows');
 
 module.exports = {
   // Constants
@@ -21,12 +21,15 @@ module.exports = {
   buildClosedSessionEmbed,
   buildAttendConfirmEmbed,
   buildAdminOverrideSuccessEmbed,
+  buildAttendanceConfirmPrompt,
+  renderAttendancePanel,
   buildRankEmbed,
   buildConfigEmbed,
 
   // Rows
   buildConfirmRow,
   buildAttendanceSelectRow,
+  buildAttendanceConfirmRow,
   buildSessionActionRow,
   buildBoardRow,
   buildAdminActionRow,

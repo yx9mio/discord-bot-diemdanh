@@ -13,7 +13,7 @@ const configService = require('../../services/configService.js');
 const { buildAttendanceExcel } = require('../../utils/attendanceExcel.js');
 const {
   buildSessionEmbed,
-  buildSessionActionRow, buildAttendanceSelectRow, buildAttendanceFilterRow,
+  buildAttendanceSelectRow, buildAttendanceFilterRow, renderAttendancePanel,
   replyErr, replyErrEdit, replyOkEdit, replyConfirm,
 } = require('../../utils/embeds.js');
 const { endSession, announceBadges, disableAttendanceUI } = require('../../utils/session.js');
@@ -81,9 +81,6 @@ class SessionButtonHandler extends InteractionHandler {
         return interaction.reply({ content: '🚫 Không có Kỳ điểm danh nào đang mở.', flags: MessageFlags.Ephemeral });
       }
 
-      const attended = await attendanceService.getAttendances(session.id);
-      const { phaiRoleIds: phaiIdsV, emojiMap: emojiMapV } = await _phaiData(session, guild.id);
-
       // Phân trang trong phiếu điểm danh cá nhân
       if (customId.startsWith('attend_view:')) {
         await interaction.deferUpdate();
@@ -99,31 +96,21 @@ class SessionButtonHandler extends InteractionHandler {
         if (!targetSession.is_active) {
           return interaction.editReply({ content: '🚫 Kỳ đã kết thúc.', embeds: [], components: [] });
         }
-        const attended = await attendanceService.getAttendances(targetSession.id);
-        const { phaiRoleIds: phaiIdsV, emojiMap: emojiMapV } = await _phaiData(targetSession, guild.id);
-        const totalPages = Math.max(1, Math.ceil(attended.length / 15));
-        const page = action === 'prev'
-          ? Math.max(1, currentPage - 1)
-          : Math.min(totalPages, currentPage + 1);
 
         await guild.members.fetch().catch(() => {});
         await guild.roles.fetch().catch(() => {});
-        const { embed, components: pagComponents } =
-          buildSessionEmbed(guild, targetSession, attended, phaiIdsV, false, page, emojiMapV, true, { showList: false, sessionId: targetSession.id });
-        return interaction.editReply({
-          embeds: [embed],
-          components: [buildAttendanceSelectRow(true), ...pagComponents],
-        });
+        const next = action === 'prev' ? Math.max(1, currentPage - 1) : currentPage + 1;
+        const { embed, components } = await renderAttendancePanel(guild, targetSession, { page: next, userId: interaction.user.id });
+        return interaction.editReply({ embeds: [embed], components });
       }
 
       // Mở mới phiếu điểm danh cá nhân
       await guild.members.fetch().catch(() => {});
       await guild.roles.fetch().catch(() => {});
-      const { embed, components: pagComponents } =
-        buildSessionEmbed(guild, session, attended, phaiIdsV, false, 1, emojiMapV, true, { showList: false, sessionId: session.id });
+      const { embed, components } = await renderAttendancePanel(guild, session, { userId: interaction.user.id });
       return interaction.reply({
         embeds: [embed],
-        components: [buildAttendanceSelectRow(true), ...pagComponents],
+        components,
         flags: MessageFlags.Ephemeral,
       });
     }

@@ -239,7 +239,7 @@ function _buildPendingView(guild, session, phaiRoleIds = [], emojiMap = null) {
  * @param {object} [opts]  - showList (default true), showPageSuffix (default true),
  *                            paginationPrefix (default 'attend_view'), filter ('all'|status),
  *                            allowClosed (default false — render kể cả khi phiên đã đóng),
- *                            sessionId (string)
+ *                            sessionId (string), userLine (string — dòng trạng thái bản thân)
  */
 function buildSessionEmbed(guild, session, attended = [], phaiRoleIds = [], _isEditing = false, page = 1, emojiMap = null, showPhaiStats = false, opts = {}) {
   if (!session.is_active && !opts.allowClosed) {
@@ -310,8 +310,9 @@ function buildSessionEmbed(guild, session, attended = [], phaiRoleIds = [], _isE
     infoParts.push(`▸ _${session.description}_`);
   }
 
-  // ── Description: ANSI block + session info ─────────────────────────────────
+  // ── Description: userLine (trạng thái bản thân) + ANSI block + session info ──
   const desc = [
+    ...(opts.userLine ? [opts.userLine, ''] : []),
     ansiBlock,
     ...(infoParts.length ? ['', ...infoParts] : []),
   ].join('\n');
