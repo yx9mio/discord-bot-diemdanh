@@ -123,12 +123,12 @@ function replyErrEdit(msg = 'Có lỗi xảy ra. Vui lòng thử lại.') {
 function replyOkEdit(msg = 'Thành công.') {
   return { embeds: [new EmbedBuilder().setColor(COLORS.GREEN).setDescription(`✅ ${msg}`)], components: [] };
 }
-function replyConfirm(description, yesId, noId) {
+function replyConfirm(description, yesId, noId, yesLabel, noLabel) {
   // [FIX] require('./_views/rows') — utils/rows.js không tồn tại
   const { buildConfirmRow } = require('./_views/rows');
   return {
     embeds: [new EmbedBuilder().setColor(COLORS.YELLOW).setDescription(`⚠️ ${description}`).setFooter({ text: FOOTER_DEFAULT })],
-    components: [buildConfirmRow(yesId, noId)],
+    components: [buildConfirmRow(yesId, noId, yesLabel, noLabel)],
     flags: MessageFlags.Ephemeral,
   };
 }

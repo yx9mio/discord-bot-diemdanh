@@ -40,24 +40,25 @@ class SetupSessionHandler extends InteractionHandler {
         getMembers(guild.id),
       ]);
 
-      const session = allSessions[0] ?? null;
+      // [UX-P2] Đọc state từ footer: ctx + sid → chọn đúng Kỳ trong nhiều Kỳ đang mở
+      const ctx = SessionView.parseFooter(interaction.message?.embeds?.[0]?.footer);
+      const session = allSessions.find(s => s.id === ctx.sessionId) ?? allSessions[0] ?? null;
       const attendances = session
         ? await attendanceService.getAttendances(session.id)
         : [];
 
       if (customId === 'setup:session:refresh') {
-        const ctx = SessionView.parseFooter(interaction.message?.embeds?.[0]?.footer);
         if (ctx.ctx === 'roster') {
           return interaction.editReply(SessionView.renderRoster({ session, guild, attendances, page: ctx.page }));
         }
         if (ctx.ctx === 'details') {
           return interaction.editReply(SessionView.renderDetails({ session, guild, members, attendances, cfg }));
         }
-        return interaction.editReply(SessionView.renderSummary({ session, guild, cfg, members, attendances, sessionCount: allSessions.length }));
+        return interaction.editReply(SessionView.renderSummary({ session, guild, cfg, members, attendances, sessionCount: allSessions.length, sessions: allSessions }));
       }
 
       if (customId === 'setup:session:back') {
-        return interaction.editReply(SessionView.renderSummary({ session, guild, cfg, members, attendances, sessionCount: allSessions.length }));
+        return interaction.editReply(SessionView.renderSummary({ session, guild, cfg, members, attendances, sessionCount: allSessions.length, sessions: allSessions }));
       }
 
       if (customId === 'setup:session:roster') {
@@ -69,12 +70,11 @@ class SetupSessionHandler extends InteractionHandler {
       }
 
       if (customId === 'setup:session:roster:prev' || customId === 'setup:session:roster:next') {
-        const ctx = SessionView.parseFooter(interaction.message?.embeds?.[0]?.footer);
         const page = customId === 'setup:session:roster:prev' ? ctx.page - 1 : ctx.page + 1;
         return interaction.editReply(SessionView.renderRoster({ session, guild, attendances, page }));
       }
 
-      return interaction.editReply(SessionView.renderSummary({ session, guild, cfg, members, attendances, sessionCount: allSessions.length }));
+      return interaction.editReply(SessionView.renderSummary({ session, guild, cfg, members, attendances, sessionCount: allSessions.length, sessions: allSessions }));
     } catch (e) {
       log.error('SETUP_SESSION', guild.id, 'Session load thất bại: %s', e.message);
       return interaction.editReply({ content: '❌ Không thể tải dữ liệu Bang Chiến, thử lại sau.' });

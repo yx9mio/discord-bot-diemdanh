@@ -46,11 +46,12 @@ class SetupSessionCloseHandler extends InteractionHandler {
 
         return interaction.editReply(
           replyConfirm(
-            `🔒 Bạn có chắc muốn đóng **tất cả ${sessions.length} Bang Chiến** đang mở?\n\n` +
-            '> Sau khi đóng, thành viên không thể điểm danh thêm ở mọi Kỳ.\n' +
-            '> Dữ liệu tất cả các Kỳ sẽ được tính vào thống kê.',
+            `Bạn đang yêu cầu đóng **tất cả ${sessions.length} Kỳ** đang mở.\n` +
+            '> Thao tác này **không thể hoàn tác** — thành viên không thể điểm danh thêm ở mọi Kỳ.',
             'setup:session:confirm:close:all',
             'setup:session:cancel_close:all',
+            `🔒 Đóng tất cả ${sessions.length} Kỳ`,
+            'Hủy',
           ),
         );
       }

@@ -1,5 +1,5 @@
 'use strict';
-const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, StringSelectMenuOptionBuilder } = require('discord.js');
 const { COLORS, ICONS, getPhaiIcon } = require('../../../../utils/theme.js');
 const { FOOTER_DEFAULT, buildAuthor } = require('../../../../utils/embeds.js');
 const { fmtTs } = require('../../../../utils/format.js');
@@ -13,6 +13,7 @@ const CUSTOM_ID = {
   ROSTER_PREV: 'setup:session:roster:prev',
   ROSTER_NEXT: 'setup:session:roster:next',
   START:       'setup:session:start',
+  SELECT:      'setup:session:select',
 };
 
 const ROSTER_PAGE_SIZE = 10;
@@ -66,7 +67,27 @@ function _resolveName(guild, userId, fallback) {
   return m ? (m.displayName || m.user.username) : (fallback ?? userId);
 }
 
-function renderSummary({ session, guild, cfg, members, attendances, sessionCount = 1 }) {
+function _sessionShortLabel(s) {
+  const name = s.session_name ?? 'Bang Chiến';
+  const day = s.started_at ? fmtTs(s.started_at).split(' ')[0] : '';
+  return day ? `${name} · ${day}` : name;
+}
+
+function _buildSessionSelect(sessions, selectedId) {
+  return new ActionRowBuilder().addComponents(
+    new StringSelectMenuBuilder()
+      .setCustomId(CUSTOM_ID.SELECT)
+      .setPlaceholder('Chọn Bang Chiến cần quản lý...')
+      .addOptions(sessions.map(s =>
+        new StringSelectMenuOptionBuilder()
+          .setLabel(_sessionShortLabel(s).slice(0, 100))
+          .setValue(s.id)
+          .setDefault(s.id === selectedId)
+      )),
+  );
+}
+
+function renderSummary({ session, guild, cfg, members, attendances, sessionCount = 1, sessions }) {
   const active = !!session;
   const eligible = session?.eligible_member_ids?.length ?? 0;
   const attended = attendances.filter(a => a.status === 'tham_gia').length;
@@ -112,6 +133,11 @@ function renderSummary({ session, guild, cfg, members, attendances, sessionCount
 
   const components = [];
 
+  // [UX-P2] Nhiều Kỳ đang mở → select chọn Kỳ cần quản lý
+  if (Array.isArray(sessions) && sessions.length > 1) {
+    components.push(_buildSessionSelect(sessions, session?.id));
+  }
+
   if (active) {
     components.push(
       new ActionRowBuilder().addComponents(
@@ -134,12 +160,16 @@ function renderSummary({ session, guild, cfg, members, attendances, sessionCount
     new ButtonBuilder().setCustomId(CUSTOM_ID.REFRESH).setLabel('Làm mới').setEmoji('🔄').setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId(CUSTOM_ID.START).setLabel('➕ Mở Kỳ mới').setStyle(ButtonStyle.Success),
   );
+  components.push(actionRow);
+
+  // [UX-P2] Đóng TẤT CẢ — hàng riêng, chỉ khi ≥ 2 Kỳ, luôn qua xác nhận
   if (active && (sessionCount ?? 1) > 1) {
-    actionRow.addComponents(
-      new ButtonBuilder().setCustomId('setup:session:close:all').setLabel(`Đóng TẤT CẢ (${sessionCount})`).setStyle(ButtonStyle.Danger),
+    components.push(
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('setup:session:close:all').setLabel(`⚠️ Đóng TẤT CẢ (${sessionCount})`).setStyle(ButtonStyle.Danger),
+      ),
     );
   }
-  components.push(actionRow);
 
   components.push(
     new ActionRowBuilder().addComponents(
