@@ -79,7 +79,7 @@ class SetupSessionConfirmHandler extends InteractionHandler {
         const sessionId = customId.slice(PREFIX_CANCEL.length);
         const session = await sessionService.getSessionByIdRaw(sessionId, guild.id);
         if (!session) return interaction.editReply(replyErrEdit('Không tìm thấy Bang Chiến yêu cầu.'));
-        if (session.status !== 'open') {
+        if (!session.is_active) {
           return interaction.editReply(replyErrEdit(`Bang Chiến **"${session.session_name}"** không còn mở.`));
         }
 
@@ -101,7 +101,7 @@ class SetupSessionConfirmHandler extends InteractionHandler {
         const sessionId = customId.slice(PREFIX_CLOSE.length);
         const session = await sessionService.getSessionByIdRaw(sessionId, guild.id);
         if (!session) return interaction.editReply(replyErrEdit('Không tìm thấy Bang Chiến yêu cầu.'));
-        if (session.status !== 'open') {
+        if (!session.is_active) {
           return interaction.editReply(replyErrEdit(`Bang Chiến **"${session.session_name}"** không còn mở.`));
         }
 

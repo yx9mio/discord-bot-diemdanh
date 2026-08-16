@@ -45,7 +45,7 @@ class SetupSessionCancelHandler extends InteractionHandler {
       if (!session) {
         return interaction.editReply(replyErrEdit('Không tìm thấy Bang Chiến yêu cầu.'));
       }
-      if (session.status !== 'open') {
+      if (!session.is_active) {
         return interaction.editReply(replyErrEdit(`Bang Chiến **"${session.session_name}"** không còn mở.`));
       }
 

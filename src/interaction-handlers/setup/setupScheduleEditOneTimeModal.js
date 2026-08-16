@@ -30,7 +30,10 @@ class SetupScheduleEditOneTimeModalHandler extends InteractionHandler {
   }
 
   parse(interaction) {
-    if (interaction.customId.startsWith(EDIT_PREFIX)) return this.some();
+    // [BUG-FIX] Loại trừ id wizard recurring (setup:sch:edit:r:step*)
+    // — chúng thuộc setupSchedule.js; nếu match cả hai handler → double-response
+    if (interaction.customId.startsWith(EDIT_PREFIX) &&
+        !interaction.customId.startsWith(`${EDIT_PREFIX}r:`)) return this.some();
     return this.none();
   }
 

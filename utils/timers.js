@@ -73,10 +73,12 @@ function scheduleCloseTimer(client, guild, session, channelId, ms) {
       const attended = await attendanceService.getAttendances(session.id);
       await guild.members.fetch().catch(() => {});
       await guild.roles.fetch().catch(() => {});
-      const statsMap = await endSession(guild, session, attended);
+      const statsMap = await endSession(guild, cur, attended);
 
       if (ch) {
-        await disableAttendanceUI(client, ch, session, attended);
+        // [BUG-FIX] Dùng cur (fresh từ DB, có message_id) — session local thiếu
+        // message_id nên disableAttendanceUI luôn early-return, board không khóa
+        await disableAttendanceUI(client, ch, cur, attended);
         const msg = new EmbedBuilder()
           .setColor(COLORS.GREY)
           .setDescription('🔒 Phiên điểm danh đã tự động kết thúc.')
