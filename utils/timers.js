@@ -154,7 +154,7 @@ function startAutoRefresh(sessionId, channelId, messageId, client) {
       const phaiIds5 = session.phai_role_ids?.length
         ? session.phai_role_ids
         : cfgT2?.phai_role_ids ?? [];
-      const { embed } = buildSessionEmbed(guild, session, attended, phaiIds5, false, 1, cfgT2?.phai_role_icons ?? null, false, { showList: false });
+      const { embed } = buildSessionEmbed(guild, session, attended, phaiIds5, false, 1, cfgT2?.phai_role_icons ?? null, true, { showList: false });
       const boardRows = buildBoardRow(true);
       const adminRows = buildAdminActionRow(true);
       const components = [boardRows, ...adminRows].slice(0, 5);

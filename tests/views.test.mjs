@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { buildConfirmRow, buildAttendanceSelectRow, buildAttendanceConfirmRow, buildSessionActionRow, buildBoardRow, buildAdminActionRow, buildAttendanceFilterRow, buildHistoryNavRow } from '../utils/_views/rows.js';
 import { buildRankEmbed } from '../utils/_views/rankView.js';
-import { buildSessionEmbed, buildClosedSessionEmbed } from '../utils/_views/sessionView.js';
+import { buildSessionEmbed, buildClosedSessionEmbed, sessionEmbedColor } from '../utils/_views/sessionView.js';
 import { buildAttendanceConfirmPrompt } from '../utils/_views/attendView.js';
 
 describe('buildConfirmRow', () => {
@@ -256,7 +256,7 @@ describe('buildSessionEmbed (active session)', () => {
     expect(embed.toJSON().title).toContain('Bang Chiến');
   });
 
-  it('contains ANSI code block with stats and progress bar', () => {
+  it('renders plain-text stats — [UX-P3] no ANSI code block', () => {
     const attended = [
       { user_id: 'u1', status: 'tham_gia', checked_in_at: new Date(now).toISOString() },
       { user_id: 'u2', status: 'tre', checked_in_at: new Date(now).toISOString() },
@@ -264,19 +264,18 @@ describe('buildSessionEmbed (active session)', () => {
     ];
     const { embed } = buildSessionEmbed(null, session, attended, [], false, 1, null, false);
     const json = embed.toJSON();
-    expect(json.description).toContain('```ansi');
-    expect(json.description).toContain('Bang Chiến');
-    expect(json.description).toContain('Tỉ lệ tham gia');
-    expect(json.description).toContain('Đúng giờ');
-    expect(json.description).toContain('Trễ');
-    expect(json.description).toContain('Có phép');
+    expect(json.title).toBe('⚔️ Bang Chiến');
+    expect(json.description).not.toContain('```ansi');
+    expect(json.description).toContain('✅ Đúng giờ 1 · ⏰ Trễ 1 · ❌ Vắng 0 · 📋 Có phép 1');
+    expect(json.description).not.toContain('Tỉ lệ tham gia');
   });
 
-  it('shows description and auto-close timestamp in description field', () => {
+  it('shows auto-close countdown as plain relative timestamp', () => {
     const { embed } = buildSessionEmbed(null, session, [], [], false, 1, null, false);
     const json = embed.toJSON();
+    expect(json.description).toContain('⏱️ Tự đóng <t:');
     expect(json.description).toContain('Thứ 7 máu chảy về tim');
-    expect(json.description).toContain('<t:');
+    expect(json.description).not.toContain('```ansi');
   });
 
   it('renders member list field with grouped attendees', () => {
@@ -367,7 +366,8 @@ describe('buildSessionEmbed (active session)', () => {
   it('renders closed session when opts.allowClosed=true', () => {
     const closedSession = { ...session, is_active: false };
     const { embed } = buildSessionEmbed(null, closedSession, [], [], false, 1, null, false, { allowClosed: true });
-    expect(embed.toJSON().title).toContain('Điểm danh — Bang Chiến');
+    expect(embed.toJSON().title).toBe('⚔️ Bang Chiến');
+    expect(embed.toJSON().description).toContain('🔒 Đã kết thúc');
   });
 
   it('prepends userLine to description — [UX-P2] trạng thái bản thân', () => {
@@ -398,20 +398,56 @@ describe('buildClosedSessionEmbed', () => {
   it('renders closed title with session name', () => {
     const embed = buildClosedSessionEmbed(session, attended, null);
     expect(embed.toJSON().title).toContain('Bang Chiến');
-    expect(embed.toJSON().title).toContain('Đã đóng');
+    expect(embed.toJSON().title).toContain('Đã kết thúc');
+  });
+
+  it('cancelled session → title Đã hủy + red', () => {
+    const cancelled = { ...session, cancelled: true };
+    const embed = buildClosedSessionEmbed(cancelled, attended, null);
+    const json = embed.toJSON();
+    expect(json.title).toContain('Đã hủy');
+    expect(json.title).not.toContain('Đã kết thúc');
+    expect(json.color).toBe(0xff4444);
+  });
+
+  it('closed session → grey', () => {
+    const embed = buildClosedSessionEmbed(session, attended, null);
+    expect(embed.toJSON().color).toBe(0x36393e);
   });
 
   it('shows stats summary in description', () => {
     const embed = buildClosedSessionEmbed(session, attended, null);
     const json = embed.toJSON();
     expect(json.description).toContain('Tỉ lệ tham gia');
-    expect(json.description).toContain('Đúng giờ:');
-    expect(json.description).toContain('Tổng:');
+    expect(json.description).toContain('Đúng giờ');
+    expect(json.description).toContain('Tổng');
   });
 
   it('keeps board tinh gọn — no member list field after close', () => {
     const embed = buildClosedSessionEmbed(session, attended, null);
     const listField = embed.toJSON().fields?.find(f => f.name.includes('Thành viên'));
     expect(listField).toBeUndefined();
+  });
+});
+
+describe('sessionEmbedColor — [UX-P3] màu theo trạng thái', () => {
+  const now = Date.now();
+  const base = { is_active: true, auto_close_at: new Date(now + 3600000).toISOString() };
+
+  it('open session → green', () => {
+    expect(sessionEmbedColor(base)).toBe(0x57f287);
+  });
+
+  it('closing soon (≤10 min) → yellow', () => {
+    const closing = { ...base, auto_close_at: new Date(now + 3 * 60000).toISOString() };
+    expect(sessionEmbedColor(closing)).toBe(0xfee75c);
+  });
+
+  it('closed session → grey', () => {
+    expect(sessionEmbedColor({ is_active: false })).toBe(0x36393e);
+  });
+
+  it('cancelled session → red (ưu tiên hơn closed)', () => {
+    expect(sessionEmbedColor({ is_active: false, cancelled: true })).toBe(0xff4444);
   });
 });

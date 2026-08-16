@@ -69,7 +69,7 @@ class SetupSessionStartModalHandler extends InteractionHandler {
           // Nạp cache thành viên & role để thống kê phái chính xác
           await guild.members.fetch().catch(() => {});
           await guild.roles.fetch().catch(() => {});
-          const { embed: sessionEmbed } = buildSessionEmbed(guild, session, [], cfg?.phai_role_ids ?? [], false, 1, cfg?.phai_role_icons ?? null, false, { showList: false });
+          const { embed: sessionEmbed } = buildSessionEmbed(guild, session, [], cfg?.phai_role_ids ?? [], false, 1, cfg?.phai_role_icons ?? null, true, { showList: false });
           const boardRows = buildBoardRow(true);
           const adminRows = buildAdminActionRow(true);
           const msg = await ch.send({ embeds: [sessionEmbed], components: [boardRows, ...adminRows].slice(0, 5) });

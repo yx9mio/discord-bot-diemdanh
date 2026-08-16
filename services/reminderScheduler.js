@@ -214,7 +214,7 @@ async function autoOpenSession(guild, cfg, sched) {
     // Nạp đầy đủ cache thành viên & role để _phaiStats chính xác
     await guild.members.fetch().catch(() => {});
     await guild.roles.fetch().catch(() => {});
-    const { embed: sessionEmbed } = buildSessionEmbed(guild, session, [], cfg?.phai_role_ids ?? [], false, 1, cfg?.phai_role_icons ?? null, false, { showList: false });
+    const { embed: sessionEmbed } = buildSessionEmbed(guild, session, [], cfg?.phai_role_ids ?? [], false, 1, cfg?.phai_role_icons ?? null, true, { showList: false });
     const boardRows = buildBoardRow(true);
     const adminRows = buildAdminActionRow(true);
     const msg = await ch.send({

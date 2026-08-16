@@ -1,8 +1,8 @@
 'use strict';
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const {
-  COLORS, ICONS, FOOTER_DEFAULT,
-  pctEmoji, pctLabel, formatDuration, buildAuthor,
+  COLORS, FOOTER_DEFAULT,
+  formatDuration, buildAuthor,
 } = require('../_helpers');
 const { getPhaiIcon } = require('../theme.js');
 const { buildPublicUrl } = require('../phaiIcons.js');
@@ -17,42 +17,18 @@ const FILTER_LABELS = {
   co_phep:        '📋 Có phép',
 };
 
-// ─── ANSI helpers ────────────────────────────────────────────────────────────
-const ANSI = {
-  RESET:   '\x1b[0m',
-  GREEN:   '\x1b[1;32m',
-  YELLOW:  '\x1b[1;33m',
-  RED:     '\x1b[1;31m',
-  CYAN:    '\x1b[1;36m',
-  MAGENTA: '\x1b[1;35m',
-  GREY:    '\x1b[1;30m',
-};
-
-/** Thanh tiến độ ASCII 10 kí tự */
-function _progressBar(pct, len = 10) {
-  const filled = Math.round(pct / 100 * len);
-  return '▰'.repeat(filled) + '▱'.repeat(len - filled);
-}
-
-/** Thanh tiến độ tô màu ANSI theo ngưỡng */
-function _ansiBar(pct, len = 10) {
-  const color = pct >= 80 ? ANSI.GREEN : pct >= 50 ? ANSI.YELLOW : ANSI.RED;
-  return `${color}${_progressBar(pct, len)}${ANSI.RESET}`;
-}
-
-/** Màu ANSI tương ứng tỉ lệ */
-function _pctColor(pct) {
-  if (pct >= 80) return ANSI.GREEN;
-  if (pct >= 50) return ANSI.YELLOW;
-  return ANSI.RED;
-}
-
-/** Đệm chuỗi bên phải */
-function _pad(str, len) {
-  // Tính kí tự hiển thị (bỏ escape ANSI)
-  const visible = str.replace(/\x1b\[[0-9;]*m/g, ''); // eslint-disable-line no-control-regex
-  const diff = len - visible.length;
-  return diff > 0 ? str + ' '.repeat(diff) : str;
+/**
+ * [UX-P3] Màu embed theo trạng thái phiên (không theo % tham gia):
+ *   xanh đang mở · vàng sắp tự đóng (≤10 phút) · xám đã đóng · đỏ đã hủy
+ */
+function sessionEmbedColor(session) {
+  if (session?.cancelled) return COLORS.RED;
+  if (!session?.is_active) return COLORS.GREY;
+  if (session.auto_close_at) {
+    const msLeft = new Date(session.auto_close_at).getTime() - Date.now();
+    if (msLeft > 0 && msLeft <= 10 * 60 * 1000) return COLORS.YELLOW;
+  }
+  return COLORS.GREEN;
 }
 
 /** Chuỗi thời gian đã diễn ra */
@@ -98,47 +74,7 @@ function _groupedList(groups) {
   return lines;
 }
 
-/** Phái stats dạng ANSI 2 cột (lọc theo attendance role nếu có) */
-function _phaiStatsAnsi(phaiRoleIds, guild, attended, eligibleSet, attendanceRoleId) {
-  const items = [];
-  for (const roleId of (phaiRoleIds ?? [])) {
-    const role = guild?.roles?.cache?.get(roleId);
-    if (!role) continue;
-    let roleMembers = [...role.members.keys()].filter(id => eligibleSet.size === 0 || eligibleSet.has(id));
-    if (attendanceRoleId) {
-      roleMembers = roleMembers.filter(id => {
-        const m = guild.members?.cache?.get(id);
-        return m?.roles?.cache?.has(attendanceRoleId);
-      });
-    }
-    const rPresent = attended.filter(a =>
-      roleMembers.includes(a.user_id) && ['tham_gia', 'tre'].includes(a.status)
-    ).length;
-    const name = role.name.length > 10 ? role.name.slice(0, 9) + '…' : role.name;
-    items.push({ name, rPresent });
-  }
-  if (!items.length) return null;
-
-  const lines = [];
-  for (let i = 0; i < items.length; i += 2) {
-    const left = items[i];
-    const right = items[i + 1];
-    const lName  = _pad(left.name, 10);
-    const lColor = left.rPresent > 0 ? ANSI.GREEN : ANSI.GREY;
-    const lNum   = `${lColor}${left.rPresent}${ANSI.RESET}`;
-    let line = `${lName}: ${lNum}`;
-    if (right) {
-      const rName  = _pad(right.name, 10);
-      const rColor = right.rPresent > 0 ? ANSI.GREEN : ANSI.GREY;
-      const rNum   = `${rColor}${right.rPresent}${ANSI.RESET}`;
-      line += `  |  ${rName}: ${rNum}`;
-    }
-    lines.push(line);
-  }
-  return '```ansi\n' + lines.join('\n') + '\n```';
-}
-
-/** Phái stats dạng text thường + Discord custom emoji (cho view chỉnh sửa) */
+/** Phái stats dạng text thường + Discord custom emoji — [UX-P3] thay thế hoàn toàn ANSI */
 function _phaiStatsText(phaiRoleIds, guild, attended, eligibleSet, attendanceRoleId, emojiMap = null) {
   const items = [];
   for (const roleId of (phaiRoleIds ?? [])) {
@@ -260,7 +196,6 @@ function buildSessionEmbed(guild, session, attended = [], phaiRoleIds = [], _isE
   const absent  = sortedAttended.filter(a => a.status === 'khong_tham_gia').length;
   const excused = sortedAttended.filter(a => a.status === 'co_phep').length;
   const onTime  = joined - late;
-  const pct     = total > 0 ? Math.round(joined / total * 100) : 0;
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const clampedPage = Math.max(1, Math.min(page, totalPages));
@@ -274,35 +209,23 @@ function buildSessionEmbed(guild, session, attended = [], phaiRoleIds = [], _isE
   const runningDur       = _durationStr(session.started_at, session.ended_at ?? null);
   const attendanceRoleId = session.allowed_role_id ?? null;
 
-  // ── ANSI code block ───────────────────────────────────────────────────────
-  const pctC = _pctColor(pct);
-  const ansiLines = [
-    `${ANSI.CYAN}⚔️ ${session.session_name ?? 'Kỳ'}${ANSI.RESET}`,
-  ];
-  if (session.is_active && runningDur) {
-    ansiLines.push(`${ANSI.GREY}⏱️ Đang diễn ra: ${runningDur}${ANSI.RESET}`);
+  // ── Description — plain text, mobile-first ([UX-P3] bỏ ANSI hoàn toàn) ─────
+  const descParts = [];
+  if (opts.userLine) descParts.push(opts.userLine, '');
+  if (session.is_active) {
+    if (session.auto_close_at) {
+      const autoCloseTs = Math.floor(new Date(session.auto_close_at).getTime() / 1000);
+      descParts.push(`⏱️ Tự đóng <t:${autoCloseTs}:R>`);
+    } else if (runningDur) {
+      descParts.push(`⏱️ Đang diễn ra: ${runningDur}`);
+    }
+  } else {
+    const endTs = session.ended_at ? Math.floor(new Date(session.ended_at).getTime() / 1000) : null;
+    descParts.push(endTs ? `🔒 Đóng lúc <t:${endTs}:f>` : '🔒 Đã kết thúc');
   }
-  ansiLines.push('');
-  ansiLines.push(`${pctC}${pctEmoji(pct)} Tỉ lệ tham gia: ${pct}% — ${pctLabel(pct)}${ANSI.RESET}`);
-  ansiLines.push(_ansiBar(pct, 20));
-  ansiLines.push('');
-  ansiLines.push(
-    `${ANSI.GREEN}✅ Đúng giờ: ${String(onTime).padEnd(4)}${ANSI.RESET}  ` +
-    `${ANSI.YELLOW}⏰ Trễ: ${String(late).padEnd(4)}${ANSI.RESET}  ` +
-    `${ANSI.RED}❌ Vắng: ${String(absent).padEnd(4)}${ANSI.RESET}`
-  );
-  ansiLines.push(
-    `${ANSI.MAGENTA}📋 Có phép: ${String(excused).padEnd(4)}${ANSI.RESET}  ` +
-    `${ANSI.CYAN}📊 Tổng: ${String(total).padEnd(4)}${ANSI.RESET}`
-  );
-  const ansiBlock = '```ansi\n' + ansiLines.join('\\n') + '\n```';
+  descParts.push(`✅ Đúng giờ ${onTime} · ⏰ Trễ ${late} · ❌ Vắng ${absent} · 📋 Có phép ${excused}`);
 
-  // ── Info parts ────────────────────────────────────────────────────────────
   const infoParts = [];
-  if (session.auto_close_at) {
-    const autoCloseTs = Math.floor(new Date(session.auto_close_at).getTime() / 1000);
-    infoParts.push(`▸ ⏱️ Tự động đóng: <t:${autoCloseTs}:R> (<t:${autoCloseTs}:t>)`);
-  }
   if (eligibleCount > 0) {
     infoParts.push(`▸ 🎯 Mục tiêu: **${total}/${eligibleCount}** thành viên`);
   }
@@ -310,19 +233,17 @@ function buildSessionEmbed(guild, session, attended = [], phaiRoleIds = [], _isE
     infoParts.push(`▸ _${session.description}_`);
   }
 
-  // ── Description: userLine (trạng thái bản thân) + ANSI block + session info ──
   const desc = [
-    ...(opts.userLine ? [opts.userLine, ''] : []),
-    ansiBlock,
+    ...descParts,
     ...(infoParts.length ? ['', ...infoParts] : []),
   ].join('\n');
 
-  const color = pct >= 80 ? COLORS.GREEN : pct >= 50 ? COLORS.YELLOW : COLORS.RED;
+  const color = sessionEmbedColor(session);
 
   const embed = new EmbedBuilder()
     .setColor(color)
     .setAuthor(buildAuthor(guild))
-    .setTitle(`⚔️ Điểm danh — ${session.session_name ?? 'Kỳ điểm danh'}`)
+    .setTitle(`⚔️ ${session.session_name ?? 'Kỳ điểm danh'}`)
     .setDescription(desc)
     .setFooter({ text: `${FOOTER_DEFAULT} · ${session.is_active ? 'Đang diễn ra' : 'Đã kết thúc'}` })
     .setTimestamp();
@@ -331,11 +252,9 @@ function buildSessionEmbed(guild, session, attended = [], phaiRoleIds = [], _isE
   const thumbUrl = _topPhaiThumbnail(phaiRoleIds, guild, sortedAttended, emojiMap);
   if (thumbUrl) embed.setThumbnail(thumbUrl);
 
-  // ── Phái stats field ──────────────────────────────────────────────────────
+  // ── Phái stats field (plain text — luôn) ──────────────────────────────────
   if (showPhaiStats && phaiRoleIds?.length) {
-    const phaiBlock = _isEditing
-      ? _phaiStatsText(phaiRoleIds, guild, sortedAttended, eligibleSet, attendanceRoleId, emojiMap)
-      : _phaiStatsAnsi(phaiRoleIds, guild, sortedAttended, eligibleSet, attendanceRoleId);
+    const phaiBlock = _phaiStatsText(phaiRoleIds, guild, sortedAttended, eligibleSet, attendanceRoleId, emojiMap);
     if (phaiBlock) {
       embed.addFields({ name: '⚔️ Phân bố Phái', value: phaiBlock, inline: false });
     }
@@ -389,27 +308,34 @@ function buildClosedSessionEmbed(session, attended = [], _guild, phaiRoleIds = [
   const late    = sortedAttended.filter(a => a.status === 'tre').length;
   const onTime  = joined - late;
   const pct     = total > 0 ? Math.round(joined / total * 100) : 0;
-  const color   = pct >= 80 ? COLORS.GREEN : pct >= 50 ? COLORS.YELLOW : COLORS.RED;
+
+  const cancelled = !!session?.cancelled;
+  const color     = cancelled ? COLORS.RED : COLORS.GREY;
+  const endTs     = session?.ended_at ? Math.floor(new Date(session.ended_at).getTime() / 1000) : null;
 
   const eligibleSet = new Set((session?.eligible_member_ids ?? []).map(m => m.id ?? m));
   const attendanceRoleId = session?.allowed_role_id ?? null;
-  const phaiBlock = _phaiStatsAnsi(phaiRoleIds, _guild, sortedAttended, eligibleSet, attendanceRoleId);
+  const phaiBlock = _phaiStatsText(phaiRoleIds, _guild, sortedAttended, eligibleSet, attendanceRoleId, emojiMap);
+
+  const descLines = [];
+  descLines.push(endTs
+    ? `${cancelled ? '🗑️' : '🔒'} ${cancelled ? 'Đã hủy' : 'Đóng'} lúc <t:${endTs}:f>`
+    : (cancelled ? '🗑️ Đã hủy' : '🔒 Đã kết thúc'));
+  descLines.push(`**Tỉ lệ tham gia**: \`${pct}%\` (${joined}/${total})`);
+  descLines.push(`✅ Đúng giờ \`${onTime}\` · ⏰ Trễ \`${late}\` · ❌ Vắng \`${absent}\` · 📋 Có phép \`${excused}\` · 📊 Tổng \`${total}\``);
 
   const embed = new EmbedBuilder()
     .setColor(color)
     .setAuthor(buildAuthor(_guild))
-    .setTitle(`🔒 Đã đóng — ${session?.session_name ?? 'Kỳ điểm danh'}`)
-    .setDescription(
-      `**Tỉ lệ tham gia**: \`${pct}%\` (${joined}/${total})\n` +
-      `✅ Đúng giờ: \`${onTime}\` · ⏰ Trễ: \`${late}\` · ❌ Vắng: \`${absent}\` · 📋 Có phép: \`${excused}\` · 📊 Tổng: \`${total}\``
-    );
+    .setTitle(`${cancelled ? '🗑️ Đã hủy' : '🔴 Đã kết thúc'} — ${session?.session_name ?? 'Kỳ điểm danh'}`)
+    .setDescription(descLines.join('\n'));
 
   if (phaiBlock) {
     embed.addFields({ name: '⚔️ Phân bố Phái', value: phaiBlock, inline: false });
   }
 
   embed
-    .setFooter({ text: `${FOOTER_DEFAULT} · Đã đóng` })
+    .setFooter({ text: `${FOOTER_DEFAULT} · ${cancelled ? 'Đã hủy' : 'Đã đóng'}` })
     .setTimestamp();
 
   const thumbUrl = _topPhaiThumbnail(phaiRoleIds, _guild, sortedAttended, emojiMap);
@@ -418,4 +344,4 @@ function buildClosedSessionEmbed(session, attended = [], _guild, phaiRoleIds = [
   return embed;
 }
 
-module.exports = { buildSessionEmbed, buildClosedSessionEmbed };
+module.exports = { buildSessionEmbed, buildClosedSessionEmbed, sessionEmbedColor };
