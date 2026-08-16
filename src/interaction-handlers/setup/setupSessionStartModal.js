@@ -45,7 +45,13 @@ class SetupSessionStartModalHandler extends InteractionHandler {
       }
 
       // [UX-W3] B1 (modal) → lưu draft, hiển thị B2: chọn kênh + role
-      wizardDraft.put(interaction.user.id, { ten, phut, moTa, channelId: null, roleId: null });
+      // [BUG-FIX] Quay lại từ B3: giữ channelId/roleId đã chọn ở B2
+      const prev = wizardDraft.get(interaction.user.id);
+      wizardDraft.put(interaction.user.id, {
+        ten, phut, moTa,
+        channelId: prev?.channelId ?? null,
+        roleId: prev?.roleId ?? null,
+      });
       await guild.channels.fetch().catch(() => {});
       await guild.roles.fetch().catch(() => {});
 

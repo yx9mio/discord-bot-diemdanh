@@ -17,7 +17,7 @@ const scheduledService = require('./scheduledService.js');
 const sessionService   = require('./sessionService.js');
 const log = require('../utils/logger.js');
 const { cleanupAuditLogs } = require('../utils/auditLog.js');
-const { tryAcquireLeadership, startHeartbeat, stopHeartbeat } = require('../utils/schedulerLock.js');
+const { tryAcquireLeadership, startHeartbeat, stopHeartbeat, isLeadershipValid } = require('../utils/schedulerLock.js');
 const { DateTime } = require('luxon');
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { buildSessionEmbed } = require('../utils/_views/sessionView.js');
@@ -62,6 +62,11 @@ async function runReminders() {
     }
 
     for (const [, guild] of guilds) {
+      // [BUG-FIX] Mất quyền leader giữa tick → dừng ngay, tránh duplicate
+      if (!isLeadershipValid()) {
+        log.warn('REMINDER', null, 'Mất quyền leader, dừng tick giữa chừng');
+        break;
+      }
       await processGuildReminders(guild);
     }
   } catch (e) {
@@ -162,9 +167,26 @@ async function autoOpenSession(guild, cfg, sched) {
 
     // Distributed guard: atomic deactivate schedule để tránh multi-instance duplicate
     if (sched.type === 'one_time') {
+      // [BUG-FIX] Kiểm tra phiên đang mở TRƯỚC khi deactivate — trước đây
+      // lịch bị xóa vĩnh viễn nếu admin đã mở thủ công (không tạo phiên mới)
+      const alreadyActive = await sessionService.getActiveSession(guild.id);
+      if (alreadyActive) {
+        log.info('AUTO_OPEN', guild.id, 'Đã có phiên đang mở, bỏ qua auto-open (giữ lịch)');
+        return;
+      }
       const deleted = await scheduledService.deleteScheduledSession(guild.id, sched.id);
       if (!deleted) {
         log.info('AUTO_OPEN', guild.id, 'Schedule %s đã được xử lý bởi instance khác, bỏ qua', sched.id);
+        return;
+      }
+      // Re-check sau deactivate: race với admin mở thủ công trong khoảng trống
+      // → khôi phục lịch để không mất dữ liệu schedule
+      const raceActive = await sessionService.getActiveSession(guild.id);
+      if (raceActive) {
+        await scheduledService.createScheduledSession({ ...sched, id: undefined }).catch(e => {
+          log.error('AUTO_OPEN', guild.id, 'Khôi phục lịch %s thất bại: %s', sched.id, e.message);
+        });
+        log.info('AUTO_OPEN', guild.id, 'Race với phiên mở thủ công — đã khôi phục lịch %s', sched.id);
         return;
       }
     } else {
@@ -197,6 +219,12 @@ async function autoOpenSession(guild, cfg, sched) {
         closeAt = closeAt.plus({ days: 1 });
       }
       autoCloseAt = closeAt.toISO();
+    }
+
+    // [BUG-FIX] Chốt quyền leader lần cuối trước khi tạo phiên (đã qua heartbeat)
+    if (!isLeadershipValid()) {
+      log.warn('AUTO_OPEN', guild.id, 'Mất quyền leader, bỏ qua auto-open %s', sched.id);
+      return;
     }
 
     const session = await sessionService.createSession({

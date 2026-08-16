@@ -18,6 +18,15 @@ function _set(guildId, name, emojiString) {
 }
 function _del(guildId, name) { _cache.delete(_key(guildId, name)); }
 
+// [BUG-FIX] Xoá mọi key memory của một emoji_id — khi rename, key cũ (theo tên
+// cũ) vẫn còn → getEmojiString trả emoji chết. Cũng dùng cho deleteEmoji.
+function _purgeByEmojiId(guildId, emojiId) {
+  const suffix = `:${emojiId}>`;
+  for (const k of _cache.keys()) {
+    if (k.startsWith(guildId + ':') && _cache.get(k).endsWith(suffix)) _cache.delete(k);
+  }
+}
+
 /** Đồng bộ emoji từ Discord guild.emojis.cache → Supabase + in-memory cache */
 async function syncGuildEmojis(guild) {
   if (!guild?.emojis?.cache) return;
@@ -60,6 +69,7 @@ async function upsertEmoji(emoji) {
   _throwSupabase(error, 'upsertEmoji');
 
   const str = (emoji.animated ?? false) ? `<a:${emoji.name}:${emoji.id}>` : `<:${emoji.name}:${emoji.id}>`;
+  _purgeByEmojiId(guildId, emoji.id);
   _set(guildId, emoji.name, str);
   log.debug('EMOJI_CACHE', guildId, 'Upserted emoji %s (%s)', emoji.name, emoji.id);
 }
@@ -72,6 +82,7 @@ async function deleteEmoji(emoji) {
   const { error } = await client.from('guild_emojis').delete().eq('guild_id', guildId).eq('emoji_id', emoji.id);
   _throwSupabase(error, 'deleteEmoji');
 
+  _purgeByEmojiId(guildId, emoji.id);
   _del(guildId, emoji.name);
   log.debug('EMOJI_CACHE', guildId, 'Deleted emoji %s (%s)', emoji.name, emoji.id);
 }

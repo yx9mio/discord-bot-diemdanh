@@ -9,6 +9,7 @@ const INSTANCE_ID = `${HOST}-${PID}`;
 const DEFAULT_TTL_SECONDS = 70;
 
 let _heartbeatTimer = null;
+let _leadershipValid = true;
 
 function _rpc(name, args) {
   return getClient().rpc(name, args);
@@ -59,8 +60,13 @@ async function releaseLeadership(jobName) {
 
 function startHeartbeat(jobName) {
   if (_heartbeatTimer) return;
+  _leadershipValid = true;
   _heartbeatTimer = setInterval(() => {
-    renewLeadership(jobName).catch(() => {});
+    renewLeadership(jobName)
+      // [BUG-FIX] Lock bị giành (renew trả false) → đánh dấu mất quyền leader;
+      // tick phải tự dừng thay vì tiếp tục gây duplicate
+      .then(ok => { if (!ok) _leadershipValid = false; })
+      .catch(() => { /* lỗi transient: giữ quyền, thử lại heartbeat sau */ });
   }, 30_000);
   _heartbeatTimer.unref();
 }
@@ -70,6 +76,11 @@ function stopHeartbeat() {
     clearInterval(_heartbeatTimer);
     _heartbeatTimer = null;
   }
+  _leadershipValid = true;
+}
+
+function isLeadershipValid() {
+  return _leadershipValid;
 }
 
 module.exports = {
@@ -79,4 +90,5 @@ module.exports = {
   releaseLeadership,
   startHeartbeat,
   stopHeartbeat,
+  isLeadershipValid,
 };

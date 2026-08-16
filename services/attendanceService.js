@@ -71,7 +71,11 @@ async function _releaseL2(sessionId, userId) {
  */
 async function tryAcquireAttendanceLock(sessionId, userId) {
   if (!_tryAcquireL1(sessionId, userId)) return false;
-  return await _tryAcquireL2(sessionId, userId);
+  const ok = await _tryAcquireL2(sessionId, userId);
+  // [BUG-FIX] L2 fail (lock instance khác / lỗi DB) → phải thả L1,
+  // nếu không user bị chặn 30s dù lock đã free
+  if (!ok) _releaseL1(sessionId, userId);
+  return ok;
 }
 
 /**

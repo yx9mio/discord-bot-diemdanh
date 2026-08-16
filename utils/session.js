@@ -8,6 +8,7 @@
 // [FIX-SELECT] voHieuHoaNutDiemDanh: thêm selectRow(false) — disable select menu khi đóng phiên
 const { EmbedBuilder } = require('discord.js');
 const memberService = require('../services/memberService.js');
+const sessionService = require('../services/sessionService.js');
 const log = require('./logger.js');
 const {
   COLORS,
@@ -138,12 +139,24 @@ function computeSessionPatches(attended, allStats, eligibleIds, sessionId, guild
  *
  * @returns {Promise<Map<userId, {total, streak, max}>>}
  */
+// [BUG-FIX] Single-flight: chống endSession chạy 2 lần (autoClose race với admin
+// close/CLOSE_ALL) → member_stats không bị double-count
+const closingSessions = new Set();
+
 async function endSession(guild, session, attended) {
-  const allStats = await memberService.getAllMemberStats(guild.id);
-  const eligibleIds = session.eligible_member_ids ?? [];
-  const { statsMap, patches } = computeSessionPatches(attended, allStats, eligibleIds, session.id, guild.id);
-  if (patches.length) await memberService.batchUpsertMemberStats(guild.id, patches);
-  return statsMap;
+  if (closingSessions.has(session.id)) return new Map();
+  closingSessions.add(session.id);
+  try {
+    const cur = await sessionService.getSessionById(session.id).catch(() => null);
+    if (!cur || cur.is_active) return new Map();
+    const allStats = await memberService.getAllMemberStats(guild.id);
+    const eligibleIds = session.eligible_member_ids ?? [];
+    const { statsMap, patches } = computeSessionPatches(attended, allStats, eligibleIds, session.id, guild.id);
+    if (patches.length) await memberService.batchUpsertMemberStats(guild.id, patches);
+    return statsMap;
+  } finally {
+    closingSessions.delete(session.id);
+  }
 }
 
 const ketThucPhien = endSession;

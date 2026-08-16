@@ -43,10 +43,32 @@ class MessageDeleteListener extends Listener {
         : cfg?.phai_role_ids ?? [];
       const { embed } = buildSessionEmbed(guild, session, attended, phaiIds, false, 1, cfg?.phai_role_icons ?? null, true, { showList: false });
       const boardRows = buildBoardRow(true);
-      const msg = await ch.send({ embeds: [embed], components: [boardRows] });
-      await sessionService.updateSessionMessage(session.id, { message_id: msg.id });
+
+      const postBoard = async () => {
+        const msg = await ch.send({ embeds: [embed], components: [boardRows] });
+        await sessionService.updateSessionMessage(session.id, { message_id: msg.id });
+        return msg;
+      };
+
+      let msg = await postBoard();
+      // [BUG-FIX] Race: msg mới bị xóa giữa send và updateSessionMessage →
+      // DB trỏ vào id đã xóa, board mất vĩnh viễn. Verify + gửi lại 1 lần.
+      const stillThere = await ch.messages.fetch(msg.id).catch(() => null);
+      if (!stillThere) {
+        const retry = await postBoard().catch(() => null);
+        if (!retry) {
+          log.warn('MESSAGE_DELETE', guild.id, 'Board mới lại bị xóa ngay, bỏ qua (phiên %s)', session.id);
+          return;
+        }
+        msg = retry;
+      }
+
       startAutoRefresh(session.id, ch.id, msg.id, message.client);
 
+      // [BUG-FIX] Prune entries cũ để Map không phình vô hạn
+      for (const [sid, ts] of lastRepost) {
+        if (Date.now() - ts > REPOST_COOLDOWN_MS) lastRepost.delete(sid);
+      }
       lastRepost.set(session.id, Date.now());
       log.info('MESSAGE_DELETE', guild.id, 'Đã phục hồi board phiên %s → msg %s', session.id, msg.id);
     } catch (err) {
