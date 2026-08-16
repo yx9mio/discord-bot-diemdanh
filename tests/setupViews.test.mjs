@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { HomeView } from '../src/commands/setup/_views/_HomeView.js';
+import { SessionView } from '../src/commands/setup/_views/_SessionView.js';
 
 function makeCache(arr) {
   return {
@@ -220,5 +221,133 @@ describe('HomeView._nextSchedule (tz Asia/Ho_Chi_Minh)', () => {
   it('bỏ qua lịch one_time đã qua', () => {
     const res = HomeView._nextSchedule([{ id: 's', scheduled_date: '2026-08-10', hour: 21, minute: 0 }], tz, now);
     expect(res).toBeNull();
+  });
+});
+
+const session2 = {
+  id: 's2',
+  session_name: 'Bang Chiến Phụ',
+  channel_id: 'c2',
+  started_by: 'u2',
+  started_at: '2026-08-16T15:00:00Z',
+  eligible_member_ids: ['u1', 'u2', 'u3'],
+};
+
+function sessionViewRows(sessions, selected, atts = attendances, membersList = members) {
+  const view = SessionView.renderSummary({
+    session: selected, guild, cfg: cfgFull, members: membersList,
+    attendances: atts, sessionCount: sessions.length, sessions,
+  });
+  return { view, rows: view.components.map(r => r.toJSON()) };
+}
+
+describe('SessionView — một Kỳ', () => {
+  it('không có select chọn Kỳ và không có Đóng TẤT CẢ', () => {
+    const { rows } = sessionViewRows([session], session);
+    const ids = rows.flatMap(r => r.components.map(c => c.custom_id));
+    expect(ids).not.toContain('setup:session:select');
+    expect(ids).not.toContain('setup:session:close:all');
+  });
+
+  it('admin row nhúng đúng sessionId vào customId', () => {
+    const { rows } = sessionViewRows([session], session);
+    const admin = rows.find(r => r.components.some(c => c.custom_id === 'admin:mark'));
+    const ids = admin.components.map(c => c.custom_id);
+    expect(ids).toContain('setup:session:cancel:s1');
+    expect(ids).toContain('setup:session:close:s1');
+  });
+
+  it('footer encode sid:', () => {
+    const { view } = sessionViewRows([session], session);
+    expect(view.embeds[0].data.footer.text).toContain('sid:s1');
+  });
+});
+
+describe('SessionView — nhiều Kỳ', () => {
+  it('select xuất hiện với đủ option + default là Kỳ đang xem', () => {
+    const { rows } = sessionViewRows([session, session2], session);
+    const select = rows[0].components[0];
+    expect(select.type).toBe(3);
+    expect(select.custom_id).toBe('setup:session:select');
+    expect(select.options).toHaveLength(2);
+    expect(select.options.map(o => o.value)).toEqual(['s1', 's2']);
+    expect(select.options.find(o => o.value === 's1').default).toBe(true);
+    expect(select.options.find(o => o.value === 's2').default).toBe(false);
+  });
+
+  it('select default chuyển theo Kỳ đã chọn (s2)', () => {
+    const { rows, view } = sessionViewRows([session, session2], session2);
+    const select = rows[0].components[0];
+    expect(select.options.find(o => o.value === 's2').default).toBe(true);
+    expect(view.embeds[0].data.footer.text).toContain('sid:s2');
+  });
+
+  it('Đóng TẤT CẢ nằm hàng riêng, không kề Đóng Kỳ', () => {
+    const { rows } = sessionViewRows([session, session2], session);
+    const closeAllRow = rows.find(r => r.components.some(c => c.custom_id === 'setup:session:close:all'));
+    expect(closeAllRow).toBeDefined();
+    expect(closeAllRow.components[0].label).toBe('⚠️ Đóng TẤT CẢ (2)');
+    expect(closeAllRow.components[0].style).toBe(4); // Danger
+    const sameRow = rows.some(r => r.components.some(c => c.custom_id === 'setup:session:close:all')
+      && r.components.some(c => c.custom_id === 'setup:session:close:s1' || c.custom_id === 'setup:session:cancel:s1'));
+    expect(sameRow).toBe(false);
+  });
+
+  it('admin row theo Kỳ đã chọn (s2)', () => {
+    const { rows } = sessionViewRows([session, session2], session2);
+    const admin = rows.find(r => r.components.some(c => c.custom_id === 'admin:mark'));
+    const ids = admin.components.map(c => c.custom_id);
+    expect(ids).toContain('setup:session:cancel:s2');
+    expect(ids).toContain('setup:session:close:s2');
+  });
+});
+
+describe('SessionView.parseFooter', () => {
+  it('decode ctx + sid + page mặc định', () => {
+    expect(SessionView.parseFooter({ text: '⚔️ · summary · sid:s1 · Quản Gia' }))
+      .toEqual({ ctx: 'summary', sessionId: 's1', page: 0 });
+  });
+
+  it('decode roster + page', () => {
+    expect(SessionView.parseFooter({ text: '⚔️ · roster · sid:s1 · p:2 · Quản Gia' }))
+      .toEqual({ ctx: 'roster', sessionId: 's1', page: 2 });
+  });
+
+  it('footer trống → mặc định', () => {
+    expect(SessionView.parseFooter(null)).toEqual({ ctx: 'summary', sessionId: null, page: 0 });
+  });
+});
+
+describe('SessionView — roster/details encode state', () => {
+  it('renderRoster footer chứa sid + p:', () => {
+    const atts = [
+      ...attendances,
+      { user_id: 'u4', status: 'khong_tham_gia' },
+      { user_id: 'u5', status: 'tham_gia' },
+      { user_id: 'u6', status: 'tre' },
+      { user_id: 'u7', status: 'tham_gia' },
+      { user_id: 'u8', status: 'tham_gia' },
+      { user_id: 'u9', status: 'tham_gia' },
+      { user_id: 'u10', status: 'tham_gia' },
+      { user_id: 'u11', status: 'tham_gia' },
+      { user_id: 'u12', status: 'tham_gia' },
+      { user_id: 'u13', status: 'tham_gia' },
+      { user_id: 'u14', status: 'tham_gia' },
+    ];
+    const view = SessionView.renderRoster({ session, guild, attendances: atts, page: 1 });
+    const ctx = SessionView.parseFooter(view.embeds[0].data.footer);
+    expect(ctx.ctx).toBe('roster');
+    expect(ctx.sessionId).toBe('s1');
+    expect(ctx.page).toBe(1);
+    const ids = view.components.map(r => r.toJSON()).flatMap(r => r.components.map(c => c.custom_id));
+    expect(ids).toContain('setup:session:roster:prev');
+    expect(ids).toContain('setup:session:roster:next');
+  });
+
+  it('renderDetails footer chứa sid:', () => {
+    const view = SessionView.renderDetails({ session, guild, members, attendances, cfg: cfgFull });
+    const ctx = SessionView.parseFooter(view.embeds[0].data.footer);
+    expect(ctx.ctx).toBe('details');
+    expect(ctx.sessionId).toBe('s1');
   });
 });
