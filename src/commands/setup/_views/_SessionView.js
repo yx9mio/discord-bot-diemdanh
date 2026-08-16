@@ -74,16 +74,18 @@ function _sessionShortLabel(s) {
 }
 
 function _buildSessionSelect(sessions, selectedId) {
+  // [FIX] Discord giới hạn StringSelectMenu tối đa 25 options — chặn để không throw
+  const options = sessions.slice(0, 25).map(s =>
+    new StringSelectMenuOptionBuilder()
+      .setLabel(_sessionShortLabel(s).slice(0, 100))
+      .setValue(s.id)
+      .setDefault(s.id === selectedId)
+  );
   return new ActionRowBuilder().addComponents(
     new StringSelectMenuBuilder()
       .setCustomId(CUSTOM_ID.SELECT)
-      .setPlaceholder('Chọn Bang Chiến cần quản lý...')
-      .addOptions(sessions.map(s =>
-        new StringSelectMenuOptionBuilder()
-          .setLabel(_sessionShortLabel(s).slice(0, 100))
-          .setValue(s.id)
-          .setDefault(s.id === selectedId)
-      )),
+      .setPlaceholder(sessions.length > 25 ? 'Chọn Bang Chiến... (hiện 25 đầu tiên)' : 'Chọn Bang Chiến cần quản lý...')
+      .addOptions(options),
   );
 }
 

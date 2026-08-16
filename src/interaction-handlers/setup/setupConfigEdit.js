@@ -109,6 +109,9 @@ async function handleButton(interaction) {
     if (!checkCooldown(interaction.user.id, 'setup_cfg_edit', 1000)) {
       return interaction.reply({ content: '⏳ Vui lòng đợi một chút trước khi thực hiện hành động này.', flags: MessageFlags.Ephemeral });
     }
+    // [FIX] Lưu msgId của ConfigView để modal submit refresh đúng dashboard
+    const { ConfigView } = require('../../commands/setup/_views/_ConfigView.js');
+    ConfigView.storeMessageId(interaction.guild.id, interaction.message?.id);
     const cfg = await configService.getGuildConfig(interaction.guild.id);
     const phaiIds = cfg?.phai_role_ids ?? [];
     if (!phaiIds.length) {
@@ -143,6 +146,10 @@ async function handleButton(interaction) {
     if (!checkCooldown(interaction.user.id, 'setup_cfg_edit', 1000)) {
       return interaction.reply({ content: '⏳ Vui lòng đợi một chút trước khi thực hiện hành động này.', flags: MessageFlags.Ephemeral });
     }
+    // [FIX] Lưu msgId của ConfigView để modal submit refresh đúng dashboard
+    const { ConfigView } = require('../../commands/setup/_views/_ConfigView.js');
+    ConfigView.storeMessageId(interaction.guild.id, interaction.message?.id);
+    const cfg = await configService.getGuildConfig(interaction.guild.id);
     const modal = new ModalBuilder()
       .setCustomId(MODAL_PREFIX + 'tz')
       .setTitle('Cài đặt Timezone')
@@ -153,6 +160,7 @@ async function handleButton(interaction) {
             .setLabel('Timezone (VD: Asia/Ho_Chi_Minh)')
             .setStyle(TextInputStyle.Short)
             .setPlaceholder('Asia/Ho_Chi_Minh')
+            .setValue(cfg?.timezone ?? '')
             .setRequired(true),
         ),
       );

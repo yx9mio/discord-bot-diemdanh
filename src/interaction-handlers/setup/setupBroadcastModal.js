@@ -53,7 +53,14 @@ class SetupBroadcastModalHandler extends InteractionHandler {
       .setAuthor({ name: authorName, iconURL: interaction.user.displayAvatarURL({ extension: 'png' }) })
       .setFooter({ text: FOOTER_DEFAULT }).setTimestamp();
 
-    await targetChannel.send({ embeds: [embed] }).catch(e => log.warn('BROADCAST', guild.id, 'Gửi broadcast thất bại: %s', e.message));
+    // [FIX] Báo lỗi rõ thay vì nuốt lỗi gửi — tránh "thành công giả"
+    const sent = await targetChannel.send({ embeds: [embed] }).catch(e => {
+      log.warn('BROADCAST', guild.id, 'Gửi broadcast thất bại: %s', e.message);
+      return null;
+    });
+    if (!sent) {
+      return interaction.editReply(replyErrEdit(`Không thể gửi tin tới <#${targetChannel.id}> — thiếu quyền hoặc kênh không hợp lệ.`));
+    }
 
     try {
       const cfg = await getGuildConfig(guild.id);

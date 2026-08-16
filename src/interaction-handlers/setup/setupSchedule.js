@@ -123,6 +123,16 @@ class SetupScheduleHandler extends InteractionHandler {
         closeDayOfWeek = (state.day + offset) % 7;
         closeHour = state.closeHour;
         closeMinute = state.closeMinute;
+        // [FIX] Cùng ngày: giờ đóng phải muộn hơn giờ mở, không thì lịch "mở xong đóng ngay"
+        if (offset === 0) {
+          const openMin = state.hour * 60 + state.minute;
+          const closeMin = closeHour * 60 + closeMinute;
+          if (closeMin <= openMin) {
+            clearState(guild.id, interaction.user.id);
+            const schedules = await scheduledService.getScheduledSessions(guild.id).catch(() => []);
+            return interaction.editReply({ content: '❌ Giờ đóng phải muộn hơn giờ mở khi đóng cùng ngày.', ...ScheduleView.render({ schedules, guild, page: 0 }) });
+          }
+        }
       }
 
       const gioBatDau = `${String(state.hour).padStart(2, '0')}:${String(state.minute).padStart(2, '0')}`;
@@ -209,6 +219,16 @@ class SetupScheduleHandler extends InteractionHandler {
         closeDayOfWeek = (state.day + offset) % 7;
         closeHour = state.closeHour;
         closeMinute = state.closeMinute;
+        // [FIX] Cùng ngày: giờ đóng phải muộn hơn giờ mở
+        if (offset === 0) {
+          const openMin = state.hour * 60 + state.minute;
+          const closeMin = closeHour * 60 + closeMinute;
+          if (closeMin <= openMin) {
+            clearEditState(guild.id, interaction.user.id, scheduleId);
+            const schedules = await scheduledService.getScheduledSessions(guild.id).catch(() => []);
+            return interaction.editReply({ content: '❌ Giờ đóng phải muộn hơn giờ mở khi đóng cùng ngày.', ...ScheduleView.render({ schedules, guild, page: 0 }) });
+          }
+        }
       }
 
       const gioBatDau = `${String(state.hour).padStart(2, '0')}:${String(state.minute).padStart(2, '0')}`;
