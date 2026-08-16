@@ -4,6 +4,7 @@ const { getGuildConfig } = require('../../../services/configService.js');
 const { getScheduledSessions } = require('../../../services/scheduledService.js');
 const { getMembers } = require('../../../services/memberService.js');
 const { getActiveSessions } = require('../../../services/sessionService.js');
+const attendanceService = require('../../../services/attendanceService.js');
 const { HomeView } = require('../../commands/setup/_views/_HomeView.js');
 const { CUSTOM_ID } = HomeView;
 const log = require('../../../utils/logger.js');
@@ -33,10 +34,13 @@ class SetupHomeHandler extends InteractionHandler {
         getMembers(guild.id),
         getActiveSessions(guild.id),
       ]);
-      return interaction.editReply(HomeView.render({ guild, cfg, schedules, members, sessions }));
+      const attendances = sessions?.length
+        ? await attendanceService.getAttendances(sessions[0].id)
+        : [];
+      return interaction.editReply(HomeView.render({ guild, cfg, schedules, members, sessions, attendances }));
     } catch (e) {
       log.error('SETUP_HOME', guild.id, 'Dashboard load thất bại: %s', e.message);
-      return interaction.editReply({ content: '❌ Không thể tải dashboard, thử lại sau.' });
+      return interaction.editReply(HomeView.renderError({ guild, reason: e.message }));
     }
   }, 'SetupHomeHandler')(interaction); }
 }

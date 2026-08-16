@@ -8,6 +8,7 @@ const configService    = require('../../../services/configService.js');
 const scheduledService = require('../../../services/scheduledService.js');
 const memberService    = require('../../../services/memberService.js');
 const { getActiveSessions } = require('../../../services/sessionService.js');
+const attendanceService = require('../../../services/attendanceService.js');
 const log = require('../../../utils/logger.js');
 const { HomeView } = require('./_views/_HomeView.js'); // [FIX-SETUP] đường dẫn mới
 
@@ -43,14 +44,22 @@ class SetupCommand extends Command {
     }
 
     const { guild } = interaction;
-    const [cfg, schedules, members, sessions] = await Promise.all([
-      configService.getGuildConfig(guild.id),
-      scheduledService.getScheduledSessions(guild.id),
-      memberService.getMembers(guild.id),
-      getActiveSessions(guild.id),
-    ]);
-    const view = HomeView.render({ guild, cfg, schedules, members, sessions });
-    return interaction.editReply(view);
+    try {
+      const [cfg, schedules, members, sessions] = await Promise.all([
+        configService.getGuildConfig(guild.id),
+        scheduledService.getScheduledSessions(guild.id),
+        memberService.getMembers(guild.id),
+        getActiveSessions(guild.id),
+      ]);
+      const attendances = sessions?.length
+        ? await attendanceService.getAttendances(sessions[0].id)
+        : [];
+      const view = HomeView.render({ guild, cfg, schedules, members, sessions, attendances });
+      return interaction.editReply(view);
+    } catch (e) {
+      log.error('SETUP', guild.id, 'Dashboard load thất bại: %s', e.message);
+      return interaction.editReply(HomeView.renderError({ guild, reason: e.message }));
+    }
   }
 }
 
