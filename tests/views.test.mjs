@@ -195,15 +195,15 @@ describe('buildRankEmbed', () => {
   ];
 
   it('renders top members by current_streak', () => {
-    const embed = buildRankEmbed(members, null, 'streak');
+    const embed = buildRankEmbed(members, null, 10);
     const json = embed.toJSON();
-    expect(json.title).toContain('Bảng Xếp Hạng');
+    expect(json.title).toMatch(/bảng xếp hạng/i);
     expect(json.description).toContain('u1');
     expect(json.description).toContain('5');
   });
 
   it('shows empty state when members list is empty', () => {
-    const embed = buildRankEmbed([], null, 'streak');
+    const embed = buildRankEmbed([], null, 10);
     const json = embed.toJSON();
     expect(json.description).toContain('Chưa có dữ liệu');
   });
