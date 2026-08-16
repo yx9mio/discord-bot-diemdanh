@@ -23,8 +23,8 @@ describe('buildConfirmRow', () => {
   it('uses Danger style for confirm and Secondary for cancel', () => {
     const row = buildConfirmRow('c', 'x');
     const json = row.toJSON();
-    expect(json.components[0].style).toBe(4); // ButtonStyle.Danger = 4
-    expect(json.components[1].style).toBe(2); // ButtonStyle.Secondary = 2
+    expect(json.components[0].style).toBe(4);
+    expect(json.components[1].style).toBe(2);
   });
 });
 
@@ -34,8 +34,8 @@ describe('buildAttendanceSelectRow', () => {
     const json = row.toJSON();
     expect(json.type).toBe(1);
     expect(json.components).toHaveLength(1);
-    expect(json.components[0].type).toBe(3); // ComponentType.StringSelect = 3
-    expect(json.components[0].custom_id).toBe('attend_status_select');
+    expect(json.components[0].type).toBe(3);
+    expect(json.components[0].custom_id).toBe('attendance:select');
     expect(json.components[0].options).toHaveLength(4);
   });
 
@@ -105,7 +105,7 @@ describe('buildBoardRow', () => {
     const json = buildBoardRow(false).toJSON();
     const byId = Object.fromEntries(json.components.map(c => [c.custom_id, c.disabled]));
     expect(byId.attend_view).toBe(true);
-    expect(byId.attend_list).toBeUndefined(); // toJSON bỏ qua disabled:false
+    expect(byId.attend_list).toBeUndefined();
   });
 });
 
@@ -126,9 +126,9 @@ describe('buildAttendanceFilterRow', () => {
   it('active filter button has Primary style', () => {
     const json = buildAttendanceFilterRow('tre').toJSON();
     const active = json.components.find(c => c.custom_id === 'attend_list:filter:tre');
-    expect(active.style).toBe(1); // Primary
+    expect(active.style).toBe(1);
     const inactive = json.components.find(c => c.custom_id === 'attend_list:filter:all');
-    expect(inactive.style).toBe(2); // Secondary
+    expect(inactive.style).toBe(2);
   });
 
   it('appends sessionId suffix to filter customIds when provided', () => {
@@ -222,15 +222,14 @@ describe('buildSessionEmbed (active session)', () => {
 
   it('renders title with session name', () => {
     const { embed } = buildSessionEmbed(null, session, [], [], false, 1, null, false);
-    const json = embed.toJSON();
-    expect(json.title).toContain('Bang Chiến');
+    expect(embed.toJSON().title).toContain('Bang Chiến');
   });
 
   it('contains ANSI code block with stats and progress bar', () => {
     const attended = [
       { user_id: 'u1', status: 'tham_gia', checked_in_at: new Date(now).toISOString() },
-      { user_id: 'u2', status: 'tre',      checked_in_at: new Date(now).toISOString() },
-      { user_id: 'u3', status: 'co_phep',  checked_in_at: new Date(now).toISOString() },
+      { user_id: 'u2', status: 'tre', checked_in_at: new Date(now).toISOString() },
+      { user_id: 'u3', status: 'co_phep', checked_in_at: new Date(now).toISOString() },
     ];
     const { embed } = buildSessionEmbed(null, session, attended, [], false, 1, null, false);
     const json = embed.toJSON();
@@ -252,11 +251,10 @@ describe('buildSessionEmbed (active session)', () => {
   it('renders member list field with grouped attendees', () => {
     const attended = [
       { user_id: 'u1', status: 'tham_gia', checked_in_at: new Date(now).toISOString() },
-      { user_id: 'u2', status: 'tre',      checked_in_at: new Date(now).toISOString() },
+      { user_id: 'u2', status: 'tre', checked_in_at: new Date(now).toISOString() },
     ];
     const { embed } = buildSessionEmbed(null, session, attended, [], false, 1, null, false);
-    const json = embed.toJSON();
-    const listField = json.fields.find(f => f.name.includes('Danh sách'));
+    const listField = embed.toJSON().fields.find(f => f.name.includes('Danh sách'));
     expect(listField).toBeDefined();
     expect(listField.value).toContain('Đúng giờ:');
     expect(listField.value).toContain('Trễ:');
@@ -281,8 +279,7 @@ describe('buildSessionEmbed (active session)', () => {
       checked_in_at: new Date(now).toISOString(),
     }));
     const { embed, components, totalPages } = buildSessionEmbed(null, session, many, [], false, 1, null, false, { showList: false });
-    const json = embed.toJSON();
-    expect((json.fields ?? []).some(f => f.name.includes('Danh sách'))).toBe(false);
+    expect((embed.toJSON().fields ?? []).some(f => f.name.includes('Danh sách'))).toBe(false);
     expect(components).toHaveLength(0);
     expect(totalPages).toBe(1);
   });
@@ -315,8 +312,7 @@ describe('buildSessionEmbed (active session)', () => {
       checked_in_at: new Date(now).toISOString(),
     }));
     const { embed, components, totalPages } = buildSessionEmbed(null, session, mixed, [], false, 1, null, false, { filter: 'tre' });
-    const json = embed.toJSON();
-    const listField = json.fields.find(f => f.name.includes('Danh sách'));
+    const listField = embed.toJSON().fields.find(f => f.name.includes('Danh sách'));
     expect(listField.name).toContain('5');
     expect(listField.name).toContain('Trễ');
     expect(listField.value).not.toContain('Đúng giờ:');
@@ -356,8 +352,8 @@ describe('buildClosedSessionEmbed', () => {
   const attended = [
     { user_id: 'u1', status: 'tham_gia', checked_in_at: new Date(now - 7000000).toISOString() },
     { user_id: 'u2', status: 'tham_gia', checked_in_at: new Date(now - 6000000).toISOString() },
-    { user_id: 'u3', status: 'tre',      checked_in_at: new Date(now - 5000000).toISOString() },
-    { user_id: 'u4', status: 'co_phep',  checked_in_at: new Date(now - 4000000).toISOString() },
+    { user_id: 'u3', status: 'tre', checked_in_at: new Date(now - 5000000).toISOString() },
+    { user_id: 'u4', status: 'co_phep', checked_in_at: new Date(now - 4000000).toISOString() },
     { user_id: 'u5', status: 'khong_tham_gia', checked_in_at: new Date(now - 3000000).toISOString() },
     { user_id: 'u6', status: 'tham_gia', checked_in_at: new Date(now - 2000000).toISOString() },
   ];
@@ -378,8 +374,7 @@ describe('buildClosedSessionEmbed', () => {
 
   it('keeps board tinh gọn — no member list field after close', () => {
     const embed = buildClosedSessionEmbed(session, attended, null);
-    const json = embed.toJSON();
-    const listField = json.fields?.find(f => f.name.includes('Thành viên'));
+    const listField = embed.toJSON().fields?.find(f => f.name.includes('Thành viên'));
     expect(listField).toBeUndefined();
   });
 });
