@@ -340,7 +340,7 @@ class SessionButtonHandler extends InteractionHandler {
         const s = sessions[0];
         return interaction.reply(
           replyConfirm(
-            `🔒 Bạn có chắc muốn đóng Kỳ **"${s.session_name}"** không?\\n\\n` +
+            `🔒 Bạn có chắc muốn đóng Kỳ **"${s.session_name}"** không?\n\n` +
             '> Sau khi đóng, thành viên không thể điểm danh thêm. Kết quả sẽ được tổng kết và cập nhật vào hệ thống.',
             'session:confirm_close',
             'session:cancel_close',
