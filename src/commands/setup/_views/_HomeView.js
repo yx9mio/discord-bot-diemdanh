@@ -27,7 +27,7 @@ function _fmtSchedule(s) {
 
 function _buildStatusLine(cfg, members) {
   const ok = !!cfg?.notification_channel_id && (members?.length ?? 0) > 0;
-  if (ok) return '> 🟢 **Hệ thống sẵn sàng.** Bấm **➕ Mở Bang Chiến** bên dưới để điểm danh.';
+  if (ok) return '> 🟢 **Hệ thống sẵn sàng.** Bấm **➕ Mở Kỳ** bên dưới để điểm danh.';
   const steps = [];
   if (!cfg?.notification_channel_id) steps.push('⬜ Cài đặt kênh + múi giờ');
   if (!members?.length) steps.push('⬜ Thêm thành viên');
@@ -91,7 +91,7 @@ function render({ guild, cfg, schedules, members, session, sessions }) {
   );
 
   const secondaryRow = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId(CUSTOM_ID.START).setLabel('Mở Bang Chiến').setEmoji(ICONS.PLUS).setStyle(ButtonStyle.Success),
+    new ButtonBuilder().setCustomId(CUSTOM_ID.START).setLabel('Mở Kỳ').setEmoji(ICONS.PLUS).setStyle(ButtonStyle.Success),
     new ButtonBuilder().setCustomId(CUSTOM_ID.SCH).setLabel('Lịch').setEmoji(ICONS.CALENDAR).setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId(CUSTOM_ID.HISTORY).setLabel('Nhật Ký').setEmoji(ICONS.CHART).setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId(CUSTOM_ID.BROADCAST).setLabel('Phát Tin').setEmoji(ICONS.BELL).setStyle(ButtonStyle.Secondary),

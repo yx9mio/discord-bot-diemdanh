@@ -175,7 +175,6 @@ class SessionButtonHandler extends InteractionHandler {
       const attended = await attendanceService.getAttendances(session.id);
 
       const VALID_FILTERS = ['all', 'tham_gia', 'tre', 'khong_tham_gia', 'co_phep'];
-      const filter = VALID_FILTERS.includes(parts[3]) ? parts[3] : 'all';
 
       const { phaiRoleIds: phaiIdsL, emojiMap: emojiMapL } = await _phaiData(session, guild.id);
       await Promise.all([
