@@ -15,6 +15,8 @@ const COLORS = {
   PINK:    0xeb459e,
   BLURPLE: 0x5865f2,
   DISCORD_RED: 0xed4245,
+  INFO:    0x5865f2,
+  WARN:    0xfee75c,
 };
 
 const ICONS = {
