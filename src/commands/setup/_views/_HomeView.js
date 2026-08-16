@@ -144,7 +144,9 @@ function render({ guild, cfg, schedules, members, sessions, attendances }) {
     desc.push(`\n⚔️ **Bang Chiến hiện tại**\n🟢 **${name}**${extras}\n⏱️ Tự đóng: ${autoClose}`);
 
     const atts = attendances ?? [];
-    const eligible = s.eligible_member_ids?.length ?? 0;
+    // [FIX] Quân số = thành viên đã thêm (qua "Thêm thành viên"), nhất quán với SessionView;
+    // trước đây dùng eligible_member_ids (luôn rỗng) nên luôn hiện X/0 · 0%
+    const eligible = members?.length ?? 0;
     const totalPresent = atts.filter(a => a.status === 'tham_gia' || a.status === 'tre').length;
     const pct = eligible > 0 ? Math.round((totalPresent / eligible) * 100) : 0;
     desc.push(`👥 Quân số: **${totalPresent}/${eligible}** · **${pct}%**`);

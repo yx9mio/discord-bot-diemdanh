@@ -120,6 +120,13 @@ describe('HomeView.render — trạng thái', () => {
     expect(desc).toContain('🟠 Thiếu Lâm: **0**');
   });
 
+  it('quân số dùng số thành viên đã thêm kể cả khi eligible_member_ids rỗng', () => {
+    const s = { ...session, eligible_member_ids: [] };
+    const view = HomeView.render({ guild, cfg: cfgFull, schedules: [], members, sessions: [s], attendances });
+    const desc = view.embeds[0].data.description;
+    expect(desc).toContain('Quân số: **2/4** · **50%**');
+  });
+
   it('active: ghi chú +N Kỳ khác khi nhiều Kỳ', () => {
     const view = HomeView.render({ guild, cfg: cfgFull, schedules: [], members, sessions: [session, { ...session, id: 's2' }], attendances });
     expect(view.embeds[0].data.description).toContain('(+1 Kỳ khác)');

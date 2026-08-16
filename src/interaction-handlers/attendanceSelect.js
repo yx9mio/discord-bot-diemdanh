@@ -7,6 +7,7 @@ const { MessageFlags } = require('discord.js');
 const { InteractionHandler, InteractionHandlerTypes } = require('@sapphire/framework');
 const sessionService    = require('../../services/sessionService.js');
 const configService     = require('../../services/configService.js');
+const memberService     = require('../../services/memberService.js');
 const log               = require('../../utils/logger.js');
 const { buildAttendanceConfirmPrompt, buildAttendanceConfirmRow } = require('../../utils/embeds.js');
 const { checkCooldown } = require('../../utils/cooldown.js');
@@ -50,24 +51,29 @@ class AttendanceSelectHandler extends InteractionHandler {
       const member = await guild.members.fetch(user.id).catch(() => null);
       const hasPhai = member && phaiRoleIds.some(rid => member.roles.cache.has(rid));
       if (!hasPhai) {
-        const roles = phaiRoleIds.map(rid => guild.roles.cache.get(rid)).filter(Boolean);
-        if (roles.length) {
-          const { StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ActionRowBuilder } = require('discord.js');
-          const select = new StringSelectMenuBuilder()
-            .setCustomId(`phai:select:${status}`)
-            .setPlaceholder('👤 Chọn phái / nhóm của bạn...')
-            .addOptions(
-              roles.map(r => {
-                const opt = new StringSelectMenuOptionBuilder().setLabel(r.name).setValue(r.id);
-                try { opt.setEmoji(r.icon || '👤'); } catch (_) {}
-                return opt;
-              }),
-            );
-          return interaction.reply({
-            content: '⚠️ Bạn chưa có **role phái**. Vui lòng chọn phái của bạn:',
-            components: [new ActionRowBuilder().addComponents(select)],
-            flags: MessageFlags.Ephemeral,
-          });
+        // [FIX] Quân số: thành viên đã được thêm qua "Thêm thành viên" (ngoài role)
+        // vẫn được điểm danh — không bắt buộc có role phái.
+        const rosterMember = await memberService.getMember(guild.id, user.id).catch(() => null);
+        if (!rosterMember) {
+          const roles = phaiRoleIds.map(rid => guild.roles.cache.get(rid)).filter(Boolean);
+          if (roles.length) {
+            const { StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ActionRowBuilder } = require('discord.js');
+            const select = new StringSelectMenuBuilder()
+              .setCustomId(`phai:select:${status}`)
+              .setPlaceholder('👤 Chọn phái / nhóm của bạn...')
+              .addOptions(
+                roles.map(r => {
+                  const opt = new StringSelectMenuOptionBuilder().setLabel(r.name).setValue(r.id);
+                  try { opt.setEmoji(r.icon || '👤'); } catch (_) {}
+                  return opt;
+                }),
+              );
+            return interaction.reply({
+              content: '⚠️ Bạn chưa có **role phái**. Vui lòng chọn phái của bạn:',
+              components: [new ActionRowBuilder().addComponents(select)],
+              flags: MessageFlags.Ephemeral,
+            });
+          }
         }
       }
     }
