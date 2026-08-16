@@ -223,7 +223,15 @@ function buildSessionEmbed(guild, session, attended = [], phaiRoleIds = [], _isE
     const endTs = session.ended_at ? Math.floor(new Date(session.ended_at).getTime() / 1000) : null;
     descParts.push(endTs ? `🔒 Đóng lúc <t:${endTs}:f>` : '🔒 Đã kết thúc');
   }
-  descParts.push(`✅ Đúng giờ ${onTime} · ⏰ Trễ ${late} · ❌ Vắng ${absent} · 📋 Có phép ${excused}`);
+  // [UX-W2] Stats dọc + tỉ lệ tham gia — mobile-first
+  const pct = total > 0 ? Math.round(joined / total * 100) : 0;
+  descParts.push(
+    `✅ Đúng giờ: ${onTime}`,
+    `⏰ Trễ: ${late}`,
+    `❌ Vắng: ${absent}`,
+    `📋 Có phép: ${excused}`,
+    `📊 Tỉ lệ tham gia: ${pct}%`,
+  );
 
   const infoParts = [];
   if (eligibleCount > 0) {

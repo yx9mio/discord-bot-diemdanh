@@ -205,8 +205,12 @@ describe('buildSessionEmbed (active session)', () => {
     const json = embed.toJSON();
     expect(json.title).toBe('⚔️ Bang Chiến');
     expect(json.description).not.toContain('```ansi');
-    expect(json.description).toContain('✅ Đúng giờ 1 · ⏰ Trễ 1 · ❌ Vắng 0 · 📋 Có phép 1');
-    expect(json.description).not.toContain('Tỉ lệ tham gia');
+    // [UX-W2] stats dọc + tỉ lệ tham gia
+    expect(json.description).toContain('✅ Đúng giờ: 1');
+    expect(json.description).toContain('⏰ Trễ: 1');
+    expect(json.description).toContain('❌ Vắng: 0');
+    expect(json.description).toContain('📋 Có phép: 1');
+    expect(json.description).toContain('📊 Tỉ lệ tham gia: 67%');
   });
 
   it('shows auto-close countdown as plain relative timestamp', () => {
